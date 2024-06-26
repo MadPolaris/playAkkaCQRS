@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package net.imadz.infrastructure.proto;
+// Define the Money type
+message MoneyPO {
+  double amount = 1;
+  string currency = 2;
+}
+
+// Define the BalanceChanged event
+message BalanceChanged {
+  MoneyPO update = 1; // Assuming Money can be serialized to string
+  int64 timestamp = 2;
+}
+
+message CreditEventPO {
+  oneof event {
+    BalanceChanged balanceChangedPO = 1;
+  }
+}
+
+// Define the CreditBalanceState snapshot
+message CreditBalanceStatePO {
+  string userId = 1; // UUID can be represented as a string
+  map<string, MoneyPO> accountBalance = 2;
+  map<string, MoneyPO> reservedAmount = 3;
+}

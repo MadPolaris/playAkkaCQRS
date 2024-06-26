@@ -1,0 +1,56 @@
+syntax = "proto3";
+import "credits.proto";
+
+package net.imadz.infrastructure.proto;
+
+
+// Define TransactionStatus enum
+enum TransactionStatusPO {
+  NEW = 0;
+  INITIATED = 1;
+  PREPARED = 2;
+  COMPLETED = 3;
+  FAILED = 4;
+}
+
+// Define the TransactionInitiated event
+message TransactionInitiatedPO {
+  string fromUserId = 1;
+  string toUserId = 2;
+  MoneyPO amount = 3;
+}
+
+// Define the TransactionPrepared event
+message TransactionPreparedPO {
+  string id = 1;
+}
+
+// Define the TransactionCompleted event
+message TransactionCompletedPO {
+  string id = 1;
+}
+
+// Define the TransactionFailed event
+message TransactionFailedPO {
+  string id = 1;
+  string reason = 2;
+}
+
+// Define the TransactionEvent oneof
+message TransactionEventPO {
+  oneof event {
+    TransactionInitiatedPO transactionInitiatedPO = 1;
+    TransactionPreparedPO transactionPreparedPO = 2;
+    TransactionCompletedPO transactionCompletedPO = 3;
+    TransactionFailedPO transactionFailedPO = 4;
+  }
+}
+
+// Define the TransactionState snapshot
+message TransactionStatePO {
+  string id = 1; // UUID can be represented as a string
+  string fromUserId = 2;
+  string toUserId = 3;
+  MoneyPO amount = 4;
+  TransactionStatusPO status = 5;
+}
