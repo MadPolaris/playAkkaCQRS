@@ -1,6 +1,6 @@
 # Play Akka CQRS
 
-[English](README.md) | English
+[English](README.md) | 中文
 
 ## 概要
 本项目试图建立一个 Scala 单一微服务代码项目的脚手架。它包含了以下一些特性：
