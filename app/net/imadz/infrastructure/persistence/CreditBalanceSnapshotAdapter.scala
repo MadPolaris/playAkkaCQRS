@@ -14,9 +14,17 @@ class CreditBalanceSnapshotAdapter extends SnapshotAdapter[CreditBalanceState] {
     val accountBalance = state.accountBalance.map { case (k, v) =>
       k -> MoneyPO(v.amount.doubleValue, v.currency.getCurrencyCode)
     }
+    val reservedAmount = state.reservedAmount.map { case (k, v) =>
+      k.toString -> MoneyPO(v.amount.doubleValue, v.currency.getCurrencyCode)
+    }
+    val incomingCredits = state.incomingCredits.map { case (k, v) =>
+      k.toString -> MoneyPO(v.amount.doubleValue, v.currency.getCurrencyCode)
+    }
     CreditBalanceStatePO(
       userId = state.userId.toString,
-      accountBalance = accountBalance
+      accountBalance = accountBalance,
+      reservedAmount = reservedAmount,
+      incomingCredits = incomingCredits
     )
   }
 
@@ -28,10 +36,14 @@ class CreditBalanceSnapshotAdapter extends SnapshotAdapter[CreditBalanceState] {
       val reservedAmount = po.reservedAmount.map { case (k, v) =>
         Id.of(k) -> Money(v.amount, Currency.getInstance(v.currency))
       }
+      val incomingCredits = po.incomingCredits.map { case (k, v) =>
+        Id.of(k) -> Money(v.amount, Currency.getInstance(v.currency))
+      }
       CreditBalanceState(
         userId = UUID.fromString(po.userId),
         accountBalance = accountBalance,
-        reservedAmount = reservedAmount
+        reservedAmount = reservedAmount,
+        incomingCredits = incomingCredits
       )
     case unknown => throw new IllegalStateException(s"Unknown journal type: ${unknown.getClass.getName}")
   }

@@ -32,7 +32,7 @@ object TransactionEventHandler {
 
     case TransactionFailed(id, reason) =>
       if (state.id == id) {
-        state.copy(status = Failed)
+        state.copy(status = Failed(reason))
       } else {
         state
       }

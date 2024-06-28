@@ -22,7 +22,7 @@ object TransactionEntity {
   case object Initiated extends TransactionStatus
   case object Prepared extends TransactionStatus
   case object Completed extends TransactionStatus
-  case object Failed extends TransactionStatus
+  case class Failed(reason: String) extends TransactionStatus
 
   // Event
   sealed trait TransactionEvent

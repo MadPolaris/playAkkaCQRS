@@ -1,12 +1,15 @@
 package controllers
 
-import akka.actor.ActorSystem
+import akka.actor.typed.Scheduler
 import akka.actor.typed.javadsl.Adapter
+import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
+import akka.actor.{ActorSystem, typed}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.application.queries.{GetBalanceQuery, GetRecent12MonthsIncomeAndExpenseReport}
 import net.imadz.application.services.{CreateCreditBalanceService, DepositService, MoneyTransferService, WithdrawService}
-import net.imadz.infrastructure.bootstrap.{CreditBalanceBootstrap, MonthlyIncomeAndExpenseBootstrap, TransactionBootstrap}
+import net.imadz.infrastructure.bootstrap.{CreditBalanceBootstrap, MonthlyIncomeAndExpenseBootstrap, TransactionBootstrap, TransactionCoordinatorRepository}
 import play.api.mvc._
 
 import javax.inject._
@@ -17,10 +20,13 @@ import scala.concurrent.ExecutionContext
  * application's home page.
  */
 @Singleton
-class HomeController @Inject()(val system: ActorSystem,
+class HomeController @Inject()(
+  val system: ActorSystem,
   val sharding: ClusterSharding,
   val monthlyQuery: GetRecent12MonthsIncomeAndExpenseReport,
   val monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
+  val creditBalanceRepository: CreditBalanceRepository,
+  val coordinatorRepository: TransactionCoordinatorRepository,
   val getBalanceQuery: GetBalanceQuery,
   val createService: CreateCreditBalanceService,
   val depositService: DepositService,
@@ -31,10 +37,12 @@ class HomeController @Inject()(val system: ActorSystem,
   with MonthlyIncomeAndExpenseBootstrap
   with CreditBalanceBootstrap
   with TransactionBootstrap {
+  val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
+  implicit val scheduler: Scheduler = typedSystem.scheduler
 
   initMonthlySummaryProjection(Adapter.toTyped(system), sharding, monthlyRepository)
   initCreditBalanceAggregate(sharding)
-  initTransactionAggregate(sharding)
+  initTransactionAggregate(sharding, coordinatorRepository, creditBalanceRepository)
 
   /**
    * Create an Action to render an HTML page.

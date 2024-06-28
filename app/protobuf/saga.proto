@@ -1,0 +1,92 @@
+syntax = "proto3";
+import "saga_participant.proto";
+
+package net.imadz.infrastructure.saga.proto;
+
+
+message TransactionPO {
+  string id = 1;
+  repeated TransactionStepPO steps = 2;
+  repeated string phases = 3;
+}
+
+message TransactionResponsePO {
+  oneof response {
+    CompletedPO completed = 1;
+    FailedPO failed = 2;
+  }
+}
+
+message CompletedPO {
+  string transaction_id = 1;
+}
+
+message FailedPO {
+  string transaction_id = 1;
+  string reason = 2;
+}
+
+message ParticipantPO {
+  string name = 1;
+  oneof participant_type {
+    net.imadz.infrastructure.proto.FromAccountParticipantPO from_account_participant = 2;
+    net.imadz.infrastructure.proto.ToAccountParticipantPO to_account_participant = 3;
+    // Add more participant types as needed
+  }
+}
+
+message TransactionStepPO {
+  string id = 1;
+  string phase = 2;
+  // TransactionParticipant is an interface and cannot be directly serialized.
+  // This needs to be handled in the application layer.
+  ParticipantPO participant = 3;
+}
+
+message ActorRefPO {
+  string path = 1; // Simplified representation of ActorRef
+}
+
+message SagaEventPO {
+  oneof event {
+    TransactionStartedPO transaction_started = 1;
+    TransactionPhaseStartedPO transaction_phase_started = 2;
+    TransactionStepStartedPO transaction_step_started = 3;
+    StepCompletedPO step_completed = 4;
+    PhaseCompletedPO phase_completed = 5;
+    TransactionCompletedPO transaction_completed = 6;
+  }
+}
+
+message TransactionStartedPO {
+  TransactionPO transaction = 1;
+}
+
+message TransactionPhaseStartedPO {
+  string phase = 1;
+}
+
+message TransactionStepStartedPO {
+  TransactionStepPO step = 1;
+}
+
+message StepCompletedPO {
+  TransactionStepPO step = 1;
+  bool success = 2;
+}
+
+message PhaseCompletedPO {
+  string phase = 1;
+  bool success = 2;
+}
+
+message TransactionCompletedPO {
+  bool success = 1;
+}
+
+message StatePO {
+  optional TransactionPO current_transaction = 1;
+  repeated TransactionStepPO completed_steps = 2;
+  string current_phase = 3;
+  optional TransactionStepPO current_step = 4;
+}

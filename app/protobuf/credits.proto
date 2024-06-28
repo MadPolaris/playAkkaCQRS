@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 package net.imadz.infrastructure.proto;
+
 // Define the Money type
 message MoneyPO {
   double amount = 1;
@@ -9,13 +10,54 @@ message MoneyPO {
 
 // Define the BalanceChanged event
 message BalanceChanged {
-  MoneyPO update = 1; // Assuming Money can be serialized to string
+  MoneyPO update = 1;
   int64 timestamp = 2;
 }
 
-message CreditEventPO {
+// Define the FundsReserved event
+message FundsReserved {
+  string transferId = 1;
+  MoneyPO amount = 2;
+}
+
+// Define the FundsDeducted event
+message FundsDeducted {
+  string transferId = 1;
+  MoneyPO amount = 2;
+}
+
+// Define the ReservationReleased event
+message ReservationReleased {
+  string transferId = 1;
+  MoneyPO amount = 2;
+}
+
+// Define the IncomingCreditsRecorded event
+message IncomingCreditsRecorded {
+  string transferId = 1;
+  MoneyPO amount = 2;
+}
+
+// Define the IncomingCreditsCommited event
+message IncomingCreditsCommited {
+  string transferId = 1;
+}
+
+// Define the IncomingCreditsCanceled event
+message IncomingCreditsCanceled {
+  string transferId = 1;
+}
+
+// Define the CreditBalanceEvent union
+message CreditBalanceEventPO {
   oneof event {
-    BalanceChanged balanceChangedPO = 1;
+    BalanceChanged balanceChanged = 1;
+    FundsReserved fundsReserved = 2;
+    FundsDeducted fundsDeducted = 3;
+    ReservationReleased reservationReleased = 4;
+    IncomingCreditsRecorded incomingCreditsRecorded = 5;
+    IncomingCreditsCommited incomingCreditsCommited = 6;
+    IncomingCreditsCanceled incomingCreditsCanceled = 7;
   }
 }
 
@@ -24,4 +66,5 @@ message CreditBalanceStatePO {
   string userId = 1; // UUID can be represented as a string
   map<string, MoneyPO> accountBalance = 2;
   map<string, MoneyPO> reservedAmount = 3;
+  map<string, MoneyPO> incomingCredits = 4;
 }

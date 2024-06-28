@@ -1,10 +1,10 @@
 package net.imadz.domain.entities.behaviors
 
+import net.imadz.common.CommonTypes.Id
 import net.imadz.domain.entities.CreditBalanceEntity.{BalanceChanged, CreditBalanceEventHandler, CreditBalanceState}
 import net.imadz.domain.values.Money
 
 import java.util.Currency
-
 import net.imadz.domain.entities.CreditBalanceEntity._
 
 object CreditBalanceEventHandler {
@@ -17,17 +17,30 @@ object CreditBalanceEventHandler {
         accountBalance = updateAccountBalance(state, currency, reserveAmount.copy(amount = -reserveAmount.amount)),
         reservedAmount = state.reservedAmount + (transferId -> reserveAmount)
       )
-
+    case FundsDeducted(transferId: Id, amount: Money) =>
+      state.copy(
+        reservedAmount = state.reservedAmount - transferId
+      )
     case ReservationReleased(transferId, releaseAmount@Money(_, currency)) =>
       state.copy(
         accountBalance = updateAccountBalance(state, currency, releaseAmount),
         reservedAmount = state.reservedAmount - transferId
       )
 
-    case TransferCompleted(transferId) =>
+    case IncomingCreditsRecorded(transferId, amount) =>
       state.copy(
-        reservedAmount = state.reservedAmount - transferId
+        incomingCredits = state.incomingCredits + (transferId -> amount)
       )
+    case IncomingCreditsCommited(transferId) =>
+      state.copy(
+        accountBalance= updateAccountBalance(state, state.incomingCredits(transferId).currency, state.incomingCredits(transferId)),
+        incomingCredits = state.incomingCredits - transferId
+      )
+    case IncomingCreditsCanceled(transferId) =>
+      state.copy(
+        incomingCredits = state.incomingCredits - transferId
+      )
+
   }
 
   private def updateAccountBalance(state: CreditBalanceState, currency: Currency, updateMoney: Money): Map[String, Money] = {

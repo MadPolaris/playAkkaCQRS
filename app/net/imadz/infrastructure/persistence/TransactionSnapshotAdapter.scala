@@ -9,7 +9,7 @@ import net.imadz.infrastructure.proto.transactions._
 
 import java.util.Currency
 
-class TransactionSnapshotAdapter extends SnapshotAdapter[TransactionState] {
+ class TransactionSnapshotAdapter extends SnapshotAdapter[TransactionState] {
 
   override def toJournal(state: TransactionState): Any = {
     TransactionStatePO(
@@ -17,16 +17,16 @@ class TransactionSnapshotAdapter extends SnapshotAdapter[TransactionState] {
       fromUserId = state.fromUserId.map(_.toString).getOrElse(""),
       toUserId = state.toUserId.map(_.toString).getOrElse(""),
       amount = state.amount.map(m => MoneyPO(m.amount.doubleValue, m.currency.getCurrencyCode)),
-      status = writeStatus(state.status)
+      status = Some(writeStatus(state.status))
     )
   }
 
-  private def writeStatus(status: TransactionStatus): TransactionStatusPO = status match {
-    case New => TransactionStatusPO.NEW
-    case Initiated => TransactionStatusPO.INITIATED
-    case Prepared => TransactionStatusPO.PREPARED
-    case Completed => TransactionStatusPO.COMPLETED
-    case Failed => TransactionStatusPO.FAILED
+  private def writeStatus(status: TransactionStatus): TransactionStatusMessagePO = status match {
+    case New => TransactionStatusMessagePO(TransactionStatusPO.NEW)
+    case Initiated => TransactionStatusMessagePO(TransactionStatusPO.INITIATED)
+    case Prepared => TransactionStatusMessagePO(TransactionStatusPO.PREPARED)
+    case Completed => TransactionStatusMessagePO(TransactionStatusPO.COMPLETED)
+    case Failed(reason) => TransactionStatusMessagePO(TransactionStatusPO.FAILED)
   }
 
   override def fromJournal(from: Any): TransactionState = from match {
@@ -36,12 +36,12 @@ class TransactionSnapshotAdapter extends SnapshotAdapter[TransactionState] {
         fromUserId = if (po.fromUserId.isEmpty) None else Some(Id.of(po.fromUserId)),
         toUserId = if (po.toUserId.isEmpty) None else Some(Id.of(po.toUserId)),
         amount = po.amount.map(money => Money(BigDecimal(money.amount), Currency.getInstance(money.currency))),
-        status = po.status match {
+        status = po.status.get.status match {
           case TransactionStatusPO.NEW => New
           case TransactionStatusPO.INITIATED => Initiated
           case TransactionStatusPO.PREPARED => Prepared
           case TransactionStatusPO.COMPLETED => Completed
-          case TransactionStatusPO.FAILED => Failed
+          case TransactionStatusPO.FAILED => Failed("")
         }
       )
     case unknown => throw new IllegalStateException(s"Unknown journal type: ${unknown.getClass.getName}")

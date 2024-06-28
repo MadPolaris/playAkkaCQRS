@@ -3,14 +3,54 @@ import "credits.proto";
 
 package net.imadz.infrastructure.proto;
 
+// Define the Id type
+message string {
+  string value = 1;
+}
 
-// Define TransactionStatus enum
+// Define the Money type
+
+
+// Define the TransactionStatus enum
 enum TransactionStatusPO {
-  NEW = 0;
-  INITIATED = 1;
-  PREPARED = 2;
-  COMPLETED = 3;
-  FAILED = 4;
+  UNKNOWN = 0;
+  NEW = 1;
+  INITIATED = 2;
+  PREPARED = 3;
+  COMPLETED = 4;
+  FAILED = 5;
+}
+
+// Define the Failed status message
+message FailedStatusPO {
+  string reason = 1;
+}
+
+// Define the TransactionStatus union
+message TransactionStatusMessagePO {
+  TransactionStatusPO status = 1;
+  oneof details {
+    FailedStatusPO failed = 2;
+  }
+}
+
+// Define the TransactionState message
+message TransactionStatePO {
+  string id = 1;
+  string fromUserId = 2;
+  string toUserId = 3;
+  MoneyPO amount = 4;
+  TransactionStatusMessagePO status = 5;
+}
+
+// Define the TransactionEvent union
+message TransactionEventPO {
+  oneof event {
+    TransactionInitiatedPO initiated = 1;
+    TransactionPreparedPO prepared = 2;
+    TransactionCompletedPO completed = 3;
+    TransactionFailedPO failed = 4;
+  }
 }
 
 // Define the TransactionInitiated event
@@ -34,23 +74,4 @@ message TransactionCompletedPO {
 message TransactionFailedPO {
   string id = 1;
   string reason = 2;
-}
-
-// Define the TransactionEvent oneof
-message TransactionEventPO {
-  oneof event {
-    TransactionInitiatedPO transactionInitiatedPO = 1;
-    TransactionPreparedPO transactionPreparedPO = 2;
-    TransactionCompletedPO transactionCompletedPO = 3;
-    TransactionFailedPO transactionFailedPO = 4;
-  }
-}
-
-// Define the TransactionState snapshot
-message TransactionStatePO {
-  string id = 1; // UUID can be represented as a string
-  string fromUserId = 2;
-  string toUserId = 3;
-  MoneyPO amount = 4;
-  TransactionStatusPO status = 5;
 }

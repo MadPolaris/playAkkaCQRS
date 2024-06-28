@@ -1,5 +1,7 @@
 package net.imadz.common
 
+import net.imadz.common.CommonTypes.Id
+
 import java.util.UUID
 
 object CommonTypes {
@@ -25,5 +27,7 @@ object CommonTypes {
 }
 
 object Id {
-  def of(value: String): UUID = UUID.fromString(value)
+  def of(value: String): Id = UUID.fromString(value)
+
+  def gen: Id = java.util.UUID.randomUUID()
 }
