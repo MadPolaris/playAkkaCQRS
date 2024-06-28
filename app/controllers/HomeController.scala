@@ -9,7 +9,7 @@ import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.application.queries.{GetBalanceQuery, GetRecent12MonthsIncomeAndExpenseReport}
 import net.imadz.application.services.{CreateCreditBalanceService, DepositService, MoneyTransferService, WithdrawService}
-import net.imadz.infrastructure.bootstrap.{CreditBalanceBootstrap, MonthlyIncomeAndExpenseBootstrap, TransactionBootstrap, TransactionCoordinatorRepository}
+import net.imadz.infrastructure.bootstrap._
 import play.api.mvc._
 
 import javax.inject._
@@ -36,14 +36,15 @@ class HomeController @Inject()(
 )(implicit executionContext: ExecutionContext) extends BaseController
   with MonthlyIncomeAndExpenseBootstrap
   with CreditBalanceBootstrap
-  with TransactionBootstrap {
+  with TransactionBootstrap
+  with SagaTransactionCoordinatorBootstrap {
   val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
   implicit val scheduler: Scheduler = typedSystem.scheduler
 
   initMonthlySummaryProjection(Adapter.toTyped(system), sharding, monthlyRepository)
   initCreditBalanceAggregate(sharding)
+  initSagaTransactionCoordinatorAggregate(sharding, creditBalanceRepository)
   initTransactionAggregate(sharding, coordinatorRepository, creditBalanceRepository)
-
   /**
    * Create an Action to render an HTML page.
    *

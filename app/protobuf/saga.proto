@@ -35,12 +35,21 @@ message ParticipantPO {
   }
 }
 
+enum StepStatusPO {
+  STEP_CREATED = 0;
+  STEP_ONGOING = 1;
+  STEP_COMPLETED = 2;
+  STEP_FAILED = 3;
+}
+
+
 message TransactionStepPO {
   string id = 1;
   string phase = 2;
   // TransactionParticipant is an interface and cannot be directly serialized.
   // This needs to be handled in the application layer.
   ParticipantPO participant = 3;
+  StepStatusPO status = 4;
 }
 
 message ActorRefPO {

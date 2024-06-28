@@ -21,9 +21,14 @@ object TransactionCoordinator {
   }
 
   // @formatter:off
+  sealed trait StepStatus
+  case object StepCreated extends StepStatus
+  case object StepOngoing extends StepStatus
+  case object StepCompleted extends StepStatus
+  case object StepFailed extends StepStatus
   // Value Object
   case class Transaction(id: String, steps: Seq[TransactionStep], phases: Seq[String])
-  case class TransactionStep(id: String, phase: String, participant: Participant)
+  case class TransactionStep(id: String, phase: String, participant: Participant, status: StepStatus = StepCreated)
 
   // Commands
   sealed trait SagaCommand

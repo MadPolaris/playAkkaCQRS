@@ -77,25 +77,25 @@ object SagaCommandBehaviors {
   private def startNextStep(context: ActorContext[SagaCommand], maybeReplyTo: Option[ActorRef[TransactionResponse]])(state: State)(implicit ec: ExecutionContext): Effect[SagaEvent, State] = {
     state.currentTransaction match {
       case Some(transaction) if state.currentPhase.nonEmpty =>
-
         transaction.steps.find(step =>
-          //TODO: what if the step's participant is called, and what if it is not
           step.phase == state.currentPhase && !state.completedSteps.contains(step)
         ) match {
           case Some(step) =>
-            Effect
-              .persist(TransactionStepStarted(step))
-              .thenRun { _ =>
-                val future = state.currentPhase match {
-                  case "prepare" => step.participant.prepare(transaction.id, Map.empty)
-                  case "commit" => step.participant.commit(transaction.id, Map.empty)
-                  case "rollback" => step.participant.rollback(transaction.id, Map.empty)
-                }
-                future.onComplete {
-                  case Success(success) => context.self ! CompleteStep(step, success, maybeReplyTo)
-                  case Failure(_) => context.self ! CompleteStep(step, success = false, maybeReplyTo)
-                }
-              }
+            val isRecoveryProcess = maybeReplyTo.isEmpty
+
+            if (isRecoveryProcess && step.status == StepOngoing) {
+              // Recovery process for an ongoing step: re-run without generating event
+              Effect.none.thenRun(_ => executeStep(context, step, transaction, state.currentPhase, maybeReplyTo))
+            } else if (step.status == StepCreated || !isRecoveryProcess) {
+              // Normal process or Recovery process for a created step: generate event and run
+              Effect
+                .persist(TransactionStepStarted(step))
+                .thenRun(_ => executeStep(context, step, transaction, state.currentPhase, maybeReplyTo))
+            } else {
+              // For any other status during recovery, just execute the step
+              Effect.none.thenRun(_ => executeStep(context, step, transaction, state.currentPhase, maybeReplyTo))
+            }
+
           case None =>
             // No more steps in this phase, move to the next phase or complete the transaction
             Effect.persist(PhaseCompleted(state.currentPhase, success = true))
@@ -103,6 +103,24 @@ object SagaCommandBehaviors {
         }
       case _ =>
         Effect.none
+    }
+  }
+
+  private def executeStep(
+    context: ActorContext[SagaCommand],
+    step: TransactionStep,
+    transaction: Transaction,
+    currentPhase: String,
+    maybeReplyTo: Option[ActorRef[TransactionResponse]]
+  )(implicit ec: ExecutionContext): Unit = {
+    val future = currentPhase match {
+      case "prepare" => step.participant.prepare(transaction.id, Map.empty)
+      case "commit" => step.participant.commit(transaction.id, Map.empty)
+      case "rollback" => step.participant.rollback(transaction.id, Map.empty)
+    }
+    future.onComplete {
+      case Success(success) => context.self ! CompleteStep(step, success, maybeReplyTo)
+      case Failure(_) => context.self ! CompleteStep(step, success = false, maybeReplyTo)
     }
   }
 

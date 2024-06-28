@@ -14,7 +14,6 @@ import net.imadz.infrastructure.persistence.{TransactionCoordinatorEventAdapter,
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 
 trait SagaTransactionCoordinatorBootstrap {

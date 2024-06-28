@@ -10,9 +10,9 @@ object SagaEventHandler {
       case TransactionPhaseStarted(phase) =>
         state.copy(currentPhase = phase)
       case TransactionStepStarted(step) =>
-        state.copy(currentStep = Some(step))
-      case StepCompleted(step, _) =>
-        state.copy(completedSteps = state.completedSteps + step, currentStep = None)
+        state.copy(currentStep = Some(step.copy(status = StepOngoing)))
+      case StepCompleted(step, success) =>
+        state.copy(completedSteps = state.completedSteps + step.copy(status = if (success) StepCompleted else StepFailed), currentStep = None)
       case PhaseCompleted(phase, _) =>
         state.copy(currentPhase = phase)
       case TransactionCompleted(_) =>
