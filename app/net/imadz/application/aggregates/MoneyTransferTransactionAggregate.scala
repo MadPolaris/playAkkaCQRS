@@ -35,12 +35,12 @@ object MoneyTransferTransactionAggregate {
     val toAccountParticipant = new ToAccountParticipant(toUserId: Id, amount: Money, repository)
 
     Seq(
-      TransactionStep("deduct-from-account", "prepare", fromAccountParticipant),
-      TransactionStep("add-to-account", "prepare", toAccountParticipant),
+      TransactionStep("reserve-amount-from-account", "prepare", fromAccountParticipant),
+      TransactionStep("record-incoming-amount-to-account", "prepare", toAccountParticipant),
       TransactionStep("commit-from-account", "commit", fromAccountParticipant),
       TransactionStep("commit-to-account", "commit", toAccountParticipant),
-      TransactionStep("rollback-from-account", "rollback", fromAccountParticipant),
-      TransactionStep("rollback-to-account", "rollback", toAccountParticipant)
+      TransactionStep("compensate-from-account", "compensate", fromAccountParticipant),
+      TransactionStep("compensate-to-account", "compensate", toAccountParticipant)
     )
   }
 
@@ -58,21 +58,27 @@ object MoneyTransferTransactionAggregate {
     private val fromAccountRef = repo.findCreditBalanceByUserId(fromUserId)
 
     override def prepare(transactionId: String, context: Map[String, Any]): Future[Boolean] = {
-      fromAccountRef.ask(CreditBalanceAggregate.ReserveFunds(Id.of(transactionId), amount, _))
-        .mapTo[FundsReservationConfirmation]
-        .map(_.error.isEmpty)
+      executeWithRetryClassification(
+        fromAccountRef.ask(CreditBalanceAggregate.ReserveFunds(Id.of(transactionId), amount, _))
+          .mapTo[FundsReservationConfirmation]
+          .map(_.error.isEmpty)
+      )
     }
 
     override def commit(transactionId: String, context: Map[String, Any]): Future[Boolean] = {
-      fromAccountRef.ask(CreditBalanceAggregate.DeductFunds(Id.of(transactionId), _))
-        .mapTo[FundsDeductionConfirmation]
-        .map(_.error.isEmpty)
+      executeWithRetryClassification(
+        fromAccountRef.ask(CreditBalanceAggregate.DeductFunds(Id.of(transactionId), _))
+          .mapTo[FundsDeductionConfirmation]
+          .map(_.error.isEmpty)
+      )
     }
 
-    override def rollback(transactionId: String, context: Map[String, Any]): Future[Boolean] = {
-      fromAccountRef.ask(CreditBalanceAggregate.ReleaseReservedFunds(Id.of(transactionId), _))
-        .mapTo[FundsReleaseConfirmation]
-        .map(_.error.isEmpty)
+    override def compensate(transactionId: String, context: Map[String, Any]): Future[Boolean] = {
+      executeWithRetryClassification(
+        fromAccountRef.ask(CreditBalanceAggregate.ReleaseReservedFunds(Id.of(transactionId), _))
+          .mapTo[FundsReleaseConfirmation]
+          .map(_.error.isEmpty)
+      )
     }
   }
 
@@ -82,21 +88,27 @@ object MoneyTransferTransactionAggregate {
     implicit val timeout: Timeout = 5.seconds
 
     override def prepare(transactionId: String, context: Map[String, Any]): Future[Boolean] = {
-      toAccountRef.ask(CreditBalanceAggregate.RecordIncomingCredits(Id.of(transactionId), amount, _))
-        .mapTo[RecordIncomingCreditsConfirmation]
-        .map(_.error.isEmpty)
+      executeWithRetryClassification(
+        toAccountRef.ask(CreditBalanceAggregate.RecordIncomingCredits(Id.of(transactionId), amount, _))
+          .mapTo[RecordIncomingCreditsConfirmation]
+          .map(_.error.isEmpty)
+      )
     }
 
     override def commit(transactionId: String, context: Map[String, Any]): Future[Boolean] = {
-      toAccountRef.ask(CreditBalanceAggregate.CommitIncomingCredits(Id.of(transactionId), _))
-        .mapTo[CommitIncomingCreditsConfirmation]
-        .map(_.error.isEmpty)
+      executeWithRetryClassification(
+        toAccountRef.ask(CreditBalanceAggregate.CommitIncomingCredits(Id.of(transactionId), _))
+          .mapTo[CommitIncomingCreditsConfirmation]
+          .map(_.error.isEmpty)
+      )
     }
 
-    override def rollback(transactionId: String, context: Map[String, Any]): Future[Boolean] = {
-      toAccountRef.ask(CreditBalanceAggregate.CancelIncomingCredit(Id.of(transactionId), _))
-        .mapTo[CancelIncomingCreditConfirmation]
-        .map(_.error.isEmpty)
+    override def compensate(transactionId: String, context: Map[String, Any]): Future[Boolean] = {
+      executeWithRetryClassification(
+        toAccountRef.ask(CreditBalanceAggregate.CancelIncomingCredit(Id.of(transactionId), _))
+          .mapTo[CancelIncomingCreditConfirmation]
+          .map(_.error.isEmpty)
+      )
     }
   }
 

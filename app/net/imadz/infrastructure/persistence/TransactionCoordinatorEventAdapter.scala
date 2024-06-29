@@ -3,10 +3,12 @@ package net.imadz.infrastructure.persistence
 import akka.persistence.typed.{EventAdapter, EventSeq}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.application.saga.TransactionCoordinator.{StepStatus, _}
-import net.imadz.infrastructure.saga.proto.saga.StepStatusPO.{STEP_COMPLETED, STEP_CREATED, STEP_FAILED, STEP_ONGOING}
+import net.imadz.infrastructure.saga.proto.saga.StepStatusPO.{STEP_COMPENSATED, STEP_COMPLETED, STEP_CREATED, STEP_FAILED, STEP_ONGOING, STEP_TIMEOUT}
 import net.imadz.infrastructure.saga.proto.saga._
 
+import java.util.concurrent.TimeUnit
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.FiniteDuration
 
 case class TransactionCoordinatorEventAdapter(repository: CreditBalanceRepository, ec: ExecutionContext) extends EventAdapter[SagaEvent, SagaEventPO.Event] with ParticipantAdapter {
 
@@ -32,11 +34,17 @@ case class TransactionCoordinatorEventAdapter(repository: CreditBalanceRepositor
     }
 
   private def serializeTransactionStep(step: TransactionStep): TransactionStepPO = {
-    TransactionStepPO(step.id, step.phase, serializeParticipant(step.participant), serializeStepStatus(step.status))
+    TransactionStepPO(step.id, step.phase,
+      serializeParticipant(step.participant),
+      serializeStepStatus(step.status),
+      step.failedReason, step.retries, step.timeoutDuration.length.toInt)
   }
 
   private def deserializeTransactionStepPO(stepPO: TransactionStepPO): TransactionStep =
-    TransactionStep(stepPO.id, stepPO.phase, deserializeParticipant(stepPO.getParticipant), deserializeStepStatus(stepPO.status))
+    TransactionStep(stepPO.id, stepPO.phase,
+      deserializeParticipant(stepPO.getParticipant), deserializeStepStatus(stepPO.status),
+      stepPO.failedReason, stepPO.retries, FiniteDuration(stepPO.timeoutDuration, TimeUnit.SECONDS)
+    )
 
   private def serializeStepStatus(status: StepStatus): StepStatusPO = status match {
     case StepCreated => StepStatusPO.STEP_CREATED
@@ -50,6 +58,8 @@ case class TransactionCoordinatorEventAdapter(repository: CreditBalanceRepositor
     case STEP_ONGOING => StepOngoing
     case STEP_COMPLETED => StepCompleted
     case STEP_FAILED => StepFailed
+    case STEP_TIMEOUT => StepTimedOut
+    case STEP_COMPENSATED => StepCompensated
   }
 
   override def manifest(event: SagaEvent): String = event.getClass.getName

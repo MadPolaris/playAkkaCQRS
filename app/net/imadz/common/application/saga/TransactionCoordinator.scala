@@ -7,17 +7,43 @@ import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
 import net.imadz.common.application.saga.behaviors.{SagaCommandBehaviors, SagaEventHandler}
 
-import scala.concurrent.{ExecutionContext, Future}
+import java.net.ConnectException
+import java.sql.SQLTransientException
+import scala.concurrent.duration.{DurationInt, FiniteDuration}
+import scala.concurrent.{ExecutionContext, Future, TimeoutException}
 
 
 object TransactionCoordinator {
+
+  case class RetryableFailure(message: String) extends RuntimeException(message)
+  case class NonRetryableFailure(message: String) extends RuntimeException(message)
   // Any method of Participant should be idempotent
   trait Participant {
     def prepare(transactionId: String, context: Map[String, Any]): Future[Boolean]
 
     def commit(transactionId: String, context: Map[String, Any]): Future[Boolean]
 
-    def rollback(transactionId: String, context: Map[String, Any]): Future[Boolean]
+    def compensate(transactionId: String, context: Map[String, Any]): Future[Boolean]
+
+    protected def executeWithRetryClassification[T](
+      operation: => Future[T]
+    )(implicit ec: ExecutionContext): Future[T] = {
+      operation.recoverWith {
+        case e: Exception => classifyFailure(e) match {
+          case RetryableFailure(msg) => Future.failed(RetryableFailure(msg))
+          case NonRetryableFailure(msg) => Future.failed(NonRetryableFailure(msg))
+        }
+      }
+    }
+
+    protected def classifyFailure(e: Exception): Exception = e match {
+      case _: TimeoutException => RetryableFailure("Operation timed out")
+      case _: ConnectException => RetryableFailure("Connection failed")
+      case _: SQLTransientException => RetryableFailure("Transient database error")
+      case _: IllegalArgumentException => NonRetryableFailure("Invalid argument")
+      //case _: EntityNotFoundException => NonRetryableFailure("Entity not found")
+      case _ => NonRetryableFailure("Unclassified error: " + e.getMessage)
+    }
   }
 
   // @formatter:off
@@ -26,9 +52,24 @@ object TransactionCoordinator {
   case object StepOngoing extends StepStatus
   case object StepCompleted extends StepStatus
   case object StepFailed extends StepStatus
+  case object StepTimedOut extends StepStatus
+  case object StepCompensated extends StepStatus
+
   // Value Object
-  case class Transaction(id: String, steps: Seq[TransactionStep], phases: Seq[String])
-  case class TransactionStep(id: String, phase: String, participant: Participant, status: StepStatus = StepCreated)
+  case class Transaction(
+    id: String,
+    steps: Seq[TransactionStep],
+    phases: Seq[String])
+
+  case class TransactionStep(
+    id: String,
+    phase: String,
+    participant: Participant,
+    status: StepStatus = StepCreated,
+    failedReason: Option[String] = None,
+    retries: Int = 0,
+    timeoutDuration: FiniteDuration = 30.seconds
+  )
 
   // Commands
   sealed trait SagaCommand
@@ -36,11 +77,17 @@ object TransactionCoordinator {
   case class StartNextStep(replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
   case class CompleteStep(step: TransactionStep, success: Boolean, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
   case class CompletePhase(phase: String, success: Boolean, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
+  case class ExecuteStep(step: TransactionStep, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
+  case class RetryStep(step: TransactionStep, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
+  case class StepTimeout(step: TransactionStep, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
+  case class CompensateStep(step: TransactionStep, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
 
   sealed trait TransactionResponse
   object TransactionResponse {
     case class Completed(transactionId: String) extends TransactionResponse
     case class Failed(transactionId: String, reason: String) extends TransactionResponse
+    case class PartiallyCompleted(transactionId: String, completedSteps: Seq[TransactionStep], failedSteps: Seq[TransactionStep]) extends TransactionResponse
+
   }
   // Events
   sealed trait SagaEvent
@@ -48,6 +95,9 @@ object TransactionCoordinator {
   final case class TransactionPhaseStarted(phase: String) extends SagaEvent
   final case class TransactionStepStarted(step: TransactionStep) extends SagaEvent
   final case class StepCompleted(step: TransactionStep, success: Boolean) extends SagaEvent
+  final case class StepFailed(step: TransactionStep, reason: String) extends SagaEvent
+  final case class StepTimedOut(step: TransactionStep) extends SagaEvent
+  final case class StepCompensated(step: TransactionStep) extends SagaEvent
   final case class PhaseCompleted(phase: String, success: Boolean) extends SagaEvent
   final case class TransactionCompleted(success: Boolean) extends SagaEvent
 
@@ -55,6 +105,8 @@ object TransactionCoordinator {
   final case class State(
     currentTransaction: Option[Transaction] = None,
     completedSteps: Set[TransactionStep] = Set.empty,
+    failedSteps: Set[TransactionStep] = Set.empty,
+    compensatedSteps: Set[TransactionStep] = Set.empty,
     currentPhase: String = "",
     currentStep: Option[TransactionStep] = None
   )
@@ -78,7 +130,7 @@ object TransactionCoordinator {
   private def onRecoveryCompleted(context: ActorContext[SagaCommand])(state: State): Unit = {
     state.currentTransaction.foreach { _ =>
       state.currentPhase match {
-        case "prepare" | "commit" | "rollback" => context.self ! StartNextStep(None)
+        case "prepare" | "commit" | "compensate" => context.self ! StartNextStep(None)
         case _ => // Do nothing
       }
     }

@@ -14,7 +14,9 @@ case class TransactionCoordinatorSnapshotAdapter(repository: CreditBalanceReposi
       currentTransaction = state.currentTransaction.map(transactionToProto),
       completedSteps = state.completedSteps.map(stepToProto).toSeq,
       currentPhase = state.currentPhase,
-      currentStep = state.currentStep.map(stepToProto)
+      currentStep = state.currentStep.map(stepToProto),
+      failedSteps = state.failedSteps.map(stepToProto).toSeq,
+      compensateSteps = state.compensatedSteps.map(stepToProto).toSeq
     )
   }
 
@@ -23,6 +25,8 @@ case class TransactionCoordinatorSnapshotAdapter(repository: CreditBalanceReposi
       TransactionCoordinator.State(
         currentTransaction = statePO.currentTransaction.map(protoToTransaction),
         completedSteps = statePO.completedSteps.map(protoToStep).toSet,
+        failedSteps = statePO.failedSteps.map(protoToStep).toSet,
+        compensatedSteps = statePO.compensateSteps.map(protoToStep).toSet,
         currentPhase = statePO.currentPhase,
         currentStep = statePO.currentStep.map(protoToStep)
       )

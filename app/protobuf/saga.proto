@@ -14,6 +14,7 @@ message TransactionResponsePO {
   oneof response {
     CompletedPO completed = 1;
     FailedPO failed = 2;
+    PartiallyCompletedPO partial = 3;
   }
 }
 
@@ -24,6 +25,12 @@ message CompletedPO {
 message FailedPO {
   string transaction_id = 1;
   string reason = 2;
+}
+
+message PartiallyCompletedPO {
+  string transaction_id = 1;
+  repeated TransactionStepPO completedSteps = 2;
+  repeated TransactionStepPO failedSteps = 3;
 }
 
 message ParticipantPO {
@@ -40,6 +47,8 @@ enum StepStatusPO {
   STEP_ONGOING = 1;
   STEP_COMPLETED = 2;
   STEP_FAILED = 3;
+  STEP_TIMEOUT = 4;
+  STEP_COMPENSATED = 5;
 }
 
 
@@ -50,11 +59,11 @@ message TransactionStepPO {
   // This needs to be handled in the application layer.
   ParticipantPO participant = 3;
   StepStatusPO status = 4;
+  optional string failedReason = 5;
+  int32 retries = 6;
+  int32 timeoutDuration = 7; // seconds
 }
 
-message ActorRefPO {
-  string path = 1; // Simplified representation of ActorRef
-}
 
 message SagaEventPO {
   oneof event {
@@ -84,6 +93,18 @@ message StepCompletedPO {
   bool success = 2;
 }
 
+message StepFailedPO{
+  TransactionStepPO step = 1;
+}
+
+message StepTimedOutPO {
+  TransactionStepPO step = 1;
+}
+
+message StepCompensatedPO {
+  TransactionStepPO step = 1;
+}
+
 message PhaseCompletedPO {
   string phase = 1;
   bool success = 2;
@@ -96,6 +117,8 @@ message TransactionCompletedPO {
 message StatePO {
   optional TransactionPO current_transaction = 1;
   repeated TransactionStepPO completed_steps = 2;
-  string current_phase = 3;
-  optional TransactionStepPO current_step = 4;
+  repeated TransactionStepPO failed_steps = 3;
+  repeated TransactionStepPO compensate_steps = 4;
+  string current_phase = 5;
+  optional TransactionStepPO current_step = 6;
 }
