@@ -17,7 +17,7 @@ object TransactionCoordinator {
 
   // Value Object
   sealed trait TransactionPhase {
-    def key: String = toString
+    val key: String = toString
   }
 
   case object PreparePhase extends TransactionPhase {
