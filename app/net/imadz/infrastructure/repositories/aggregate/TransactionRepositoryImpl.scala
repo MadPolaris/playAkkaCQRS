@@ -5,7 +5,9 @@ import net.imadz.application.aggregates.MoneyTransferTransactionAggregate
 import net.imadz.application.aggregates.repository.TransactionRepository
 import net.imadz.common.CommonTypes.Id
 
-class TransactionRepositoryImpl(sharding: ClusterSharding) extends TransactionRepository {
+import javax.inject.Inject
+
+class TransactionRepositoryImpl @Inject()(sharding: ClusterSharding) extends TransactionRepository {
 
   override def findTransactionById(transaction: Id): EntityRef[MoneyTransferTransactionAggregate.MoneyTransferTransactionCommand] =
     sharding.entityRefFor(MoneyTransferTransactionAggregate.TransactionEntityTypeKey, transaction.toString)
