@@ -9,7 +9,7 @@ import net.imadz.application.aggregates.MoneyTransferTransactionAggregate._
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.Id
 import net.imadz.common.application.saga.TransactionCoordinator
-import net.imadz.common.application.saga.TransactionCoordinator.{Transaction, TransactionResponse}
+import net.imadz.common.application.saga.TransactionCoordinator.{CommitPhase, CompensatePhase, PreparePhase, Transaction, TransactionResponse}
 import net.imadz.domain.entities.TransactionEntity._
 
 import scala.concurrent.ExecutionContext
@@ -26,7 +26,7 @@ object MoneyTransferTransactionBehaviors {
       val transaction = Transaction(
         id = transactionId,
         steps = steps,
-        phases = Seq("prepare", "commit", "rollback"))
+        phases = Seq(PreparePhase.key, CommitPhase.key, CompensatePhase.key))
       Effect.persist(TransactionInitiated(fromUserId, toUserId, amount))
         .thenRun { _ =>
           coordinator.ask[TransactionResponse](intermediateReplyTo => TransactionCoordinator.StartTransaction(transaction, intermediateReplyTo))

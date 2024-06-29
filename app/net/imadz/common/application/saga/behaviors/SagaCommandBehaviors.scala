@@ -28,7 +28,7 @@ object SagaCommandBehaviors {
         Effect.persist(
           List(
             TransactionStarted(transaction),
-            TransactionPhaseStarted("prepare"))
+            TransactionPhaseStarted(PreparePhase.key))
         ).thenRun(state => startPreparePhase(context, Some(replyTo))(state))
 
       case StartNextStep(replyTo) =>
@@ -58,17 +58,17 @@ object SagaCommandBehaviors {
         Effect.persist(TransactionStepStarted(step))
           .thenRun(_ => executeCompensation(context, step, state.currentTransaction.get, replyTo))
 
-      case CompletePhase("prepare", true, replyTo) =>
+      case CompletePhase(preparePhase, true, replyTo) =>
         Effect.persist(
           List(
-            PhaseCompleted("prepare", true),
-            TransactionPhaseStarted("commit")
+            PhaseCompleted(preparePhase, success = true),
+            TransactionPhaseStarted(CommitPhase.key)
           )).thenRun(_ => startCommitPhase(context, replyTo))
 
-      case CompletePhase("commit", true, maybeReplyTo) =>
+      case CompletePhase(commitPhase, true, maybeReplyTo) =>
         val baseEffect = Effect.persist[SagaEvent, State](
           List(
-            PhaseCompleted("commit", true),
+            PhaseCompleted(commitPhase, success = true),
             TransactionCompleted(true)
           ))
 
@@ -76,10 +76,10 @@ object SagaCommandBehaviors {
           .map(baseEffect.thenReply[TransactionResponse](_)(_ => TransactionResponse.Completed(state.currentTransaction.get.id)))
           .getOrElse(baseEffect)
 
-      case CompletePhase("compensate", success, maybeReplyTo) =>
+      case CompletePhase(compensatePhase, success, maybeReplyTo) =>
         val baseEffect = Effect
           .persist[SagaEvent, State](List(
-            PhaseCompleted("compensate", success),
+            PhaseCompleted(compensatePhase, success),
             TransactionCompleted(false)
           ))
         maybeReplyTo.map(
@@ -148,7 +148,7 @@ object SagaCommandBehaviors {
         Effect.persist(
           List(
             StepFailed(step, "Max retries reached"),
-            TransactionPhaseStarted("compensate")
+            TransactionPhaseStarted(CompensatePhase.key)
           )).thenRun(_ => startCompensationPhase(context, replyTo))
       }
     } else {
@@ -156,7 +156,7 @@ object SagaCommandBehaviors {
       Effect.persist(
         List(
           StepFailed(step, "Circuit breaker is open, cannot retry"),
-          TransactionPhaseStarted("compensate")
+          TransactionPhaseStarted(CompensatePhase.key)
         )).thenRun(_ => {
         context.log.warn(s"Circuit breaker is open for step ${step.id}, moving to compensation phase")
         startCompensationPhase(context, replyTo)
@@ -178,9 +178,9 @@ object SagaCommandBehaviors {
     circuitBreaker: CircuitBreaker
   )(implicit ec: ExecutionContext): Unit = {
     val stepExecution = () => currentPhase match {
-      case "prepare" => step.participant.prepare(transaction.id, Map.empty)
-      case "commit" => step.participant.commit(transaction.id, Map.empty)
-      case "compensate" => step.participant.compensate(transaction.id, Map.empty)
+      case PreparePhase.key => step.participant.prepare(transaction.id, Map.empty)
+      case CommitPhase.key => step.participant.commit(transaction.id, Map.empty)
+      case CompensatePhase.key => step.participant.compensate(transaction.id, Map.empty)
     }
 
     val futureWithCircuitBreaker = circuitBreaker.withCircuitBreaker(stepExecution())

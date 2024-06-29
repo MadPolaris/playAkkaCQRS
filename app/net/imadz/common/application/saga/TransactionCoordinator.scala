@@ -14,9 +14,26 @@ import scala.concurrent.{ExecutionContext, Future, TimeoutException}
 
 
 object TransactionCoordinator {
+  sealed trait TransactionPhase {
+    def key: String = toString
+  }
 
-  case class RetryableFailure(message: String) extends RuntimeException(message)
-  case class NonRetryableFailure(message: String) extends RuntimeException(message)
+  case object PreparePhase extends TransactionPhase {
+    override def toString: String = "prepare"
+  }
+
+  case object CommitPhase extends TransactionPhase {
+    override def toString: String = "commit"
+  }
+
+  case object CompensatePhase extends TransactionPhase {
+    override def toString: String = "compensate"
+  }
+
+  sealed trait RetryableOrNotException
+  case class RetryableFailure(message: String) extends RuntimeException(message) with RetryableOrNotException
+  case class NonRetryableFailure(message: String) extends RuntimeException(message) with RetryableOrNotException
+
   // Any method of Participant should be idempotent
   trait Participant {
     def prepare(transactionId: String, context: Map[String, Any]): Future[Boolean]
@@ -36,13 +53,19 @@ object TransactionCoordinator {
       }
     }
 
-    protected def classifyFailure(e: Exception): Exception = e match {
+    private def classifyFailure(e: Exception): RetryableOrNotException = defaultClassification
+      .orElse(specificClassification)
+      .apply(e)
+
+    protected def defaultClassification: PartialFunction[Exception, RetryableOrNotException] = {
       case _: TimeoutException => RetryableFailure("Operation timed out")
       case _: ConnectException => RetryableFailure("Connection failed")
       case _: SQLTransientException => RetryableFailure("Transient database error")
       case _: IllegalArgumentException => NonRetryableFailure("Invalid argument")
-      //case _: EntityNotFoundException => NonRetryableFailure("Entity not found")
-      case _ => NonRetryableFailure("Unclassified error: " + e.getMessage)
+    }
+
+    protected def specificClassification: PartialFunction[Exception, RetryableOrNotException] = {
+      case e => NonRetryableFailure("Unclassified error: " + e.getMessage)
     }
   }
 
@@ -130,11 +153,12 @@ object TransactionCoordinator {
   private def onRecoveryCompleted(context: ActorContext[SagaCommand])(state: State): Unit = {
     state.currentTransaction.foreach { _ =>
       state.currentPhase match {
-        case "prepare" | "commit" | "compensate" => context.self ! StartNextStep(None)
+        case PreparePhase.key | CommitPhase.key | CompensatePhase.key => context.self ! StartNextStep(None)
         case _ => // Do nothing
       }
     }
   }
+
   // @formatter:off
   val entityTypeKey: EntityTypeKey[SagaCommand] = EntityTypeKey("SagaTransaction")
   val tags: Vector[String] = Vector.tabulate(5)(i => s"SagaTransaction-$i")
