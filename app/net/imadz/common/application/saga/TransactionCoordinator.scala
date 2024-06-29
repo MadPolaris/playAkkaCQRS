@@ -14,6 +14,8 @@ import scala.concurrent.{ExecutionContext, Future, TimeoutException}
 
 
 object TransactionCoordinator {
+
+  // Value Object
   sealed trait TransactionPhase {
     def key: String = toString
   }
@@ -78,7 +80,6 @@ object TransactionCoordinator {
   case object StepTimedOut extends StepStatus
   case object StepCompensated extends StepStatus
 
-  // Value Object
   case class Transaction(
     id: String,
     steps: Seq[TransactionStep],
