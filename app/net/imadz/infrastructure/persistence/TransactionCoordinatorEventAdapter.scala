@@ -2,7 +2,7 @@ package net.imadz.infrastructure.persistence
 
 import akka.persistence.typed.{EventAdapter, EventSeq}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
-import net.imadz.common.application.saga.TransactionCoordinator.{StepStatus, _}
+import net.imadz.common.application.saga.TransactionCoordinator._
 import net.imadz.infrastructure.saga.proto.saga.StepStatusPO.{STEP_COMPENSATED, STEP_COMPLETED, STEP_CREATED, STEP_FAILED, STEP_ONGOING, STEP_TIMEOUT}
 import net.imadz.infrastructure.saga.proto.saga._
 
@@ -30,6 +30,12 @@ case class TransactionCoordinatorEventAdapter(repository: CreditBalanceRepositor
         SagaEventPO.Event.PhaseCompleted(PhaseCompletedPO(phase, success))
       case TransactionCompleted(success) =>
         SagaEventPO.Event.TransactionCompleted(TransactionCompletedPO(success))
+      case StepFailed(step, reason) =>
+        SagaEventPO.Event.StepFailed(StepFailedPO(Some(serializeTransactionStep(step)), reason))
+      case StepTimedOut(step) =>
+        SagaEventPO.Event.StepTimedOut(StepTimedOutPO(Some(serializeTransactionStep(step))))
+      case StepCompensated(step) =>
+        SagaEventPO.Event.StepCompensated(StepCompensatedPO(Some(serializeTransactionStep(step))))
 
     }
 
@@ -51,6 +57,8 @@ case class TransactionCoordinatorEventAdapter(repository: CreditBalanceRepositor
     case StepOngoing => StepStatusPO.STEP_ONGOING
     case StepCompleted => StepStatusPO.STEP_COMPLETED
     case StepFailed => StepStatusPO.STEP_FAILED
+    case StepTimedOut => StepStatusPO.STEP_TIMEOUT
+    case StepCompensated => StepStatusPO.STEP_COMPENSATED
   }
 
   private def deserializeStepStatus(stepStatusPO: StepStatusPO): StepStatus = stepStatusPO match {
@@ -82,6 +90,12 @@ case class TransactionCoordinatorEventAdapter(repository: CreditBalanceRepositor
         EventSeq.single(PhaseCompleted(po.phase, po.success))
       case SagaEventPO.Event.TransactionCompleted(po) =>
         EventSeq.single(TransactionCompleted(po.success))
+      case SagaEventPO.Event.StepFailed(po) =>
+        EventSeq.single(StepFailed(deserializeTransactionStepPO(po.step.get), po.reason))
+      case SagaEventPO.Event.StepTimedOut(po) =>
+        EventSeq.single(StepTimedOut(deserializeTransactionStepPO(po.step.get)))
+      case SagaEventPO.Event.StepCompensated(po) =>
+        EventSeq.single(StepCompensated(deserializeTransactionStepPO(po.step.get)))
       case _ =>
         EventSeq.empty
     }
