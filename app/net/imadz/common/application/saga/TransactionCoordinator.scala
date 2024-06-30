@@ -5,6 +5,7 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
+import net.imadz.common.CborSerializable
 import net.imadz.common.application.saga.behaviors.{SagaCommandBehaviors, SagaEventHandler}
 
 import java.net.ConnectException
@@ -96,7 +97,7 @@ object TransactionCoordinator {
   )
 
   // Commands
-  sealed trait SagaCommand
+  sealed trait SagaCommand extends CborSerializable
   final case class StartTransaction(transaction: Transaction, replyTo: ActorRef[TransactionResponse]) extends SagaCommand
   case class StartNextStep(replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
   case class CompleteStep(step: TransactionStep, success: Boolean, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
@@ -106,7 +107,7 @@ object TransactionCoordinator {
   case class StepTimeout(step: TransactionStep, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
   case class CompensateStep(step: TransactionStep, replyTo: Option[ActorRef[TransactionResponse]]) extends SagaCommand
 
-  sealed trait TransactionResponse
+  sealed trait TransactionResponse extends CborSerializable
   object TransactionResponse {
     case class Completed(transactionId: String) extends TransactionResponse
     case class Failed(transactionId: String, reason: String) extends TransactionResponse

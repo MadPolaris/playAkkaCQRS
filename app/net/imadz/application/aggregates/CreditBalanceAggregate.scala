@@ -4,14 +4,15 @@ import akka.actor.typed.ActorRef
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.persistence.typed.scaladsl.Effect
 import net.imadz.application.aggregates.behaviors.CreditBalanceBehaviors
-import net.imadz.common.CommonTypes.{CborSerializable, Id, iMadzError}
+import net.imadz.common.CborSerializable
+import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.domain.entities.CreditBalanceEntity.{CreditBalanceEvent, CreditBalanceState}
 import net.imadz.domain.values.Money
 
 object CreditBalanceAggregate {
 
   // Commands Section
-  sealed trait CreditBalanceCommand
+  sealed trait CreditBalanceCommand extends CborSerializable
   case class AddInitial(initial: Money, replyTo: ActorRef[CreditBalanceConfirmation]) extends CreditBalanceCommand
   case class Deposit(change: Money, replyTo: ActorRef[CreditBalanceConfirmation]) extends CreditBalanceCommand
   case class Withdraw(change: Money, replyTo: ActorRef[CreditBalanceConfirmation]) extends CreditBalanceCommand
