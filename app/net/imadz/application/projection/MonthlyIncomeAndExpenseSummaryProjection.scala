@@ -12,14 +12,15 @@ import akka.projection.{ProjectionId, eventsourced}
 import net.imadz.application.aggregates.CreditBalanceAggregate
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.domain.entities.CreditBalanceEntity.CreditBalanceEvent
+import net.imadz.infrastructure.proto.credits.CreditBalanceEventPO
 
 object MonthlyIncomeAndExpenseSummaryProjection {
 
   val projectionName = "MonthlyIncomeAndExpenseSummary"
 
 
-  def createProjection(system: ActorSystem[_], sharding: ClusterSharding, index: Int, repository: MonthlyIncomeAndExpenseSummaryRepository): ExactlyOnceProjection[Offset, EventEnvelope[CreditBalanceEvent]] = {
-    val sourceProvider: SourceProvider[Offset, eventsourced.EventEnvelope[CreditBalanceEvent]] = EventSourcedProvider
+  def createProjection(system: ActorSystem[_], sharding: ClusterSharding, index: Int, repository: MonthlyIncomeAndExpenseSummaryRepository): ExactlyOnceProjection[Offset, EventEnvelope[CreditBalanceEventPO.Event]] = {
+    val sourceProvider: SourceProvider[Offset, eventsourced.EventEnvelope[CreditBalanceEventPO.Event]] = EventSourcedProvider
       .eventsByTag(system = system,
         readJournalPluginId = MongoReadJournal.Identifier,
         tag = CreditBalanceAggregate.tags(index))
