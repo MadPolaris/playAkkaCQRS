@@ -12,6 +12,7 @@ import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id
 import net.imadz.common.application.saga.TransactionCoordinator
+import net.imadz.common.application.saga.repository.TransactionCoordinatorRepository
 import net.imadz.domain.entities.TransactionEntity
 import net.imadz.domain.entities.behaviors.TransactionEventHandler
 import net.imadz.infrastructure.persistence.{TransactionEventAdapter, TransactionSnapshotAdapter}
