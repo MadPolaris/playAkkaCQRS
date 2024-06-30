@@ -23,11 +23,12 @@ CREATE TABLE `akka_projection_offset_store` (
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
 
 
-CREATE TABLE `monthly_income_and_expense` (
+CREATE TABLE `monthly_income_and_expense_summary` (
                                                 `user_id` varchar(255) NOT NULL,
                                                 `year` int(4) NOT NULL,
                                                 `month` int(2) NOT NULL,
-                                                `income` DECIMAL(19, 4) NOT NULL,
-                                                `expense` DECIMAL(19, 4) NOT NULL,
+                                                `day` int(2) NOT NULL,
+                                                `income` DECIMAL(19, 4) NOT NULL default 0,
+                                                `expense` DECIMAL(19, 4) NOT NULL default 0,
                                                 PRIMARY KEY (`user_id`,`year`, `month`)
 ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
