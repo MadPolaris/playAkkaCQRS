@@ -12,11 +12,6 @@ object CommonTypes {
 
   trait ReadModel
 
-  /**
-   * Marker trait for serialization with Jackson CBOR
-   */
-  trait CborSerializable
-
   trait DomainPolicy[Event, State, Param] {
     def apply(state: State, param: Param): Either[iMadzError, List[Event]]
   }
