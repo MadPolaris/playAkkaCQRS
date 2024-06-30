@@ -5,7 +5,8 @@ import akka.actor.typed.javadsl.Adapter
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.actor.{ActorSystem, typed}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
+import net.imadz.application.aggregates.repository.{CreditBalanceRepository, TransactionRepository}
+import net.imadz.application.projection.ScalikeJdbcSetup
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.application.queries.{GetBalanceQuery, GetRecent12MonthsIncomeAndExpenseReport}
 import net.imadz.application.services.{CreateCreditBalanceService, DepositService, MoneyTransferService, WithdrawService}
@@ -24,25 +25,28 @@ import scala.concurrent.ExecutionContext
  */
 @Singleton
 class HomeController @Inject()(
-  val system: ActorSystem,
-  val sharding: ClusterSharding,
-  val monthlyQuery: GetRecent12MonthsIncomeAndExpenseReport,
-  val monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
-  val creditBalanceRepository: CreditBalanceRepository,
-  val coordinatorRepository: TransactionCoordinatorRepository,
-  val getBalanceQuery: GetBalanceQuery,
-  val createService: CreateCreditBalanceService,
-  val depositService: DepositService,
-  val withdrawService: WithdrawService,
-  val moneyTransferService: MoneyTransferService,
-  val controllerComponents: ControllerComponents
-)(implicit executionContext: ExecutionContext) extends BaseController
+                                val system: ActorSystem,
+                                val sharding: ClusterSharding,
+                                val monthlyQuery: GetRecent12MonthsIncomeAndExpenseReport,
+                                val monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
+                                val creditBalanceRepository: CreditBalanceRepository,
+                                val transactionRepository: TransactionRepository,
+                                val coordinatorRepository: TransactionCoordinatorRepository,
+                                val getBalanceQuery: GetBalanceQuery,
+                                val createService: CreateCreditBalanceService,
+                                val depositService: DepositService,
+                                val withdrawService: WithdrawService,
+                                val controllerComponents: ControllerComponents
+                              )(implicit executionContext: ExecutionContext) extends BaseController
   with MonthlyIncomeAndExpenseBootstrap
   with CreditBalanceBootstrap
   with TransactionBootstrap
   with SagaTransactionCoordinatorBootstrap {
   val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
+  ScalikeJdbcSetup.init(Adapter.toTyped(system))
+
   implicit val scheduler: Scheduler = typedSystem.scheduler
+  val moneyTransferService: MoneyTransferService = new MoneyTransferService(system.toTyped, transactionRepository)
 
   initMonthlySummaryProjection(Adapter.toTyped(system), sharding, monthlyRepository)
   initCreditBalanceAggregate(sharding)
