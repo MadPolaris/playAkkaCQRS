@@ -5,8 +5,8 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityContext, EntityRef}
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{EventSourcedBehavior, RetentionCriteria}
-import net.imadz.application.aggregates.CreditBalanceAggregate
 import net.imadz.application.aggregates.MoneyTransferTransactionAggregate.{MoneyTransferTransactionCommand, TransactionEntityTypeKey}
+import net.imadz.application.aggregates.TransactionAggregate
 import net.imadz.application.aggregates.behaviors.MoneyTransferTransactionBehaviors
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.Id
@@ -27,8 +27,8 @@ trait TransactionBootstrap {
     repository: CreditBalanceRepository)(implicit ec: ExecutionContext, scheduler: Scheduler): Unit = {
 
     val behaviorFactory: EntityContext[MoneyTransferTransactionCommand] => Behavior[MoneyTransferTransactionCommand] = { context =>
-      val i = math.abs(context.entityId.hashCode % CreditBalanceAggregate.tags.size)
-      val selectedTag = CreditBalanceAggregate.tags(i)
+      val i = math.abs(context.entityId.hashCode % TransactionAggregate.tags.size)
+      val selectedTag = TransactionAggregate.tags(i)
       apply(Id.of(context.entityId), selectedTag,
         coordinatorRepository.findTransactionCoordinatorByTrxId(Id.of(context.entityId)),
         repository,
