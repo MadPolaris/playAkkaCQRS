@@ -1,0 +1,57 @@
+@startuml
+'https://plantuml.com/state-diagram
+
+scale 350 width
+[*] --> NotShooting
+
+state NotShooting {
+  [*] --> Idle
+  Idle --> Configuring : EvConfig
+  Configuring --> Idle : EvConfig
+}
+
+state Configuring {
+  [*] --> NewValueSelection
+  NewValueSelection --> NewValuePreview : EvNewValue
+  NewValuePreview --> NewValueSelection : EvNewValueRejected
+  NewValuePreview --> NewValueSelection : EvNewValueSaved
+
+  state NewValuePreview {
+     State1 -> State2
+  }
+
+}
+@enduml
+
+
+@startuml
+' Step Executor's lifecycle
+[*] --> Created
+Created --> Ongoing: Start
+Ongoing --> Failed: Failure
+Ongoing --> Succeed: Success
+Ongoing --> Failed: TimedOut
+Failed --> Ongoing: Retry if retry-able
+
+Succeed --> [*]
+Failed --> [*]
+@enduml
+
+@startuml
+' Saga Transaction Coordinator lifecycle
+[*] --> Created
+Created --> Preparing: PreparationStarted
+Preparing --> Prepared: PreparationSucceed
+Prepared --> Committing: CommissionStarted
+Committing --> Committed: CommissionSucceed
+Preparing --> PrepareFailed: PreparationFailure
+PrepareFailed --> Compensating: CompensationStarted
+Committing --> CommitFailed: CommissionFailure
+CommitFailed --> Compensating: CompensationStarted
+Compensating --> Compensated: CompensationSucceed
+Compensating --> CompensationFailed: CompensationFailure
+
+Committed --> [*]
+Compensated --> [*]
+CompensationFailed --> [*]
+@enduml
