@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package net.imadz.infra.saga;
+
+option java_multiple_files = true;
+option java_package = "net.imadz.infra.saga.proto";
+
+// Enums
+enum TransactionPhase {
+  PREPARE_PHASE = 0;
+  COMMIT_PHASE = 1;
+  COMPENSATE_PHASE = 2;
+}
+
+enum Status {
+  CREATED = 0;
+  ONGOING = 1;
+  SUCCEED = 2;
+  FAILED = 3;
+}
+
+// Messages
+message SagaTransactionStep {
+  string step_id = 1;
+  TransactionPhase phase = 2;
+  int32 max_retries = 3;
+  int64 timeout_duration_millis = 4;
+  bool retry_when_recovered_ongoing = 5;
+  string participant_type = 6; // This will be used to identify the participant implementation
+}
+
+message State {
+  SagaTransactionStep step = 1;
+  string transaction_id = 2;
+  Status status = 3;
+  int32 retries = 4;
+  RetryableOrNotException last_error = 5;
+  bool circuit_breaker_open = 6;
+}
+
+message RetryableOrNotException {
+  bool is_retryable = 1;
+  string message = 2;
+}
+
+// Events
+message ExecutionStarted {
+  string transaction_id = 1;
+  SagaTransactionStep transaction_step = 2;
+}
+
+message OperationSucceeded {
+  bytes result = 1; // Use bytes to store serialized result
+}
+
+message OperationFailed {
+  RetryableOrNotException error = 1;
+}
+
+message RetryScheduled {
+  int32 retry_count = 1;
+}
+
+// Commands
+message StartCommand {
+  string transaction_id = 1;
+  SagaTransactionStep saga_step = 2;
+}
+
+message RecoverExecutionCommand {
+  string transaction_id = 1;
+  SagaTransactionStep saga_step = 2;
+}
+
+message OperationResponseCommand {
+  oneof result {
+    bytes success = 1;
+    RetryableOrNotException error = 2;
+  }
+}
+
+message RetryOperationCommand {}
+
+message TimedOutCommand {}
+
+// Participant definitions for testing
+message SuccessfulParticipant {}
+
+message RetryingParticipant {
+  int32 succeed_after = 1;
+}
+
+message TimeoutParticipant {}
+
+message AlwaysFailingParticipant {}
+
+message NonRetryableFailingParticipant {}

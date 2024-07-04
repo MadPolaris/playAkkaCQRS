@@ -5,6 +5,7 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.pattern.CircuitBreaker
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
+import com.fasterxml.jackson.annotation.JsonIgnore
 import net.imadz.common.CborSerializable
 import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException}
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase, TransactionPhase}
@@ -13,7 +14,7 @@ import scala.concurrent.duration._
 
 object SagaPhase {
   // Value Object
-  sealed trait TransactionPhase {
+  sealed trait TransactionPhase extends CborSerializable {
     val key: String = toString
   }
 
@@ -33,7 +34,7 @@ object SagaPhase {
 case class SagaTransactionStep[E, R](
                                       stepId: String,
                                       phase: TransactionPhase,
-                                      participant: SagaParticipant[E, R],
+                                      @JsonIgnore participant: SagaParticipant[E, R],
                                       maxRetries: Int = 0,
                                       timeoutDuration: FiniteDuration = 30.seconds,
                                       retryWhenRecoveredOngoing: Boolean = true
@@ -43,14 +44,14 @@ object StepExecutor {
   // @formatter:off
   // Commands
   sealed trait Command extends CborSerializable
-  case class Start[E, R](transactionId: String, sagaStep: SagaTransactionStep[E, R], replyTo: Option[ActorRef[StepResult]]) extends Command
-  case class RecoverExecution[E, R](transactionId: String, sagaStep: SagaTransactionStep[E, R], replyTo: Option[ActorRef[StepResult]]) extends Command
-  private case class OperationResponse[R](result: Either[RetryableOrNotException, R], replyTo: Option[ActorRef[StepResult]]) extends Command
-  private case class RetryOperation(replyTo: Option[ActorRef[StepResult]]) extends Command
-  private case class TimedOut(replyTo: Option[ActorRef[StepResult]]) extends Command
-  sealed trait StepResult extends CborSerializable
-  case class StepCompleted(value: Any, result: Any) extends StepResult
-  case class StepFailed(value: Any, error: Any) extends StepResult
+  case class Start[E, R](transactionId: String,  sagaStep: SagaTransactionStep[E, R], replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]) extends Command
+  case class RecoverExecution[E, R](transactionId: String, sagaStep: SagaTransactionStep[E, R], replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]) extends Command
+   case class OperationResponse[R](result: Either[RetryableOrNotException, R], replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]) extends Command
+   case class RetryOperation[E, R](replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]) extends Command
+   case class TimedOut[E, R](replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]) extends Command
+  sealed trait StepResult[E, R] extends CborSerializable
+  case class StepCompleted[E,R](transactionId: String, result: R) extends StepResult[E, R]
+  case class StepFailed[E, R](transactionId: String, error: E) extends StepResult[E, R]
 
   // Events
   sealed trait Event
@@ -67,16 +68,16 @@ object StepExecutor {
                           retries: Int = 0,
                           lastError: Option[RetryableOrNotException] = None,
                           circuitBreakerOpen: Boolean = false
-                        )
+                        ) extends CborSerializable
 
-  sealed trait Status
+  sealed trait Status extends CborSerializable
   case object Created extends Status
   case object Ongoing extends Status
   case object Succeed extends Status
   case object Failed extends Status
 
   // Response
-  sealed trait Response
+  sealed trait Response extends CborSerializable
   case class OperationSuccess(result: Any) extends Response
   case class OperationFailure(error: RetryableOrNotException) extends Response
 
@@ -156,7 +157,7 @@ object StepExecutor {
                                     circuitBreaker: CircuitBreaker
                                   ): (State[E, R], Command) => Effect[Event, State[E, R]] = { (state, command) =>
     command match {
-      case Start(transactionId, step, replyTo) if state.status == Created =>
+      case Start(transactionId, step, replyTo: Some[ActorRef[StepResult[E, R]]]) if state.status == Created =>
 
         Effect
           .persist(ExecutionStarted(transactionId, step))
@@ -200,11 +201,11 @@ object StepExecutor {
           .thenRun(_ => scheduleRetry(timers, nextDelay, replyTo))
 
 
-      case RetryOperation(replyTo) if state.status == Failed =>
+      case RetryOperation(replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]) if state.status == Failed =>
         state.step.zip(state.transactionId).map {
           case (step, trxId) =>
             Effect.none[Event, State[E, R]]
-              .thenRun(_ => executeOperation(context, step.phase, step, state.transactionId.get, circuitBreaker, replyTo))
+              .thenRun(_ => executeOperation[E, R](context, step.phase, step, state.transactionId.get, circuitBreaker, replyTo))
         }.getOrElse(Effect.none)
 
       case OperationResponse(Left(error), replyTo) =>
@@ -214,8 +215,9 @@ object StepExecutor {
       case TimedOut(replyTo) =>
         // TODO ack coordinator with step result
         Effect.persist(OperationFailed(RetryableFailure("timed out")))
-          .thenRun(_ => replyTo.foreach(_ ! StepFailed(state.transactionId.get, "timed out")))
-      case _ =>
+          .thenRun(_ => replyTo.foreach(_ ! StepFailed(state.transactionId.get, RetryableFailure("timed out"))))
+      case msg =>
+        context.log.warn(s"msg: $msg is not processed")
         Effect.none
     }
   }
@@ -240,7 +242,7 @@ object StepExecutor {
                                       step: SagaTransactionStep[E, R],
                                       transactionId: String,
                                       circuitBreaker: CircuitBreaker,
-                                      replyTo: Option[ActorRef[StepResult]]
+                                      replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]
                                     ): Unit = {
     import context.executionContext
 
@@ -256,14 +258,14 @@ object StepExecutor {
     }
 
     circuitBreaker.withCircuitBreaker(eventualStepResult).onComplete {
-      case scala.util.Success(result) =>
-        context.self ! OperationResponse(Right(result), replyTo)
+      case scala.util.Success(result: Either[RetryableOrNotException, R]) =>
+        context.self ! OperationResponse(result, replyTo)
       case scala.util.Failure(exception) =>
         context.self ! OperationResponse(Left(NonRetryableFailure(exception.getMessage)), replyTo)
     }
   }
 
-  private def scheduleRetry(timers: TimerScheduler[Command], delay: FiniteDuration, replyTo: Option[ActorRef[StepResult]]): Unit = {
+  private def scheduleRetry[E, R](timers: TimerScheduler[Command], delay: FiniteDuration, replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]): Unit = {
     timers.startSingleTimer(RetryOperation(replyTo), delay)
   }
 

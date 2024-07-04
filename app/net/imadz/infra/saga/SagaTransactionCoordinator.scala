@@ -23,7 +23,7 @@ object SagaTransactionCoordinator {
   private case class PhaseFailed(phase: TransactionPhase, error: RetryableOrNotException) extends Command
 
   // Events
-  sealed trait Event
+  sealed trait Event extends CborSerializable
   case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _]]) extends Event
   case class PhaseSucceeded(phase: TransactionPhase) extends Event
   case class TransactionCompleted(transactionId: String) extends Event
@@ -129,10 +129,10 @@ object SagaTransactionCoordinator {
       }
   }
 
-  private def executePhase(
+  private def executePhase[E, R](
                             context: ActorContext[Command],
                             state: State,
-                            stepExecutorFactory: (String, SagaTransactionStep[_, _]) => ActorRef[StepExecutor.Command]
+                            stepExecutorFactory: (String, SagaTransactionStep[E, R]) => ActorRef[StepExecutor.Command]
                           )(implicit ec: ExecutionContext, askTimeout: Timeout): Unit = {
 
     val stepsInPhase = state.steps.filter(_.phase == state.currentPhase)
@@ -143,9 +143,9 @@ object SagaTransactionCoordinator {
     val futureResults = stepsInPhase.map { step =>
       val stepExecutor = stepExecutorFactory(
         s"${state.transactionId.get}-${step.stepId}-${state.currentPhase}",
-        step
+        step.asInstanceOf[SagaTransactionStep[E, R]]
       )
-      stepExecutor.ask((ref: ActorRef[StepExecutor.StepResult]) => StepExecutor.Start(state.transactionId.get, step, Some(ref)))(askTimeout, scheduler).map {
+      stepExecutor.ask((ref: ActorRef[StepExecutor.StepResult[RetryableOrNotException, R]]) => StepExecutor.Start[E, R](state.transactionId.get, step.asInstanceOf[SagaTransactionStep[E, R]], Some(ref)))(askTimeout, scheduler).map {
         case StepExecutor.StepCompleted(_, result) => result
         case StepExecutor.StepFailed(_, error) => Left(error)
       }
@@ -154,7 +154,7 @@ object SagaTransactionCoordinator {
 
     import scala.concurrent.Future
     Future.sequence(futureResults).onComplete {
-      case Success(results) => context.self ! PhaseCompleted(state.currentPhase, results.map(Right.apply))
+      case Success(results) => context.self ! PhaseCompleted(state.currentPhase, results.map(Right.apply(_)))
       case Failure(error) => context.self ! PhaseFailed(state.currentPhase, NonRetryableFailure(error.getMessage))
     }
   }
