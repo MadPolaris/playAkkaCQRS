@@ -47,7 +47,11 @@ akka {
       StepExecutor.Event,
       StepExecutor.State[String, String]](
       system,
-      StepExecutor(PersistenceId.ofUniqueId(id), participant, 2, 2.seconds, CircuitBreakerSettings(5, 30.seconds, 30.seconds))
+      StepExecutor(persistenceId = PersistenceId.ofUniqueId(id),
+        participant = participant,
+        maxRetries = 2,
+        initialRetryDelay = 2.seconds,
+        circuitBreakerSettings = CircuitBreakerSettings(5, 30.seconds, 30.seconds))
     )
 
   val participant = SuccessfulParticipant
