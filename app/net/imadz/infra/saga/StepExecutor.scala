@@ -5,7 +5,6 @@ import akka.actor.typed.{ActorRef, Behavior}
 import akka.pattern.CircuitBreaker
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
-import com.fasterxml.jackson.annotation.JsonIgnore
 import net.imadz.common.CborSerializable
 import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException}
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase, TransactionPhase}
