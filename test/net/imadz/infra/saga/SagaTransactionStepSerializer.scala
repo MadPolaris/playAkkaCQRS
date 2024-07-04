@@ -47,10 +47,10 @@ class SagaTransactionStepSerializer extends Serializer {
     // You'll need to implement this based on your specific participants
     participantType match {
       case "net.imadz.infra.saga.SuccessfulParticipant" => SuccessfulParticipant
-      case "net.imadz.infra.saga.RetryingParticipant" => new RetryingParticipant(3) // Default value, adjust as needed
-      case "net.imadz.infra.saga.TimeoutParticipant" => new TimeoutParticipant
-      case "net.imadz.infra.saga.AlwaysFailingParticipant" => new AlwaysFailingParticipant
-      case "net.imadz.infra.saga.NonRetryableFailingParticipant" => new NonRetryableFailingParticipant
+      case "net.imadz.infra.saga.RetryingParticipant" => RetryingParticipant // Default value, adjust as needed
+      case "net.imadz.infra.saga.TimeoutParticipant" => TimeoutParticipant
+      case "net.imadz.infra.saga.AlwaysFailingParticipant" => AlwaysFailingParticipant
+      case "net.imadz.infra.saga.NonRetryableFailingParticipant" => NonRetryableFailingParticipant
       case _ => throw new IllegalArgumentException(s"Unknown participant type: $participantType")
     }
   }

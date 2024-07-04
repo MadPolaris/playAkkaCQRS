@@ -9,6 +9,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
 import net.imadz.common.CborSerializable
 import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException}
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase, TransactionPhase}
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration._
 
@@ -34,7 +35,7 @@ object SagaPhase {
 case class SagaTransactionStep[E, R](
                                       stepId: String,
                                       phase: TransactionPhase,
-                                      @JsonIgnore participant: SagaParticipant[E, R],
+                                      participant: SagaParticipant[E, R],
                                       maxRetries: Int = 0,
                                       timeoutDuration: FiniteDuration = 30.seconds,
                                       retryWhenRecoveredOngoing: Boolean = true
@@ -181,7 +182,7 @@ object StepExecutor {
           })
 
       case OperationResponse(Left(error: RetryableFailure), replyTo)
-        if state.status == Ongoing
+        if (state.status == Ongoing || state.status == Failed)
           && state.retries < maxRetries =>
 
         val nextRetry = state.retries + 1
@@ -193,6 +194,7 @@ object StepExecutor {
 
 
       case TimedOut(replyTo) if state.status == Ongoing && state.retries < maxRetries =>
+        context.log.warn(s"TimedOut found ${state.retries} times")
         val nextRetry = state.retries + 1
         val nextDelay = calculateBackoffDelay(initialRetryDelay, nextRetry)
 
@@ -201,7 +203,7 @@ object StepExecutor {
           .thenRun(_ => scheduleRetry(timers, nextDelay, replyTo))
 
 
-      case RetryOperation(replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]) if state.status == Failed =>
+      case RetryOperation(replyTo: Option[ActorRef[StepResult[RetryableOrNotException, R]]]) if state.status == Ongoing =>
         state.step.zip(state.transactionId).map {
           case (step, trxId) =>
             Effect.none[Event, State[E, R]]
@@ -236,6 +238,8 @@ object StepExecutor {
     }
   }
 
+  val logger = LoggerFactory.getLogger(getClass)
+
   private def executeOperation[E, R](
                                       context: akka.actor.typed.scaladsl.ActorContext[Command],
                                       stepPhase: TransactionPhase,
@@ -261,6 +265,7 @@ object StepExecutor {
       case scala.util.Success(result: Either[RetryableOrNotException, R]) =>
         context.self ! OperationResponse(result, replyTo)
       case scala.util.Failure(exception) =>
+        logger.warn(s"$exception found while processing ${step}")
         context.self ! OperationResponse(Left(NonRetryableFailure(exception.getMessage)), replyTo)
     }
   }
