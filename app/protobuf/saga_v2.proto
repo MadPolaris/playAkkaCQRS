@@ -52,7 +52,8 @@ message ExecutionStartedPO {
 }
 
 message OperationSucceededPO {
-  bytes result = 1; // Use bytes to store serialized result
+  string resultType = 1;
+  bytes result = 2; // Use bytes to store serialized result
 }
 
 message OperationFailedPO {
@@ -61,6 +62,15 @@ message OperationFailedPO {
 
 message RetryScheduledPO {
   int32 retry_count = 1;
+}
+
+message StepExecutorEventPO {
+  oneof event {
+    ExecutionStartedPO started = 1;
+    OperationSucceededPO succeed = 2;
+    OperationFailedPO failed = 3;
+    RetryScheduledPO rescheduled = 4;
+  }
 }
 
 // Commands
@@ -75,10 +85,19 @@ message RecoverExecutionCommandPO {
   SagaTransactionStepPO saga_step = 2;
 }
 
+message OperationSucceedCommandPO {
+    string successMessageType = 1;
+    bytes success = 2;
+}
+
+message OperationFailedCommandPO {
+   RetryableOrNotExceptionPO error = 1;
+}
+
 message OperationResponseCommandPO {
   oneof result {
-    bytes success = 1;
-    RetryableOrNotExceptionPO error = 2;
+    OperationSucceedCommandPO succeed = 1;
+    OperationFailedCommandPO error = 2;
   }
 }
 

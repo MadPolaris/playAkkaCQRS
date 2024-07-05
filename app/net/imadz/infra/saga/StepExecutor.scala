@@ -59,7 +59,7 @@ object StepExecutor {
   // Events
   sealed trait Event
   case class ExecutionStarted[E, R](transactionId: String, transactionStep: SagaTransactionStep[E, R], replyToPath: String) extends Event
-  case class OperationSucceeded(result: Any) extends Event
+  case class OperationSucceeded[R](result: R) extends Event
   case class OperationFailed(error: RetryableOrNotException) extends Event
   case class RetryScheduled(retryCount: Int) extends Event
 
