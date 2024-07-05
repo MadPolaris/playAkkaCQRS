@@ -106,7 +106,7 @@ message PhaseCompletedPO {
   repeated PhaseResultPO results = 2;
 }
 
-message PhaseFailedPO {
+message PhaseFailurePO {
   TransactionPhasePO phase = 1;
   string error_message = 2;
   bool is_retryable = 3;
@@ -126,6 +126,10 @@ message TransactionStartedPO {
 }
 
 message PhaseSucceededPO {
+  TransactionPhasePO phase = 1;
+}
+
+message PhaseFailedPO {
   TransactionPhasePO phase = 1;
 }
 

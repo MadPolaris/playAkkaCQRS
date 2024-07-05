@@ -33,6 +33,13 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       |    warn-about-java-serializer-usage = off
       |  }
       |}
+      |# In-memory database configuration for unit testing
+      |       database {
+      |         url = "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1"
+      |         driver = org.h2.Driver
+      |         connectionPool = disabled
+      |         keepAliveConnection = true
+      |       }
       |akka.test.single-expect-default = 100s
       |akka.actor.testkit.typed.single-expect-default = 100s
       |""".stripMargin
