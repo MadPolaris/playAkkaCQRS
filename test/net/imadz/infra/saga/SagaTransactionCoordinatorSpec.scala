@@ -165,5 +165,73 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
         stepTraces = List(StepExecutor.State(), StepExecutor.State())
       )
     }
+    "handle failure during CommitPhase and successfully compensate" in {
+      val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
+        if (step.stepId == "commit1") createFailingStepExecutor()
+        else createSuccessfulStepExecutor()
+      )
+      val transactionId = "commit-fail-transaction"
+      val steps = List(
+        SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("prepare2", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("commit1", CommitPhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("commit2", CommitPhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("compensate1", CompensatePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("compensate2", CompensatePhase, SuccessfulParticipant, 2)
+      )
+      val prob = createTestProbe[TransactionResult]()
+      val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref)))
+
+      result.event shouldBe SagaTransactionCoordinator.TransactionStarted(transactionId, steps)
+      result.state.status shouldBe SagaTransactionCoordinator.InProgress
+
+      val expected = prob.receiveMessage(10.seconds)
+
+      expected shouldBe TransactionResult(
+        successful = false,
+        SagaTransactionCoordinator.State(
+          transactionId = Some(transactionId),
+          steps = steps,
+          currentPhase = CompensatePhase,
+          status = SagaTransactionCoordinator.Failed,
+        ),
+        stepTraces = List.fill(6)(StepExecutor.State())
+      )
+    }
+
+    "handle partial failure during CompensatePhase" in {
+      val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
+        if (step.stepId == "commit2" || step.stepId == "compensate1") createFailingStepExecutor()
+        else createSuccessfulStepExecutor()
+      )
+      val transactionId = "compensate-partial-fail-transaction"
+      val steps = List(
+        SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("prepare2", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("commit1", CommitPhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("commit2", CommitPhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("compensate1", CompensatePhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("compensate2", CompensatePhase, SuccessfulParticipant, 2)
+      )
+      val prob = createTestProbe[TransactionResult]()
+      val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref)))
+
+      result.event shouldBe SagaTransactionCoordinator.TransactionStarted(transactionId, steps)
+      result.state.status shouldBe SagaTransactionCoordinator.InProgress
+
+      val expected = prob.receiveMessage(10.seconds)
+
+      expected shouldBe TransactionResult(
+        successful = false,
+        SagaTransactionCoordinator.State(
+          transactionId = Some(transactionId),
+          steps = steps,
+          currentPhase = CompensatePhase,
+          status = SagaTransactionCoordinator.Failed,
+        ),
+        stepTraces = List.fill(6)(StepExecutor.State())
+      )
+    }
+
   }
 }
