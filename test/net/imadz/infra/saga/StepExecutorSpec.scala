@@ -263,7 +263,7 @@ akka {
       }
       eventSourcedTestKit.restart()
       logger.info("restarting executor")
-     
+
       // The actor should automatically retry the operation
       probe.expectMessage(10.seconds, StepCompleted[String, String]("trx-recover", "Success after retry",
         StepExecutor.State(step = Some(recoverStep),
@@ -273,6 +273,29 @@ akka {
           lastError = Some(RetryableFailure("Retry needed")),
           replyTo = Some(probe.ref.path.toSerializationFormat))
       ))
+    }
+
+    "persist events and recover state" in {
+      val probe = createTestProbe[StepResult[String, String]]()
+      val participant = SuccessfulParticipant
+      val eventSourcedTestKit = createTestKit("test-persist")
+
+      val step = SagaTransactionStep[String, String](
+        "persist-step", PreparePhase, participant
+      )
+
+      eventSourcedTestKit.runCommand(Start("trx-persist", step, Some(probe.ref)))
+
+      // Verify persisted events
+      val persistedEvents = eventSourcedTestKit.persistenceTestKit.persistedInStorage("test-persist")
+      persistedEvents should contain(ExecutionStarted("trx-persist", step, probe.ref.path.toSerializationFormat))
+      persistedEvents should contain(OperationSucceeded("Prepared"))
+
+      // Simulate restart and verify recovered state
+      eventSourcedTestKit.restart()
+      val recoveredState = eventSourcedTestKit.getState()
+      recoveredState.status shouldBe Succeed
+      recoveredState.transactionId shouldBe Some("trx-persist")
     }
   }
 }
