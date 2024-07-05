@@ -10,6 +10,7 @@ import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.StepExecutor._
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
+import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -35,27 +36,37 @@ akka {
        }
 
     }
+    # In-memory database configuration for unit testing
+       database {
+         url = "jdbc:h2:mem:test;DB_CLOSE_DELAY=-1"
+         driver = org.h2.Driver
+         connectionPool = disabled
+         keepAliveConnection = true
+       }
 """.stripMargin
   ).withFallback(EventSourcedBehaviorTestKit.config)
 )
   with AnyWordSpecLike
   with BeforeAndAfterEach
   with LogCapturing {
-  private def createTestKit(participant: SagaParticipant[String, String], id: String): EventSourcedBehaviorTestKit[Command, Event, State[String, String]] =
+
+  val logger = LoggerFactory.getLogger(getClass)
+
+  private def createTestKit[E, R](id: String, defaultMaxRetries: Int = 5, initialRetryDelay: FiniteDuration = 2.seconds, circuitBreakerSettings: CircuitBreakerSettings = CircuitBreakerSettings(5, 30.seconds, 30.seconds)): EventSourcedBehaviorTestKit[Command, Event, State[E, R]] =
     EventSourcedBehaviorTestKit[
       StepExecutor.Command,
       StepExecutor.Event,
-      StepExecutor.State[String, String]](
+      StepExecutor.State[E, R]](
       system,
       StepExecutor(persistenceId = PersistenceId.ofUniqueId(id),
-        participant = participant,
-        maxRetries = 2,
-        initialRetryDelay = 2.seconds,
-        circuitBreakerSettings = CircuitBreakerSettings(5, 30.seconds, 30.seconds))
+        defaultMaxRetries = defaultMaxRetries,
+        initialRetryDelay = initialRetryDelay,
+        circuitBreakerSettings = circuitBreakerSettings
+      )
     )
 
   val participant = SuccessfulParticipant
-  val eventSourcedTestKit: EventSourcedBehaviorTestKit[Command, Event, State[String, String]] = createTestKit(participant, "test-1")
+  val eventSourcedTestKit: EventSourcedBehaviorTestKit[Command, Event, State[String, String]] = createTestKit("test-1")
 
   override protected def beforeEach(): Unit = {
     super.beforeEach()
@@ -66,143 +77,202 @@ akka {
   "StepExecutor" should {
 
     "successfully execute Start command" in {
-      val probe = createTestProbe[StepResult[RetryableOrNotException, String]]()
+      val probe = createTestProbe[StepResult[String, String]]()
 
       val reserveFromAccount = SagaTransactionStep[String, String](
         "from-account-reservation", PreparePhase, SuccessfulParticipant
       )
       val result = eventSourcedTestKit.runCommand(Start("trx1", reserveFromAccount, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx1", reserveFromAccount)
+      result.event shouldBe ExecutionStarted("trx1", reserveFromAccount, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx1")
       result.state.step shouldBe Some(reserveFromAccount)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(3.seconds, StepCompleted[RetryableOrNotException, String]("trx1", "Prepared"))
+      probe.expectMessage(3.seconds, StepCompleted[String, String](
+        transactionId = "trx1",
+        result = "Prepared",
+        StepExecutor.State(step = Some(reserveFromAccount), transactionId = Some("trx1"), status = Succeed,
+          replyTo = Some(probe.ref.path.toSerializationFormat))
+      ))
 
     }
 
     "successfully execute Start command for PreparePhase" in {
-      val probe = createTestProbe[StepResult[RetryableOrNotException, String]]()
-      val eventSourcedTestKit = createTestKit(SuccessfulParticipant, "test-prepare")
+      val probe = createTestProbe[StepResult[String, String]]()
+      val eventSourcedTestKit = createTestKit("test-prepare")
 
       val prepareStep = SagaTransactionStep[String, String](
         "prepare-step", PreparePhase, SuccessfulParticipant
       )
       val result = eventSourcedTestKit.runCommand(Start("trx1", prepareStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx1", prepareStep)
+      result.event shouldBe ExecutionStarted("trx1", prepareStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx1")
       result.state.step shouldBe Some(prepareStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(5.seconds, StepCompleted[RetryableOrNotException, String]("trx1", "Prepared"))
+      probe.expectMessage(5.seconds, StepCompleted[String, String]("trx1", "Prepared",
+        StepExecutor.State(step = Some(prepareStep), transactionId = Some("trx1"), status = Succeed
+          , replyTo = Some(probe.ref.path.toSerializationFormat))
+      ))
     }
 
     "successfully execute Start command for CommitPhase" in {
-      val probe = createTestProbe[StepResult[RetryableOrNotException, String]]()
-      val eventSourcedTestKit = createTestKit(SuccessfulParticipant, "test-commit")
+      val probe = createTestProbe[StepResult[String, String]]()
+      val eventSourcedTestKit = createTestKit("test-commit")
 
       val commitStep = SagaTransactionStep[String, String](
         "commit-step", CommitPhase, SuccessfulParticipant
       )
       val result = eventSourcedTestKit.runCommand(Start("trx2", commitStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx2", commitStep)
+      result.event shouldBe ExecutionStarted("trx2", commitStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx2")
       result.state.step shouldBe Some(commitStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(5.seconds, StepCompleted[RetryableOrNotException, String]("trx2", "Committed"))
+      probe.expectMessage(5.seconds, StepCompleted[String, String]("trx2", "Committed",
+        StepExecutor.State(step = Some(commitStep), transactionId = Some("trx2"), status = Succeed
+          , replyTo = Some(probe.ref.path.toSerializationFormat))
+      ))
     }
 
     "successfully execute Start command for CompensatePhase" in {
-      val probe = createTestProbe[StepResult[RetryableOrNotException, String]]()
-      val eventSourcedTestKit = createTestKit(SuccessfulParticipant, "test-compensate")
+      val probe = createTestProbe[StepResult[String, String]]()
+      val eventSourcedTestKit = createTestKit("test-compensate")
 
       val compensateStep = SagaTransactionStep[String, String](
         "compensate-step", CompensatePhase, SuccessfulParticipant
       )
       val result = eventSourcedTestKit.runCommand(Start("trx3", compensateStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx3", compensateStep)
+      result.event shouldBe ExecutionStarted("trx3", compensateStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx3")
       result.state.step shouldBe Some(compensateStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(5.seconds, StepCompleted[RetryableOrNotException, String]("trx3", "Compensated"))
+      probe.expectMessage(5.seconds, StepCompleted[String, String]("trx3", "Compensated",
+        StepExecutor.State(step = Some(compensateStep), transactionId = Some("trx3"), status = Succeed, replyTo = Some(probe.ref.path.toSerializationFormat))
+      ))
     }
 
     "retry on retryable failure" in {
-      val probe = createTestProbe[StepResult[RetryableOrNotException, String]]()
-      val retryingParticipant = RetryingParticipant
-      val eventSourcedTestKit = createTestKit(retryingParticipant, "test-retry")
+      val probe = createTestProbe[StepResult[String, String]]()
+      val retryingParticipant = RetryingParticipant()
+      val eventSourcedTestKit = createTestKit("test-retry")
 
       val retryStep = SagaTransactionStep[String, String](
         "retry-step", PreparePhase, retryingParticipant, maxRetries = 5
       )
       val result = eventSourcedTestKit.runCommand(Start("trx4", retryStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx4", retryStep)
+      result.event shouldBe ExecutionStarted("trx4", retryStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx4")
       result.state.step shouldBe Some(retryStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(10.seconds, StepCompleted[RetryableOrNotException, String]("trx4", "Success after retry"))
+      probe.expectMessage(10.seconds, StepCompleted[String, String]("trx4", "Success after retry",
+        StepExecutor.State(step = Some(retryStep), transactionId = Some("trx4"), status = Succeed,
+          retries = 2,
+          lastError = Some(RetryableFailure("Retry needed")),
+          replyTo = Some(probe.ref.path.toSerializationFormat)
+        )
+      ))
     }
 
     "fail after max retries" in {
-      val probe = createTestProbe[StepResult[RetryableOrNotException, String]]()
+      val probe = createTestProbe[StepResult[String, String]]()
       val alwaysFailingParticipant = AlwaysFailingParticipant
-      val eventSourcedTestKit = createTestKit(alwaysFailingParticipant, "test-max-retries")
+      val eventSourcedTestKit = createTestKit("test-max-retries")
 
       val failingStep = SagaTransactionStep[String, String](
         "failing-step", PreparePhase, alwaysFailingParticipant, maxRetries = 2
       )
       val result = eventSourcedTestKit.runCommand(Start("trx5", failingStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx5", failingStep)
+      result.event shouldBe ExecutionStarted("trx5", failingStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx5")
       result.state.step shouldBe Some(failingStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessageType[StepFailed[RetryableOrNotException, String]](10.seconds)
+      probe.expectMessageType[StepFailed[String, String]](10.seconds)
     }
 
     "fail immediately on non-retryable failure" in {
       val probe = createTestProbe[StepResult[RetryableOrNotException, String]]()
       val nonRetryableFailingParticipant = NonRetryableFailingParticipant
-      val eventSourcedTestKit = createTestKit(nonRetryableFailingParticipant, "test-non-retryable")
+      val eventSourcedTestKit = createTestKit("test-non-retryable")
 
-      val nonRetryableStep = SagaTransactionStep[String, String](
+      val nonRetryableStep = SagaTransactionStep[RetryableOrNotException, String](
         "non-retryable-step", PreparePhase, nonRetryableFailingParticipant, maxRetries = 5
       )
       val result = eventSourcedTestKit.runCommand(Start("trx6", nonRetryableStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx6", nonRetryableStep)
+      result.event shouldBe ExecutionStarted("trx6", nonRetryableStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx6")
       result.state.step shouldBe Some(nonRetryableStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(5.seconds, StepFailed[RetryableOrNotException, String]("trx6", NonRetryableFailure("Critical error")))
+      probe.expectMessage(5.seconds, StepFailed[RetryableOrNotException, String]("trx6", NonRetryableFailure("Critical error"),
+        StepExecutor.State[RetryableOrNotException, String](step = Some(nonRetryableStep), transactionId = Some("trx6"),
+          status = Failed,
+          lastError = Some(NonRetryableFailure("Critical error")),
+          replyTo = Some(probe.ref.path.toSerializationFormat)
+        )
+      ))
     }
 
     "timeout on long-running operation" in {
       val probe = createTestProbe[StepResult[RetryableOrNotException, String]]()
       val timeoutParticipant = TimeoutParticipant
-      val eventSourcedTestKit = createTestKit(timeoutParticipant, "test-timeout")
+      val eventSourcedTestKit = createTestKit("test-timeout")
 
-      val timeoutStep = SagaTransactionStep[String, String](
+      val timeoutStep = SagaTransactionStep[RetryableOrNotException, String](
         "timeout-step", PreparePhase, timeoutParticipant, timeoutDuration = 1.seconds, maxRetries = 2
       )
       val result = eventSourcedTestKit.runCommand(Start("trx7", timeoutStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx7", timeoutStep)
+      result.event shouldBe ExecutionStarted("trx7", timeoutStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx7")
       result.state.step shouldBe Some(timeoutStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(1000.seconds, StepFailed[RetryableOrNotException, String]("trx7", RetryableFailure("timed out")))
+      probe.expectMessage(1000.seconds, StepFailed[RetryableOrNotException, String]("trx7", RetryableFailure("timed out"),
+        StepExecutor.State(step = Some(timeoutStep), transactionId = Some("trx7"), status = Failed,
+          lastError = Some(RetryableFailure("timed out")),
+          replyTo = Some(probe.ref.path.toSerializationFormat))
+      ))
+    }
+
+    "recover execution and retry when in Ongoing state" in {
+      val probe = createTestProbe[StepResult[String, String]]()
+      val retryingParticipant = RetryingParticipant()
+      val eventSourcedTestKit = createTestKit("test-recover")
+
+      val recoverStep = SagaTransactionStep[String, String](
+        "recover-step", PreparePhase, retryingParticipant, maxRetries = 5, retryWhenRecoveredOngoing = true
+      )
+
+      // Simulate a crash after starting execution
+      eventSourcedTestKit.runCommand(Start("trx-recover", recoverStep, Some(probe.ref)))
+      try {
+        Thread.sleep(500L)
+      } catch {
+        case ignored: Throwable => ()
+      }
+      eventSourcedTestKit.restart()
+      logger.info("restarting executor")
+     
+      // The actor should automatically retry the operation
+      probe.expectMessage(10.seconds, StepCompleted[String, String]("trx-recover", "Success after retry",
+        StepExecutor.State(step = Some(recoverStep),
+          transactionId = Some("trx-recover"),
+          status = Succeed,
+          retries = 2,
+          lastError = Some(RetryableFailure("Retry needed")),
+          replyTo = Some(probe.ref.path.toSerializationFormat))
+      ))
     }
   }
 }
@@ -220,13 +290,18 @@ case object SuccessfulParticipant extends SagaParticipant[String, String] with C
   }
 }
 
-case object RetryingParticipant extends SagaParticipant[String, String] with CborSerializable {
+case class RetryingParticipant() extends SagaParticipant[String, String] with CborSerializable {
   private var attempts = 0
   private val succeedAfter = 3
 
   override def doPrepare(transactionId: String) = {
     attempts += 1
-    logger.warn(s"RetryingParticipant is doing prepare $attempts")
+    try {
+      Thread.sleep(500L)
+    } catch {
+      case ignored: Throwable => ()
+    }
+    logger.warn(s"RetryingParticipant is doing prepare $attempts times")
     if (attempts < succeedAfter) Future.failed(RetryableFailure("Retry needed"))
     else Future.successful(Right[String, String]("Success after retry"))
   }
@@ -242,12 +317,12 @@ case object RetryingParticipant extends SagaParticipant[String, String] with Cbo
 }
 
 
-case object TimeoutParticipant extends SagaParticipant[String, String] {
+case object TimeoutParticipant extends SagaParticipant[RetryableOrNotException, String] {
   override def doPrepare(transactionId: String) = Future.never // Simulating a long-running operation
 
-  override def doCommit(transactionId: String) = Future.successful(Right[String, String]("Committed"))
+  override def doCommit(transactionId: String) = Future.successful(Right[RetryableOrNotException, String]("Committed"))
 
-  override def doCompensate(transactionId: String) = Future.successful(Right[String, String]("Compensated"))
+  override def doCompensate(transactionId: String) = Future.successful(Right[RetryableOrNotException, String]("Compensated"))
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case it@RetryableFailure("Retry needed") => it
@@ -256,7 +331,15 @@ case object TimeoutParticipant extends SagaParticipant[String, String] {
 }
 
 case object AlwaysFailingParticipant extends SagaParticipant[String, String] {
-  override def doPrepare(transactionId: String) = Future.failed(RetryableFailure("Always fails"))
+  override def doPrepare(transactionId: String) = {
+    logger.warn(s"AlwaysFailingParticipant is failing after 5 seconds")
+    try {
+      Thread.sleep(1000L)
+    } catch {
+      case ignored: Throwable => ()
+    }
+    Future.failed(RetryableFailure("Always fails"))
+  }
 
   override def doCommit(transactionId: String) = Future.successful(Right[String, String]("Committed"))
 
@@ -268,12 +351,12 @@ case object AlwaysFailingParticipant extends SagaParticipant[String, String] {
   }
 }
 
-case object NonRetryableFailingParticipant extends SagaParticipant[String, String] {
-  override def doPrepare(transactionId: String) = Future.failed(NonRetryableFailure("Critical error"))
+case object NonRetryableFailingParticipant extends SagaParticipant[RetryableOrNotException, String] {
+  override def doPrepare(transactionId: String) = Future.failed(new RuntimeException())
 
-  override def doCommit(transactionId: String) = Future.successful(Right[String, String]("Committed"))
+  override def doCommit(transactionId: String) = Future.successful(Right[RetryableOrNotException, String]("Committed"))
 
-  override def doCompensate(transactionId: String) = Future.successful(Right[String, String]("Compensated"))
+  override def doCompensate(transactionId: String) = Future.successful(Right[RetryableOrNotException, String]("Compensated"))
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case _ => NonRetryableFailure("Critical error")

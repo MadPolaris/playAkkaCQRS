@@ -1,6 +1,4 @@
 <configuration>
-    <!-- Other configuration here -->
-
     <!-- Console appender -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -14,8 +12,7 @@
     <logger name="play" level="INFO"/>
     <logger name="application" level="DEBUG"/>
 
-    <!-- The appenders defined for this CapturingAppenderDelegate logger are used when there is a test failure
-         and all logging events from the test are flushed to these appenders. -->
+    <!-- The appenders defined for this CapturingAppenderDelegate logger are used when there is a test failure and all logging events from the test are flushed to these appenders. -->
     <logger name="akka.actor.testkit.typed.internal.CapturingAppenderDelegate" >
         <appender-ref ref="CONSOLE"/>
     </logger>

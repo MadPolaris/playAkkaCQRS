@@ -1,0 +1,100 @@
+
+
+@startuml
+    participant Client
+    participant StepExecutor
+    participant Participant
+    participant CircuitBreaker
+    participant TimerScheduler
+
+    Client->>StepExecutor: Start(transactionId, sagaStep, replyTo)
+    StepExecutor->>StepExecutor: Persist(ExecutionStarted)
+    StepExecutor->>TimerScheduler: Schedule Timeout
+    StepExecutor->>CircuitBreaker: withCircuitBreaker(operation)
+    CircuitBreaker->>Participant: prepare/commit/compensate
+
+    alt Operation Succeeds
+        Participant-->>CircuitBreaker: Success(result)
+        CircuitBreaker-->>StepExecutor: Success(result)
+        StepExecutor->>StepExecutor: OperationResponse(Right(result))
+        StepExecutor->>StepExecutor: Persist(OperationSucceeded)
+        StepExecutor-->>Client: StepCompleted
+    else Operation Fails (Retryable)
+        Participant-->>CircuitBreaker: Failure(RetryableFailure)
+        CircuitBreaker-->>StepExecutor: Failure(RetryableFailure)
+        StepExecutor->>StepExecutor: OperationResponse(Left(RetryableFailure))
+        StepExecutor->>StepExecutor: Persist(OperationFailed, RetryScheduled)
+        StepExecutor->>TimerScheduler: Schedule Retry
+    else Operation Fails (Non-Retryable)
+        Participant-->>CircuitBreaker: Failure(NonRetryableFailure)
+        CircuitBreaker-->>StepExecutor: Failure(NonRetryableFailure)
+        StepExecutor->>StepExecutor: OperationResponse(Left(NonRetryableFailure))
+        StepExecutor->>StepExecutor: Persist(OperationFailed)
+        StepExecutor-->>Client: StepFailed
+    end
+
+    alt Timeout Occurs
+        TimerScheduler->>StepExecutor: TimedOut
+        StepExecutor->>StepExecutor: Persist(OperationFailed, RetryScheduled)
+        StepExecutor->>TimerScheduler: Schedule Retry
+    end
+
+    alt Retry Operation
+        TimerScheduler->>StepExecutor: RetryOperation
+        StepExecutor->>CircuitBreaker: withCircuitBreaker(operation)
+        CircuitBreaker->>Participant: prepare/commit/compensate
+    end
+
+    alt Recovery Completed (Ongoing State)
+        StepExecutor->>StepExecutor: RecoverExecution
+        StepExecutor->>StepExecutor: Persist(ExecutionStarted)
+        StepExecutor->>CircuitBreaker: withCircuitBreaker(operation)
+        CircuitBreaker->>Participant: prepare/commit/compensate
+    end
+@enduml
+
+@startuml
+    participant Client
+    participant StepExecutor
+    participant Participant
+    participant TimerScheduler
+
+    Client->>StepExecutor: Start(transactionId, sagaStep, replyTo)
+    StepExecutor->>StepExecutor: Persist(ExecutionStarted)
+    StepExecutor->>TimerScheduler: Schedule Timeout
+    StepExecutor->>Participant: prepare/commit/compensate
+
+    alt Operation Succeeds
+        Participant-->>StepExecutor: Success(result)
+        StepExecutor->>StepExecutor: OperationResponse(Right(result))
+        StepExecutor->>StepExecutor: Persist(OperationSucceeded)
+        StepExecutor-->>Client: StepCompleted
+    else Operation Fails (Retryable)
+        Participant-->>StepExecutor: Failure(RetryableFailure)
+        StepExecutor->>StepExecutor: OperationResponse(Left(RetryableFailure))
+        StepExecutor->>StepExecutor: Persist(OperationFailed, RetryScheduled)
+        StepExecutor->>TimerScheduler: Schedule Retry
+    else Operation Fails (Non-Retryable)
+        Participant-->>StepExecutor: Failure(NonRetryableFailure)
+        StepExecutor->>StepExecutor: OperationResponse(Left(NonRetryableFailure))
+        StepExecutor->>StepExecutor: Persist(OperationFailed)
+        StepExecutor-->>Client: StepFailed
+    end
+
+    alt Timeout Occurs
+        TimerScheduler->>StepExecutor: TimedOut
+        StepExecutor->>StepExecutor: Persist(OperationFailed, RetryScheduled)
+        StepExecutor->>TimerScheduler: Schedule Retry
+    end
+
+    alt Retry Operation
+        TimerScheduler->>StepExecutor: RetryOperation
+        StepExecutor->>Participant: prepare/commit/compensate
+    end
+
+    alt Recovery Completed (Ongoing State)
+        StepExecutor->>StepExecutor: RecoverExecution
+        StepExecutor->>StepExecutor: Persist(ExecutionStarted)
+        StepExecutor->>Participant: prepare/commit/compensate
+    end
+@enduml

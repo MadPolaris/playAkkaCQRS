@@ -258,4 +258,3 @@
 ### 关于 Akka EventSourcing + CQRS
 如前文所示，该脚手架采用了一个不同结构尝试，将 Aggregate 内部的与 Akka 无关的部分置于 Domain 层，而基于 Akka 的 Aggregate 部分放在 Application 层。
 另外，在 Akka EventSourcing 过程中 Akka 事件与快照序列化采用了 protobuf 协议，在初始化引导注册通过了对应 Adapter。 
-

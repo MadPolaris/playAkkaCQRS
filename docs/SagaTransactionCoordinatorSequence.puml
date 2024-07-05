@@ -1,0 +1,102 @@
+@startuml
+    participant Client
+    participant SagaTransactionCoordinator
+    participant StepExecutor
+    participant EventSourcedBehavior
+
+    Client->>SagaTransactionCoordinator: StartTransaction
+    SagaTransactionCoordinator->>EventSourcedBehavior: Persist(TransactionStarted)
+    EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
+    SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(PreparePhase)
+
+    loop For each step in PreparePhase
+        SagaTransactionCoordinator->>StepExecutor: Start
+        StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
+    end
+
+    alt All steps successful
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted(PreparePhase)
+        SagaTransactionCoordinator->>EventSourcedBehavior: Persist(PhaseSucceeded(PreparePhase))
+        EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CommitPhase)
+
+        loop For each step in CommitPhase
+            SagaTransactionCoordinator->>StepExecutor: Start
+            StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
+        end
+
+        alt All steps successful
+            SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted(CommitPhase)
+            SagaTransactionCoordinator->>EventSourcedBehavior: Persist(PhaseSucceeded(CommitPhase), TransactionCompleted)
+            EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
+            SagaTransactionCoordinator-->>Client: TransactionResult(successful=true)
+        else Any step failed
+            SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseFailed(CommitPhase)
+            SagaTransactionCoordinator->>EventSourcedBehavior: Persist(TransactionFailed)
+            EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
+            SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CompensatePhase)
+        end
+    else Any step failed
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseFailed(PreparePhase)
+        SagaTransactionCoordinator->>EventSourcedBehavior: Persist(TransactionFailed)
+        EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CompensatePhase)
+    end
+
+    opt CompensatePhase
+        loop For each step in CompensatePhase
+            SagaTransactionCoordinator->>StepExecutor: Start
+            StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
+        end
+
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted/PhaseFailed(CompensatePhase)
+        SagaTransactionCoordinator->>EventSourcedBehavior: Persist(PhaseSucceeded(CompensatePhase)/TransactionFailed)
+        EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
+        SagaTransactionCoordinator-->>Client: TransactionResult(successful=false)
+    end
+@enduml
+
+@startuml
+    participant Client
+    participant SagaTransactionCoordinator
+    participant StepExecutor
+
+    Client->>SagaTransactionCoordinator: StartTransaction
+    SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(PreparePhase)
+
+    loop For each step in PreparePhase
+        SagaTransactionCoordinator->>StepExecutor: Start
+        StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
+    end
+
+    alt All steps successful
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted(PreparePhase)
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CommitPhase)
+
+        loop For each step in CommitPhase
+            SagaTransactionCoordinator->>StepExecutor: Start
+            StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
+        end
+
+        alt All steps successful
+            SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted(CommitPhase)
+            SagaTransactionCoordinator-->>Client: TransactionResult(successful=true)
+        else Any step failed
+            SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseFailed(CommitPhase)
+            SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CompensatePhase)
+        end
+    else Any step failed
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseFailed(PreparePhase)
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CompensatePhase)
+    end
+
+    opt CompensatePhase
+        loop For each step in CompensatePhase
+            SagaTransactionCoordinator->>StepExecutor: Start
+            StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
+        end
+
+        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted/PhaseFailed(CompensatePhase)
+        SagaTransactionCoordinator-->>Client: TransactionResult(successful=false)
+    end
+@enduml

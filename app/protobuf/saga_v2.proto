@@ -6,13 +6,13 @@ option java_multiple_files = true;
 option java_package = "net.imadz.infra.saga.proto";
 
 // Enums
-enum TransactionPhase {
+enum TransactionPhasePO {
   PREPARE_PHASE = 0;
   COMMIT_PHASE = 1;
   COMPENSATE_PHASE = 2;
 }
 
-enum Status {
+enum StepStatusPO {
   CREATED = 0;
   ONGOING = 1;
   SUCCEED = 2;
@@ -20,78 +20,128 @@ enum Status {
 }
 
 // Messages
-message SagaTransactionStep {
+message SagaTransactionStepPO {
   string step_id = 1;
-  TransactionPhase phase = 2;
+  TransactionPhasePO phase = 2;
   int32 max_retries = 3;
   int64 timeout_duration_millis = 4;
   bool retry_when_recovered_ongoing = 5;
   string participant_type = 6; // This will be used to identify the participant implementation
 }
 
-message State {
-  SagaTransactionStep step = 1;
+message StepStatePO {
+  SagaTransactionStepPO step = 1;
   string transaction_id = 2;
-  Status status = 3;
+  StepStatusPO status = 3;
   int32 retries = 4;
-  RetryableOrNotException last_error = 5;
+  RetryableOrNotExceptionPO last_error = 5;
   bool circuit_breaker_open = 6;
+  string replyToPath = 7;
 }
 
-message RetryableOrNotException {
+message RetryableOrNotExceptionPO {
   bool is_retryable = 1;
   string message = 2;
 }
 
 // Events
-message ExecutionStarted {
+message ExecutionStartedPO {
   string transaction_id = 1;
-  SagaTransactionStep transaction_step = 2;
+  SagaTransactionStepPO transaction_step = 2;
+  string replyToPath = 3;
 }
 
-message OperationSucceeded {
+message OperationSucceededPO {
   bytes result = 1; // Use bytes to store serialized result
 }
 
-message OperationFailed {
-  RetryableOrNotException error = 1;
+message OperationFailedPO {
+  RetryableOrNotExceptionPO error = 1;
 }
 
-message RetryScheduled {
+message RetryScheduledPO {
   int32 retry_count = 1;
 }
 
 // Commands
-message StartCommand {
+message StartCommandPO {
   string transaction_id = 1;
-  SagaTransactionStep saga_step = 2;
+  SagaTransactionStepPO saga_step = 2;
+  string replyToPath = 3;
 }
 
-message RecoverExecutionCommand {
+message RecoverExecutionCommandPO {
   string transaction_id = 1;
-  SagaTransactionStep saga_step = 2;
+  SagaTransactionStepPO saga_step = 2;
 }
 
-message OperationResponseCommand {
+message OperationResponseCommandPO {
   oneof result {
     bytes success = 1;
-    RetryableOrNotException error = 2;
+    RetryableOrNotExceptionPO error = 2;
   }
 }
 
-message RetryOperationCommand {}
+message RetryOperationCommandPO {}
 
-message TimedOutCommand {}
+message TimedOutCommandPO {}
 
-// Participant definitions for testing
-message SuccessfulParticipant {}
+// Coordinator's Proto
 
-message RetryingParticipant {
-  int32 succeed_after = 1;
+enum CoordinatorStatusPO {
+  TRANSACTION_CREATED = 0;
+  TRANSACTION_IN_PROGRESS = 1;
+  TRANSACTION_COMPLETED = 2;
+  TRANSACTION_FAILED = 3;
 }
 
-message TimeoutParticipant {}
+// Commands
+message StartTransactionPO {
+  string transaction_id = 1;
+  repeated SagaTransactionStepPO steps = 2;
+}
 
-message AlwaysFailingParticipant {}
+message PhaseCompletedPO {
+  TransactionPhasePO phase = 1;
+  repeated PhaseResultPO results = 2;
+}
 
-message NonRetryableFailingParticipant {}
+message PhaseFailedPO {
+  TransactionPhasePO phase = 1;
+  string error_message = 2;
+  bool is_retryable = 3;
+}
+
+message PhaseResultPO {
+  oneof result {
+    string error = 1;
+    bytes success = 2;
+  }
+}
+
+// Events
+message TransactionStartedPO {
+  string transaction_id = 1;
+  repeated SagaTransactionStepPO steps = 2;
+}
+
+message PhaseSucceededPO {
+  TransactionPhasePO phase = 1;
+}
+
+message TransactionCompletedPO {
+  string transaction_id = 1;
+}
+
+message TransactionFailedPO {
+  string transaction_id = 1;
+  string reason = 2;
+}
+
+// State
+message CoordinatorStatePO {
+  string transaction_id = 1;
+  repeated SagaTransactionStepPO steps = 2;
+  TransactionPhasePO current_phase = 3;
+  CoordinatorStatusPO status = 4;
+}
