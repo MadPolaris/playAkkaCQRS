@@ -2,30 +2,23 @@ package net.imadz.infra.saga.persistence
 
 import akka.persistence.typed.{EventAdapter, EventSeq}
 import com.google.protobuf.ByteString
+import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.infra.saga.SagaParticipant._
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
 import net.imadz.infra.saga.proto.saga_v2._
-import net.imadz.infra.saga.{AkkaSerializationWrapper, SagaParticipant, SagaTransactionStep, StepExecutor}
+import net.imadz.infra.saga._
 
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationLong
 
-class StepExecutorEventAdapter(serialization: AkkaSerializationWrapper) extends EventAdapter[StepExecutor.Event, StepExecutorEventPO.Event] {
+case class StepExecutorEventAdapter(serialization: AkkaSerializationWrapper, repository: CreditBalanceRepository, ec: ExecutionContext) extends EventAdapter[StepExecutor.Event, StepExecutorEventPO.Event] {
+  private val stepSerializer: SagaTransactionStepSerializer = SagaTransactionStepSerializer(repository = repository, ec = ec)
+
   override def manifest(event: StepExecutor.Event): String = event.getClass.getName
 
   override def toJournal(e: StepExecutor.Event): StepExecutorEventPO.Event = e match {
     case StepExecutor.ExecutionStarted(transactionId, step, replyToPath) =>
-      val stepPO = SagaTransactionStepPO(
-        stepId = step.stepId,
-        phase = step.phase match {
-          case PreparePhase => TransactionPhasePO.PREPARE_PHASE
-          case CommitPhase => TransactionPhasePO.COMMIT_PHASE
-          case CompensatePhase => TransactionPhasePO.COMPENSATE_PHASE
-        },
-        maxRetries = step.maxRetries,
-        timeoutDurationMillis = step.timeoutDuration.toMillis,
-        retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
-        participantType = step.participant.getClass.getName
-      )
+      val stepPO = stepSerializer.serializeSagaTransactionStep(step)
       StepExecutorEventPO.Event.Started(ExecutionStartedPO(transactionId, Some(stepPO), replyToPath))
 
     case StepExecutor.OperationSucceeded(result) =>
@@ -53,7 +46,7 @@ class StepExecutorEventAdapter(serialization: AkkaSerializationWrapper) extends 
               case TransactionPhasePO.COMPENSATE_PHASE => CompensatePhase
               case _ => throw new IllegalArgumentException(s"Unknown phase: ${stepPO.phase}")
             },
-            participant = Class.forName(stepPO.participantType).newInstance().asInstanceOf[SagaParticipant[Any, Any]],
+            participant = stepSerializer.deserializeSagaTransactionStep(stepPO).asInstanceOf[SagaParticipant[_, _]],
             maxRetries = stepPO.maxRetries,
             timeoutDuration = stepPO.timeoutDurationMillis.milliseconds,
             retryWhenRecoveredOngoing = stepPO.retryWhenRecoveredOngoing

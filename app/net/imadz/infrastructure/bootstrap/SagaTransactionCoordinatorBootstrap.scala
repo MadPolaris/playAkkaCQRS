@@ -10,7 +10,8 @@ import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id
 import net.imadz.infra.saga.SagaTransactionCoordinator.entityTypeKey
-import net.imadz.infra.saga.{SagaTransactionCoordinator, SagaTransactionStep, StepExecutor}
+import net.imadz.infra.saga.persistence.SagaTransactionCoordinatorEventAdapter
+import net.imadz.infra.saga.{SagaTransactionCoordinator, StepExecutor}
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 
@@ -39,17 +40,18 @@ trait SagaTransactionCoordinatorBootstrap {
           EventSourcedBehavior(
             persistenceId = PersistenceId(entityTypeKey.name, transactionId.toString),
             emptyState = SagaTransactionCoordinator.State.apply(),
-            commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, (key, step) => createStepExecutor(actorContext, key, step)),
+            commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, (key, step) => createStepExecutor(actorContext, key, repository)),
             eventHandler = SagaTransactionCoordinator.eventHandler
           ).withTagger(_ => Set(tag))
             .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
             .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))
+            .eventAdapter(SagaTransactionCoordinatorEventAdapter(actorContext.system, repository, global))
         })
   }
 
 
-  private def createStepExecutor(context: ActorContext[SagaTransactionCoordinator.Command], key: String, step: SagaTransactionStep[_, _]) = {
-    context.spawn(StepExecutor[Any, Any](
+  private def createStepExecutor(context: ActorContext[SagaTransactionCoordinator.Command], key: String, creditBalanceRepository: CreditBalanceRepository) = {
+    context.spawn(StepExecutor[Any, Any](creditBalanceRepository)(
       PersistenceId.ofUniqueId(key),
       defaultMaxRetries = 5,
       initialRetryDelay = 100.millis,

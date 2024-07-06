@@ -43,10 +43,10 @@
 
     <logger name="play" level="INFO"/>
     <logger name="application" level="DEBUG"/>
-<!--    <logger name="akka" level="DEBUG"/>-->
-<!--    <logger name="akka.actor" level="DEBUG"/>-->
-<!--    <logger name="akka.event.slf4j.Slf4jLogger" level="DEBUG"/>-->
-<!--    <logger name="akka.remote" level="DEBUG"/>-->
+    <logger name="akka" level="DEBUG"/>
+    <!--    <logger name="akka.actor" level="DEBUG"/>-->
+    <!--    <logger name="akka.event.slf4j.Slf4jLogger" level="DEBUG"/>-->
+    <!--    <logger name="akka.remote" level="DEBUG"/>-->
 
     <root level="WARN">
         <appender-ref ref="ASYNCFILE"/>

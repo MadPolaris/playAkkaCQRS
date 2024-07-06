@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "saga_participant.proto";
+
 package net.imadz.infra.saga;
 
 option java_multiple_files = true;
@@ -19,6 +21,13 @@ enum StepStatusPO {
   FAILED = 3;
 }
 
+message SagaParticipantPO {
+   oneof participant {
+      net.imadz.infrastructure.proto.FromAccountParticipantPO fromAccount = 1;
+      net.imadz.infrastructure.proto.ToAccountParticipantPO toAccount = 2;
+   }
+}
+
 // Messages
 message SagaTransactionStepPO {
   string step_id = 1;
@@ -26,7 +35,8 @@ message SagaTransactionStepPO {
   int32 max_retries = 3;
   int64 timeout_duration_millis = 4;
   bool retry_when_recovered_ongoing = 5;
-  string participant_type = 6; // This will be used to identify the participant implementation
+  SagaParticipantPO participant = 6;
+  string participant_type = 7;// This will be used to identify the participant implementation
 }
 
 message StepStatePO {
@@ -159,6 +169,16 @@ message TransactionCompletedPO {
 message TransactionFailedPO {
   string transaction_id = 1;
   string reason = 2;
+}
+
+message SagaTransactionCoordinatorEventPO {
+  oneof event {
+    TransactionStartedPO started = 1;
+    PhaseSucceededPO phaseSucceeded = 2;
+    PhaseFailedPO phaseFailed = 3;
+    TransactionCompletedPO transactionCompleted = 4;
+    TransactionFailedPO transactionFailed = 5;
+  }
 }
 
 // State

@@ -38,12 +38,12 @@ object MoneyTransferTransactionAggregate {
     val toAccountParticipant = new ToAccountParticipant(toUserId: Id, amount: Money, repository)
 
     List(
-      SagaTransactionStep("reserve-amount-from-account", PreparePhase, fromAccountParticipant),
-      SagaTransactionStep("record-incoming-amount-to-account", PreparePhase, toAccountParticipant),
-      SagaTransactionStep("commit-from-account", CommitPhase, fromAccountParticipant),
-      SagaTransactionStep("commit-to-account", CommitPhase, toAccountParticipant),
-      SagaTransactionStep("compensate-from-account", CompensatePhase, fromAccountParticipant),
-      SagaTransactionStep("compensate-to-account", CompensatePhase, toAccountParticipant)
+      SagaTransactionStep("reserve-amount-from-account", PreparePhase, fromAccountParticipant, 5),
+      SagaTransactionStep("record-incoming-amount-to-account", PreparePhase, toAccountParticipant, 5),
+      SagaTransactionStep("commit-from-account", CommitPhase, fromAccountParticipant, 5),
+      SagaTransactionStep("commit-to-account", CommitPhase, toAccountParticipant, 5),
+      SagaTransactionStep("compensate-from-account", CompensatePhase, fromAccountParticipant, 5),
+      SagaTransactionStep("compensate-to-account", CompensatePhase, toAccountParticipant, 5)
     )
   }
 

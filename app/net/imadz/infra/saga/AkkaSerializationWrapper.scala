@@ -3,7 +3,7 @@ package net.imadz.infra.saga
 import akka.actor.ActorSystem
 import akka.serialization.{SerializationExtension, Serializers}
 
-class AkkaSerializationWrapper(system: ActorSystem) {
+case class AkkaSerializationWrapper(system: ActorSystem) {
   private val serialization = SerializationExtension(system)
 
   def serialize(obj: AnyRef): (Array[Byte], String) = {

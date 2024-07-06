@@ -23,7 +23,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       |  actor {
       |    serializers {
       |      proto = "akka.remote.serialization.ProtobufSerializer"
-      |      saga-transaction-step = "net.imadz.infra.saga.SagaTransactionStepSerializer"
+      |      saga-transaction-step = "net.imadz.infra.saga.SagaTransactionStepSerializerForTest"
       |    }
       |    serialization-bindings {
       |      "com.google.protobuf.Message" = proto

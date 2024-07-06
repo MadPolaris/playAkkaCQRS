@@ -5,28 +5,29 @@ import net.imadz.infra.saga.SagaPhase._
 
 import scala.concurrent.duration.DurationLong
 
-class SagaTransactionStepSerializer extends Serializer {
+class SagaTransactionStepSerializerForTest extends Serializer {
   override def identifier: Int = 1234 // Unique identifier for this serializer
 
   override def toBinary(o: AnyRef): Array[Byte] = o match {
     case step: SagaTransactionStep[_, _] =>
-     proto.saga_v2.SagaTransactionStepPO(
+      proto.saga_v2.SagaTransactionStepPO(
         stepId = step.stepId,
         phase = step.phase match {
-          case PreparePhase =>proto.saga_v2.TransactionPhasePO.PREPARE_PHASE
-          case CommitPhase =>proto.saga_v2.TransactionPhasePO.COMMIT_PHASE
-          case CompensatePhase =>proto.saga_v2.TransactionPhasePO.COMPENSATE_PHASE
+          case PreparePhase => proto.saga_v2.TransactionPhasePO.PREPARE_PHASE
+          case CommitPhase => proto.saga_v2.TransactionPhasePO.COMMIT_PHASE
+          case CompensatePhase => proto.saga_v2.TransactionPhasePO.COMPENSATE_PHASE
         },
         maxRetries = step.maxRetries,
         timeoutDurationMillis = step.timeoutDuration.toMillis,
         retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
+        participant = None,
         participantType = step.participant.getClass.getName
       ).toByteArray
     case _ => throw new IllegalArgumentException(s"Cannot serialize object of type ${o.getClass}")
   }
 
   override def fromBinary(bytes: Array[Byte], manifest: Option[Class[_]]): AnyRef = {
-    val protoStep =proto.saga_v2.SagaTransactionStepPO.parseFrom(bytes)
+    val protoStep = proto.saga_v2.SagaTransactionStepPO.parseFrom(bytes)
     SagaTransactionStep(
       stepId = protoStep.stepId,
       phase = protoStep.phase match {

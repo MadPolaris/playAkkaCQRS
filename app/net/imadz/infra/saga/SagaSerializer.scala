@@ -8,7 +8,7 @@ import net.imadz.infra.saga.proto.saga_v2.{OperationFailedCommandPO, OperationSu
 
 class SagaSerializer(system: ExtendedActorSystem) extends SerializerWithStringManifest {
 
-  private val serialization = SerializationExtension(system)
+  private lazy val serialization = SerializationExtension(system)
 
   override def identifier: Int = 1000
 
