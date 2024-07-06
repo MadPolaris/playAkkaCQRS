@@ -6,10 +6,10 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
 import akka.persistence.typed.PersistenceId
 import com.typesafe.config.ConfigFactory
-import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure}
+import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, SagaResult}
 import net.imadz.infra.saga.SagaPhase._
-import net.imadz.infra.saga.SagaTransactionCoordinator.{TransactionResult, TransactionStarted}
-import net.imadz.infra.saga.{AlwaysFailingParticipant, SagaTransactionCoordinator, SagaTransactionStep, StepExecutor, SuccessfulParticipant}
+import net.imadz.infra.saga.SagaTransactionCoordinator.TransactionResult
+import net.imadz.infra.saga.StepExecutor.StepResult
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -60,10 +60,10 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
     )
   }
 
-  private def createSuccessfulStepExecutor(): ActorRef[StepExecutor.Command] = {
+  private def createSuccessfulStepExecutor[E, R](): ActorRef[StepExecutor.Command] = {
     spawn(Behaviors.receiveMessage[StepExecutor.Command] {
-      case StepExecutor.Start(transactionId, step, replyTo) =>
-        replyTo.foreach(_ ! StepExecutor.StepCompleted(step.stepId, Right(()), StepExecutor.State()))
+      case StepExecutor.Start(transactionId, step, replyTo: Option[ActorRef[StepResult[E, R]]]) =>
+        replyTo.foreach(_ ! StepExecutor.StepCompleted[E, R](step.stepId, SagaResult.empty[R](), StepExecutor.State()))
         Behaviors.same
     })
   }

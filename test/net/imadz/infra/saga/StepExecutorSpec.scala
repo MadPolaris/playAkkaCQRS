@@ -82,7 +82,7 @@ akka {
       val reserveFromAccount = SagaTransactionStep[String, String](
         "from-account-reservation", PreparePhase, SuccessfulParticipant
       )
-      val result = eventSourcedTestKit.runCommand(Start("trx1", reserveFromAccount, Some(probe.ref)))
+      val result = eventSourcedTestKit.runCommand(Start[String, String]("trx1", reserveFromAccount, Some(probe.ref)))
 
       result.event shouldBe ExecutionStarted("trx1", reserveFromAccount, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx1")
@@ -91,8 +91,8 @@ akka {
 
       probe.expectMessage(3.seconds, StepCompleted[String, String](
         transactionId = "trx1",
-        result = "Prepared",
-        StepExecutor.State(step = Some(reserveFromAccount), transactionId = Some("trx1"), status = Succeed,
+        result = SagaResult("Prepared"),
+        state = StepExecutor.State(step = Some(reserveFromAccount), transactionId = Some("trx1"), status = Succeed,
           replyTo = Some(probe.ref.path.toSerializationFormat))
       ))
 
@@ -112,8 +112,10 @@ akka {
       result.state.step shouldBe Some(prepareStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(5.seconds, StepCompleted[String, String]("trx1", "Prepared",
-        StepExecutor.State(step = Some(prepareStep), transactionId = Some("trx1"), status = Succeed
+      probe.expectMessage(5.seconds, StepCompleted[String, String](
+        transactionId = "trx1",
+        result = SagaResult("Prepared"),
+        state = StepExecutor.State(step = Some(prepareStep), transactionId = Some("trx1"), status = Succeed
           , replyTo = Some(probe.ref.path.toSerializationFormat))
       ))
     }
@@ -132,8 +134,10 @@ akka {
       result.state.step shouldBe Some(commitStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(5.seconds, StepCompleted[String, String]("trx2", "Committed",
-        StepExecutor.State(step = Some(commitStep), transactionId = Some("trx2"), status = Succeed
+      probe.expectMessage(5.seconds, StepCompleted[String, String](
+        transactionId = "trx2",
+        result = SagaResult("Committed"),
+        state = StepExecutor.State(step = Some(commitStep), transactionId = Some("trx2"), status = Succeed
           , replyTo = Some(probe.ref.path.toSerializationFormat))
       ))
     }
@@ -152,8 +156,10 @@ akka {
       result.state.step shouldBe Some(compensateStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(5.seconds, StepCompleted[String, String]("trx3", "Compensated",
-        StepExecutor.State(step = Some(compensateStep), transactionId = Some("trx3"), status = Succeed, replyTo = Some(probe.ref.path.toSerializationFormat))
+      probe.expectMessage(5.seconds, StepCompleted[String, String](
+        transactionId = "trx3",
+        result = SagaResult("Compensated"),
+        state = StepExecutor.State(step = Some(compensateStep), transactionId = Some("trx3"), status = Succeed, replyTo = Some(probe.ref.path.toSerializationFormat))
       ))
     }
 
@@ -172,8 +178,10 @@ akka {
       result.state.step shouldBe Some(retryStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(10.seconds, StepCompleted[String, String]("trx4", "Success after retry",
-        StepExecutor.State(step = Some(retryStep), transactionId = Some("trx4"), status = Succeed,
+      probe.expectMessage(10.seconds, StepCompleted[String, String](
+        transactionId = "trx4",
+        result = SagaResult("Success after retry"),
+        state = StepExecutor.State(step = Some(retryStep), transactionId = Some("trx4"), status = Succeed,
           retries = 2,
           lastError = Some(RetryableFailure("Retry needed")),
           replyTo = Some(probe.ref.path.toSerializationFormat)
@@ -214,8 +222,12 @@ akka {
       result.state.step shouldBe Some(nonRetryableStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(5.seconds, StepFailed[RetryableOrNotException, String]("trx6", NonRetryableFailure("Critical error"),
-        StepExecutor.State[RetryableOrNotException, String](step = Some(nonRetryableStep), transactionId = Some("trx6"),
+      probe.expectMessage(5.seconds, StepFailed[RetryableOrNotException, String](
+        transactionId = "trx6",
+        error = NonRetryableFailure("Critical error"),
+        state = StepExecutor.State(
+          step = Some(nonRetryableStep),
+          transactionId = Some("trx6"),
           status = Failed,
           lastError = Some(NonRetryableFailure("Critical error")),
           replyTo = Some(probe.ref.path.toSerializationFormat)
@@ -238,8 +250,10 @@ akka {
       result.state.step shouldBe Some(timeoutStep)
       result.state.status shouldBe Ongoing
 
-      probe.expectMessage(1000.seconds, StepFailed[RetryableOrNotException, String]("trx7", RetryableFailure("timed out"),
-        StepExecutor.State(step = Some(timeoutStep), transactionId = Some("trx7"), status = Failed,
+      probe.expectMessage(1000.seconds, StepFailed[RetryableOrNotException, String](
+        transactionId = "trx7",
+        error = RetryableFailure("timed out"),
+        state = StepExecutor.State(step = Some(timeoutStep), transactionId = Some("trx7"), status = Failed,
           lastError = Some(RetryableFailure("timed out")),
           replyTo = Some(probe.ref.path.toSerializationFormat))
       ))
@@ -265,8 +279,10 @@ akka {
       logger.info("restarting executor")
 
       // The actor should automatically retry the operation
-      probe.expectMessage(10.seconds, StepCompleted[String, String]("trx-recover", "Success after retry",
-        StepExecutor.State(step = Some(recoverStep),
+      probe.expectMessage(10.seconds, StepCompleted[String, String](
+        transactionId = "trx-recover",
+        result = SagaResult("Success after retry"),
+        state = StepExecutor.State(step = Some(recoverStep),
           transactionId = Some("trx-recover"),
           status = Succeed,
           retries = 2,
@@ -289,7 +305,7 @@ akka {
       // Verify persisted events
       val persistedEvents = eventSourcedTestKit.persistenceTestKit.persistedInStorage("test-persist")
       persistedEvents should contain(ExecutionStarted("trx-persist", step, probe.ref.path.toSerializationFormat))
-      persistedEvents should contain(OperationSucceeded("Prepared"))
+      persistedEvents should contain(OperationSucceeded(SagaResult("Prepared")))
 
       // Simulate restart and verify recovered state
       eventSourcedTestKit.restart()
@@ -301,11 +317,11 @@ akka {
 }
 
 case object SuccessfulParticipant extends SagaParticipant[String, String] with CborSerializable {
-  override def doPrepare(transactionId: String) = Future.successful(Right[String, String]("Prepared"))
+  override def doPrepare(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Prepared")))
 
-  override def doCommit(transactionId: String) = Future.successful(Right[String, String]("Committed"))
+  override def doCommit(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Committed")))
 
-  override def doCompensate(transactionId: String) = Future.successful(Right[String, String]("Compensated"))
+  override def doCompensate(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Compensated")))
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case it@RetryableFailure("Retry needed") => it
@@ -326,12 +342,12 @@ case class RetryingParticipant() extends SagaParticipant[String, String] with Cb
     }
     logger.warn(s"RetryingParticipant is doing prepare $attempts times")
     if (attempts < succeedAfter) Future.failed(RetryableFailure("Retry needed"))
-    else Future.successful(Right[String, String]("Success after retry"))
+    else Future.successful(Right[String, SagaResult[String]](SagaResult("Success after retry")))
   }
 
-  override def doCommit(transactionId: String) = Future.successful(Right[String, String]("Committed"))
+  override def doCommit(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Committed")))
 
-  override def doCompensate(transactionId: String) = Future.successful(Right[String, String]("Compensated"))
+  override def doCompensate(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Compensated")))
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case it@RetryableFailure("Retry needed") => it
@@ -343,9 +359,9 @@ case class RetryingParticipant() extends SagaParticipant[String, String] with Cb
 case object TimeoutParticipant extends SagaParticipant[RetryableOrNotException, String] {
   override def doPrepare(transactionId: String) = Future.never // Simulating a long-running operation
 
-  override def doCommit(transactionId: String) = Future.successful(Right[RetryableOrNotException, String]("Committed"))
+  override def doCommit(transactionId: String) = Future.successful(Right[RetryableOrNotException, SagaResult[String]](SagaResult("Committed")))
 
-  override def doCompensate(transactionId: String) = Future.successful(Right[RetryableOrNotException, String]("Compensated"))
+  override def doCompensate(transactionId: String) = Future.successful(Right[RetryableOrNotException, SagaResult[String]](SagaResult("Compensated")))
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case it@RetryableFailure("Retry needed") => it
@@ -364,9 +380,9 @@ case object AlwaysFailingParticipant extends SagaParticipant[String, String] {
     Future.failed(RetryableFailure("Always fails"))
   }
 
-  override def doCommit(transactionId: String) = Future.successful(Right[String, String]("Committed"))
+  override def doCommit(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Committed")))
 
-  override def doCompensate(transactionId: String) = Future.successful(Right[String, String]("Compensated"))
+  override def doCompensate(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Compensated")))
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case it@RetryableFailure("Retry needed") => it
@@ -377,9 +393,10 @@ case object AlwaysFailingParticipant extends SagaParticipant[String, String] {
 case object NonRetryableFailingParticipant extends SagaParticipant[RetryableOrNotException, String] {
   override def doPrepare(transactionId: String) = Future.failed(new RuntimeException())
 
-  override def doCommit(transactionId: String) = Future.successful(Right[RetryableOrNotException, String]("Committed"))
+  override def doCommit(transactionId: String) = Future.successful(Right[RetryableOrNotException, SagaResult[String]](SagaResult("Committed")))
 
-  override def doCompensate(transactionId: String) = Future.successful(Right[RetryableOrNotException, String]("Compensated"))
+  override def doCompensate(transactionId: String) = Future.successful(Right[RetryableOrNotException, SagaResult[String]](SagaResult("Compensated")))
+
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case _ => NonRetryableFailure("Critical error")

@@ -36,7 +36,7 @@ object StepExecutorCommandHandler {
           .persist(OperationSucceeded(result))
           .thenRun(updatedState => updatedState.status match {
             case Succeed => // Notify success
-              replyTo.foreach(_ ! StepCompleted[E, R](state.transactionId.get, result.asInstanceOf[R], updatedState))
+              replyTo.foreach(_ ! StepCompleted[E, R](state.transactionId.get, result.asInstanceOf[SagaResult[R]], updatedState))
             case _ => // Unexpected state
           })
 

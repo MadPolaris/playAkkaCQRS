@@ -9,7 +9,21 @@ import scala.concurrent.{ExecutionContext, Future, TimeoutException}
 import scala.util.{Failure, Success}
 
 object SagaParticipant {
-  type ParticipantEffect[E, R] = Future[Either[E, R]]
+  case class SagaResult[T](
+                            message: Option[String],
+                            metadata: Map[String, String],
+                            data: Option[T]
+                          )
+
+  object SagaResult {
+    def empty[T](): SagaResult[T] = SagaResult[T](None, Map.empty[String, String], None)
+
+    def apply[T](data: T): SagaResult[T] = SagaResult(None, Map.empty[String, String], Some(data))
+
+    def apply[T](data: T, message: String): SagaResult[T] = SagaResult(Some(message), Map.empty[String, String], Some(data))
+  }
+
+  type ParticipantEffect[E, R] = Future[Either[E, SagaResult[R]]]
 
   sealed trait RetryableOrNotException {
     def message: String
@@ -64,7 +78,7 @@ trait SagaParticipant[E, R] {
       .orElse(fallbackClassification)
       .apply(e)
 
-   logger.warn(s"$e had been classified as $retryableOrNotException")
+    logger.warn(s"$e had been classified as $retryableOrNotException")
 
     retryableOrNotException
   }

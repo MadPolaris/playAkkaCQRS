@@ -6,7 +6,7 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.util.Timeout
 import net.imadz.common.CborSerializable
-import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableOrNotException}
+import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableOrNotException, SagaResult}
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.StepExecutor.{StepCompleted, StepFailed, StepResult}
 
@@ -171,7 +171,7 @@ object SagaTransactionCoordinator {
         case StepFailed(tid, e, stepState) => stepState :: acc
       })
 
-      val positiveResults = stepResults.foldLeft[List[Either[RetryableOrNotException, R]]](Nil)((acc, result) => result match {
+      val positiveResults = stepResults.foldLeft[List[Either[RetryableOrNotException, SagaResult[R]]]](Nil)((acc, result) => result match {
         case StepCompleted(tid, r, stepState) => Right(r) :: acc
         case StepFailed(tid, e: E, stepState) => Left(NonRetryableFailure(e.toString)) :: acc
       })

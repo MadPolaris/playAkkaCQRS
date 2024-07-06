@@ -6,7 +6,7 @@ import akka.pattern.CircuitBreaker
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
 import net.imadz.common.CborSerializable
-import net.imadz.infra.saga.SagaParticipant.RetryableOrNotException
+import net.imadz.infra.saga.SagaParticipant.{RetryableOrNotException, SagaResult}
 import net.imadz.infra.saga.SagaPhase.TransactionPhase
 import net.imadz.infra.saga.handlers.{StepExecutorCommandHandler, StepExecutorEventHandler, StepExecutorRecoveryHandler}
 
@@ -53,7 +53,7 @@ object StepExecutor {
    case class RetryOperation[E, R](replyTo: Option[ActorRef[StepResult[E, R]]]) extends Command
    case class TimedOut[E, R](replyTo: Option[ActorRef[StepResult[E, R]]]) extends Command
   sealed trait StepResult[E, R] extends CborSerializable
-  case class StepCompleted[E,R](transactionId: String, result: R, state: State[E, R]) extends StepResult[E, R]
+  case class StepCompleted[E,R](transactionId: String, result: SagaResult[R], state: State[E, R]) extends StepResult[E, R]
   case class StepFailed[E, R](transactionId: String, error: E, state: State[E, R]) extends StepResult[E, R]
 
   // Events
