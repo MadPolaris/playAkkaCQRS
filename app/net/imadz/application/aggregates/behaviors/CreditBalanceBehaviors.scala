@@ -33,21 +33,22 @@ object CreditBalanceBehaviors {
 
   }
 
-  def reserveBehaviors(state: CreditBalanceState): PartialFunction[CreditBalanceCommand, Effect[CreditBalanceEvent, CreditBalanceState]] = {
+  private def reserveBehaviors(state: CreditBalanceState): PartialFunction[CreditBalanceCommand, Effect[CreditBalanceEvent, CreditBalanceState]] = {
     case ReserveFunds(transferId, amount, replyTo) =>
       val currentBalance = state.accountBalance.getOrElse(amount.currency.getCurrencyCode, Money(BigDecimal(0), amount.currency))
-      //TODO: 需要处理重复命令请求
-      TransferDomainService.validateTransfer(currentBalance, amount) match {
+      TransferDomainService.validateTransfer(transferId, state.reservedAmount, currentBalance, amount) match {
         case Right(_) =>
           Effect.persist(FundsReserved(transferId, amount))
             .thenReply(replyTo)(_ => FundsReservationConfirmation(transferId, None))
+        case Left(iMadzError("60008", _)) =>
+          Effect.reply(replyTo)(FundsReservationConfirmation(transferId, None))
         case Left(error) =>
           Effect.reply(replyTo)(FundsReservationConfirmation(transferId, Some(error)))
       }
     case DeductFunds(transferId, replyTo) =>
       state.reservedAmount.get(transferId) match {
         case Some(reservedAmount) =>
-          Effect.persist(ReservationReleased(transferId, reservedAmount))
+          Effect.persist(FundsDeducted(transferId, reservedAmount))
             .thenReply(replyTo)(_ => FundsDeductionConfirmation(transferId, None))
         case None =>
           Effect.reply(replyTo)(FundsDeductionConfirmation(transferId, Some(iMadzError("60006", "No reserved funds found for this transfer"))))
@@ -63,7 +64,6 @@ object CreditBalanceBehaviors {
   }
 
   private def incomingCreditBehaviors(state: CreditBalanceState): PartialFunction[CreditBalanceCommand, Effect[CreditBalanceEvent, CreditBalanceState]] = {
-    ////TODO: 需要处理重复命令请求
 
     case RecordIncomingCredits(transferId, amount, replyTo) =>
       state.incomingCredits.get(transferId) match {
