@@ -64,7 +64,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
   "StepExecutor and SagaTransactionCoordinator Integration" should {
 
     "successfully complete a transaction with multiple steps across different phases" in {
-      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createSuccessfulStepExecutor())
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createStepExecutor())
       val transactionId = "multi-phase-transaction"
       val steps = List(
         SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
@@ -86,8 +86,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
     "handle failure in Prepare phase and initiate compensation" in {
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        if (step.stepId == "prepare2") createFailingStepExecutor()
-        else createSuccessfulStepExecutor()
+        createStepExecutor()
       )
       val transactionId = "prepare-fail-transaction"
       val steps = List(
@@ -111,8 +110,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
     "handle failure in Commit phase and compensate all steps" in {
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        if (step.stepId == "commit1") createFailingStepExecutor()
-        else createSuccessfulStepExecutor()
+        createStepExecutor()
       )
       val transactionId = "commit-fail-transaction"
       val steps = List(
@@ -138,8 +136,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     "retry a step with temporary failure" in {
       val retryingParticipant = new RetryingParticipant()
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        if (step.stepId == "prepare1") createStepExecutor(retryingParticipant)
-        else createSuccessfulStepExecutor()
+        createStepExecutor()
       )
       val transactionId = "retry-transaction"
       val steps = List(
@@ -164,8 +161,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     "handle circuit breaker behavior" in {
       val circuitBreakerParticipant = new CircuitBreakerParticipant()
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        if (step.stepId == "circuit-breaker-step") createStepExecutor(circuitBreakerParticipant)
-        else createSuccessfulStepExecutor()
+        createStepExecutor()
       )
       val transactionId = "circuit-breaker-transaction"
       val steps = List(
@@ -185,8 +181,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     "handle timeout in a step" in {
       val timeoutParticipant = new TimeoutParticipant()
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        if (step.stepId == "timeout-step") createStepExecutor(timeoutParticipant)
-        else createSuccessfulStepExecutor()
+        createStepExecutor()
       )
       val transactionId = "timeout-transaction"
       val steps = List(
@@ -206,7 +201,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     }
 
     "handle partial compensation" in {
-      val eventSourcedTestKit = createEventSourcedTestKit((_, step) => createStepExecutor(SuccessfulParticipant))
+      val eventSourcedTestKit = createEventSourcedTestKit((_, step) => createStepExecutor())
       val transactionId = "partial-compensate-transaction"
       val steps = List(
         SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
@@ -246,7 +241,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     })
   }
 
-  private def createStepExecutor(participant: SagaParticipant[_, _], circuitBreakerSettings: CircuitBreakerSettings = CircuitBreakerSettings(5, 30.seconds, 30.seconds)): ActorRef[StepExecutor.Command] = {
+  private def createStepExecutor(circuitBreakerSettings: CircuitBreakerSettings = CircuitBreakerSettings(5, 30.seconds, 30.seconds)) = {
     spawn(StepExecutor[Any, Any](
       PersistenceId.ofUniqueId(s"step-executor-${java.util.UUID.randomUUID()}"),
       defaultMaxRetries = 5,
