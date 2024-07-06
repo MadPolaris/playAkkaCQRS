@@ -161,6 +161,25 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
     // Add more test cases here...
 
+    "handle circuit breaker behavior" in {
+      val circuitBreakerParticipant = new CircuitBreakerParticipant()
+      val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
+        if (step.stepId == "circuit-breaker-step") createStepExecutor(circuitBreakerParticipant)
+        else createSuccessfulStepExecutor()
+      )
+      val transactionId = "circuit-breaker-transaction"
+      val steps = List(
+        SagaTransactionStep("circuit-breaker-step", PreparePhase, circuitBreakerParticipant, 10, 1.seconds))
+      val probe = createTestProbe[TransactionResult]()
+
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+
+      val result = probe.receiveMessage(15.seconds)
+
+      result.successful shouldBe false
+      result.state.status shouldBe SagaTransactionCoordinator.Failed
+      result.stepTraces.reverse.head.retries should be >= 3
+    }
   }
 
   private def createSuccessfulStepExecutor[E, R](): ActorRef[StepExecutor.Command] = {

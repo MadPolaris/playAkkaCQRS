@@ -402,3 +402,21 @@ case object NonRetryableFailingParticipant extends SagaParticipant[RetryableOrNo
     case _ => NonRetryableFailure("Critical error")
   }
 }
+
+case class CircuitBreakerParticipant() extends SagaParticipant[RetryableOrNotException, String] {
+  private var attempts = 0
+
+  override def doPrepare(transactionId: String) = {
+    attempts += 1
+    Future.failed(RetryableFailure(s"Failure attempt $attempts"))
+  }
+
+  override def doCommit(transactionId: String) = Future.successful(Right[RetryableOrNotException, SagaResult[String]](SagaResult("Committed")))
+
+  override def doCompensate(transactionId: String) = Future.successful(Right[RetryableOrNotException, SagaResult[String]](SagaResult("Compensated")))
+
+  override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
+    case it@RetryableFailure("Retry needed") => it
+    case _ => RetryableFailure("Retry needed")
+  }
+}
