@@ -11,8 +11,8 @@ import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummar
 import net.imadz.application.queries.{GetBalanceQuery, GetRecent12MonthsIncomeAndExpenseReport}
 import net.imadz.application.services.{CreateCreditBalanceService, DepositService, MoneyTransferService, WithdrawService}
 import net.imadz.common.Id
-import net.imadz.common.application.saga.repository.TransactionCoordinatorRepository
 import net.imadz.domain.values.Money
+import net.imadz.infra.saga.TransactionCoordinatorRepository
 import net.imadz.infrastructure.bootstrap._
 import play.api.mvc._
 

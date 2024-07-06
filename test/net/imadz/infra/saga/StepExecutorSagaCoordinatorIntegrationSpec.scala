@@ -2,20 +2,18 @@ package net.imadz.infra.saga
 
 import akka.actor.testkit.typed.scaladsl.{LogCapturing, ScalaTestWithActorTestKit}
 import akka.actor.typed.ActorRef
-import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
 import akka.persistence.typed.PersistenceId
 import com.typesafe.config.ConfigFactory
-import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, SagaResult}
+import net.imadz.infra.saga.SagaParticipant.RetryableFailure
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.SagaTransactionCoordinator.TransactionResult
-import net.imadz.infra.saga.StepExecutor.{CircuitBreakerSettings, StepResult}
+import net.imadz.infra.saga.StepExecutor.CircuitBreakerSettings
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
 
-import scala.concurrent.Future
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestKit(
   ConfigFactory.parseString(
@@ -223,22 +221,6 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       result.stepTraces should have length 6 // prepare1, prepare2, commit1, commit2 (failed), compensate1 (failed), compensate2
       result.stepTraces.count(_.status == StepExecutor.Failed) shouldBe 2
     }
-  }
-
-  private def createSuccessfulStepExecutor[E, R](): ActorRef[StepExecutor.Command] = {
-    spawn(Behaviors.receiveMessage[StepExecutor.Command] {
-      case StepExecutor.Start(transactionId, step, replyTo: Option[ActorRef[StepResult[E, R]]]) =>
-        replyTo.foreach(_ ! StepExecutor.StepCompleted[E, R](transactionId, SagaResult.empty[R](), StepExecutor.State()))
-        Behaviors.same
-    })
-  }
-
-  private def createFailingStepExecutor(): ActorRef[StepExecutor.Command] = {
-    spawn(Behaviors.receiveMessage[StepExecutor.Command] {
-      case StepExecutor.Start(transactionId, step, replyTo) =>
-        replyTo.foreach(_ ! StepExecutor.StepFailed(transactionId, Left(NonRetryableFailure("Test failure")), StepExecutor.State()))
-        Behaviors.same
-    })
   }
 
   private def createStepExecutor(circuitBreakerSettings: CircuitBreakerSettings = CircuitBreakerSettings(5, 30.seconds, 30.seconds)) = {

@@ -11,10 +11,9 @@ import net.imadz.application.aggregates.behaviors.MoneyTransferTransactionBehavi
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id
-import net.imadz.common.application.saga.TransactionCoordinator
-import net.imadz.common.application.saga.repository.TransactionCoordinatorRepository
 import net.imadz.domain.entities.TransactionEntity
 import net.imadz.domain.entities.behaviors.TransactionEventHandler
+import net.imadz.infra.saga.{SagaTransactionCoordinator, TransactionCoordinatorRepository}
 import net.imadz.infrastructure.persistence.{TransactionEventAdapter, TransactionSnapshotAdapter}
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
@@ -24,14 +23,14 @@ import scala.concurrent.duration.DurationInt
 
 trait TransactionBootstrap {
   def initTransactionAggregate(sharding: ClusterSharding,
-    coordinatorRepository: TransactionCoordinatorRepository,
-    repository: CreditBalanceRepository)(implicit ec: ExecutionContext, scheduler: Scheduler): Unit = {
+                               coordinatorRepository: TransactionCoordinatorRepository,
+                               repository: CreditBalanceRepository)(implicit ec: ExecutionContext, scheduler: Scheduler): Unit = {
 
     val behaviorFactory: EntityContext[MoneyTransferTransactionCommand] => Behavior[MoneyTransferTransactionCommand] = { context =>
       val i = math.abs(context.entityId.hashCode % TransactionAggregate.tags.size)
       val selectedTag = TransactionAggregate.tags(i)
       apply(Id.of(context.entityId), selectedTag,
-        coordinatorRepository.findTransactionCoordinatorByTrxId(Id.of(context.entityId)),
+        coordinatorRepository.findSagaTransactionCoordinator(Id.of(context.entityId)),
         repository,
         sharding)
     }
@@ -40,11 +39,11 @@ trait TransactionBootstrap {
   }
 
   private def apply(transaction: Id,
-    tag: String,
-    coordinator: EntityRef[TransactionCoordinator.SagaCommand],
-    repository: CreditBalanceRepository,
-    sharding: ClusterSharding
-  )(implicit ec: ExecutionContext, scheduler: Scheduler): Behavior[MoneyTransferTransactionCommand] =
+                    tag: String,
+                    coordinator: EntityRef[SagaTransactionCoordinator.Command],
+                    repository: CreditBalanceRepository,
+                    sharding: ClusterSharding
+                   )(implicit ec: ExecutionContext, scheduler: Scheduler): Behavior[MoneyTransferTransactionCommand] =
     Behaviors.logMessages(LogOptions().withLogger(LoggerFactory.getLogger("iMadz")).withLevel(Level.INFO),
       Behaviors
         .setup { actorContext =>

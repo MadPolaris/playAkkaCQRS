@@ -2,9 +2,10 @@ package net.imadz.infrastructure.persistence
 
 import net.imadz.application.aggregates.MoneyTransferTransactionAggregate.{FromAccountParticipant, ToAccountParticipant}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
+import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.common.Id
-import net.imadz.common.application.saga.TransactionCoordinator.Participant
 import net.imadz.domain.values.Money
+import net.imadz.infra.saga.SagaParticipant
 import net.imadz.infrastructure.proto.credits.MoneyPO
 import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO, ToAccountParticipantPO}
 import net.imadz.infrastructure.saga.proto.saga.ParticipantPO
@@ -16,7 +17,7 @@ trait ParticipantAdapter {
   def repository: CreditBalanceRepository
   def ec: ExecutionContext
 
-  def deserializeParticipant(participantPO: ParticipantPO): Participant = participantPO.participantType match {
+  def deserializeParticipant(participantPO: ParticipantPO): SagaParticipant[iMadzError, String] = participantPO.participantType match {
     case ParticipantPO.ParticipantType.FromAccountParticipant(fromAccountPO) =>
       FromAccountParticipant(
         fromUserId = Id.of(fromAccountPO.fromUserId),
@@ -36,7 +37,7 @@ trait ParticipantAdapter {
         repo = repository)(ec)
   }
 
-  def serializeParticipant(participant: Participant): Option[ParticipantPO] = participant match {
+  def serializeParticipant(participant: SagaParticipant[iMadzError, String]): Option[ParticipantPO] = participant match {
     case FromAccountParticipant(fromUserId, amount, _) =>
       Some(ParticipantPO(
         name = "FromAccountParticipant",

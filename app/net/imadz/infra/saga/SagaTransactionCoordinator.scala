@@ -2,6 +2,7 @@ package net.imadz.infra.saga
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior, Scheduler}
+import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.util.Timeout
@@ -14,15 +15,22 @@ import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
 
 object SagaTransactionCoordinator {
+  val tags: Vector[String] = Vector.tabulate(5)(i => s"SagaTransactionCoordinator-$i")
+  val entityTypeKey: EntityTypeKey[Command] = EntityTypeKey("SagaTransactionCoordinator")
 
 
   // @formatter:off
   // Commands
   sealed trait Command extends CborSerializable
-  case class StartTransaction(transactionId: String, steps: List[SagaTransactionStep[_, _]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
+  case class StartTransaction[E, R](transactionId: String, steps: List[SagaTransactionStep[E, R]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
   private case class PhaseCompleted(phase: TransactionPhase, results: List[Either[RetryableOrNotException, Any]], stepTraces: List[StepExecutor.State[_, _]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
   private case class PhaseFailure(phase: TransactionPhase, error: RetryableOrNotException, stepTraces: List[StepExecutor.State[_, _]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
-  case class TransactionResult(successful: Boolean, state: State, stepTraces: List[StepExecutor.State[_, _]])
+  case class TransactionResult(successful: Boolean, state: State, stepTraces: List[StepExecutor.State[_, _]]){
+    def failReason: String =
+      if (successful) ""
+    else stepTraces.map(_.toString).mkString("""\n""")
+
+}
 
   // Events
   sealed trait Event extends CborSerializable
@@ -60,7 +68,7 @@ object SagaTransactionCoordinator {
     )
   }
 
-  private def commandHandler(
+  def commandHandler(
                               context: ActorContext[Command],
                               stepExecutorFactory: (String, SagaTransactionStep[_, _]) => ActorRef[StepExecutor.Command]
                             )(implicit ec: ExecutionContext, timeout: Timeout): (State, Command) => Effect[Event, State] = { (state, command) =>
@@ -185,7 +193,7 @@ object SagaTransactionCoordinator {
     })
   }
 
-  private def eventHandler: (State, Event) => State = { (state, event) =>
+  def eventHandler: (State, Event) => State = { (state, event) =>
     event match {
       case TransactionStarted(transactionId, steps) =>
         state.copy(transactionId = Some(transactionId), steps = steps, status = InProgress)
