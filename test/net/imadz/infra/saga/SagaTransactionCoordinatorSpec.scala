@@ -71,7 +71,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
   private def createFailingStepExecutor(): ActorRef[StepExecutor.Command] = {
     spawn(Behaviors.receiveMessage[StepExecutor.Command] {
       case StepExecutor.Start(transactionId, step, replyTo) =>
-        replyTo.foreach(_ ! StepExecutor.StepFailed(step.stepId, Left(NonRetryableFailure("Test failure")), StepExecutor.State()))
+        replyTo.foreach(_ ! StepExecutor.StepFailed(transactionId, Left(NonRetryableFailure("Test failure")), StepExecutor.State()))
         Behaviors.same
     })
   }
