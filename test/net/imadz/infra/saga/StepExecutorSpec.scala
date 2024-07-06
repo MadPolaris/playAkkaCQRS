@@ -380,9 +380,11 @@ case object AlwaysFailingParticipant extends SagaParticipant[String, String] {
     Future.failed(RetryableFailure("Always fails"))
   }
 
-  override def doCommit(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Committed")))
+  override def doCommit(transactionId: String) =     Future.failed(RetryableFailure("Always fails"))
 
-  override def doCompensate(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Compensated")))
+
+  override def doCompensate(transactionId: String) =     Future.failed(RetryableFailure("Always fails"))
+
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case it@RetryableFailure("Retry needed") => it
@@ -414,6 +416,22 @@ case class CircuitBreakerParticipant() extends SagaParticipant[RetryableOrNotExc
   override def doCommit(transactionId: String) = Future.successful(Right[RetryableOrNotException, SagaResult[String]](SagaResult("Committed")))
 
   override def doCompensate(transactionId: String) = Future.successful(Right[RetryableOrNotException, SagaResult[String]](SagaResult("Compensated")))
+
+  override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
+    case it@RetryableFailure("Retry needed") => it
+    case _ => RetryableFailure("Retry needed")
+  }
+}
+
+case class TimeoutParticipant() extends SagaParticipant[String, String] {
+  override def doPrepare(transactionId: String) = {
+    Thread.sleep(1000) // Simulate long-running operation
+    Future.successful(Right[String, SagaResult[String]](SagaResult("Prepared")))
+  }
+
+  override def doCommit(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Committed")))
+
+  override def doCompensate(transactionId: String) = Future.successful(Right[String, SagaResult[String]](SagaResult("Compensated")))
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
     case it@RetryableFailure("Retry needed") => it

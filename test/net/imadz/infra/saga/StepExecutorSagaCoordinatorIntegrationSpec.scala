@@ -180,6 +180,54 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       result.state.status shouldBe SagaTransactionCoordinator.Failed
       result.stepTraces.reverse.head.retries should be >= 3
     }
+
+
+    "handle timeout in a step" in {
+      val timeoutParticipant = new TimeoutParticipant()
+      val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
+        if (step.stepId == "timeout-step") createStepExecutor(timeoutParticipant)
+        else createSuccessfulStepExecutor()
+      )
+      val transactionId = "timeout-transaction"
+      val steps = List(
+        SagaTransactionStep("timeout-step", PreparePhase, timeoutParticipant, 2, timeoutDuration = 500.millis),
+        SagaTransactionStep("compensate-step", CompensatePhase, SuccessfulParticipant, 2)
+      )
+      val probe = createTestProbe[TransactionResult]()
+
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+
+      val result = probe.receiveMessage(10.seconds)
+
+      result.successful shouldBe false
+      result.state.status shouldBe SagaTransactionCoordinator.Failed
+      result.state.currentPhase shouldBe CompensatePhase
+      result.stepTraces.reverse.head.lastError.get shouldBe a[RetryableFailure]
+    }
+
+    "handle partial compensation" in {
+      val eventSourcedTestKit = createEventSourcedTestKit((_, step) => createStepExecutor(SuccessfulParticipant))
+      val transactionId = "partial-compensate-transaction"
+      val steps = List(
+        SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("prepare2", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("commit1", CommitPhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("commit2", CommitPhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("compensate1", CompensatePhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("compensate2", CompensatePhase, SuccessfulParticipant, 2)
+      )
+      val probe = createTestProbe[TransactionResult]()
+
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+
+      val result = probe.receiveMessage(10.seconds)
+
+      result.successful shouldBe false
+      result.state.status shouldBe SagaTransactionCoordinator.Failed
+      result.state.currentPhase shouldBe CompensatePhase
+      result.stepTraces should have length 6 // prepare1, prepare2, commit1, commit2 (failed), compensate1 (failed), compensate2
+      result.stepTraces.count(_.status == StepExecutor.Failed) shouldBe 2
+    }
   }
 
   private def createSuccessfulStepExecutor[E, R](): ActorRef[StepExecutor.Command] = {
