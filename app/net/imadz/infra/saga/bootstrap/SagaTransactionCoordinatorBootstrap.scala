@@ -1,4 +1,4 @@
-package net.imadz.infrastructure.bootstrap
+package net.imadz.infra.saga.bootstrap
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{Behavior, LogOptions, SupervisorStrategy}

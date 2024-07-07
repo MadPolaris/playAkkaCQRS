@@ -2,16 +2,16 @@ package net.imadz.application.aggregates
 
 import akka.actor.typed.ActorRef
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
-import akka.persistence.typed.scaladsl.Effect
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.{CborSerializable, Id}
-import net.imadz.domain.entities.TransactionEntity._
+//import net.imadz.domain.entities.TransactionEntity._
 import net.imadz.domain.values.Money
 import net.imadz.infra.saga.SagaParticipant._
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
-import net.imadz.infra.saga.SagaTransactionCoordinator.TransactionResult
+import net.imadz.infra.saga.SagaTransactionCoordinator.{TracingStep, TransactionResult}
 import net.imadz.infra.saga.{SagaParticipant, SagaTransactionStep}
+import play.api.libs.json.{Json, OWrites}
 
 import scala.concurrent.ExecutionContext
 
@@ -24,10 +24,14 @@ object MoneyTransferTransactionAggregate {
   case class UpdateMoneyTransferTransactionStatus(id: Id, newStatus: TransactionResult, replyTo: ActorRef[TransactionResultConfirmation]) extends MoneyTransferTransactionCommand
 
   // Command Replies
-  case class TransactionResultConfirmation(transactionId: Id, error: Option[String]) extends CborSerializable
+  case class TransactionResultConfirmation(transactionId: Id, error: Option[String], tracing: List[TracingStep]) extends CborSerializable
+
+  object TransactionResultConfirmation {
+    implicit val confirmationWrites: OWrites[TransactionResultConfirmation] = Json.writes[TransactionResultConfirmation]
+  }
 
   // Command Handler
-  type TransactionCommandHandler = (TransactionState, MoneyTransferTransactionCommand) => Effect[TransactionEvent, TransactionState]
+//  type TransactionCommandHandler = (TransactionState, MoneyTransferTransactionCommand) => Effect[TransactionEvent, TransactionState]
 
   // Akka
   val TransactionEntityTypeKey: EntityTypeKey[MoneyTransferTransactionCommand] = EntityTypeKey("Transaction")
@@ -52,8 +56,8 @@ object MoneyTransferTransactionAggregate {
   import akka.util.Timeout
   import net.imadz.application.aggregates.CreditBalanceAggregate._
 
+  import scala.concurrent.ExecutionContext
   import scala.concurrent.duration._
-  import scala.concurrent.{ExecutionContext, Future}
 
   case class FromAccountParticipant(fromUserId: Id, amount: Money, repo: CreditBalanceRepository)(implicit ec: ExecutionContext) extends SagaParticipant[iMadzError, String] {
 

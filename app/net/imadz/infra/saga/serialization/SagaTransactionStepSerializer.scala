@@ -1,4 +1,4 @@
-package net.imadz.infra.saga
+package net.imadz.infra.saga.serialization
 
 import akka.serialization.Serializer
 import net.imadz.application.aggregates.MoneyTransferTransactionAggregate.{FromAccountParticipant, ToAccountParticipant}
@@ -7,6 +7,7 @@ import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
+import net.imadz.infra.saga.SagaTransactionStep
 import net.imadz.infra.saga.proto.saga_v2.SagaParticipantPO.Participant.{FromAccount, ToAccount}
 import net.imadz.infra.saga.proto.saga_v2.{SagaParticipantPO, SagaTransactionStepPO, TransactionPhasePO}
 import net.imadz.infrastructure.persistence.ParticipantAdapter
@@ -15,7 +16,7 @@ import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO
 
 import java.util.Currency
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
+import scala.concurrent.duration.DurationLong
 import scala.util.{Failure, Success, Try}
 
 case class SagaTransactionStepSerializer(repository: CreditBalanceRepository, ec: ExecutionContext) extends Serializer with ParticipantAdapter {

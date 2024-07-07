@@ -63,6 +63,9 @@ trait SagaParticipant[E, R] {
       case Success(Right(r)) =>
         logger.info("SagaParticipant executed successfully with right result")
         Success(Right(r))
+      case Success(Left(e@net.imadz.common.CommonTypes.iMadzError(code, message))) =>
+        logger.warn(s"SagaParticipant executed failed with $e")
+        Success(Left(classifyFailure(e)))
       case Success(Left(e)) =>
         logger.warn(s"SagaParticipant executed failed with $e")
         Success(Left(classifyFailure(new Exception("Operation failed"))))
@@ -93,7 +96,7 @@ trait SagaParticipant[E, R] {
   protected def customClassification: PartialFunction[Throwable, RetryableOrNotException]
 
   private def fallbackClassification: PartialFunction[Throwable, RetryableOrNotException] = {
-    case e => NonRetryableFailure("Unclassified error: " + e.getMessage)
+    case e => NonRetryableFailure("Unclassified error: " + e.getClass.getName + ":" + e.getMessage)
   }
 
 }

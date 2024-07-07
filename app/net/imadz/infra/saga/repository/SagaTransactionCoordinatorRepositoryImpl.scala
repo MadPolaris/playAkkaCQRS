@@ -1,8 +1,8 @@
-package net.imadz.infrastructure.repositories.aggregate
+package net.imadz.infra.saga.repository
 
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
 import net.imadz.common.CommonTypes.Id
-import net.imadz.infra.saga.{SagaTransactionCoordinator, TransactionCoordinatorRepository}
+import net.imadz.infra.saga.SagaTransactionCoordinator
 
 import javax.inject.Inject
 

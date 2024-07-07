@@ -1,4 +1,4 @@
-package net.imadz.infra.saga
+package net.imadz.infra.saga.serialization
 
 import akka.actor.ActorSystem
 import akka.serialization.{SerializationExtension, Serializers}

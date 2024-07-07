@@ -8,7 +8,7 @@ object CommonTypes {
 
   type Id = UUID
 
-  final case class iMadzError(code: String, message: String) extends Throwable
+  final case class iMadzError(code: String, message: String) extends Throwable with CborSerializable
 
   trait ReadModel
 

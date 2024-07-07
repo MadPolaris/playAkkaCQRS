@@ -91,7 +91,7 @@ object CreditBalanceBehaviors {
             .thenReply(replyTo)(_ => CancelIncomingCreditConfirmation(transferId, None))
         case None =>
           Effect
-            .reply(replyTo)(CancelIncomingCreditConfirmation(transferId, Some(iMadzError("", "incoming credits cannot be found or already be canceled before"))))
+            .reply(replyTo)(CancelIncomingCreditConfirmation(transferId, Some(iMadzError("60009", "incoming credits cannot be found or already be canceled before"))))
 
       }
   }

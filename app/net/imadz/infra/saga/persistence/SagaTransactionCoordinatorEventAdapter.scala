@@ -5,12 +5,13 @@ import akka.persistence.typed.{EventAdapter, EventSeq}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
 import net.imadz.infra.saga.proto.saga_v2._
-import net.imadz.infra.saga.{SagaPhase, SagaTransactionCoordinator, SagaTransactionStepSerializer}
+import net.imadz.infra.saga.serialization.SagaTransactionStepSerializer
+import net.imadz.infra.saga.{SagaPhase, SagaTransactionCoordinator, serialization}
 
 import scala.concurrent.ExecutionContext
 
 case class SagaTransactionCoordinatorEventAdapter(system: ActorSystem[Nothing], repository: CreditBalanceRepository, ec: ExecutionContext) extends EventAdapter[SagaTransactionCoordinator.Event, SagaTransactionCoordinatorEventPO.Event] {
-  private val stepSerializer: SagaTransactionStepSerializer = SagaTransactionStepSerializer(repository = repository, ec = ec)
+  private val stepSerializer: SagaTransactionStepSerializer = serialization.SagaTransactionStepSerializer(repository = repository, ec = ec)
 
   override def toJournal(e: SagaTransactionCoordinator.Event): SagaTransactionCoordinatorEventPO.Event = e match {
     case SagaTransactionCoordinator.TransactionStarted(transactionId, steps) => SagaTransactionCoordinatorEventPO.Event.Started(TransactionStartedPO(transactionId = transactionId, steps = steps.map(stepSerializer.serializeSagaTransactionStep)))

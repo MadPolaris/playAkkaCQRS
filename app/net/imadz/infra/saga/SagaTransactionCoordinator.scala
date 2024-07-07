@@ -7,9 +7,10 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior}
 import akka.util.Timeout
 import net.imadz.common.CborSerializable
-import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableOrNotException, SagaResult}
+import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException, SagaResult}
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.StepExecutor.{StepCompleted, StepFailed, StepResult}
+import play.api.libs.json._
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.language.postfixOps
@@ -25,12 +26,55 @@ object SagaTransactionCoordinator {
   case class StartTransaction[E, R](transactionId: String, steps: List[SagaTransactionStep[E, R]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
   private case class PhaseCompleted(phase: TransactionPhase, results: List[Either[RetryableOrNotException, Any]], stepTraces: List[StepExecutor.State[_, _]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
   private case class PhaseFailure(phase: TransactionPhase, error: RetryableOrNotException, stepTraces: List[StepExecutor.State[_, _]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
-  case class TransactionResult(successful: Boolean, state: State, stepTraces: List[StepExecutor.State[_, _]]){
-    def failReason: String =
-      if (successful) ""
-    else stepTraces.map(_.toString).mkString("""\n""")
+  case class TracingStep(
+                          stepNumber: Int,
+                          stepId: String,
+                          stepType: String,
+                          phase: String,
+                          participant: String,
+                          status: String,
+                          retries: Int,
+                          maxRetries: Int,
+                          timeoutInMillis: Long,
+                          retryWhenRecoveredOngoing: Boolean,
+                          circuitBreakerOpen: Boolean,
+                          error: Option[ErrorInfo]
+                        )
+  object TracingStep {
+    implicit val errorInfoFormat: OWrites[ErrorInfo] = Json.writes[ErrorInfo]
 
-}
+    implicit val tracingStepFormat: OWrites[TracingStep] = Json.writes[TracingStep]
+
+    def fromStepExecutorState(state: StepExecutor.State[_, _], stepNumber: Int): TracingStep = {
+      val step = state.step.getOrElse(throw new IllegalStateException(s"Step $stepNumber has no associated SagaTransactionStep"))
+      TracingStep(
+        stepNumber = stepNumber,
+        stepId = step.stepId,
+        stepType = step.getClass.getSimpleName,
+        phase = step.phase.toString,
+        participant = step.participant.getClass.getSimpleName,
+        status = state.status.toString,
+        retries = state.retries,
+        maxRetries = step.maxRetries,
+        timeoutInMillis = step.timeoutDuration.toMillis ,
+        retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
+        circuitBreakerOpen = state.circuitBreakerOpen,
+        error = state.lastError.map(e => ErrorInfo(e.message, e.getClass.getSimpleName, e.isInstanceOf[RetryableFailure]))
+      )
+    }
+  }
+  case class ErrorInfo(
+                        message: String,
+                        errorType: String,
+                        isRetryable: Boolean
+                      )
+  case class TransactionResult(successful: Boolean, state: State, stepTraces: List[StepExecutor.State[_, _]]){
+    
+    def orderedSteps: Seq[StepExecutor.State[_, _]]= stepTraces.reverse
+
+    lazy val tracingSteps: List[TracingStep] = orderedSteps.zipWithIndex.map(step=> TracingStep.fromStepExecutorState(step._1, step._2)).toList
+    def failReason: String = Json.toJson(tracingSteps).toString()
+  }
 
   // Events
   sealed trait Event extends CborSerializable
@@ -69,9 +113,9 @@ object SagaTransactionCoordinator {
   }
 
   def commandHandler(
-                              context: ActorContext[Command],
-                              stepExecutorFactory: (String, SagaTransactionStep[_, _]) => ActorRef[StepExecutor.Command]
-                            )(implicit ec: ExecutionContext, timeout: Timeout): (State, Command) => Effect[Event, State] = { (state, command) =>
+                      context: ActorContext[Command],
+                      stepExecutorFactory: (String, SagaTransactionStep[_, _]) => ActorRef[StepExecutor.Command]
+                    )(implicit ec: ExecutionContext, timeout: Timeout): (State, Command) => Effect[Event, State] = { (state, command) =>
     command match {
       case StartTransaction(transactionId, steps, replyTo) if state.status == Created =>
         Effect

@@ -151,7 +151,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
       result.successful shouldBe true
       result.state.status shouldBe SagaTransactionCoordinator.Completed
-      result.stepTraces.reverse.head.retries should be > 0
+      result.orderedSteps.head.retries should be > 0
     }
 
     // Add more test cases here...
@@ -172,7 +172,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
       result.successful shouldBe false
       result.state.status shouldBe SagaTransactionCoordinator.Failed
-      result.stepTraces.reverse.head.retries should be >= 3
+      result.orderedSteps.head.retries should be >= 3
     }
 
 
@@ -195,7 +195,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       result.successful shouldBe false
       result.state.status shouldBe SagaTransactionCoordinator.Failed
       result.state.currentPhase shouldBe CompensatePhase
-      result.stepTraces.reverse.head.lastError.get shouldBe a[RetryableFailure]
+      result.orderedSteps.head.lastError.get shouldBe a[RetryableFailure]
     }
 
     "handle partial compensation" in {

@@ -1,8 +1,9 @@
-package net.imadz.infra.saga
+package net.imadz.infra.saga.serialization
 
 import akka.actor.ExtendedActorSystem
 import akka.serialization.{SerializationExtension, SerializerWithStringManifest}
 import com.google.protobuf.ByteString
+import net.imadz.infra.saga.SagaParticipant
 import net.imadz.infra.saga.StepExecutor.{OperationResponse, OperationSucceeded}
 import net.imadz.infra.saga.proto.saga_v2.{OperationFailedCommandPO, OperationSucceedCommandPO, OperationSucceededPO, RetryableOrNotExceptionPO}
 
