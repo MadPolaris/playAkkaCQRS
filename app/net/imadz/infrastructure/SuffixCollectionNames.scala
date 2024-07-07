@@ -5,7 +5,6 @@ import akka.contrib.persistence.mongodb.CanSuffixCollectionNames
 class SuffixCollectionNames extends CanSuffixCollectionNames{
   override def getSuffixFromPersistenceId(persistenceId: String): String = persistenceId match {
     // in this example, we remove any leading "-test" string from persistenceId passed as parameter
-    case str: String if str.contains("Encourage") => "encourage"
     // otherwise, we do not suffix our collection
     case _ => ""
   }
