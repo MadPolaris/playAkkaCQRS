@@ -9,7 +9,6 @@ on:
 permissions:
   contents: write
 
-
 jobs:
   build:
 
@@ -23,7 +22,9 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           cache: 'sbt'
-      - name: Run tests
-        run: sbt test
+      - name: Clear SBT caches
+        run: sbt cleanCache
+      - name: Run tests with detailed logging
+        run: sbt -v test
       - name: Upload dependency graph
-        uses: scalacenter/sbt-dependency-submission@ab086b50c947c9774b70f39fc7f6e20ca2706c91
+        uses: scalacenter/sbt-dependency-submission@v1
