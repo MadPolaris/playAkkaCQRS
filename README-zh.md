@@ -176,7 +176,6 @@ curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
 │
 └─protobuf # 事件/快照 的 protobuf 协议定义
        credits.proto
-       saga.proto
        saga_participant.proto
 ```
 

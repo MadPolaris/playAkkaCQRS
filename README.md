@@ -199,7 +199,6 @@ further separates domain complexity from use case complexity. The general corres
 │
 └─protobuf # Event/Snapshot protobuf protocol definitions
        credits.proto
-       saga.proto
        saga_participant.proto
 ```
 
