@@ -84,7 +84,8 @@ libraryDependencies ++= Seq(
   "org.apache.poi" % "poi" % "5.2.4",
   "org.apache.poi" % "poi-ooxml" % "5.2.4",
 
-  "mysql" % "mysql-connector-java" % "5.1.34",
+  "mysql" % "mysql-connector-java" % "8.0.33",
+//  "mysql" % "mysql-connector-java" % "5.1.34",
   "com.lightbend.akka" %% "akka-projection-testkit" % AkkaProjectionVersion % Test
 )
 libraryDependencies += "org.scalatestplus.play" %% "scalatestplus-play" % "5.0.0" % Test
