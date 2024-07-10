@@ -39,7 +39,23 @@ object SagaTransactionCoordinator {
                           retryWhenRecoveredOngoing: Boolean,
                           circuitBreakerOpen: Boolean,
                           error: Option[ErrorInfo]
-                        )
+                        ) {
+    override def toString: String = {
+      val step = this
+      s"""
+         |Step Number: ${step.stepNumber}, Step Id: ${step.stepId}, Phase: ${step.phase}, Step Type: ${step.stepType},
+         |Saga Participant: ${step.participant}, ${step.status},
+         |Step Status: ${step.status}
+         |Step Failure: ${step.error.map(e => "type: " + e.errorType +" , msg: " + e.message).getOrElse("")},
+         |Retries/MaxRetries: ${step.retries}/${step.maxRetries},
+         |RetryWhenRecoveredOngoing: ${step.retryWhenRecoveredOngoing},
+         |Step Timeout: ${step.timeoutInMillis} millis,
+         |CircuitBreakerOpen: ${step.circuitBreakerOpen}
+         |
+         |""".stripMargin.replaceAll("""\n""", "")
+     }
+
+  }
   object TracingStep {
     implicit val errorInfoFormat: OWrites[ErrorInfo] = Json.writes[ErrorInfo]
 
@@ -73,7 +89,8 @@ object SagaTransactionCoordinator {
     def orderedSteps: Seq[StepExecutor.State[_, _]]= stepTraces.reverse
 
     lazy val tracingSteps: List[TracingStep] = orderedSteps.zipWithIndex.map(step=> TracingStep.fromStepExecutorState(step._1, step._2)).toList
-    def failReason: String = Json.toJson(tracingSteps).toString()
+    def failReason: String = tracingSteps.filter(step => step.error.nonEmpty).map(_.toString).mkString(";")
+
   }
 
   // Events
