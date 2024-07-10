@@ -2,6 +2,78 @@
 
 [English](README.md) | 中文
 
+## 快速上手
+在启动前确保以下本地端口可用：
+> - 2551，用于 Akka 远程通信和集群
+> - 27015，用于事件日志
+> - 3308，用于读取侧数据库
+
+### 1.使用 Coursier 安装 Scala，可以按照以下命令行操作：
+首先，安装 Coursier。你可以在终端中运行以下命令：
+
+Linux
+```bash
+curl -fL https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz | gzip -d > cs
+chmod +x cs
+./cs setup
+```
+Windows
+```shell
+iex "& { $(irm https://git.io/coursier-cli-windows) }"
+
+```
+
+macOS
+```bash
+curl -fL https://github.com/coursier/launchers/raw/master/cs-x86_64-apple-darwin.gz | gzip -d > cs
+chmod +x cs
+./cs setup
+```
+
+然后，使用 Coursier 安装 Scala：
+```bash
+cs install scala
+```
+
+确保 Scala 已成功安装，检查版本：
+```bash
+scala -version
+```
+以上步骤将通过 Coursier 安装 Scala 并设置好环境。
+
+### 2. 启动 Event Journal (MongoDB) 和 Read Side Database (MySQL)
+```bash
+docker-compose up -d
+```
+2. Launch Demo CQRS Service
+```bash
+sbt run
+```
+### 3. 通过命令行对服务进行测试
+```bash
+# 获取账户A剩余额度
+curl http://127.0.0.1:9000/balance/1c0d06fc-f108-4b62-b1f6-50eca6e50541
+
+# 向账户A存储额度
+curl -d {} http://127.0.0.1:9000/deposit/1c0d06fc-f108-4b62-b1f6-50eca6e50541/30.43
+
+# 从账户A提现
+curl -d {} http://127.0.0.1:9000/withdraw/1c0d06fc-f108-4b62-b1f6-50eca6e50541/10
+
+# 获取账户B剩余额度
+curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
+
+# 从账户A到账户B转账
+curl -d {} http://127.0.0.1:9000/transfer/1c0d06fc-f108-4b62-b1f6-50eca6e50541/1048f264-73e7-4ac5-9925-7fe3ddb46491/10
+
+# 获取账户A剩余额度
+curl http://127.0.0.1:9000/balance/1c0d06fc-f108-4b62-b1f6-50eca6e50541
+
+# 获取账户B剩余额度
+curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
+
+```
+
 ## 概要
 本项目试图建立一个 Scala 单一微服务代码项目的脚手架。它包含了以下一些特性：
 - 洋葱架构，包含 domain, application 和 infrastructure 三个层次
