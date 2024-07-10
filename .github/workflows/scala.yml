@@ -23,7 +23,7 @@ jobs:
           distribution: 'temurin'
           cache: 'sbt'
       - name: Clear SBT caches
-        run: sbt cleanCache
+        run: sbt clean
       - name: Run tests with detailed logging
         run: sbt -v test
       - name: Upload dependency graph
