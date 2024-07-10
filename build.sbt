@@ -95,10 +95,21 @@ libraryDependencies += "org.mongodb.scala" %% "mongo-scala-driver" % "4.11.0"
 libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-remote" % akkaVersion,
   "com.typesafe.akka" %% "akka-protobuf-v3" % akkaVersion,
-  "org.mongodb.scala" %% "mongo-scala-driver" % "4.11.1",
+//  "org.mongodb.scala" %% "mongo-scala-driver" % "4.11.1",
   "com.google.protobuf" % "protobuf-java" % "3.15.6",
   "org.reactivemongo" %% "reactivemongo" % "1.1.0-noshaded-RC11",
   "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf"
+)
+
+dependencyOverrides ++= Seq(
+  "org.mongodb.scala" %% "mongo-scala-driver" % "4.3.4",
+  "com.typesafe.akka" %% "akka-stream" % akkaVersion,
+  "com.typesafe.akka" %% "akka-actor" % akkaVersion,
+  "org.reactivemongo" %% "reactivemongo" % "1.1.0-noshaded-RC11",
+  "com.typesafe.play" %% "play-json" % "2.9.3",
+  "com.google.guava" % "guava" % "30.1.1-jre",
+  "com.typesafe.akka" %% "akka-http-core" % "10.2.7",
+  "org.slf4j" % "slf4j-api" % "2.0.4"
 )
 
 PB.targets in Compile := Seq(
