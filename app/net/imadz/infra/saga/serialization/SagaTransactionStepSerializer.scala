@@ -1,7 +1,7 @@
 package net.imadz.infra.saga.serialization
 
 import akka.serialization.Serializer
-import net.imadz.application.aggregates.MoneyTransferTransactionAggregate.{FromAccountParticipant, ToAccountParticipant}
+import net.imadz.application.services.transactor.MoneyTransferSagaTransactor.{FromAccountParticipant, ToAccountParticipant}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.common.Id

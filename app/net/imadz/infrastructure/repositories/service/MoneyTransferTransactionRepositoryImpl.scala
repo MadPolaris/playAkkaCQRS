@@ -1,13 +1,12 @@
-package net.imadz.infrastructure.repositories.aggregate
+package net.imadz.infrastructure.repositories.service
 
-import akka.actor.typed.{ActorRef, ActorSystem, Scheduler}
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
-import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
-import net.imadz.application.aggregates.MoneyTransferTransactionAggregate
-import net.imadz.application.aggregates.MoneyTransferTransactionAggregate.MoneyTransferTransactionCommand
-import net.imadz.application.aggregates.behaviors.MoneyTransferTransactionBehaviors
-import net.imadz.application.aggregates.repository.{CreditBalanceRepository, MoneyTransferTransactionRepository}
+import akka.actor.typed.{ActorRef, ActorSystem, Scheduler}
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import net.imadz.application.aggregates.repository.CreditBalanceRepository
+import net.imadz.application.services.transactor.MoneyTransferSagaTransactor.MoneyTransferTransactionCommand
+import net.imadz.application.services.transactor.{MoneyTransferSagaTransactor, MoneyTransferSagaTransactorBehaviors, MoneyTransferTransactionRepository}
 import net.imadz.common.CommonTypes.Id
 import net.imadz.infra.saga.SagaTransactionCoordinator
 import play.api.Application
@@ -21,11 +20,11 @@ class MoneyTransferTransactionRepositoryImpl @Inject()(sharding: ClusterSharding
   implicit val ec: ExecutionContext = system.executionContext
   implicit val scheduler: Scheduler = system.scheduler
 
-  override def findTransactionById(transactionId: Id): ActorRef[MoneyTransferTransactionAggregate.MoneyTransferTransactionCommand] = {
+  override def findTransactionById(transactionId: Id): ActorRef[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] = {
     val coordinator = sharding.entityRefFor(SagaTransactionCoordinator.entityTypeKey, transactionId.toString)
     system.systemActorOf(
       Behaviors.setup[MoneyTransferTransactionCommand] { context =>
-        MoneyTransferTransactionBehaviors.apply(context,
+        MoneyTransferSagaTransactorBehaviors.apply(context,
           coordinator, repository)
       },
       s"moneyTransferActor-$transactionId"

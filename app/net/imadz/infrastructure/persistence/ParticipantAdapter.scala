@@ -1,11 +1,11 @@
 package net.imadz.infrastructure.persistence
 
-import net.imadz.application.aggregates.MoneyTransferTransactionAggregate.{FromAccountParticipant, ToAccountParticipant}
+import net.imadz.application.services.transactor.MoneyTransferSagaTransactor.{FromAccountParticipant, ToAccountParticipant}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
-import net.imadz.infra.saga.SagaParticipant
+import net.imadz.infra.saga.{ForSaga, SagaParticipant}
 import net.imadz.infrastructure.proto.credits.MoneyPO
 import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO, ToAccountParticipantPO}
 import net.imadz.infrastructure.saga.proto.saga.ParticipantPO
@@ -13,7 +13,7 @@ import net.imadz.infrastructure.saga.proto.saga.ParticipantPO
 import java.util.Currency
 import scala.concurrent.ExecutionContext
 
-trait ParticipantAdapter {
+trait ParticipantAdapter extends ForSaga {
   def repository: CreditBalanceRepository
   def ec: ExecutionContext
 
