@@ -1,4 +1,4 @@
-package net.imadz.infra.saga.bootstrap
+package net.imadz.infrastructure.bootstrap
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{Behavior, LogOptions, SupervisorStrategy}
@@ -10,14 +10,14 @@ import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id
 import net.imadz.infra.saga.SagaTransactionCoordinator.entityTypeKey
-import net.imadz.infra.saga.persistence.SagaTransactionCoordinatorEventAdapter
-import net.imadz.infra.saga.{SagaTransactionCoordinator, StepExecutor}
+import net.imadz.infra.saga.{ForSaga, SagaTransactionCoordinator, StepExecutor}
+import net.imadz.infrastructure.persistence.SagaTransactionCoordinatorEventAdapter
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 
 import scala.concurrent.duration.DurationInt
 
-trait SagaTransactionCoordinatorBootstrap {
+trait SagaTransactionCoordinatorBootstrap extends ForSaga {
 
   import scala.concurrent.ExecutionContext.Implicits.global
 

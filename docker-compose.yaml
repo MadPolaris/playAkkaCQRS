@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: cqrs-demo-journal
+    volumes:
+      - mongodb_data:/data/db
+
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3308:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 1q2w3e4r5t
+      MYSQL_DATABASE: cqrs_jdbc_demo
+      MYSQL_ROOT_HOST: '%'
+    command: --default-authentication-plugin=mysql_native_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./conf/sql/1.sql:/docker-entrypoint-initdb.d/init.sql
+
+volumes:
+  mongodb_data:
+  mysql_data:

@@ -1,11 +1,10 @@
-package net.imadz.application.aggregates
+package net.imadz.application.services.transactor
 
 import akka.actor.typed.ActorRef
-import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
+import net.imadz.application.aggregates.CreditBalanceAggregate
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.{CborSerializable, Id}
-//import net.imadz.domain.entities.TransactionEntity._
 import net.imadz.domain.values.Money
 import net.imadz.infra.saga.SagaParticipant._
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
@@ -15,7 +14,7 @@ import play.api.libs.json.{Json, OWrites}
 
 import scala.concurrent.ExecutionContext
 
-object MoneyTransferTransactionAggregate {
+object MoneyTransferSagaTransactor {
   // Commands
   sealed trait MoneyTransferTransactionCommand
 
@@ -29,12 +28,6 @@ object MoneyTransferTransactionAggregate {
   object TransactionResultConfirmation {
     implicit val confirmationWrites: OWrites[TransactionResultConfirmation] = Json.writes[TransactionResultConfirmation]
   }
-
-  // Command Handler
-//  type TransactionCommandHandler = (TransactionState, MoneyTransferTransactionCommand) => Effect[TransactionEvent, TransactionState]
-
-  // Akka
-  val TransactionEntityTypeKey: EntityTypeKey[MoneyTransferTransactionCommand] = EntityTypeKey("Transaction")
 
   // Transaction Steps
   def createTransactionSteps(fromUserId: Id, toUserId: Id, amount: Money, repository: CreditBalanceRepository)(implicit ec: ExecutionContext): List[SagaTransactionStep[iMadzError, String]] = {

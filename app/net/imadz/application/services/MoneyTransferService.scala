@@ -2,10 +2,9 @@ package net.imadz.application.services
 
 import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.actor.typed.{ActorRef, ActorSystem, Scheduler}
-import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.util.Timeout
-import net.imadz.application.aggregates.MoneyTransferTransactionAggregate._
-import net.imadz.application.aggregates.repository.MoneyTransferTransactionRepository
+import net.imadz.application.services.transactor.MoneyTransferSagaTransactor._
+import net.imadz.application.services.transactor.MoneyTransferTransactionRepository
 import net.imadz.common.CommonTypes.{ApplicationService, Id}
 import net.imadz.domain.values.Money
 
@@ -17,7 +16,6 @@ import scala.concurrent.{ExecutionContext, Future}
 class MoneyTransferService @Inject()(system: ActorSystem[_], transactionRepository: MoneyTransferTransactionRepository) extends ApplicationService {
   private implicit val timeout: Timeout = 120.seconds
   private implicit val ec: ExecutionContext = system.executionContext
-  private val sharding: ClusterSharding = ClusterSharding(system)
   implicit val scheduler: Scheduler = system.scheduler
 
 

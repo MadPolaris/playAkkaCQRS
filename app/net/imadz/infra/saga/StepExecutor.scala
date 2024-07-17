@@ -10,8 +10,8 @@ import net.imadz.common.CborSerializable
 import net.imadz.infra.saga.SagaParticipant.{RetryableOrNotException, SagaResult}
 import net.imadz.infra.saga.SagaPhase.TransactionPhase
 import net.imadz.infra.saga.handlers.{StepExecutorCommandHandler, StepExecutorEventHandler, StepExecutorRecoveryHandler}
-import net.imadz.infra.saga.persistence.StepExecutorEventAdapter
 import net.imadz.infra.saga.serialization.AkkaSerializationWrapper
+import net.imadz.infrastructure.persistence.StepExecutorEventAdapter
 
 import scala.concurrent.duration._
 

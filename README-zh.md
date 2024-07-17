@@ -2,6 +2,78 @@
 
 [English](README.md) | 中文
 
+## 快速上手
+在启动前确保以下本地端口可用：
+> - 2551，用于 Akka 远程通信和集群
+> - 27015，用于事件日志
+> - 3308，用于读取侧数据库
+
+### 1.使用 Coursier 安装 Scala，可以按照以下命令行操作：
+首先，安装 Coursier。你可以在终端中运行以下命令：
+
+Linux
+```bash
+curl -fL https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz | gzip -d > cs
+chmod +x cs
+./cs setup
+```
+Windows
+```shell
+iex "& { $(irm https://git.io/coursier-cli-windows) }"
+
+```
+
+macOS
+```bash
+curl -fL https://github.com/coursier/launchers/raw/master/cs-x86_64-apple-darwin.gz | gzip -d > cs
+chmod +x cs
+./cs setup
+```
+
+然后，使用 Coursier 安装 Scala：
+```bash
+cs install scala
+```
+
+确保 Scala 已成功安装，检查版本：
+```bash
+scala -version
+```
+以上步骤将通过 Coursier 安装 Scala 并设置好环境。
+
+### 2. 启动 Event Journal (MongoDB) 和 Read Side Database (MySQL)
+```bash
+docker-compose up -d
+```
+2. Launch Demo CQRS Service
+```bash
+sbt run
+```
+### 3. 通过命令行对服务进行测试
+```bash
+# 获取账户A剩余额度
+curl http://127.0.0.1:9000/balance/1c0d06fc-f108-4b62-b1f6-50eca6e50541
+
+# 向账户A存储额度
+curl -d {} http://127.0.0.1:9000/deposit/1c0d06fc-f108-4b62-b1f6-50eca6e50541/30.43
+
+# 从账户A提现
+curl -d {} http://127.0.0.1:9000/withdraw/1c0d06fc-f108-4b62-b1f6-50eca6e50541/10
+
+# 获取账户B剩余额度
+curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
+
+# 从账户A到账户B转账
+curl -d {} http://127.0.0.1:9000/transfer/1c0d06fc-f108-4b62-b1f6-50eca6e50541/1048f264-73e7-4ac5-9925-7fe3ddb46491/10
+
+# 获取账户A剩余额度
+curl http://127.0.0.1:9000/balance/1c0d06fc-f108-4b62-b1f6-50eca6e50541
+
+# 获取账户B剩余额度
+curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
+
+```
+
 ## 概要
 本项目试图建立一个 Scala 单一微服务代码项目的脚手架。它包含了以下一些特性：
 - 洋葱架构，包含 domain, application 和 infrastructure 三个层次
@@ -28,84 +100,105 @@
 
 ### 部分目录结构示例
 ```bash
-├─controllers # Play Web Server Controller, API 端点
-│  │  HomeController.scala
-│  │
-│  └─filter
-│          LoggingFilter.scala
-│
-├─net
-│  └─imadz
-│      ├─domain #领域层
-│      │  └─values # 值对象
-│      │  │       Money.scala
-│      │  ├─entities #实体
-│      │  │  │   CreditBalanceEntity.scala
-│      │  │  └─behaviors # 事件处理器
-│      │  │      CreditBalanceEventHandler.scala
-│      │  ├─policy #领域策略
-│      │  │      AddInitialOnlyOncePolicy.scala
-│      │  │      DepositPolicy.scala
-│      │  │      WithdrawPolicy.scala
-│      │  └─services #领域服务
-│      │         TransferDomainService.scala
-│      ├─application # 应用层
-│      │  ├─aggregates # 聚合
-│      │  │  │  CreditBalanceAggregate.scala
-│      │  │  ├─behaviors # 命令处理器
-│      │  │  │      CreditBalanceBehaviors.scala
-│      │  │  ├─factories # 聚合工厂
-│      │  │  │      CreditBalanceAggregateFactory.scala
-│      │  │  └─repository # 聚合仓库
-│      │  │          CreditBalanceRepository.scala
-│      │  ├─projection # 投影
-│      │  │  │  MonthlyIncomeAndExpenseSummaryProjection.scala # 投影工厂
-│      │  │  │  MonthlyIncomeAndExpenseSummaryProjectionHandler.scala # 投影事件ETL处理器
-│      │  │  │  ScalikeJdbcSession.scala
-│      │  │  │  ScalikeJdbcSetup.scala
-│      │  │  └─repository
-│      │  │          MonthlyIncomeAndExpendsSummaryRepository.scala #投影仓库
-│      │  ├─queries #业务查询
-│      │  │      GetBalanceQuery.scala
-│      │  │      GetRecent12MonthsIncomeAndExpenseReport.scala
-│      │  └─services #应用服务
-│      │          CreateCreditBalanceService.scala
-│      │          DepositService.scala
-│      │          MoneyTransferService.scala
-│      ├─common #公共类型与工具
-│      │  │  CommonTypes.scala
-│      │  │
-│      │  └─application
-│      │      │  CommandHandlerReplyingBehavior.scala
-│      │      └─saga # 分布式事务协调器
-│      │          │  TransactionCoordinator.scala
-│      │          │
-│      │          └─behaviors # 命令与事件处理器
-│      │                  SagaCommandBehaviors.scala
-│      │                  SagaEventHandler.scala
-│      │
-│      │
-│      └─infrastructure # 基础设施层
-│          ├─bootstrap # 启动引导
-│          │      CreditBalanceBootstrap.scala
-│          │      MonthlyIncomeAndExpenseBootstrap.scala
-│          │      SagaTransactionCoordinatorBootstrap.scala
-│          ├─persistence # AKka 持久化适配器
-│          │      CreditBalanceEventAdapter.scala
-│          │      CreditBalanceSnapshotAdapter.scala
-│          │      ParticipantAdapter.scala
-│          │      TransactionCoordinatorEventAdapter.scala
-│          │      TransactionCoordinatorSnapshotAdapter.scala
-│          └─repositories # 仓库具体实现
-│              ├─aggregate
-│              │      CreditBalanceRepositoryImpl.scala
-│              └─projection
-│                      MonthlyIncomeAndExpenseSummaryRepositoryImpl.scala
-│
-└─protobuf # 事件/快照 的 protobuf 协议定义
-       credits.proto
-       saga.proto
-       saga_participant.proto
+├── controllers
+│         ├── HomeController.scala
+│         └── filter
+│             └── LoggingFilter.scala
+├── net
+│         └── imadz
+│             ├── application                            # Onion Application Layer
+│             │         ├── aggregates                   # Aggregations
+│             │         │         ├── CreditBalanceAggregate.scala
+│             │         │         ├── behaviors          # Aggregation Behaviors: Command Handlers
+│             │         │         │         └── CreditBalanceBehaviors.scala
+│             │         │         ├── factories          # Aggregation Factories
+│             │         │         │         └── CreditBalanceAggregateFactory.scala
+│             │         │         └── repository         # Aggregation Repositories
+│             │         │             └── CreditBalanceRepository.scala
+│             │         ├── projection                   # Projection for building Read side DB (materialized view)
+│             │         │         ├── MonthlyIncomeAndExpenseSummaryProjection.scala
+│             │         │         ├── MonthlyIncomeAndExpenseSummaryProjectionHandler.scala
+│             │         │         ├── ScalikeJdbcSession.scala
+│             │         │         ├── ScalikeJdbcSetup.scala
+│             │         │         └── repository         # Projection Repository
+│             │         │             └── MonthlyIncomeAndExpendsSummaryRepository.scala
+│             │         ├── queries                      # Queries based on Aggregate or Materialized view implementing Read Model
+│             │         │         ├── GetBalanceQuery.scala
+│             │         │         └── GetRecent12MonthsIncomeAndExpenseReport.scala
+│             │         └── services                     # Application Services
+│             │             ├── CreateCreditBalanceService.scala
+│             │             ├── DepositService.scala
+│             │             ├── MoneyTransferService.scala
+│             │             ├── WithdrawService.scala
+│             │             └── transactor               # Utilities for application services
+│             │                 ├── MoneyTransferSagaTransactor.scala
+│             │                 ├── MoneyTransferSagaTransactorBehaviors.scala
+│             │                 └── MoneyTransferTransactionRepository.scala
+│             ├── common
+│             │         ├── CborSerializable.scala
+│             │         ├── CommonTypes.scala
+│             │         ├── application
+│             │         │         └── CommandHandlerReplyingBehavior.scala
+│             │         └── serialization
+│             │             └── ObjectIdOffsetSerializer.scala
+│             ├── domain                                 # Onion Domain Layer
+│             │         ├── entities                     # Domain Entities
+│             │         │         ├── CreditBalanceEntity.scala
+│             │         │         └── behaviors          # Domain Entity Behaviors: Event Handler
+│             │         │             └── CreditBalanceEventHandler.scala
+│             │         ├── policy                       # Enterprise/Business Policies
+│             │         │         ├── AddInitialOnlyOncePolicy.scala
+│             │         │         ├── DepositPolicy.scala
+│             │         │         └── WithdrawPolicy.scala
+│             │         ├── services                     # Domain Services
+│             │         │         └── TransferDomainService.scala
+│             │         └── values                       # Domain Value Objects
+│             │             └── Money.scala
+│             ├── infra                                  # Infra Utilities, can be extracted into dedicated project
+│             │         └── saga                         # Saga Component
+│             │             ├── ForSaga.scala
+│             │             ├── SagaParticipant.scala
+│             │             ├── SagaTransactionCoordinator.scala
+│             │             ├── StepExecutor.scala
+│             │             ├── handlers
+│             │             │         ├── StepExecutorCommandHandler.scala
+│             │             │         ├── StepExecutorEventHandler.scala
+│             │             │         └── StepExecutorRecoveryHandler.scala
+│             │             ├── repository
+│             │             │         ├── SagaTransactionCoordinatorRepositoryImpl.scala
+│             │             │         └── TransactionCoordinatorRepository.scala
+│             │             └── serialization
+│             │                 ├── AkkaSerializationWrapper.scala
+│             │                 ├── SagaSerializer.scala
+│             │                 └── SagaTransactionStepSerializer.scala
+│             └── infrastructure                        # Onion Infrastructure Layer 
+│                 ├── SuffixCollectionNames.scala
+│                 ├── bootstrap                         # Components Bootstrap
+│                 │         ├── CreditBalanceBootstrap.scala
+│                 │         ├── MonthlyIncomeAndExpenseBootstrap.scala
+│                 │         └── SagaTransactionCoordinatorBootstrap.scala
+│                 ├── persistence                       # Event Adapters and Snapshot Adapters for Event Sourcing
+│                 │         ├── CreditBalanceEventAdapter.scala
+│                 │         ├── CreditBalanceSnapshotAdapter.scala
+│                 │         ├── ParticipantAdapter.scala
+│                 │         ├── SagaTransactionCoordinatorEventAdapter.scala
+│                 │         └── StepExecutorEventAdapter.scala
+│                 └── repositories                      # Repository Implementations for aggregates, projections and services 
+│                     ├── aggregate
+│                     │         └── CreditBalanceRepositoryImpl.scala
+│                     ├── projection
+│                     │         └── MonthlyIncomeAndExpenseSummaryRepositoryImpl.scala
+│                     └── service
+│                         └── MoneyTransferTransactionRepositoryImpl.scala
+├── protobuf                                            # Protobuf files for akka remoting, akka persistence and so on.
+│         ├── credits.proto
+│         ├── saga_participant.proto
+│         ├── saga_v2.proto
+│         ├── saga_v2_test.proto
+│         └── transactions.proto
+└── views
+    ├── index.scala.html
+    └── main.scala.html
 ```
 
 ### 领域层组件
