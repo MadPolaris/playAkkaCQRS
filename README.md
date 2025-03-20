@@ -55,6 +55,11 @@ docker-compose up -d
 sbt run
 ```
 
+> Running on Apple Silicon Chipset
+> ```bash
+> sbt -Djna.nosys=true clean run
+> ```
+
 ### 4. Test service with Command Line
 
 ```bash

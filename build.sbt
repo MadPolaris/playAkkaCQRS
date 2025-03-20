@@ -86,6 +86,11 @@ libraryDependencies ++= Seq(
 
   "mysql" % "mysql-connector-java" % "8.0.33",
 //  "mysql" % "mysql-connector-java" % "5.1.34",
+
+  // 6. fix jna runtime issue
+  "net.java.dev.jna" % "jna" % "5.13.0",
+  "net.java.dev.jna" % "jna-platform" % "5.13.0",
+  "io.methvin" % "directory-watcher" % "0.17.1",
   "com.lightbend.akka" %% "akka-projection-testkit" % AkkaProjectionVersion % Test
 )
 libraryDependencies += "org.scalatestplus.play" %% "scalatestplus-play" % "5.0.0" % Test
