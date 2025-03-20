@@ -49,6 +49,12 @@ docker-compose up -d
 ```bash
 sbt run
 ```
+
+> 在 Apple Silicon Chipset 启动
+> ```bash
+> sbt -Djna.nosys=true clean run
+> ```
+
 ### 3. 通过命令行对服务进行测试
 ```bash
 # 获取账户A剩余额度
