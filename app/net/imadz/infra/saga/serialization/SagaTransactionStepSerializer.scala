@@ -1,16 +1,15 @@
 package net.imadz.infra.saga.serialization
 
 import akka.serialization.Serializer
-import net.imadz.application.services.transactor.MoneyTransferSagaTransactor.{FromAccountParticipant, ToAccountParticipant}
+import com.google.protobuf.ByteString
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
+import net.imadz.application.services.transactor.MoneyTransferSagaTransactor.{FromAccountParticipant, ToAccountParticipant}
 import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
-import net.imadz.infra.saga.SagaTransactionStep
-import net.imadz.infra.saga.proto.saga_v2.SagaParticipantPO.Participant.{FromAccount, ToAccount}
 import net.imadz.infra.saga.proto.saga_v2.{SagaParticipantPO, SagaTransactionStepPO, TransactionPhasePO}
-import net.imadz.infrastructure.persistence.ParticipantAdapter
+import net.imadz.infra.saga.{SagaParticipant, SagaTransactionStep}
 import net.imadz.infrastructure.proto.credits.MoneyPO
 import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO, ToAccountParticipantPO}
 
@@ -19,7 +18,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationLong
 import scala.util.{Failure, Success, Try}
 
-case class SagaTransactionStepSerializer(repository: CreditBalanceRepository, ec: ExecutionContext) extends Serializer with ParticipantAdapter {
+case class SagaTransactionStepSerializer(repository: CreditBalanceRepository, ec: ExecutionContext) extends Serializer  {
 
   implicit val executionContext: ExecutionContext = ec
 
@@ -40,12 +39,30 @@ case class SagaTransactionStepSerializer(repository: CreditBalanceRepository, ec
   override def includeManifest: Boolean = false
 
   def serializeSagaTransactionStep(step: SagaTransactionStep[_, _]): SagaTransactionStepPO = {
-    val participantPO = step.participant match {
+    val (typeName, payloadBytes) = step.participant match {
       case FromAccountParticipant(fromUserId, amount, _) =>
-        FromAccount(FromAccountParticipantPO(fromUserId.toString, Some(MoneyPO(amount.amount.doubleValue, amount.currency.getCurrencyCode))))
+        val specificPO = FromAccountParticipantPO(
+          fromUserId.toString,
+          Some(MoneyPO(amount.amount.doubleValue, amount.currency.getCurrencyCode))
+        )
+        // 返回：(类型标记, 二进制数据)
+        ("FromAccountParticipantPO", ByteString.copyFrom(specificPO.toByteArray))
+
       case ToAccountParticipant(toUserId, amount, _) =>
-        ToAccount(ToAccountParticipantPO(toUserId.toString, Some(MoneyPO(amount.amount.doubleValue, amount.currency.getCurrencyCode))))
+        val specificPO = ToAccountParticipantPO(
+          toUserId.toString,
+          Some(MoneyPO(amount.amount.doubleValue, amount.currency.getCurrencyCode))
+        )
+        ("ToAccountParticipantPO", ByteString.copyFrom(specificPO.toByteArray))
+
+      case _ => throw new IllegalArgumentException("Unknown participant type")
     }
+
+    // 3. 构建通用的 SagaParticipantPO
+    val genericParticipantPO = SagaParticipantPO(
+      typeName = typeName,
+      payload = payloadBytes
+    )
 
     SagaTransactionStepPO(
       stepId = step.stepId,
@@ -54,7 +71,7 @@ case class SagaTransactionStepSerializer(repository: CreditBalanceRepository, ec
         case CommitPhase => TransactionPhasePO.COMMIT_PHASE
         case CompensatePhase => TransactionPhasePO.COMPENSATE_PHASE
       },
-      participant = Some(SagaParticipantPO(participantPO)),
+      participant = Some(genericParticipantPO),
       maxRetries = step.maxRetries,
       timeoutDurationMillis = step.timeoutDuration.toMillis,
       retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing
@@ -62,13 +79,21 @@ case class SagaTransactionStepSerializer(repository: CreditBalanceRepository, ec
   }
 
   def deserializeSagaTransactionStep(stepPO: SagaTransactionStepPO): SagaTransactionStep[iMadzError, String] = {
-    val participant = stepPO.participant match {
-      case Some(SagaParticipantPO(FromAccount(
-      FromAccountParticipantPO(fromUserId, Some(MoneyPO(amount, currencyCode, _)), _)), _)) =>
-        FromAccountParticipant(Id.of(fromUserId), Money(BigDecimal(amount), Currency.getInstance(currencyCode)), repository)
-      case Some(SagaParticipantPO(ToAccount(ToAccountParticipantPO(toUserId, Some(MoneyPO(value, currency, _)), _)), _)) =>
-        ToAccountParticipant(Id.of(toUserId), Money(BigDecimal(value), Currency.getInstance(currency)), repository)
-      case _ => throw new IllegalArgumentException("Invalid participant type in SagaTransactionStepPO")
+    val genericParticipant = stepPO.participant.getOrElse(throw new IllegalArgumentException("Missing participant"))
+
+    // 1. 根据 type_name 决定如何解析 payload
+    val participant: SagaParticipant[iMadzError, String] = genericParticipant.typeName match {
+      case "FromAccountParticipantPO" =>
+        // 解析具体的业务 Proto
+        val specificPO = FromAccountParticipantPO.parseFrom(genericParticipant.payload.toByteArray)
+        // 转换回 Scala 对象
+        FromAccountParticipant(Id.of(specificPO.fromUserId), Money(BigDecimal(specificPO.getAmount.amount), Currency.getInstance(specificPO.getAmount.currency)), repository)(ec)
+
+      case "ToAccountParticipantPO" =>
+        val specificPO = ToAccountParticipantPO.parseFrom(genericParticipant.payload.toByteArray)
+        ToAccountParticipant(Id.of(specificPO.toUserId), Money(BigDecimal(specificPO.getAmount.amount), Currency.getInstance(specificPO.getAmount.currency)), repository)(ec)
+
+      case _ => throw new IllegalArgumentException(s"Unknown type: ${genericParticipant.typeName}")
     }
 
     SagaTransactionStep[iMadzError, String](

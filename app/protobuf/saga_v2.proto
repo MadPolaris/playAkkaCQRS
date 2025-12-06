@@ -1,7 +1,5 @@
 syntax = "proto3";
 
-import "saga_participant.proto";
-
 package net.imadz.infra.saga;
 
 option java_multiple_files = true;
@@ -21,11 +19,15 @@ enum StepStatusPO {
   FAILED = 3;
 }
 
+
+// [关键修改]：通用的参与者容器
 message SagaParticipantPO {
-   oneof participant {
-      net.imadz.infrastructure.proto.FromAccountParticipantPO fromAccount = 1;
-      net.imadz.infrastructure.proto.ToAccountParticipantPO toAccount = 2;
-   }
+  // 业务参与者的全限定类名，例如 "net.imadz.infra.proto.FromAccountParticipantPO"
+  // 或者对应的 Scala 类名，取决于你序列化策略的映射方式
+  string type_name = 1;
+
+  // 业务参与者序列化后的二进制数据
+  bytes payload = 2;
 }
 
 // Messages
