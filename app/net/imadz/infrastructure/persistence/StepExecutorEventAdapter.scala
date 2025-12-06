@@ -7,7 +7,7 @@ import net.imadz.infra.saga.SagaParticipant._
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
 import net.imadz.infra.saga._
 import net.imadz.infra.saga.proto.saga_v2._
-import net.imadz.infra.saga.serialization.{AkkaSerializationWrapper, SagaTransactionStepSerializer}
+import net.imadz.infra.saga.serialization.AkkaSerializationWrapper
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationLong

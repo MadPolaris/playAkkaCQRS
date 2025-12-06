@@ -1,4 +1,4 @@
-package net.imadz.infra.saga.serialization
+package net.imadz.infrastructure.persistence
 
 import akka.serialization.Serializer
 import com.google.protobuf.ByteString
@@ -15,10 +15,9 @@ import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO
 
 import java.util.Currency
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.DurationLong
 import scala.util.{Failure, Success, Try}
 
-case class SagaTransactionStepSerializer(repository: CreditBalanceRepository, ec: ExecutionContext) extends Serializer  {
+case class SagaTransactionStepSerializer(repository: CreditBalanceRepository, ec: ExecutionContext) extends Serializer {
 
   implicit val executionContext: ExecutionContext = ec
 

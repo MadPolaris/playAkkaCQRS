@@ -39,7 +39,7 @@ akka {
      serializers {
 
         proto = "akka.remote.serialization.ProtobufSerializer"
-        saga-transaction-step = "net.imadz.infra.saga.serialization.SagaTransactionStepSerializer"
+        saga-transaction-step = "net.imadz.infrastructure.persistence.SagaTransactionStepSerializer"
 
      }
      serialization-bindings {
@@ -94,7 +94,7 @@ akka {
      serializers {
 
         proto = "akka.remote.serialization.ProtobufSerializer"
-        saga-transaction-step = "net.imadz.infra.saga.serialization.SagaTransactionStepSerializer"
+        saga-transaction-step = "net.imadz.infrastructure.persistence.SagaTransactionStepSerializer"
 
      }
      serialization-bindings {
