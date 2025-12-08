@@ -11,7 +11,6 @@ import akka.projection.scaladsl.{ExactlyOnceProjection, SourceProvider}
 import akka.projection.{ProjectionId, eventsourced}
 import net.imadz.application.aggregates.CreditBalanceAggregate
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
-import net.imadz.domain.entities.CreditBalanceEntity.CreditBalanceEvent
 import net.imadz.infrastructure.proto.credits.CreditBalanceEventPO
 
 object MonthlyIncomeAndExpenseSummaryProjection {

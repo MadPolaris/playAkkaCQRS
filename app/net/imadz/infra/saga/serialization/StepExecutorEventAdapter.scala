@@ -1,21 +1,19 @@
-package net.imadz.infrastructure.persistence
+package net.imadz.infra.saga.serialization
 
 import akka.persistence.typed.{EventAdapter, EventSeq}
 import com.google.protobuf.ByteString
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.infra.saga.SagaParticipant._
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
 import net.imadz.infra.saga._
 import net.imadz.infra.saga.proto.saga_v2._
-import net.imadz.infra.saga.serialization.AkkaSerializationWrapper
+import net.imadz.infrastructure.persistence.SagaTransactionStepSerializer
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationLong
 
-case class StepExecutorEventAdapter(serialization: AkkaSerializationWrapper, repository: CreditBalanceRepository, ec: ExecutionContext)
+case class StepExecutorEventAdapter(serialization: AkkaSerializationWrapper, stepSerializer:SagaTransactionStepSerializer, ec: ExecutionContext)
   extends EventAdapter[StepExecutor.Event, StepExecutorEventPO.Event]
   with ForSaga {
-  private val stepSerializer: SagaTransactionStepSerializer = SagaTransactionStepSerializer(repository = repository, ec = ec)
 
   override def manifest(event: StepExecutor.Event): String = event.getClass.getName
 

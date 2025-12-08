@@ -12,5 +12,4 @@ object AddInitialOnlyOncePolicy extends DomainPolicy[CreditBalanceEvent, CreditB
     if (creditBalanceState.accountBalance.values.exists(_.amount > 0)) Left(InitialConditionNotMeet)
     else Right(List(BalanceChanged(initial)))
 
-
 }

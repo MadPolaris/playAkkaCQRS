@@ -10,8 +10,9 @@ import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id
 import net.imadz.infra.saga.SagaTransactionCoordinator.entityTypeKey
+import net.imadz.infra.saga.serialization.{AkkaSerializationWrapper, SagaTransactionCoordinatorEventAdapter, StepExecutorEventAdapter}
 import net.imadz.infra.saga.{ForSaga, SagaTransactionCoordinator, StepExecutor}
-import net.imadz.infrastructure.persistence.SagaTransactionCoordinatorEventAdapter
+import net.imadz.infrastructure.persistence.SagaTransactionStepSerializer
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 
@@ -34,24 +35,30 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
   //TODO: Bad Smell
   private def apply(transactionId: Id, tag: String, repository: CreditBalanceRepository): Behavior[SagaTransactionCoordinator.Command] = {
     implicit val askTimeout: Timeout = Timeout(30.seconds)
+    val stepSerializer: SagaTransactionStepSerializer = SagaTransactionStepSerializer(repository = repository, ec = global)
+
     Behaviors.logMessages(LogOptions().withLogger(LoggerFactory.getLogger("iMadz")).withLevel(Level.INFO),
       Behaviors
         .setup { actorContext =>
           EventSourcedBehavior(
             persistenceId = PersistenceId(entityTypeKey.name, transactionId.toString),
             emptyState = SagaTransactionCoordinator.State.apply(),
-            commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, (key, step) => createStepExecutor(actorContext, key, repository)),
+            commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, (key, step) =>
+              createStepExecutor(actorContext, key, stepSerializer)),
             eventHandler = SagaTransactionCoordinator.eventHandler
           ).withTagger(_ => Set(tag))
             .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
             .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))
-            .eventAdapter(SagaTransactionCoordinatorEventAdapter(actorContext.system, repository, global))
+            .eventAdapter(SagaTransactionCoordinatorEventAdapter(actorContext.system, stepSerializer, global))
         })
   }
 
 
-  private def createStepExecutor(context: ActorContext[SagaTransactionCoordinator.Command], key: String, creditBalanceRepository: CreditBalanceRepository) = {
-    context.spawn(StepExecutor[Any, Any](creditBalanceRepository)(
+  private def createStepExecutor(context: ActorContext[SagaTransactionCoordinator.Command], key: String, stepSerializer: SagaTransactionStepSerializer) = {
+    val akkaSerialization = AkkaSerializationWrapper(context.system.classicSystem)
+    val global = scala.concurrent.ExecutionContext.global
+    val eventAdapter = StepExecutorEventAdapter(akkaSerialization, stepSerializer, global)
+    context.spawn(StepExecutor[Any, Any](eventAdapter)(
       PersistenceId.ofUniqueId(key),
       defaultMaxRetries = 5,
       initialRetryDelay = 100.millis,

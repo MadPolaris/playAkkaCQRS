@@ -1,19 +1,17 @@
-package net.imadz.infrastructure.persistence
+package net.imadz.infra.saga.serialization
 
 import akka.actor.typed.ActorSystem
 import akka.persistence.typed.{EventAdapter, EventSeq}
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
 import net.imadz.infra.saga.proto.saga_v2._
-import net.imadz.infra.saga.{ForSaga, SagaPhase, SagaTransactionCoordinator, serialization}
+import net.imadz.infra.saga.{ForSaga, SagaPhase, SagaTransactionCoordinator}
+import net.imadz.infrastructure.persistence.SagaTransactionStepSerializer
 
 import scala.concurrent.ExecutionContext
 
-case class SagaTransactionCoordinatorEventAdapter(system: ActorSystem[Nothing], repository: CreditBalanceRepository, ec: ExecutionContext)
+case class SagaTransactionCoordinatorEventAdapter(system: ActorSystem[Nothing], stepSerializer:SagaTransactionStepSerializer, ec: ExecutionContext)
   extends EventAdapter[SagaTransactionCoordinator.Event, SagaTransactionCoordinatorEventPO.Event]
   with ForSaga {
-  private val stepSerializer: SagaTransactionStepSerializer = SagaTransactionStepSerializer(repository = repository, ec = ec)
-
   override def toJournal(e: SagaTransactionCoordinator.Event): SagaTransactionCoordinatorEventPO.Event = e match {
     case SagaTransactionCoordinator.TransactionStarted(transactionId, steps) => SagaTransactionCoordinatorEventPO.Event.Started(TransactionStartedPO(transactionId = transactionId, steps = steps.map(stepSerializer.serializeSagaTransactionStep)))
     case SagaTransactionCoordinator.PhaseSucceeded(phase) => SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(PhaseSucceededPO(serializePhase(phase)))
