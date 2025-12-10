@@ -6,12 +6,11 @@ import net.imadz.infra.saga.SagaParticipant._
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
 import net.imadz.infra.saga._
 import net.imadz.infra.saga.proto.saga_v2._
-import net.imadz.infrastructure.persistence.SagaTransactionStepSerializer
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.DurationLong
 
-case class StepExecutorEventAdapter(serialization: AkkaSerializationWrapper, stepSerializer:SagaTransactionStepSerializer, ec: ExecutionContext)
+case class StepExecutorEventAdapter(serialization: AkkaSerializationWrapper, stepSerializer:AbsSagaTransactionStepSerializer, ec: ExecutionContext)
   extends EventAdapter[StepExecutor.Event, StepExecutorEventPO.Event]
   with ForSaga {
 

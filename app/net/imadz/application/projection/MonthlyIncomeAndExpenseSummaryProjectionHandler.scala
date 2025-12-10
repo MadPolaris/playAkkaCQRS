@@ -5,6 +5,7 @@ import akka.projection.eventsourced
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
+import net.imadz.common.application.projection.ScalikeJdbcSession
 import net.imadz.domain.entities.CreditBalanceEntity.BalanceChanged
 import net.imadz.infrastructure.persistence.CreditBalanceEventAdapter
 import net.imadz.infrastructure.proto.credits.{CreditBalanceEventPO => CreditEventPO}

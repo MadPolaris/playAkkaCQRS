@@ -1,8 +1,9 @@
-package net.imadz.application.projection
+package net.imadz.common.application.projection
 
 import akka.japi.function.Function
 import akka.projection.jdbc.JdbcSession
 import scalikejdbc.DB
+
 import java.sql.Connection
 
 object ScalikeJdbcSession {

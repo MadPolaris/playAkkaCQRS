@@ -1,4 +1,4 @@
-package net.imadz.application.projection
+package net.imadz.common.application.projection
 
 import akka.actor.typed.ActorSystem
 import com.typesafe.config.Config

@@ -7,13 +7,13 @@ import akka.actor.{ActorSystem, typed}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import net.imadz.application.aggregates.CreditBalanceAggregate.CreditBalanceConfirmation
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
-import net.imadz.application.projection.ScalikeJdbcSetup
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.application.queries.{GetBalanceQuery, GetRecent12MonthsIncomeAndExpenseReport}
 import net.imadz.application.services.transactor.MoneyTransferTransactionRepository
 import net.imadz.application.services.{CreateCreditBalanceService, DepositService, MoneyTransferService, WithdrawService}
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
+import net.imadz.common.application.projection.ScalikeJdbcSetup
 import net.imadz.domain.values.Money
 import net.imadz.infra.saga.repository.TransactionCoordinatorRepository
 import net.imadz.infrastructure.bootstrap._
