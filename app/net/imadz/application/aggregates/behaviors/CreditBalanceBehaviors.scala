@@ -2,11 +2,10 @@ package net.imadz.application.aggregates.behaviors
 
 import akka.persistence.typed.scaladsl.Effect
 import net.imadz.application.aggregates.CreditBalanceAggregate._
-import net.imadz.common.CommonTypes.iMadzError
+import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.application.CommandHandlerReplyingBehavior.runReplyingPolicy
 import net.imadz.domain.entities.CreditBalanceEntity._
-import net.imadz.domain.policy.{AddInitialOnlyOncePolicy, DepositPolicy, WithdrawPolicy}
-import net.imadz.domain.services.TransferDomainService
+import net.imadz.domain.policy._
 import net.imadz.domain.values.Money
 
 object CreditBalanceBehaviors {
@@ -16,7 +15,6 @@ object CreditBalanceBehaviors {
       .orElse(reserveBehaviors(state))
       .orElse(incomingCreditBehaviors(state))
       .apply(command)
-
 
   private def directBehaviors(state: CreditBalanceState): PartialFunction[CreditBalanceCommand, Effect[CreditBalanceEvent, CreditBalanceState]] = {
     case AddInitial(initial, replyTo) =>
@@ -30,70 +28,30 @@ object CreditBalanceBehaviors {
         .replyWith(replyTo)(mkError, mkLatestBalance)
     case GetBalance(replyTo) =>
       Effect.reply(replyTo)(mkLatestBalance(None)(state))
-
   }
 
   private def reserveBehaviors(state: CreditBalanceState): PartialFunction[CreditBalanceCommand, Effect[CreditBalanceEvent, CreditBalanceState]] = {
     case ReserveFunds(transferId, amount, replyTo) =>
-      val currentBalance = state.accountBalance.getOrElse(amount.currency.getCurrencyCode, Money(BigDecimal(0), amount.currency))
-      TransferDomainService.validateTransfer(transferId, state.reservedAmount, currentBalance, amount) match {
-        case Right(_) =>
-          Effect.persist(FundsReserved(transferId, amount))
-            .thenReply(replyTo)(_ => FundsReservationConfirmation(transferId, None))
-        case Left(iMadzError("60008", _)) =>
-          Effect.reply(replyTo)(FundsReservationConfirmation(transferId, None))
-        case Left(error) =>
-          Effect.reply(replyTo)(FundsReservationConfirmation(transferId, Some(error)))
-      }
+      runReplyingPolicy(ReserveFundsPolicy)(state, (transferId, amount))
+        .replyWith(replyTo)(mkReserveError, mkReserveSuccess)
     case DeductFunds(transferId, replyTo) =>
-      state.reservedAmount.get(transferId) match {
-        case Some(reservedAmount) =>
-          Effect.persist(FundsDeducted(transferId, reservedAmount))
-            .thenReply(replyTo)(_ => FundsDeductionConfirmation(transferId, None))
-        case None =>
-          Effect.reply(replyTo)(FundsDeductionConfirmation(transferId, Some(iMadzError("60006", "No reserved funds found for this transfer"))))
-      }
+      runReplyingPolicy(DeductFundsPolicy)(state, transferId)
+        .replyWith(replyTo)(mkDeductError, mkDeductSuccess)
     case ReleaseReservedFunds(transferId, replyTo) =>
-      state.reservedAmount.get(transferId) match {
-        case Some(reservedAmount) =>
-          Effect.persist(ReservationReleased(transferId, reservedAmount))
-            .thenReply(replyTo)(_ => FundsReleaseConfirmation(transferId, None))
-        case None =>
-          Effect.reply(replyTo)(FundsReleaseConfirmation(transferId, Some(iMadzError("60006", "No reserved funds found for this transfer"))))
-      }
+      runReplyingPolicy(ReleaseReservedFundsPolicy)(state, transferId)
+        .replyWith(replyTo)(mkReleaseError, mkReleaseSuccess)
   }
 
   private def incomingCreditBehaviors(state: CreditBalanceState): PartialFunction[CreditBalanceCommand, Effect[CreditBalanceEvent, CreditBalanceState]] = {
-
     case RecordIncomingCredits(transferId, amount, replyTo) =>
-      state.incomingCredits.get(transferId) match {
-        case Some(_) =>
-          Effect
-            .reply(replyTo)(RecordIncomingCreditsConfirmation(transferId = transferId, error = Some(iMadzError("60007", "incoming credits already registered"))))
-        case None =>
-          Effect
-            .persist(IncomingCreditsRecorded(transferId, amount))
-            .thenReply(replyTo)(_ => RecordIncomingCreditsConfirmation(transferId, None))
-      }
+      runReplyingPolicy(RecordIncomingCreditsPolicy)(state, (transferId, amount))
+        .replyWith(replyTo)(mkRecordError, mkRecordSuccess)
     case CommitIncomingCredits(transferId, replyTo) =>
-      state.incomingCredits.get(transferId) match {
-        case Some(_) =>
-          Effect
-            .persist(IncomingCreditsCommited(transferId))
-            .thenReply(replyTo)(_ => CommitIncomingCreditsConfirmation(transferId, None))
-        case None =>
-          Effect.reply(replyTo)(CommitIncomingCreditsConfirmation(transferId, Some(iMadzError("60008", "incoming credits cannot be found or already be committed before"))))
-      }
+      runReplyingPolicy(CommitIncomingCreditsPolicy)(state, transferId)
+        .replyWith(replyTo)(mkCommitError, mkCommitSuccess)
     case CancelIncomingCredit(transferId, replyTo) =>
-      state.incomingCredits.get(transferId) match {
-        case Some(_) =>
-          Effect.persist(IncomingCreditsCanceled(transferId))
-            .thenReply(replyTo)(_ => CancelIncomingCreditConfirmation(transferId, None))
-        case None =>
-          Effect
-            .reply(replyTo)(CancelIncomingCreditConfirmation(transferId, Some(iMadzError("60009", "incoming credits cannot be found or already be canceled before"))))
-
-      }
+      runReplyingPolicy(CancelIncomingCreditPolicy)(state, transferId)
+        .replyWith(replyTo)(mkCancelError, mkCancelSuccess)
   }
 
   private def mkLatestBalance[Param](param: Param)(updatedState: CreditBalanceState) =
@@ -102,4 +60,35 @@ object CreditBalanceBehaviors {
   private def mkError[Param](param: Param)(error: iMadzError) =
     CreditBalanceConfirmation(Some(error), Nil)
 
+  private def mkRecordError(param: (Id, Money))(error: iMadzError) =
+    RecordIncomingCreditsConfirmation(param._1, Some(error))
+
+  private def mkRecordSuccess(param: (Id, Money))(state: CreditBalanceState) =
+    RecordIncomingCreditsConfirmation(param._1, None)
+
+  // 2. Commit (Param: Id)
+  private def mkCommitError(id: Id)(error: iMadzError) =
+    CommitIncomingCreditsConfirmation(id, Some(error))
+
+  private def mkCommitSuccess(id: Id)(state: CreditBalanceState) =
+    CommitIncomingCreditsConfirmation(id, None)
+
+  // 3. Cancel (Param: Id)
+  private def mkCancelError(id: Id)(error: iMadzError) =
+    CancelIncomingCreditConfirmation(id, Some(error))
+
+  private def mkCancelSuccess(id: Id)(state: CreditBalanceState) =
+    CancelIncomingCreditConfirmation(id, None)
+
+  private def mkReserveError(param: (Id, Money))(error: iMadzError) = FundsReservationConfirmation(param._1, Some(error))
+
+  private def mkReserveSuccess(param: (Id, Money))(state: CreditBalanceState) = FundsReservationConfirmation(param._1, None)
+
+  private def mkDeductError(id: Id)(error: iMadzError) = FundsDeductionConfirmation(id, Some(error))
+
+  private def mkDeductSuccess(id: Id)(state: CreditBalanceState) = FundsDeductionConfirmation(id, None)
+
+  private def mkReleaseError(id: Id)(error: iMadzError) = FundsReleaseConfirmation(id, Some(error))
+
+  private def mkReleaseSuccess(id: Id)(state: CreditBalanceState) = FundsReleaseConfirmation(id, None)
 }

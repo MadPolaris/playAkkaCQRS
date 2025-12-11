@@ -2,7 +2,7 @@ package net.imadz.infrastructure.persistence
 
 import com.google.protobuf.ByteString
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
-import net.imadz.application.services.transactor.MoneyTransferSagaTransactor.{FromAccountParticipant, ToAccountParticipant}
+import net.imadz.application.services.transactor.{FromAccountParticipant, ToAccountParticipant}
 import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
