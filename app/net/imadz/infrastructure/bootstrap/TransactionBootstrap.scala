@@ -15,7 +15,7 @@ trait TransactionBootstrap {
       val coordinator = sharding.entityRefFor(SagaTransactionCoordinator.entityTypeKey, transactionId)
 
       // [修改] 使用 system.executionContext
-      MoneyTransferSagaTransactor.apply(transactionId, coordinator, repository)(system.executionContext)
+      MoneyTransferSagaTransactor.apply(transactionId, coordinator, repository)
     }
 
     sharding.init(Entity(MoneyTransferSagaTransactor.entityTypeKey)(behaviorFactory))

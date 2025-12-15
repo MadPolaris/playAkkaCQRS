@@ -1,7 +1,7 @@
 package net.imadz.infrastructure.persistence
 
 import akka.persistence.typed.SnapshotAdapter
-import net.imadz.application.services.transactor.MoneyTransferSagaTransactor._
+import net.imadz.application.services.transactor.MoneyTransferTransactionEntity._
 import net.imadz.domain.values.Money
 import net.imadz.infrastructure.proto.credits.MoneyPO
 import net.imadz.infrastructure.proto.transactions._
