@@ -1,4 +1,4 @@
-package net.imadz.application.services.transactor
+package net.imadz.domain.entities
 
 import net.imadz.common.CborSerializable
 import net.imadz.domain.values.Money

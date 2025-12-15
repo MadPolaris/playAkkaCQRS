@@ -4,7 +4,7 @@ import akka.persistence.typed.SnapshotAdapter
 import net.imadz.common.Id
 import net.imadz.domain.entities.CreditBalanceEntity._
 import net.imadz.domain.values.Money
-import net.imadz.infrastructure.proto.credits.credits._
+import net.imadz.infrastructure.proto.credits.{CreditBalanceStatePO, MoneyPO}
 
 import java.util.{Currency, UUID}
 

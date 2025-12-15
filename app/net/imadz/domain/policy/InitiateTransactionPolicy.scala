@@ -1,7 +1,7 @@
 package net.imadz.domain.policy
 
-import net.imadz.application.services.transactor.MoneyTransferTransactionEntity._
 import net.imadz.common.CommonTypes.{DomainPolicy, iMadzError}
+import net.imadz.domain.entities.MoneyTransferTransactionEntity._
 import net.imadz.domain.values.Money
 
 // 输入：当前状态，(发起人, 接收人, 金额)
