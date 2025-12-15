@@ -4,58 +4,58 @@ import akka.persistence.typed.{EventAdapter, EventSeq}
 import net.imadz.common.Id
 import net.imadz.domain.entities.CreditBalanceEntity._
 import net.imadz.domain.values.Money
-import net.imadz.infrastructure.proto.credits.{CreditBalanceEventPO => CreditEventPO, MoneyPO}
+import net.imadz.infrastructure.proto.credits._
 
 import java.util.Currency
 
-class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditEventPO.Event] {
+class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditBalanceEventPO.Event] {
 
-  override def toJournal(e: CreditBalanceEvent): CreditEventPO.Event =
+  override def toJournal(e: CreditBalanceEvent): CreditBalanceEventPO.Event =
     e match {
       case BalanceChanged(update, timestamp) =>
-        CreditEventPO.Event.BalanceChanged(
-          net.imadz.infrastructure.proto.credits.BalanceChanged(
-            Some(MoneyPO(update.amount.doubleValue, update.currency.getCurrencyCode)),
+        CreditBalanceEventPO.Event.BalanceChanged(
+          BalanceChangedPO(
+            Some(toMoneyPO(update)),
             timestamp
           )
         )
       case FundsReserved(transferId, amount) =>
-        CreditEventPO.Event.FundsReserved(
-          net.imadz.infrastructure.proto.credits.FundsReserved(
+        CreditBalanceEventPO.Event.FundsReserved(
+          FundsReservedPO(
             transferId.toString,
-            Some(MoneyPO(amount.amount.doubleValue, amount.currency.getCurrencyCode))
+            Some(toMoneyPO(amount))
           )
         )
       case FundsDeducted(transferId, amount) =>
-        CreditEventPO.Event.FundsDeducted(
-          net.imadz.infrastructure.proto.credits.FundsDeducted(
+        CreditBalanceEventPO.Event.FundsDeducted(
+          FundsDeductedPO(
             transferId.toString,
-            Some(MoneyPO(amount.amount.doubleValue, amount.currency.getCurrencyCode))
+            Some(toMoneyPO(amount))
           )
         )
       case ReservationReleased(transferId, amount) =>
-        CreditEventPO.Event.ReservationReleased(
-          net.imadz.infrastructure.proto.credits.ReservationReleased(
+        CreditBalanceEventPO.Event.ReservationReleased(
+          ReservationReleasedPO(
             transferId.toString,
-            Some(MoneyPO(amount.amount.doubleValue, amount.currency.getCurrencyCode))
+            Some(toMoneyPO(amount))
           )
         )
       case IncomingCreditsRecorded(transferId, amount) =>
-        CreditEventPO.Event.IncomingCreditsRecorded(
-          net.imadz.infrastructure.proto.credits.IncomingCreditsRecorded(
+        CreditBalanceEventPO.Event.IncomingCreditsRecorded(
+          IncomingCreditsRecordedPO(
             transferId.toString,
-            Some(MoneyPO(amount.amount.doubleValue, amount.currency.getCurrencyCode))
+            Some(toMoneyPO(amount))
           )
         )
       case IncomingCreditsCommited(transferId) =>
-        CreditEventPO.Event.IncomingCreditsCommited(
-          net.imadz.infrastructure.proto.credits.IncomingCreditsCommited(
+        CreditBalanceEventPO.Event.IncomingCreditsCommited(
+          IncomingCreditsCommitedPO(
             transferId.toString
           )
         )
       case IncomingCreditsCanceled(transferId) =>
-        CreditEventPO.Event.IncomingCreditsCanceled(
-          net.imadz.infrastructure.proto.credits.IncomingCreditsCanceled(
+        CreditBalanceEventPO.Event.IncomingCreditsCanceled(
+          IncomingCreditsCanceledPO(
             transferId.toString
           )
         )
@@ -63,56 +63,37 @@ class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditE
 
   override def manifest(event: CreditBalanceEvent): String = event.getClass.getName
 
-  override def fromJournal(p: CreditEventPO.Event, manifest: String): EventSeq[CreditBalanceEvent] =
+  override def fromJournal(p: CreditBalanceEventPO.Event, manifest: String): EventSeq[CreditBalanceEvent] =
     p match {
-      case CreditEventPO.Event.BalanceChanged(po) =>
-        EventSeq.single(BalanceChanged(
-          po.update.map((moneyPO: MoneyPO) => {
-            val currency = Currency.getInstance(moneyPO.currency)
-            Money(BigDecimal(moneyPO.amount), currency)
-          }).get, po.timestamp)
-        )
-      case CreditEventPO.Event.FundsReserved(po) =>
-        EventSeq.single(FundsReserved(
-          Id.of(po.transferId),
-          po.amount.map((moneyPO: MoneyPO) => {
-            val currency = Currency.getInstance(moneyPO.currency)
-            Money(BigDecimal(moneyPO.amount), currency)
-          }).get
-        ))
-      case CreditEventPO.Event.FundsDeducted(po) =>
-        EventSeq.single(FundsDeducted(
-          Id.of(po.transferId),
-          po.amount.map((moneyPO: MoneyPO) => {
-            val currency = Currency.getInstance(moneyPO.currency)
-            Money(BigDecimal(moneyPO.amount), currency)
-          }).get
-        ))
-      case CreditEventPO.Event.ReservationReleased(po) =>
-        EventSeq.single(ReservationReleased(
-          Id.of(po.transferId),
-          po.amount.map((moneyPO: MoneyPO) => {
-            val currency = Currency.getInstance(moneyPO.currency)
-            Money(BigDecimal(moneyPO.amount), currency)
-          }).get
-        ))
-      case CreditEventPO.Event.IncomingCreditsRecorded(po) =>
-        EventSeq.single(IncomingCreditsRecorded(
-          Id.of(po.transferId),
-          po.amount.map((moneyPO: MoneyPO) => {
-            val currency = Currency.getInstance(moneyPO.currency)
-            Money(BigDecimal(moneyPO.amount), currency)
-          }).get
-        ))
-      case CreditEventPO.Event.IncomingCreditsCommited(po) =>
-        EventSeq.single(IncomingCreditsCommited(
-          Id.of(po.transferId)
-        ))
-      case CreditEventPO.Event.IncomingCreditsCanceled(po) =>
-        EventSeq.single(IncomingCreditsCanceled(
-          Id.of(po.transferId)
-        ))
+      case CreditBalanceEventPO.Event.BalanceChanged(po) =>
+        EventSeq.single(BalanceChanged(fromMoneyPO(po.getUpdate), po.timestamp))
+
+      case CreditBalanceEventPO.Event.FundsReserved(po) =>
+        EventSeq.single(FundsReserved(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
+
+      case CreditBalanceEventPO.Event.FundsDeducted(po) =>
+        EventSeq.single(FundsDeducted(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
+
+      case CreditBalanceEventPO.Event.ReservationReleased(po) =>
+        EventSeq.single(ReservationReleased(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
+
+      case CreditBalanceEventPO.Event.IncomingCreditsRecorded(po) =>
+        EventSeq.single(IncomingCreditsRecorded(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
+
+      case CreditBalanceEventPO.Event.IncomingCreditsCommited(po) =>
+        EventSeq.single(IncomingCreditsCommited(Id.of(po.transferId)))
+
+      case CreditBalanceEventPO.Event.IncomingCreditsCanceled(po) =>
+        EventSeq.single(IncomingCreditsCanceled(Id.of(po.transferId)))
+
       case _ =>
         EventSeq.empty
     }
+
+  // Helper methods for Money conversion
+  private def toMoneyPO(money: Money): MoneyPO =
+    MoneyPO(money.amount.doubleValue, money.currency.getCurrencyCode)
+
+  private def fromMoneyPO(po: MoneyPO): Money =
+    Money(BigDecimal(po.amount), Currency.getInstance(po.currency))
 }

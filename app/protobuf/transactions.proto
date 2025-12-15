@@ -1,17 +1,14 @@
 syntax = "proto3";
-import "credits.proto";
 
 package net.imadz.infrastructure.proto;
 
-// Define the Id type
-message string {
-  string value = 1;
-}
+// 导入 credits.proto 以使用 MoneyPO
+import "credits.proto";
 
-// Define the Money type
+option java_multiple_files = true;
 
+// --- Enums ---
 
-// Define the TransactionStatus enum
 enum TransactionStatusPO {
   UNKNOWN = 0;
   NEW = 1;
@@ -21,26 +18,29 @@ enum TransactionStatusPO {
   FAILED = 5;
 }
 
-// Define the Failed status message
-message FailedStatusPO {
-  string reason = 1;
+// --- Events ---
+
+message TransactionInitiatedPO {
+  string fromUserId = 1;
+  string toUserId = 2;
+  net.imadz.infrastructure.proto.MoneyPO amount = 3;
+  int64 timestamp = 4;
 }
 
-// Define the TransactionStatus union
-message TransactionStatusMessagePO {
-  TransactionStatusPO status = 1;
-  oneof details {
-    FailedStatusPO failed = 2;
-  }
-}
-
-// Define the TransactionState message
-message TransactionStatePO {
+message TransactionPreparedPO {
   string id = 1;
-  string fromUserId = 2;
-  string toUserId = 3;
-  MoneyPO amount = 4;
-  TransactionStatusMessagePO status = 5;
+  int64 timestamp = 2;
+}
+
+message TransactionCompletedPO {
+  string id = 1;
+  int64 timestamp = 2;
+}
+
+message TransactionFailedPO {
+  string id = 1;
+  string reason = 2;
+  int64 timestamp = 3;
 }
 
 // Define the TransactionEvent union
@@ -53,25 +53,24 @@ message TransactionEventPO {
   }
 }
 
-// Define the TransactionInitiated event
-message TransactionInitiatedPO {
-  string fromUserId = 1;
-  string toUserId = 2;
-  MoneyPO amount = 3;
+// --- State Snapshot ---
+
+message FailedStatusDetailsPO {
+  string reason = 1;
 }
 
-// Define the TransactionPrepared event
-message TransactionPreparedPO {
-  string id = 1;
+message TransactionStatusMessagePO {
+  TransactionStatusPO status = 1;
+  oneof details {
+    FailedStatusDetailsPO failed = 2;
+  }
 }
 
-// Define the TransactionCompleted event
-message TransactionCompletedPO {
+// Define the TransactionState message (Snapshot)
+message TransactionStatePO {
   string id = 1;
-}
-
-// Define the TransactionFailed event
-message TransactionFailedPO {
-  string id = 1;
-  string reason = 2;
+  string fromUserId = 2;
+  string toUserId = 3;
+  net.imadz.infrastructure.proto.MoneyPO amount = 4;
+  TransactionStatusMessagePO status = 5;
 }

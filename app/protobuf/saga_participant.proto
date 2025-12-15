@@ -1,14 +1,18 @@
 syntax = "proto3";
-import "credits.proto";
 
 package net.imadz.infrastructure.proto;
 
-// Represents a participant that handles the from account in a transaction
+import "credits.proto";
+
+option java_multiple_files = true;
+
+// Represents a participant that handles the 'from' account (Source)
 message FromAccountParticipantPO {
   string from_user_id = 1;
   net.imadz.infrastructure.proto.MoneyPO amount = 2;
 }
 
+// Represents a participant that handles the 'to' account (Destination)
 message ToAccountParticipantPO {
   string to_user_id = 1;
   net.imadz.infrastructure.proto.MoneyPO amount = 2;

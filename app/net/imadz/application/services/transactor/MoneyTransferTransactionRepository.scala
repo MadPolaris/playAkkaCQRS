@@ -1,6 +1,6 @@
 package net.imadz.application.services.transactor
 
-import akka.actor.typed.ActorRef
+import akka.cluster.sharding.typed.scaladsl.EntityRef
 import com.google.inject.ImplementedBy
 import net.imadz.common.CommonTypes.Id
 import net.imadz.infrastructure.repositories.service.MoneyTransferTransactionRepositoryImpl
@@ -8,5 +8,6 @@ import net.imadz.infrastructure.repositories.service.MoneyTransferTransactionRep
 @ImplementedBy(classOf[MoneyTransferTransactionRepositoryImpl])
 trait MoneyTransferTransactionRepository {
 
-  def findTransactionById(transaction: Id): ActorRef[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand]
+  // [修改] 返回值从 ActorRef 改为 EntityRef
+  def findTransactionById(transaction: Id): EntityRef[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand]
 }
