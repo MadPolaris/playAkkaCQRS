@@ -36,27 +36,17 @@ class HomeController @Inject()(
                                 val monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
                                 val creditBalanceRepository: CreditBalanceRepository,
                                 val transactionRepository: MoneyTransferTransactionRepository,
-                                val coordinatorRepository: TransactionCoordinatorRepository,
                                 val getBalanceQuery: GetBalanceQuery,
-                                val createService: CreateCreditBalanceService,
                                 val depositService: DepositService,
+                                val moneyTransferService: MoneyTransferService,
                                 val withdrawService: WithdrawService,
                                 val controllerComponents: ControllerComponents
-                              )(implicit executionContext: ExecutionContext) extends BaseController
-  with MonthlyIncomeAndExpenseBootstrap
-  with CreditBalanceBootstrap
-  with TransactionBootstrap
-  with SagaTransactionCoordinatorBootstrap {
+//                                , val bootstrap: net.imadz.infrastructure.bootstrap.ApplicationBootstrap
+                              )(implicit executionContext: ExecutionContext) extends BaseController {
   val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
   ScalikeJdbcSetup.init(Adapter.toTyped(system))
 
   implicit val scheduler: Scheduler = typedSystem.scheduler
-  val moneyTransferService: MoneyTransferService = new MoneyTransferService(system.toTyped, transactionRepository)
-
-  initMonthlySummaryProjection(Adapter.toTyped(system), sharding, monthlyRepository)
-  initCreditBalanceAggregate(sharding)
-  initSagaTransactionCoordinatorAggregate(sharding, creditBalanceRepository)
-  initTransactionAggregate(typedSystem, sharding, creditBalanceRepository)
 
   /**
    * Create an Action to render an HTML page.

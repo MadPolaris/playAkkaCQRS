@@ -1,7 +1,9 @@
 package net.imadz.application.services
 
-import akka.actor.typed.{ActorSystem, Scheduler}
-import akka.cluster.sharding.typed.scaladsl.EntityRef // [新增]
+import akka.actor.typed.Scheduler
+// [NEW] 引入适配器扩展方法 .toTyped
+import akka.actor.typed.scaladsl.adapter._
+import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.util.Timeout
 import net.imadz.application.services.transactor.MoneyTransferSagaTransactor._
 import net.imadz.application.services.transactor.MoneyTransferTransactionRepository
@@ -12,7 +14,12 @@ import javax.inject.Inject
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
-class MoneyTransferService @Inject()(system: ActorSystem[_], transactionRepository: MoneyTransferTransactionRepository) extends ApplicationService {
+// [CHANGE] 构造函数注入 classicSystem: akka.actor.ActorSystem
+class MoneyTransferService @Inject()(classicSystem: akka.actor.ActorSystem, transactionRepository: MoneyTransferTransactionRepository) extends ApplicationService {
+
+  // [NEW] 手动转换为 Typed ActorSystem
+  private val system = classicSystem.toTyped
+
   private implicit val timeout: Timeout = 120.seconds
   private implicit val ec: ExecutionContext = system.executionContext
   implicit val scheduler: Scheduler = system.scheduler
@@ -30,7 +37,6 @@ class MoneyTransferService @Inject()(system: ActorSystem[_], transactionReposito
     transactionRef.ask(ref => InitiateMoneyTransferTransaction(fromUserId, toUserId, amount, ref))
   }
 
-  // [修改] 返回类型改为 EntityRef
   private def getTransactionRef(transactionId: Id): EntityRef[MoneyTransferTransactionCommand] = {
     transactionRepository.findTransactionById(transactionId)
   }
