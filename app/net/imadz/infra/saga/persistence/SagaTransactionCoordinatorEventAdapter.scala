@@ -1,22 +1,42 @@
-package net.imadz.infra.saga.serialization
+package net.imadz.infra.saga.persistence
 
-import akka.actor.typed.ActorSystem
+import akka.actor.ExtendedActorSystem
 import akka.persistence.typed.{EventAdapter, EventSeq}
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
 import net.imadz.infra.saga.proto.saga_v2._
+import net.imadz.infra.saga.serialization.SagaExecutorConverter
 import net.imadz.infra.saga.{ForSaga, SagaPhase, SagaTransactionCoordinator}
 
 import scala.concurrent.ExecutionContext
 
-case class SagaTransactionCoordinatorEventAdapter(system: ActorSystem[Nothing], stepSerializer:AbsSagaTransactionStepSerializer, ec: ExecutionContext)
+case class SagaTransactionCoordinatorEventAdapter(system: ExtendedActorSystem)
   extends EventAdapter[SagaTransactionCoordinator.Event, SagaTransactionCoordinatorEventPO.Event]
-  with ForSaga {
+    with SagaExecutorConverter
+    with ForSaga {
+  implicit val ec: ExecutionContext = system.dispatcher
+
   override def toJournal(e: SagaTransactionCoordinator.Event): SagaTransactionCoordinatorEventPO.Event = e match {
-    case SagaTransactionCoordinator.TransactionStarted(transactionId, steps) => SagaTransactionCoordinatorEventPO.Event.Started(TransactionStartedPO(transactionId = transactionId, steps = steps.map(stepSerializer.serializeSagaTransactionStep)))
-    case SagaTransactionCoordinator.PhaseSucceeded(phase) => SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(PhaseSucceededPO(serializePhase(phase)))
-    case SagaTransactionCoordinator.PhaseFailed(phase) => SagaTransactionCoordinatorEventPO.Event.PhaseFailed(PhaseFailedPO(serializePhase(phase)))
-    case SagaTransactionCoordinator.TransactionCompleted(transactionId) => SagaTransactionCoordinatorEventPO.Event.TransactionCompleted(TransactionCompletedPO(transactionId))
-    case SagaTransactionCoordinator.TransactionFailed(transactionId, reason) => SagaTransactionCoordinatorEventPO.Event.TransactionFailed(TransactionFailedPO(transactionId, reason))
+    case SagaTransactionCoordinator.TransactionStarted(transactionId, steps) =>
+      SagaTransactionCoordinatorEventPO.Event.Started(
+        TransactionStartedPO(transactionId = transactionId,
+          steps = steps.map(SagaStepConv.toProto))
+      )
+    case SagaTransactionCoordinator.PhaseSucceeded(phase) =>
+      SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(
+        PhaseSucceededPO(serializePhase(phase))
+      )
+    case SagaTransactionCoordinator.PhaseFailed(phase) =>
+      SagaTransactionCoordinatorEventPO.Event.PhaseFailed(
+        PhaseFailedPO(serializePhase(phase))
+      )
+    case SagaTransactionCoordinator.TransactionCompleted(transactionId) =>
+      SagaTransactionCoordinatorEventPO.Event.TransactionCompleted(
+        TransactionCompletedPO(transactionId)
+      )
+    case SagaTransactionCoordinator.TransactionFailed(transactionId, reason) =>
+      SagaTransactionCoordinatorEventPO.Event.TransactionFailed(
+        TransactionFailedPO(transactionId, reason)
+      )
   }
 
 
@@ -43,12 +63,16 @@ case class SagaTransactionCoordinatorEventAdapter(system: ActorSystem[Nothing], 
       case SagaTransactionCoordinatorEventPO.Event.Started(TransactionStartedPO(transactionId, steps, _)) =>
         SagaTransactionCoordinator.TransactionStarted(
           transactionId,
-          steps.map(stepSerializer.deserializeSagaTransactionStep).toList
+          steps.map(SagaStepConv.fromProto).toList
         )
       case SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(PhaseSucceededPO(phase, _)) =>
-        SagaTransactionCoordinator.PhaseSucceeded(deserializePhase(phase))
+        SagaTransactionCoordinator.PhaseSucceeded(
+          deserializePhase(phase)
+        )
       case SagaTransactionCoordinatorEventPO.Event.PhaseFailed(PhaseFailedPO(phase, _)) =>
-        SagaTransactionCoordinator.PhaseFailed(deserializePhase(phase))
+        SagaTransactionCoordinator.PhaseFailed(
+          deserializePhase(phase)
+        )
       case SagaTransactionCoordinatorEventPO.Event.TransactionCompleted(TransactionCompletedPO(transactionId, _)) =>
         SagaTransactionCoordinator.TransactionCompleted(transactionId)
       case SagaTransactionCoordinatorEventPO.Event.TransactionFailed(TransactionFailedPO(transactionId, reason, _)) =>
@@ -58,4 +82,5 @@ case class SagaTransactionCoordinatorEventAdapter(system: ActorSystem[Nothing], 
     }
     EventSeq.single(event)
   }
+
 }

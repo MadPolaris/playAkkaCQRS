@@ -1,0 +1,709 @@
+diff --git a/app/net/imadz/common/serialization/PrimitiveConverter.scala b/app/net/imadz/common/serialization/PrimitiveConverter.scala
+index 09c9cff..c2587ad 100644
+--- a/app/net/imadz/common/serialization/PrimitiveConverter.scala
++++ b/app/net/imadz/common/serialization/PrimitiveConverter.scala
+@@ -1,6 +1,7 @@
+-package net.imadz.infrastructure.persistence.converters
++package net.imadz.common.serialization
+ 
+ import net.imadz.common.CommonTypes.Id
++
+ import java.util.{Currency, UUID}
+ 
+ trait PrimitiveConverter {
+diff --git a/app/net/imadz/common/serialization/SerializationExtension.scala b/app/net/imadz/common/serialization/SerializationExtension.scala
+index b4f516b..70c1de5 100644
+--- a/app/net/imadz/common/serialization/SerializationExtension.scala
++++ b/app/net/imadz/common/serialization/SerializationExtension.scala
+@@ -1,6 +1,7 @@
+-package net.imadz.infra.saga.serialization
++package net.imadz.common.serialization
+ 
+ import akka.actor.{ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
++import net.imadz.infra.saga.serialization.SagaParticipantSerializerStrategy
+ 
+ import java.util.concurrent.ConcurrentHashMap
+ import scala.reflect.ClassTag
+@@ -8,7 +9,7 @@ import scala.reflect.ClassTag
+ object SerializationExtension extends ExtensionId[SerializationExtensionImpl] with ExtensionIdProvider {
+   override def lookup: ExtensionId[SerializationExtensionImpl] = SerializationExtension
+   override def createExtension(system: ExtendedActorSystem): SerializationExtensionImpl = new SerializationExtensionImpl(system)
+-  def apply(system: ActorSystem): SerializationExtensionImpl = system.extension(this)
++  override def apply(system: ActorSystem): SerializationExtensionImpl = system.extension(this)
+ }
+ 
+ class SerializationExtensionImpl(system: ExtendedActorSystem) extends Extension {
+diff --git a/app/net/imadz/infra/saga/StepExecutor.scala b/app/net/imadz/infra/saga/StepExecutor.scala
+index aaf10a9..98494f2 100644
+--- a/app/net/imadz/infra/saga/StepExecutor.scala
++++ b/app/net/imadz/infra/saga/StepExecutor.scala
+@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.Behaviors
+ import akka.actor.typed.{ActorRef, Behavior}
+ import akka.pattern.CircuitBreaker
+ import akka.persistence.typed.scaladsl.EventSourcedBehavior
+-import akka.persistence.typed.{EventAdapter, PersistenceId, RecoveryCompleted}
++import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
+ import net.imadz.common.CborSerializable
+ import net.imadz.infra.saga.SagaParticipant.{RetryableOrNotException, SagaResult}
+ import net.imadz.infra.saga.SagaPhase.TransactionPhase
+@@ -99,7 +99,7 @@ object StepExecutor {
+   // @formatter:on
+ 
+ 
+-  def apply[E, R](eventAdapter: EventAdapter[Event, _])(persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings): Behavior[Command] = {
++  def apply[E, R](persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings): Behavior[Command] = {
+     Behaviors.setup { context =>
+       Behaviors.withTimers { timers =>
+ 
+@@ -115,11 +115,10 @@ object StepExecutor {
+           emptyState = State[E, R](),
+           commandHandler = StepExecutorCommandHandler.commandHandler[E, R](context, timers, defaultMaxRetries, initialRetryDelay, circuitBreaker),
+           eventHandler = StepExecutorEventHandler.eventHandler[E, R]
+-        ).eventAdapter(eventAdapter)
+-          .receiveSignal {
+-            case (state, RecoveryCompleted) =>
+-              StepExecutorRecoveryHandler.onRecoveryCompleted[E, R](context, state)
+-          }
++        ).receiveSignal {
++          case (state, RecoveryCompleted) =>
++            StepExecutorRecoveryHandler.onRecoveryCompleted[E, R](context, state)
++        }
+       }
+     }
+   }
+diff --git a/app/net/imadz/infra/saga/serialization/SagaParticipantSerializerStrategy.scala b/app/net/imadz/infra/saga/serialization/SagaParticipantSerializerStrategy.scala
+index 463e144..28b41d6 100644
+--- a/app/net/imadz/infra/saga/serialization/SagaParticipantSerializerStrategy.scala
++++ b/app/net/imadz/infra/saga/serialization/SagaParticipantSerializerStrategy.scala
+@@ -1,5 +1,18 @@
+ package net.imadz.infra.saga.serialization
+ 
++import net.imadz.infra.saga.SagaParticipant
++
+ trait SagaParticipantSerializerStrategy {
++  def manifest: String
++  def participantClass: Class[_]
++
++  def toBinary(participant: SagaParticipant[_, _]): Array[Byte]
+ 
+-}
++  /**
++   * 反序列化
++   * @param bytes 二进制数据
++   * @param resolver 依赖解析器 (即 Extension)
++   * @param ec 执行上下文 (通常由 System 提供)
++   */
++  def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _]
++}
+\ No newline at end of file
+diff --git a/app/net/imadz/infra/saga/serialization/SagaTransactionStepSerializer.scala b/app/net/imadz/infra/saga/serialization/SagaTransactionStepSerializer.scala
+index 951a5e2..ee12f07 100644
+--- a/app/net/imadz/infra/saga/serialization/SagaTransactionStepSerializer.scala
++++ b/app/net/imadz/infra/saga/serialization/SagaTransactionStepSerializer.scala
+@@ -1,5 +1,38 @@
+ package net.imadz.infra.saga.serialization
+ 
+-class SagaTransactionStepSerializer {
++import akka.actor.ExtendedActorSystem
++import com.google.protobuf.ByteString
++import net.imadz.common.CommonTypes.iMadzError
++import net.imadz.common.serialization.SerializationExtension
++// 假设这些 Proto 也是框架的一部分
++import net.imadz.infra.saga.proto.saga_v2.{SagaParticipantPO, SagaTransactionStepPO}
++import net.imadz.infra.saga.{SagaParticipant, SagaTransactionStep}
+ 
+-}
++import scala.concurrent.ExecutionContext
++
++class SagaTransactionStepSerializer(system: ExtendedActorSystem)
++  extends AbsSagaTransactionStepSerializer {
++
++  private lazy val ext = SerializationExtension(system)
++  implicit val executionContext: ExecutionContext = system.dispatcher
++
++  override def identifier: Int = 1234
++
++  override def serializeSagaTransactionStep(step: SagaTransactionStep[_, _]): SagaTransactionStepPO = {
++    val participant = step.participant
++    val strategy = ext.strategyFor(participant.getClass)
++
++    val payloadBytes = strategy.toBinary(participant)
++    val typeName = strategy.manifest
++
++    writeSagaParticipantPO(step, SagaParticipantPO(typeName, ByteString.copyFrom(payloadBytes)))
++  }
++
++  override def deserializeSagaTransactionStep(stepPO: SagaTransactionStepPO): SagaTransactionStep[iMadzError, String] = {
++    val genericParticipant = stepPO.participant.getOrElse(throw new IllegalArgumentException("Missing participant"))
++    val strategy = ext.strategyFor(genericParticipant.typeName)
++
++    val participant = strategy.fromBinary(genericParticipant.payload.toByteArray).asInstanceOf[SagaParticipant[iMadzError, String]]
++    readSagaTransactionStep(stepPO, participant)
++  }
++}
+\ No newline at end of file
+diff --git a/app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala b/app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala
+index d3aa71c..aa9390a 100644
+--- a/app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala
++++ b/app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala
+@@ -10,7 +10,7 @@ import net.imadz.application.aggregates.repository.CreditBalanceRepository
+ import net.imadz.common.CommonTypes.Id
+ import net.imadz.common.Id
+ import net.imadz.infra.saga.SagaTransactionCoordinator.entityTypeKey
+-import net.imadz.infra.saga.serialization.{AkkaSerializationWrapper, SagaTransactionCoordinatorEventAdapter, StepExecutorEventAdapter}
++import net.imadz.infra.saga.persistence.SagaTransactionCoordinatorEventAdapter
+ import net.imadz.infra.saga.{ForSaga, SagaTransactionCoordinator, StepExecutor}
+ import net.imadz.infrastructure.persistence.SagaTransactionStepSerializer
+ import org.slf4j.LoggerFactory
+@@ -44,7 +44,7 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
+             persistenceId = PersistenceId(entityTypeKey.name, transactionId.toString),
+             emptyState = SagaTransactionCoordinator.State.apply(),
+             commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, (key, step) =>
+-              createStepExecutor(actorContext, key, stepSerializer)),
++              createStepExecutor(actorContext, key)),
+             eventHandler = SagaTransactionCoordinator.eventHandler
+           ).withTagger(_ => Set(tag))
+             .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+@@ -54,11 +54,8 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
+   }
+ 
+ 
+-  private def createStepExecutor(context: ActorContext[SagaTransactionCoordinator.Command], key: String, stepSerializer: SagaTransactionStepSerializer) = {
+-    val akkaSerialization = AkkaSerializationWrapper(context.system.classicSystem)
+-    val global = scala.concurrent.ExecutionContext.global
+-    val eventAdapter = StepExecutorEventAdapter(akkaSerialization, stepSerializer, global)
+-    context.spawn(StepExecutor[Any, Any](eventAdapter)(
++  private def createStepExecutor(context: ActorContext[SagaTransactionCoordinator.Command], key: String): Any = {
++    context.spawn(StepExecutor[Any, Any](
+       PersistenceId.ofUniqueId(key),
+       defaultMaxRetries = 5,
+       initialRetryDelay = 100.millis,
+diff --git a/app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala b/app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala
+index d59eea2..2903402 100644
+--- a/app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala
++++ b/app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala
+@@ -4,12 +4,23 @@ import akka.actor.typed.{ActorSystem, Behavior}
+ import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityContext}
+ import net.imadz.application.aggregates.repository.CreditBalanceRepository
+ import net.imadz.application.services.transactor.MoneyTransferSagaTransactor
++import net.imadz.common.serialization.SerializationExtension
+ import net.imadz.infra.saga.SagaTransactionCoordinator
++import net.imadz.infrastructure.persistence.strategies.TransactionSerializationStrategies
+ 
+-trait TransactionBootstrap {
++import scala.concurrent.ExecutionContext.Implicits.global
+ 
++trait TransactionBootstrap {
+   // [修改] 增加了 system 参数
+   def initTransactionAggregate(system: ActorSystem[_], sharding: ClusterSharding, repository: CreditBalanceRepository): Unit = {
++    // 1. 获取扩展容器
++    val ext = SerializationExtension(system)
++
++    // 2. 注册您的业务策略 (这一步就是"挂号")
++    ext.registerStrategy(TransactionSerializationStrategies.FromAccountStrategy(repository))
++    ext.registerStrategy(TransactionSerializationStrategies.ToAccountStrategy(repository))
++
++
+     val behaviorFactory: EntityContext[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] => Behavior[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] = { context =>
+       val transactionId = context.entityId
+       val coordinator = sharding.entityRefFor(SagaTransactionCoordinator.entityTypeKey, transactionId)
+diff --git a/app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala b/app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala
+index 56fc37b..975078c 100644
+--- a/app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala
++++ b/app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala
+@@ -1,99 +1,78 @@
+ package net.imadz.infrastructure.persistence
+ 
+ import akka.persistence.typed.{EventAdapter, EventSeq}
+-import net.imadz.common.Id
+ import net.imadz.domain.entities.CreditBalanceEntity._
+-import net.imadz.domain.values.Money
++// 引入生成的 Converter Trait
++import net.imadz.infrastructure.persistence.converters.CreditBalanceProtoConverters
++// 引入 Protobuf 定义
+ import net.imadz.infrastructure.proto.credits._
+ 
+-import java.util.Currency
+-
+-class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditBalanceEventPO.Event] {
+-
+-  override def toJournal(e: CreditBalanceEvent): CreditBalanceEventPO.Event =
+-    e match {
+-      case BalanceChanged(update, timestamp) =>
+-        CreditBalanceEventPO.Event.BalanceChanged(
+-          BalanceChangedPO(
+-            Some(toMoneyPO(update)),
+-            timestamp
+-          )
+-        )
+-      case FundsReserved(transferId, amount) =>
+-        CreditBalanceEventPO.Event.FundsReserved(
+-          FundsReservedPO(
+-            transferId.toString,
+-            Some(toMoneyPO(amount))
+-          )
+-        )
+-      case FundsDeducted(transferId, amount) =>
+-        CreditBalanceEventPO.Event.FundsDeducted(
+-          FundsDeductedPO(
+-            transferId.toString,
+-            Some(toMoneyPO(amount))
+-          )
+-        )
+-      case ReservationReleased(transferId, amount) =>
+-        CreditBalanceEventPO.Event.ReservationReleased(
+-          ReservationReleasedPO(
+-            transferId.toString,
+-            Some(toMoneyPO(amount))
+-          )
+-        )
+-      case IncomingCreditsRecorded(transferId, amount) =>
+-        CreditBalanceEventPO.Event.IncomingCreditsRecorded(
+-          IncomingCreditsRecordedPO(
+-            transferId.toString,
+-            Some(toMoneyPO(amount))
+-          )
+-        )
+-      case IncomingCreditsCommited(transferId) =>
+-        CreditBalanceEventPO.Event.IncomingCreditsCommited(
+-          IncomingCreditsCommitedPO(
+-            transferId.toString
+-          )
+-        )
+-      case IncomingCreditsCanceled(transferId) =>
+-        CreditBalanceEventPO.Event.IncomingCreditsCanceled(
+-          IncomingCreditsCanceledPO(
+-            transferId.toString
+-          )
+-        )
+-    }
++/**
++ * CreditBalanceEventAdapter
++ * * 职责：
++ * 1. 混入 CreditBalanceProtoConverters 以获得所有转化能力
++ * 2. 将领域事件映射到 Proto OneOf 包装类
++ * 3. 将 Proto OneOf 包装类还原回领域事件
++ */
++class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditBalanceEventPO]
++  with CreditBalanceProtoConverters {
+ 
+   override def manifest(event: CreditBalanceEvent): String = event.getClass.getName
+ 
+-  override def fromJournal(p: CreditBalanceEventPO.Event, manifest: String): EventSeq[CreditBalanceEvent] =
+-    p match {
++  override def toJournal(e: CreditBalanceEvent): CreditBalanceEventPO = {
++    // 显式调用 Converters 中定义的 Object，逻辑清晰，无隐式魔法
++    val eventUnion = e match {
++      case evt: BalanceChanged =>
++        CreditBalanceEventPO.Event.BalanceChanged(BalanceChangedConv.toProto(evt))
++
++      case evt: FundsReserved =>
++        CreditBalanceEventPO.Event.FundsReserved(FundsReservedConv.toProto(evt))
++
++      case evt: FundsDeducted =>
++        CreditBalanceEventPO.Event.FundsDeducted(FundsDeductedConv.toProto(evt))
++
++      case evt: ReservationReleased =>
++        CreditBalanceEventPO.Event.ReservationReleased(ReservationReleasedConv.toProto(evt))
++
++      case evt: IncomingCreditsRecorded =>
++        CreditBalanceEventPO.Event.IncomingCreditsRecorded(IncomingCreditsRecordedConv.toProto(evt))
++
++      case evt: IncomingCreditsCommited =>
++        CreditBalanceEventPO.Event.IncomingCreditsCommited(IncomingCreditsCommitedConv.toProto(evt))
++
++      case evt: IncomingCreditsCanceled =>
++        CreditBalanceEventPO.Event.IncomingCreditsCanceled(IncomingCreditsCanceledConv.toProto(evt))
++    }
++
++    // 包装进 Root PO
++    CreditBalanceEventPO(eventUnion)
++  }
++
++  override def fromJournal(p: CreditBalanceEventPO, manifest: String): EventSeq[CreditBalanceEvent] = {
++    p.event match {
+       case CreditBalanceEventPO.Event.BalanceChanged(po) =>
+-        EventSeq.single(BalanceChanged(fromMoneyPO(po.getUpdate), po.timestamp))
++        EventSeq.single(BalanceChangedConv.fromProto(po))
+ 
+       case CreditBalanceEventPO.Event.FundsReserved(po) =>
+-        EventSeq.single(FundsReserved(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
++        EventSeq.single(FundsReservedConv.fromProto(po))
+ 
+       case CreditBalanceEventPO.Event.FundsDeducted(po) =>
+-        EventSeq.single(FundsDeducted(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
++        EventSeq.single(FundsDeductedConv.fromProto(po))
+ 
+       case CreditBalanceEventPO.Event.ReservationReleased(po) =>
+-        EventSeq.single(ReservationReleased(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
++        EventSeq.single(ReservationReleasedConv.fromProto(po))
+ 
+       case CreditBalanceEventPO.Event.IncomingCreditsRecorded(po) =>
+-        EventSeq.single(IncomingCreditsRecorded(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
++        EventSeq.single(IncomingCreditsRecordedConv.fromProto(po))
+ 
+       case CreditBalanceEventPO.Event.IncomingCreditsCommited(po) =>
+-        EventSeq.single(IncomingCreditsCommited(Id.of(po.transferId)))
++        EventSeq.single(IncomingCreditsCommitedConv.fromProto(po))
+ 
+       case CreditBalanceEventPO.Event.IncomingCreditsCanceled(po) =>
+-        EventSeq.single(IncomingCreditsCanceled(Id.of(po.transferId)))
++        EventSeq.single(IncomingCreditsCanceledConv.fromProto(po))
+ 
+-      case _ =>
++      case CreditBalanceEventPO.Event.Empty =>
+         EventSeq.empty
+     }
+-
+-  // Helper methods for Money conversion
+-  private def toMoneyPO(money: Money): MoneyPO =
+-    MoneyPO(money.amount.doubleValue, money.currency.getCurrencyCode)
+-
+-  private def fromMoneyPO(po: MoneyPO): Money =
+-    Money(BigDecimal(po.amount), Currency.getInstance(po.currency))
++  }
+ }
+\ No newline at end of file
+diff --git a/app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala b/app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala
+index dfa09cf..a53940a 100644
+--- a/app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala
++++ b/app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala
+@@ -1,38 +1,20 @@
+ package net.imadz.infrastructure.persistence
+ 
+ import akka.persistence.typed.SnapshotAdapter
+-import net.imadz.common.Id
+ import net.imadz.domain.entities.CreditBalanceEntity._
+-import net.imadz.domain.values.Money
+-import net.imadz.infrastructure.proto.credits.{CreditBalanceStatePO, MoneyPO}
++import net.imadz.infrastructure.persistence.converters.CreditBalanceProtoConverters
++import net.imadz.infrastructure.proto.credits.CreditBalanceStatePO
+ 
+-import java.util.{Currency, UUID}
+-
+-class CreditBalanceSnapshotAdapter extends SnapshotAdapter[CreditBalanceState] {
++class CreditBalanceSnapshotAdapter extends SnapshotAdapter[CreditBalanceState] with CreditBalanceProtoConverters {
+ 
+   override def toJournal(state: CreditBalanceState): Any = {
+-    CreditBalanceStatePO(
+-      userId = state.userId.toString,
+-      accountBalance = state.accountBalance.map { case (k, v) => k -> toMoneyPO(v) },
+-      reservedAmount = state.reservedAmount.map { case (k, v) => k.toString -> toMoneyPO(v) },
+-      incomingCredits = state.incomingCredits.map { case (k, v) => k.toString -> toMoneyPO(v) }
+-    )
++    CreditBalanceStateConv.toProto(state)
+   }
+ 
+   override def fromJournal(from: Any): CreditBalanceState = from match {
+     case po: CreditBalanceStatePO =>
+-      CreditBalanceState(
+-        userId = UUID.fromString(po.userId),
+-        accountBalance = po.accountBalance.map { case (k, v) => k -> fromMoneyPO(v) }.toMap,
+-        reservedAmount = po.reservedAmount.map { case (k, v) => Id.of(k) -> fromMoneyPO(v) }.toMap,
+-        incomingCredits = po.incomingCredits.map { case (k, v) => Id.of(k) -> fromMoneyPO(v) }.toMap
+-      )
++      CreditBalanceStateConv.fromProto(po)
+     case unknown => throw new IllegalStateException(s"Unknown journal type: ${unknown.getClass.getName}")
+   }
+ 
+-  private def toMoneyPO(money: Money): MoneyPO =
+-    MoneyPO(money.amount.doubleValue, money.currency.getCurrencyCode)
+-
+-  private def fromMoneyPO(po: MoneyPO): Money =
+-    Money(BigDecimal(po.amount), Currency.getInstance(po.currency))
+ }
+\ No newline at end of file
+diff --git a/app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala b/app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala
+index a362ca1..70bc7cc 100644
+--- a/app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala
++++ b/app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala
+@@ -1,5 +1,134 @@
+ package net.imadz.infrastructure.persistence.converters
+ 
+-trait CreditBalanceProtoConverters {
++import net.imadz.common.serialization.PrimitiveConverter
++import net.imadz.domain.entities.CreditBalanceEntity._
++import net.imadz.domain.values.Money
++// 根据之前的约定，假设 ScalaPB 生成的代码位于 snake_case 的包下
++// 如果您的实际生成包是 net.imadz.banking.infrastructure.proto，请调整此处 import
++import net.imadz.infrastructure.proto.credits._
+ 
+-}
++trait CreditBalanceProtoConverters extends PrimitiveConverter {
++
++  // --- Value Objects ---
++
++  object MoneyConv extends ProtoConverter[Money, MoneyPO] {
++    override def toProto(m: Money): MoneyPO = MoneyPO(
++      amount = m.amount.doubleValue,
++      currency = CurrencyConv.toProto(m.currency)
++    )
++
++    override def fromProto(p: MoneyPO): Money = Money(
++      BigDecimal(p.amount),
++      CurrencyConv.fromProto(p.currency)
++    )
++  }
++
++  // --- Events ---
++
++  object BalanceChangedConv extends ProtoConverter[BalanceChanged, BalanceChangedPO] {
++    override def toProto(e: BalanceChanged): BalanceChangedPO = BalanceChangedPO(
++      update = Some(MoneyConv.toProto(e.update)),
++      timestamp = e.timestamp
++    )
++
++    override def fromProto(p: BalanceChangedPO): BalanceChanged = BalanceChanged(
++      update = MoneyConv.fromProto(p.update.getOrElse(throw new IllegalArgumentException("Missing update"))),
++      timestamp = p.timestamp
++    )
++  }
++
++  object FundsReservedConv extends ProtoConverter[FundsReserved, FundsReservedPO] {
++    override def toProto(e: FundsReserved): FundsReservedPO = FundsReservedPO(
++      transferId = IdConv.toProto(e.transferId),
++      amount = Some(MoneyConv.toProto(e.amount))
++    )
++
++    override def fromProto(p: FundsReservedPO): FundsReserved = FundsReserved(
++      transferId = IdConv.fromProto(p.transferId),
++      amount = MoneyConv.fromProto(p.amount.getOrElse(throw new IllegalArgumentException("Missing amount")))
++    )
++  }
++
++  // [补全] FundsDeducted
++  object FundsDeductedConv extends ProtoConverter[FundsDeducted, FundsDeductedPO] {
++    override def toProto(e: FundsDeducted): FundsDeductedPO = FundsDeductedPO(
++      transferId = IdConv.toProto(e.transferId),
++      amount = Some(MoneyConv.toProto(e.amount))
++    )
++
++    override def fromProto(p: FundsDeductedPO): FundsDeducted = FundsDeducted(
++      transferId = IdConv.fromProto(p.transferId),
++      amount = MoneyConv.fromProto(p.amount.getOrElse(throw new IllegalArgumentException("Missing amount")))
++    )
++  }
++
++  // [补全] ReservationReleased
++  object ReservationReleasedConv extends ProtoConverter[ReservationReleased, ReservationReleasedPO] {
++    override def toProto(e: ReservationReleased): ReservationReleasedPO = ReservationReleasedPO(
++      transferId = IdConv.toProto(e.transferId),
++      amount = Some(MoneyConv.toProto(e.amount))
++    )
++
++    override def fromProto(p: ReservationReleasedPO): ReservationReleased = ReservationReleased(
++      transferId = IdConv.fromProto(p.transferId),
++      amount = MoneyConv.fromProto(p.amount.getOrElse(throw new IllegalArgumentException("Missing amount")))
++    )
++  }
++
++  // [补全] IncomingCreditsRecorded
++  object IncomingCreditsRecordedConv extends ProtoConverter[IncomingCreditsRecorded, IncomingCreditsRecordedPO] {
++    override def toProto(e: IncomingCreditsRecorded): IncomingCreditsRecordedPO = IncomingCreditsRecordedPO(
++      transferId = IdConv.toProto(e.transferId),
++      amount = Some(MoneyConv.toProto(e.amount))
++    )
++
++    override def fromProto(p: IncomingCreditsRecordedPO): IncomingCreditsRecorded = IncomingCreditsRecorded(
++      transferId = IdConv.fromProto(p.transferId),
++      amount = MoneyConv.fromProto(p.amount.getOrElse(throw new IllegalArgumentException("Missing amount")))
++    )
++  }
++
++  // [补全] IncomingCreditsCommited (注意拼写与 Entity/Proto 保持一致: Commited)
++  object IncomingCreditsCommitedConv extends ProtoConverter[IncomingCreditsCommited, IncomingCreditsCommitedPO] {
++    override def toProto(e: IncomingCreditsCommited): IncomingCreditsCommitedPO = IncomingCreditsCommitedPO(
++      transferId = IdConv.toProto(e.transferId)
++    )
++
++    override def fromProto(p: IncomingCreditsCommitedPO): IncomingCreditsCommited = IncomingCreditsCommited(
++      transferId = IdConv.fromProto(p.transferId)
++    )
++  }
++
++  // [补全] IncomingCreditsCanceled
++  object IncomingCreditsCanceledConv extends ProtoConverter[IncomingCreditsCanceled, IncomingCreditsCanceledPO] {
++    override def toProto(e: IncomingCreditsCanceled): IncomingCreditsCanceledPO = IncomingCreditsCanceledPO(
++      transferId = IdConv.toProto(e.transferId)
++    )
++
++    override def fromProto(p: IncomingCreditsCanceledPO): IncomingCreditsCanceled = IncomingCreditsCanceled(
++      transferId = IdConv.fromProto(p.transferId)
++    )
++  }
++
++  // --- State Snapshot ---
++
++  object CreditBalanceStateConv extends ProtoConverter[CreditBalanceState, CreditBalanceStatePO] {
++    override def toProto(s: CreditBalanceState): CreditBalanceStatePO = CreditBalanceStatePO(
++      userId = IdConv.toProto(s.userId),
++      // 1. Map[String, Money] -> 使用 StringConv + MoneyConv
++      accountBalance = toProtoMap(s.accountBalance, StringConv, MoneyConv),
++      // 2. Map[Id, Money] -> 使用 IdConv + MoneyConv
++      reservedAmount = toProtoMap(s.reservedAmount, IdConv, MoneyConv),
++      // 3. Map[Id, Money] -> 使用 IdConv + MoneyConv
++      incomingCredits = toProtoMap(s.incomingCredits, IdConv, MoneyConv)
++    )
++
++    override def fromProto(p: CreditBalanceStatePO): CreditBalanceState = CreditBalanceState(
++      userId = IdConv.fromProto(p.userId),
++      // 这里的逻辑是对称的
++      accountBalance = fromProtoMap(p.accountBalance, StringConv, MoneyConv),
++      reservedAmount = fromProtoMap(p.reservedAmount, IdConv, MoneyConv),
++      incomingCredits = fromProtoMap(p.incomingCredits, IdConv, MoneyConv)
++    )
++  }
++}
+\ No newline at end of file
+diff --git a/app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala b/app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala
+index f14b9e2..f803fb2 100644
+--- a/app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala
++++ b/app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala
+@@ -1,5 +1,40 @@
+ package net.imadz.infrastructure.persistence.converters
+ 
+-trait SagaProtoConverters {
++import net.imadz.application.aggregates.repository.CreditBalanceRepository
++import net.imadz.application.services.transactor.{FromAccountParticipant, ToAccountParticipant}
++import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO, ToAccountParticipantPO}
+ 
+-}
++import scala.concurrent.ExecutionContext
++
++trait SagaProtoConverters extends CreditBalanceProtoConverters {
++
++  case class FromAccountParticipantConv(repository: CreditBalanceRepository)(implicit ec: ExecutionContext) extends ProtoConverter[FromAccountParticipant, FromAccountParticipantPO] {
++    override def toProto(d: FromAccountParticipant): FromAccountParticipantPO = FromAccountParticipantPO(
++      fromUserId = IdConv.toProto(d.fromUserId),
++      amount = Some(MoneyConv.toProto(d.amount))
++    )
++
++    override def fromProto(p: FromAccountParticipantPO): FromAccountParticipant = {
++      p.amount.map(amount => {
++        FromAccountParticipant(IdConv.fromProto(p.fromUserId), amount = MoneyConv.fromProto(amount), repository)
++      }).getOrElse(throw new IllegalArgumentException(s"FromAccountParticipantPO should have amount property value, but is ${p.amount}"))
++    }
++
++  }
++
++  case class ToAccountParticipantConv(repository: CreditBalanceRepository)(implicit ec: ExecutionContext) extends ProtoConverter[ToAccountParticipant, ToAccountParticipantPO] {
++
++    override def toProto(domain: ToAccountParticipant): ToAccountParticipantPO = ToAccountParticipantPO(
++      toUserId = IdConv.toProto(domain.toUserId),
++      amount = Some(MoneyConv.toProto(domain.amount))
++    )
++
++    override def fromProto(proto: ToAccountParticipantPO): ToAccountParticipant = proto.amount.map(amount => {
++      ToAccountParticipant(
++        toUserId = IdConv.fromProto(proto.toUserId),
++        amount = MoneyConv.fromProto(amount),
++        repo = repository
++      )
++    }).getOrElse(throw new IllegalArgumentException(s"ToAccountParticipantPO should have amount property value, but is ${proto.amount}"))
++  }
++}
+\ No newline at end of file
+diff --git a/app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala b/app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala
+index aa7eeaf..5f10bd8 100644
+--- a/app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala
++++ b/app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala
+@@ -1,45 +1,56 @@
+-package net.imadz.infra.saga.persistence.strategies
++package net.imadz.infrastructure.persistence.strategies
+ 
+ import net.imadz.application.aggregates.repository.CreditBalanceRepository
+ import net.imadz.application.services.transactor.{FromAccountParticipant, ToAccountParticipant}
+ import net.imadz.infra.saga.SagaParticipant
+ import net.imadz.infra.saga.serialization.SagaParticipantSerializerStrategy
+-import net.imadz.infrastructure.persistence.converters.TransactionProtoConverters.{FromAccountParticipantConv, ToAccountParticipantConv}
++import net.imadz.infrastructure.persistence.converters.SagaProtoConverters
+ import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO, ToAccountParticipantPO}
+-import net.imadz.infrastructure.serialization.SerializationExtensionImpl
+ 
+ import scala.concurrent.ExecutionContext
+ 
+ object TransactionSerializationStrategies {
+ 
+-  object FromAccountStrategy extends SagaParticipantSerializerStrategy {
++  case class FromAccountStrategy(repository: CreditBalanceRepository)(implicit executionContext: ExecutionContext) extends SagaParticipantSerializerStrategy with SagaProtoConverters {
+     override def manifest: String = "FromAccountParticipantPO"
++
+     override def participantClass: Class[_] = classOf[FromAccountParticipant]
+ 
++    private val fromConv: FromAccountParticipantConv = FromAccountParticipantConv(repository)
++
+     override def toBinary(participant: SagaParticipant[_, _]): Array[Byte] = {
+       val p = participant.asInstanceOf[FromAccountParticipant]
+-      FromAccountParticipantConv.toProto(p).toByteArray
++      fromConv.toProto(p).toByteArray
+     }
+ 
+     // [关键] 按需获取 CreditBalanceRepository
+-    override def fromBinary(bytes: Array[Byte], resolver: SerializationExtensionImpl)(implicit ec: ExecutionContext): SagaParticipant[_, _] = {
++    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _] = {
+       val po = FromAccountParticipantPO.parseFrom(bytes)
++      fromConv.fromProto(po)
++    }
++
++  }
++
++
++  case class ToAccountStrategy(repository: CreditBalanceRepository)(implicit executionContext: ExecutionContext) extends SagaParticipantSerializerStrategy with SagaProtoConverters {
++    override def manifest: String = "ToAccountParticipantPO"
+ 
+-      // 这里的 getDependency 是类型安全的
+-      val repo = resolver.getDependency[CreditBalanceRepository]
++    override def participantClass: Class[_] = classOf[ToAccountParticipant]
+ 
+-      FromAccountParticipantConv.fromProto(po, repo)
++    private val toConv: ToAccountParticipantConv = ToAccountParticipantConv(repository)
++
++    override def toBinary(participant: SagaParticipant[_, _]): Array[Byte] = {
++      val p = participant.asInstanceOf[ToAccountParticipant]
++      toConv.toProto(p).toByteArray
+     }
+-  }
+ 
+-  // 假设有一个 OrderParticipant 需要 OrderRepository
+-  /*
+-  object CreateOrderStrategy extends SagaParticipantSerializerStrategy {
+-    // ...
+-    override def fromBinary(..., resolver: SerializationExtensionImpl)... {
+-       val repo = resolver.getDependency[OrderRepository] // 拿另一个 Repo
+-       OrderParticipantConv.fromProto(po, repo)
++    // [关键] 按需获取 CreditBalanceRepository
++    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _] = {
++      val po = ToAccountParticipantPO.parseFrom(bytes)
++      toConv.fromProto(po)
+     }
++
+   }
+-  */
++
++
+ }
+\ No newline at end of file
+diff --git a/conf/serialization.conf b/conf/serialization.conf
+index e57b55c..6e73e24 100644
+--- a/conf/serialization.conf
++++ b/conf/serialization.conf
+@@ -6,14 +6,19 @@ akka {
+         object-id-offset = "net.imadz.common.serialization.ObjectIdOffsetSerializer"
+         proto = "akka.remote.serialization.ProtobufSerializer"
+         saga-serializer = "net.imadz.infra.saga.serialization.SagaSerializer"
++        saga-step-serializer = "net.imadz.infra.saga.serialization.SagaTransactionStepSerializer"
+      }
+      serialization-bindings {
+        "akka.contrib.persistence.mongodb.ObjectIdOffset" = object-id-offset
+        "com.google.protobuf.Message" = proto
+        "scalapb.GeneratedMessage" = proto
+        "net.imadz.common.CborSerializable" = jackson-cbor
++
+        "net.imadz.infra.saga.StepExecutor$OperationResponse" =  saga-serializer
+        "net.imadz.infra.saga.StepExecutor$OperationSucceeded" =  saga-serializer
++
++       "net.imadz.infra.saga.StepExecutor$Event" =  saga-serializer
++       "net.imadz.infra.saga.SagaTransactionStep" = saga-step-serializer
+      }
+      allow-java-serialization = on
+      warn-about-java-serializer-usage = off

@@ -4,12 +4,11 @@ import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.pattern.CircuitBreaker
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
-import akka.persistence.typed.{EventAdapter, PersistenceId, RecoveryCompleted}
+import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
 import net.imadz.common.CborSerializable
 import net.imadz.infra.saga.SagaParticipant.{RetryableOrNotException, SagaResult}
 import net.imadz.infra.saga.SagaPhase.TransactionPhase
 import net.imadz.infra.saga.handlers.{StepExecutorCommandHandler, StepExecutorEventHandler, StepExecutorRecoveryHandler}
-import net.imadz.infra.saga.serialization.AkkaSerializationWrapper
 
 import scala.concurrent.duration._
 
@@ -99,32 +98,6 @@ object StepExecutor {
   // @formatter:on
 
 
-  def apply[E, R](eventAdapter: EventAdapter[Event, _])(persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings): Behavior[Command] = {
-    Behaviors.setup { context =>
-      Behaviors.withTimers { timers =>
-
-        val circuitBreaker: CircuitBreaker = CircuitBreaker(
-          scheduler = context.system.classicSystem.scheduler,
-          maxFailures = circuitBreakerSettings.maxFailures,
-          callTimeout = circuitBreakerSettings.callTimeout,
-          resetTimeout = circuitBreakerSettings.resetTimeout
-        )
-
-        EventSourcedBehavior[Command, Event, State[E, R]](
-          persistenceId = persistenceId,
-          emptyState = State[E, R](),
-          commandHandler = StepExecutorCommandHandler.commandHandler[E, R](context, timers, defaultMaxRetries, initialRetryDelay, circuitBreaker),
-          eventHandler = StepExecutorEventHandler.eventHandler[E, R]
-        ).eventAdapter(eventAdapter)
-          .receiveSignal {
-            case (state, RecoveryCompleted) =>
-              StepExecutorRecoveryHandler.onRecoveryCompleted[E, R](context, state)
-          }
-      }
-    }
-  }
-
-
   def apply[E, R](persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings): Behavior[Command] = {
     Behaviors.setup { context =>
       Behaviors.withTimers { timers =>
@@ -135,8 +108,6 @@ object StepExecutor {
           callTimeout = circuitBreakerSettings.callTimeout,
           resetTimeout = circuitBreakerSettings.resetTimeout
         )
-        val akkaSerialization = AkkaSerializationWrapper(context.system.classicSystem)
-        val global = scala.concurrent.ExecutionContext.global
 
         EventSourcedBehavior[Command, Event, State[E, R]](
           persistenceId = persistenceId,
@@ -150,4 +121,5 @@ object StepExecutor {
       }
     }
   }
+
 }

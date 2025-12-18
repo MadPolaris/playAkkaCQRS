@@ -1,99 +1,77 @@
 package net.imadz.infrastructure.persistence
 
 import akka.persistence.typed.{EventAdapter, EventSeq}
-import net.imadz.common.Id
 import net.imadz.domain.entities.CreditBalanceEntity._
-import net.imadz.domain.values.Money
+// 引入生成的 Converter Trait
+import net.imadz.infrastructure.persistence.converters.CreditBalanceProtoConverters
+// 引入 Protobuf 定义
 import net.imadz.infrastructure.proto.credits._
 
-import java.util.Currency
-
-class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditBalanceEventPO.Event] {
-
-  override def toJournal(e: CreditBalanceEvent): CreditBalanceEventPO.Event =
-    e match {
-      case BalanceChanged(update, timestamp) =>
-        CreditBalanceEventPO.Event.BalanceChanged(
-          BalanceChangedPO(
-            Some(toMoneyPO(update)),
-            timestamp
-          )
-        )
-      case FundsReserved(transferId, amount) =>
-        CreditBalanceEventPO.Event.FundsReserved(
-          FundsReservedPO(
-            transferId.toString,
-            Some(toMoneyPO(amount))
-          )
-        )
-      case FundsDeducted(transferId, amount) =>
-        CreditBalanceEventPO.Event.FundsDeducted(
-          FundsDeductedPO(
-            transferId.toString,
-            Some(toMoneyPO(amount))
-          )
-        )
-      case ReservationReleased(transferId, amount) =>
-        CreditBalanceEventPO.Event.ReservationReleased(
-          ReservationReleasedPO(
-            transferId.toString,
-            Some(toMoneyPO(amount))
-          )
-        )
-      case IncomingCreditsRecorded(transferId, amount) =>
-        CreditBalanceEventPO.Event.IncomingCreditsRecorded(
-          IncomingCreditsRecordedPO(
-            transferId.toString,
-            Some(toMoneyPO(amount))
-          )
-        )
-      case IncomingCreditsCommited(transferId) =>
-        CreditBalanceEventPO.Event.IncomingCreditsCommited(
-          IncomingCreditsCommitedPO(
-            transferId.toString
-          )
-        )
-      case IncomingCreditsCanceled(transferId) =>
-        CreditBalanceEventPO.Event.IncomingCreditsCanceled(
-          IncomingCreditsCanceledPO(
-            transferId.toString
-          )
-        )
-    }
+/**
+ * CreditBalanceEventAdapter
+ * * 职责：
+ * 1. 混入 CreditBalanceProtoConverters 以获得所有转化能力
+ * 2. 将领域事件映射到 Proto OneOf 包装类
+ * 3. 将 Proto OneOf 包装类还原回领域事件
+ */
+class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditBalanceEventPO.Event]
+  with CreditBalanceProtoConverters {
 
   override def manifest(event: CreditBalanceEvent): String = event.getClass.getName
 
-  override def fromJournal(p: CreditBalanceEventPO.Event, manifest: String): EventSeq[CreditBalanceEvent] =
-    p match {
-      case CreditBalanceEventPO.Event.BalanceChanged(po) =>
-        EventSeq.single(BalanceChanged(fromMoneyPO(po.getUpdate), po.timestamp))
+  override def toJournal(e: CreditBalanceEvent): CreditBalanceEventPO.Event = {
+    // 显式调用 Converters 中定义的 Object，逻辑清晰，无隐式魔法
+    val eventUnion = e match {
+      case evt: BalanceChanged =>
+        CreditBalanceEventPO.Event.BalanceChanged(BalanceChangedConv.toProto(evt))
 
-      case CreditBalanceEventPO.Event.FundsReserved(po) =>
-        EventSeq.single(FundsReserved(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
+      case evt: FundsReserved =>
+        CreditBalanceEventPO.Event.FundsReserved(FundsReservedConv.toProto(evt))
 
-      case CreditBalanceEventPO.Event.FundsDeducted(po) =>
-        EventSeq.single(FundsDeducted(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
+      case evt: FundsDeducted =>
+        CreditBalanceEventPO.Event.FundsDeducted(FundsDeductedConv.toProto(evt))
 
-      case CreditBalanceEventPO.Event.ReservationReleased(po) =>
-        EventSeq.single(ReservationReleased(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
+      case evt: ReservationReleased =>
+        CreditBalanceEventPO.Event.ReservationReleased(ReservationReleasedConv.toProto(evt))
 
-      case CreditBalanceEventPO.Event.IncomingCreditsRecorded(po) =>
-        EventSeq.single(IncomingCreditsRecorded(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
+      case evt: IncomingCreditsRecorded =>
+        CreditBalanceEventPO.Event.IncomingCreditsRecorded(IncomingCreditsRecordedConv.toProto(evt))
 
-      case CreditBalanceEventPO.Event.IncomingCreditsCommited(po) =>
-        EventSeq.single(IncomingCreditsCommited(Id.of(po.transferId)))
+      case evt: IncomingCreditsCommited =>
+        CreditBalanceEventPO.Event.IncomingCreditsCommited(IncomingCreditsCommitedConv.toProto(evt))
 
-      case CreditBalanceEventPO.Event.IncomingCreditsCanceled(po) =>
-        EventSeq.single(IncomingCreditsCanceled(Id.of(po.transferId)))
-
-      case _ =>
-        EventSeq.empty
+      case evt: IncomingCreditsCanceled =>
+        CreditBalanceEventPO.Event.IncomingCreditsCanceled(IncomingCreditsCanceledConv.toProto(evt))
     }
 
-  // Helper methods for Money conversion
-  private def toMoneyPO(money: Money): MoneyPO =
-    MoneyPO(money.amount.doubleValue, money.currency.getCurrencyCode)
+    eventUnion
+  }
 
-  private def fromMoneyPO(po: MoneyPO): Money =
-    Money(BigDecimal(po.amount), Currency.getInstance(po.currency))
+  override def fromJournal(p: CreditBalanceEventPO.Event, manifest: String): EventSeq[CreditBalanceEvent] = {
+    p match {
+      case CreditBalanceEventPO.Event.BalanceChanged(po) =>
+        EventSeq.single(BalanceChangedConv.fromProto(po))
+
+      case CreditBalanceEventPO.Event.FundsReserved(po) =>
+        EventSeq.single(FundsReservedConv.fromProto(po))
+
+      case CreditBalanceEventPO.Event.FundsDeducted(po) =>
+        EventSeq.single(FundsDeductedConv.fromProto(po))
+
+      case CreditBalanceEventPO.Event.ReservationReleased(po) =>
+        EventSeq.single(ReservationReleasedConv.fromProto(po))
+
+      case CreditBalanceEventPO.Event.IncomingCreditsRecorded(po) =>
+        EventSeq.single(IncomingCreditsRecordedConv.fromProto(po))
+
+      case CreditBalanceEventPO.Event.IncomingCreditsCommited(po) =>
+        EventSeq.single(IncomingCreditsCommitedConv.fromProto(po))
+
+      case CreditBalanceEventPO.Event.IncomingCreditsCanceled(po) =>
+        EventSeq.single(IncomingCreditsCanceledConv.fromProto(po))
+
+      case CreditBalanceEventPO.Event.Empty =>
+        EventSeq.empty
+    }
+  }
 }

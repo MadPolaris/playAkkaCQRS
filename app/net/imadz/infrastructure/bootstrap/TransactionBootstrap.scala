@@ -4,12 +4,23 @@ import akka.actor.typed.{ActorSystem, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityContext}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.services.transactor.MoneyTransferSagaTransactor
+import net.imadz.common.serialization.SerializationExtension
 import net.imadz.infra.saga.SagaTransactionCoordinator
+import net.imadz.infrastructure.persistence.strategies.TransactionSerializationStrategies
+
+import scala.concurrent.ExecutionContext.Implicits.global
 
 trait TransactionBootstrap {
-
   // [修改] 增加了 system 参数
   def initTransactionAggregate(system: ActorSystem[_], sharding: ClusterSharding, repository: CreditBalanceRepository): Unit = {
+    // 1. 获取扩展容器
+    val ext = SerializationExtension(system)
+
+    // 2. 注册您的业务策略 (这一步就是"挂号")
+    ext.registerStrategy(TransactionSerializationStrategies.FromAccountStrategy(repository))
+    ext.registerStrategy(TransactionSerializationStrategies.ToAccountStrategy(repository))
+
+
     val behaviorFactory: EntityContext[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] => Behavior[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] = { context =>
       val transactionId = context.entityId
       val coordinator = sharding.entityRefFor(SagaTransactionCoordinator.entityTypeKey, transactionId)
