@@ -2,7 +2,6 @@ package net.imadz.infra.saga.serialization
 
 import akka.actor.ExtendedActorSystem
 import akka.serialization.Serializer
-import net.imadz.common.serialization.{SerializationExtension, SerializationExtensionImpl}
 
 import scala.util.{Failure, Success, Try}
 // 假设这些 Proto 也是框架的一部分
@@ -13,8 +12,6 @@ import scala.concurrent.ExecutionContext
 
 class SagaTransactionStepSerializer(override val system: ExtendedActorSystem)
   extends Serializer with SagaExecutorConverter {
-
-  def ext: SerializationExtensionImpl = SerializationExtension(system)
 
   implicit val executionContext: ExecutionContext = system.dispatcher
 

@@ -13,13 +13,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 trait TransactionBootstrap {
   // [修改] 增加了 system 参数
   def initTransactionAggregate(system: ActorSystem[_], sharding: ClusterSharding, repository: CreditBalanceRepository): Unit = {
-    // 1. 获取扩展容器
-    val ext = SerializationExtension(system)
-
-    // 2. 注册您的业务策略 (这一步就是"挂号")
-    ext.registerStrategy(TransactionSerializationStrategies.FromAccountStrategy(repository))
-    ext.registerStrategy(TransactionSerializationStrategies.ToAccountStrategy(repository))
-
 
     val behaviorFactory: EntityContext[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] => Behavior[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] = { context =>
       val transactionId = context.entityId

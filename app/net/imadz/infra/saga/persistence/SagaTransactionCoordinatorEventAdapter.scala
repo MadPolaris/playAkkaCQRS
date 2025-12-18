@@ -2,85 +2,69 @@ package net.imadz.infra.saga.persistence
 
 import akka.actor.ExtendedActorSystem
 import akka.persistence.typed.{EventAdapter, EventSeq}
-import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
+import net.imadz.common.serialization.SerializationExtension
+import net.imadz.infra.saga.SagaTransactionCoordinator
+import net.imadz.infra.saga.persistence.converters.SagaCoordinatorProtoConverters
 import net.imadz.infra.saga.proto.saga_v2._
-import net.imadz.infra.saga.serialization.SagaExecutorConverter
-import net.imadz.infra.saga.{ForSaga, SagaPhase, SagaTransactionCoordinator}
 
 import scala.concurrent.ExecutionContext
 
-case class SagaTransactionCoordinatorEventAdapter(system: ExtendedActorSystem)
-  extends EventAdapter[SagaTransactionCoordinator.Event, SagaTransactionCoordinatorEventPO.Event]
-    with SagaExecutorConverter
-    with ForSaga {
+/**
+ * SagaTransactionCoordinatorEventAdapter
+ *
+ * 实现了 Converter 分离的设计：
+ * 1. 混入 SagaCoordinatorProtoConverters 获取所有转换逻辑
+ * 2. 注入 ExtendedActorSystem 获取 SerializationExtension
+ */
+class SagaTransactionCoordinatorEventAdapter(override val system: ExtendedActorSystem)
+  extends EventAdapter[SagaTransactionCoordinator.Event, SagaTransactionCoordinatorEventPO]
+    with SagaCoordinatorProtoConverters {
+
+  // 如果 Mapper 内部需要 EC (目前不需要，但保留以防万一)
   implicit val ec: ExecutionContext = system.dispatcher
 
-  override def toJournal(e: SagaTransactionCoordinator.Event): SagaTransactionCoordinatorEventPO.Event = e match {
-    case SagaTransactionCoordinator.TransactionStarted(transactionId, steps) =>
-      SagaTransactionCoordinatorEventPO.Event.Started(
-        TransactionStartedPO(transactionId = transactionId,
-          steps = steps.map(SagaStepConv.toProto))
-      )
-    case SagaTransactionCoordinator.PhaseSucceeded(phase) =>
-      SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(
-        PhaseSucceededPO(serializePhase(phase))
-      )
-    case SagaTransactionCoordinator.PhaseFailed(phase) =>
-      SagaTransactionCoordinatorEventPO.Event.PhaseFailed(
-        PhaseFailedPO(serializePhase(phase))
-      )
-    case SagaTransactionCoordinator.TransactionCompleted(transactionId) =>
-      SagaTransactionCoordinatorEventPO.Event.TransactionCompleted(
-        TransactionCompletedPO(transactionId)
-      )
-    case SagaTransactionCoordinator.TransactionFailed(transactionId, reason) =>
-      SagaTransactionCoordinatorEventPO.Event.TransactionFailed(
-        TransactionFailedPO(transactionId, reason)
-      )
-  }
+  override def manifest(event: SagaTransactionCoordinator.Event): String = ""
 
+  override def toJournal(e: SagaTransactionCoordinator.Event): SagaTransactionCoordinatorEventPO = {
+    val payload = e match {
+      case evt: SagaTransactionCoordinator.TransactionStarted =>
+        SagaTransactionCoordinatorEventPO.Event.Started(TransactionStartedConv.toProto(evt))
 
-  private def serializePhase(phase: SagaPhase.TransactionPhase) = {
-    phase match {
-      case PreparePhase => TransactionPhasePO.PREPARE_PHASE
-      case CommitPhase => TransactionPhasePO.COMMIT_PHASE
-      case CompensatePhase => TransactionPhasePO.COMPENSATE_PHASE
+      case evt: SagaTransactionCoordinator.PhaseSucceeded =>
+        SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(PhaseSucceededConv.toProto(evt))
+
+      case evt: SagaTransactionCoordinator.PhaseFailed =>
+        SagaTransactionCoordinatorEventPO.Event.PhaseFailed(PhaseFailedConv.toProto(evt))
+
+      case evt: SagaTransactionCoordinator.TransactionCompleted =>
+        SagaTransactionCoordinatorEventPO.Event.TransactionCompleted(TransactionCompletedConv.toProto(evt))
+
+      case evt: SagaTransactionCoordinator.TransactionFailed =>
+        SagaTransactionCoordinatorEventPO.Event.TransactionFailed(TransactionFailedConv.toProto(evt))
     }
+    SagaTransactionCoordinatorEventPO(payload)
   }
 
-  private def deserializePhase(phase: TransactionPhasePO) = phase match {
-    case TransactionPhasePO.PREPARE_PHASE => SagaPhase.PreparePhase
-    case TransactionPhasePO.COMMIT_PHASE => SagaPhase.CommitPhase
-    case TransactionPhasePO.COMPENSATE_PHASE => SagaPhase.CompensatePhase
-    case TransactionPhasePO.Unrecognized(_) =>
-      throw new IllegalArgumentException(s"Unrecognized transaction phase: $phase")
-  }
+  override def fromJournal(p: SagaTransactionCoordinatorEventPO, manifest: String): EventSeq[SagaTransactionCoordinator.Event] = {
+    p.event match {
+      case SagaTransactionCoordinatorEventPO.Event.Started(po) =>
+        EventSeq.single(TransactionStartedConv.fromProto(po))
 
-  override def manifest(event: SagaTransactionCoordinator.Event): String = event.getClass.getName
+      case SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(po) =>
+        EventSeq.single(PhaseSucceededConv.fromProto(po))
 
-  override def fromJournal(p: SagaTransactionCoordinatorEventPO.Event, manifest: String): EventSeq[SagaTransactionCoordinator.Event] = {
-    val event = p match {
-      case SagaTransactionCoordinatorEventPO.Event.Started(TransactionStartedPO(transactionId, steps, _)) =>
-        SagaTransactionCoordinator.TransactionStarted(
-          transactionId,
-          steps.map(SagaStepConv.fromProto).toList
-        )
-      case SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(PhaseSucceededPO(phase, _)) =>
-        SagaTransactionCoordinator.PhaseSucceeded(
-          deserializePhase(phase)
-        )
-      case SagaTransactionCoordinatorEventPO.Event.PhaseFailed(PhaseFailedPO(phase, _)) =>
-        SagaTransactionCoordinator.PhaseFailed(
-          deserializePhase(phase)
-        )
-      case SagaTransactionCoordinatorEventPO.Event.TransactionCompleted(TransactionCompletedPO(transactionId, _)) =>
-        SagaTransactionCoordinator.TransactionCompleted(transactionId)
-      case SagaTransactionCoordinatorEventPO.Event.TransactionFailed(TransactionFailedPO(transactionId, reason, _)) =>
-        SagaTransactionCoordinator.TransactionFailed(transactionId, reason)
+      case SagaTransactionCoordinatorEventPO.Event.PhaseFailed(po) =>
+        EventSeq.single(PhaseFailedConv.fromProto(po))
+
+      case SagaTransactionCoordinatorEventPO.Event.TransactionCompleted(po) =>
+        EventSeq.single(TransactionCompletedConv.fromProto(po))
+
+      case SagaTransactionCoordinatorEventPO.Event.TransactionFailed(po) =>
+        EventSeq.single(TransactionFailedConv.fromProto(po))
+
       case _ =>
-        throw new IllegalArgumentException(s"Unrecognized event: $p")
+        EventSeq.empty
     }
-    EventSeq.single(event)
   }
 
 }

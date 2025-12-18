@@ -6,8 +6,11 @@ import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
+import net.imadz.common.serialization.SerializationExtension
+import net.imadz.infrastructure.persistence.strategies.TransactionSerializationStrategies
 
 import javax.inject.{Inject, Singleton}
+import scala.concurrent.ExecutionContext
 
 /**
  * ApplicationBootstrap: 系统的总启动入口。
@@ -28,6 +31,12 @@ class ApplicationBootstrap @Inject()(
 
   // 转换为 Typed ActorSystem
   private implicit val system: ActorSystem[Nothing] = classicSystem.toTyped
+  private implicit val exec: ExecutionContext = system.executionContext
+  val serializationExtension: SerializationExtension = SerializationExtension(classicSystem.asInstanceOf[ExtendedActorSystem])
+  // 2. 注册您的业务策略 (这一步就是"挂号")
+  serializationExtension.registerStrategy(TransactionSerializationStrategies.FromAccountStrategy(creditBalanceRepository))
+  serializationExtension.registerStrategy(TransactionSerializationStrategies.ToAccountStrategy(creditBalanceRepository))
+
 
   // --- 1. 初始化标准聚合根 (CreditBalance) ---
   // 来自 CreditBalanceBootstrap
@@ -35,7 +44,7 @@ class ApplicationBootstrap @Inject()(
 
   // --- 2. 初始化 Saga 引擎 (Coordinator) ---
   // 来自 SagaTransactionCoordinatorBootstrap
-  initSagaTransactionCoordinatorAggregate(sharding)
+  initSagaTransactionCoordinatorAggregate(sharding, classicSystem.asInstanceOf[ExtendedActorSystem])
 
   // --- 3. 初始化 Saga 业务聚合根 (MoneyTransferTransaction) ---
   // 来自 TransactionBootstrap

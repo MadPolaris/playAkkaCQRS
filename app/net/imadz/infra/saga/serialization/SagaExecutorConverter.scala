@@ -4,7 +4,7 @@ import akka.actor.ExtendedActorSystem
 import akka.serialization.Serializers
 import com.google.protobuf.ByteString
 import net.imadz.common.CommonTypes.iMadzError
-import net.imadz.common.serialization.{PrimitiveConverter, SerializationExtensionImpl}
+import net.imadz.common.serialization.{PrimitiveConverter, SerializationExtension}
 import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException}
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.StepExecutor.{Event, ExecutionStarted, OperationFailed, RetryScheduled}
@@ -16,8 +16,8 @@ import scala.concurrent.duration._
 trait SagaExecutorConverter extends PrimitiveConverter {
   def system: ExtendedActorSystem
 
-  protected val serialization = akka.serialization.SerializationExtension(system)
-  protected val extension = new SerializationExtensionImpl(system)
+  protected lazy val serialization = akka.serialization.SerializationExtension(system)
+  protected lazy val extension = SerializationExtension(system)
 
   object RetryScheduledConv extends ProtoConverter[RetryScheduled, RetryScheduledPO] {
     override def toProto(domain: RetryScheduled): RetryScheduledPO = RetryScheduledPO(

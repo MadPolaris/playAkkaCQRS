@@ -1,5 +1,6 @@
 package net.imadz.infra.saga
 
+import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.pattern.CircuitBreaker
@@ -9,6 +10,7 @@ import net.imadz.common.CborSerializable
 import net.imadz.infra.saga.SagaParticipant.{RetryableOrNotException, SagaResult}
 import net.imadz.infra.saga.SagaPhase.TransactionPhase
 import net.imadz.infra.saga.handlers.{StepExecutorCommandHandler, StepExecutorEventHandler, StepExecutorRecoveryHandler}
+import net.imadz.infra.saga.persistence.StepExecutorEventAdapter
 
 import scala.concurrent.duration._
 
@@ -98,7 +100,7 @@ object StepExecutor {
   // @formatter:on
 
 
-  def apply[E, R](persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings): Behavior[Command] = {
+  def apply[E, R](persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings, extendedSystem: ExtendedActorSystem): Behavior[Command] = {
     Behaviors.setup { context =>
       Behaviors.withTimers { timers =>
 
@@ -114,7 +116,7 @@ object StepExecutor {
           emptyState = State[E, R](),
           commandHandler = StepExecutorCommandHandler.commandHandler[E, R](context, timers, defaultMaxRetries, initialRetryDelay, circuitBreaker),
           eventHandler = StepExecutorEventHandler.eventHandler[E, R]
-        ).receiveSignal {
+        ).eventAdapter(new StepExecutorEventAdapter(extendedSystem)).receiveSignal {
           case (state, RecoveryCompleted) =>
             StepExecutorRecoveryHandler.onRecoveryCompleted[E, R](context, state)
         }

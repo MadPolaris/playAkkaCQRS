@@ -2,6 +2,7 @@ package net.imadz.modules // [Fix] 修正为与目录结构一致
 
 import akka.actor.{ActorSystem, ExtendedActorSystem}
 import com.google.inject.{AbstractModule, Provides}
+import net.imadz.common.serialization.{SerializationExtension, SerializationExtensionImpl}
 import net.imadz.infrastructure.bootstrap.ApplicationBootstrap
 
 class BootstrapModule extends AbstractModule {
@@ -13,4 +14,6 @@ class BootstrapModule extends AbstractModule {
   @Provides
   def provideExtendedSystem(system: ActorSystem): ExtendedActorSystem =
     system.asInstanceOf[ExtendedActorSystem]
+
+
 }

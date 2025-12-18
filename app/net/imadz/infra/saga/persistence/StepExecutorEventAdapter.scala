@@ -15,7 +15,7 @@ import net.imadz.infra.saga.serialization.SagaExecutorConverter
  * 3. 使用 Akka Serialization 处理泛型 Result
  * 4. 使用 SerializationExtension 处理 Participant 多态
  */
-class ExecutorExecutorEventAdapter(override val system: ExtendedActorSystem)
+class StepExecutorEventAdapter(override val system: ExtendedActorSystem)
   extends EventAdapter[Event, StepExecutorEventPO]
     with SagaExecutorConverter {
 
