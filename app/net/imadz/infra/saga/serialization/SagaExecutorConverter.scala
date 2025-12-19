@@ -3,7 +3,6 @@ package net.imadz.infra.saga.serialization
 import akka.actor.ExtendedActorSystem
 import akka.serialization.Serializers
 import com.google.protobuf.ByteString
-import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.common.serialization.{PrimitiveConverter, SerializationExtension}
 import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException}
 import net.imadz.infra.saga.SagaPhase._
@@ -125,17 +124,17 @@ trait SagaExecutorConverter extends PrimitiveConverter {
       )
     }
 
-    def fromProto(stepPO: SagaTransactionStepPO): SagaTransactionStep[iMadzError, String, Any] = {
+    def fromProto(stepPO: SagaTransactionStepPO): SagaTransactionStep[Any, Any, Any] = {
       val genericParticipant = stepPO.participant.getOrElse(throw new IllegalArgumentException("Missing participant"))
 
       // 1. 找策略
       val strategy = extension.strategyFor(genericParticipant.typeName)
       // 2. 转对象
       val participant = strategy.fromBinary(genericParticipant.payload.toByteArray)
-        .asInstanceOf[SagaParticipant[iMadzError, String, Any]]
+        .asInstanceOf[SagaParticipant[Any, Any, Any]]
 
       // 3. 组装 Step
-      SagaTransactionStep[iMadzError, String, Any](
+      SagaTransactionStep[Any, Any, Any](
         stepId = stepPO.stepId,
         phase = stepPO.phase match {
           case TransactionPhasePO.PREPARE_PHASE => PreparePhase

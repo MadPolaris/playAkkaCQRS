@@ -6,6 +6,7 @@ import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
+import net.imadz.application.services.MoneyTransferService
 import net.imadz.application.services.transactor.MoneyTransferContext
 import net.imadz.common.serialization.SerializationExtension
 import net.imadz.infrastructure.persistence.strategies.TransactionSerializationStrategies
@@ -45,11 +46,18 @@ class ApplicationBootstrap @Inject()(
 
   // --- 2. 初始化 Saga 引擎 (Coordinator) ---
   // 来自 SagaTransactionCoordinatorBootstrap
-  initSagaTransactionCoordinatorAggregate[MoneyTransferContext](sharding, MoneyTransferContext(creditBalanceRepository), classicSystem.asInstanceOf[ExtendedActorSystem])
+  initSagaTransactionCoordinatorAggregate[MoneyTransferContext](
+    sharding = sharding,
+    context = MoneyTransferContext(creditBalanceRepository),
+    entityTypeKey = MoneyTransferService.moneyTransferCoordinatorKey,
+    system = classicSystem.asInstanceOf[ExtendedActorSystem])
 
   // --- 3. 初始化 Saga 业务聚合根 (MoneyTransferTransaction) ---
   // 来自 TransactionBootstrap
-  initTransactionAggregate(system, sharding, creditBalanceRepository)
+  initTransactionAggregate(
+    coordinatorEntityKey = MoneyTransferService.moneyTransferCoordinatorKey,
+    sharding = sharding,
+    repository = creditBalanceRepository)
 
   // --- 4. 初始化投影 (Projection) ---
   // 来自 MonthlyIncomeAndExpenseBootstrap
