@@ -20,7 +20,7 @@ class SagaTransactionStepSerializer(override val system: ExtendedActorSystem)
   override def includeManifest: Boolean = false
 
   def toBinary(o: AnyRef): Array[Byte] = o match {
-    case step: SagaTransactionStep[_, _] => SagaStepConv.toProto(step).toByteArray
+    case step: SagaTransactionStep[_, _, _] => SagaStepConv.toProto(step).toByteArray
     case _ => throw new IllegalArgumentException(s"Cannot serialize object of type ${o.getClass}")
   }
 

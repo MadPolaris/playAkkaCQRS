@@ -46,7 +46,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
   ).withFallback(EventSourcedBehaviorTestKit.config)
 ) with AnyWordSpecLike with BeforeAndAfterEach with LogCapturing {
 
-  private def createEventSourcedTestKit(stepExecutorCreator: (String, SagaTransactionStep[_, _]) => ActorRef[StepExecutor.Command]) = {
+  private def createEventSourcedTestKit(stepExecutorCreator: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command]) = {
     EventSourcedBehaviorTestKit[
       SagaTransactionCoordinator.Command,
       SagaTransactionCoordinator.Event,
@@ -60,10 +60,10 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
     )
   }
 
-  private def createSuccessfulStepExecutor[E, R](): ActorRef[StepExecutor.Command] = {
+  private def createSuccessfulStepExecutor[E, R, C](): ActorRef[StepExecutor.Command] = {
     spawn(Behaviors.receiveMessage[StepExecutor.Command] {
-      case StepExecutor.Start(transactionId, step, replyTo: Option[ActorRef[StepResult[E, R]]]) =>
-        replyTo.foreach(_ ! StepExecutor.StepCompleted[E, R](step.stepId, SagaResult.empty[R](), StepExecutor.State()))
+      case StepExecutor.Start(transactionId, step, replyTo: Option[ActorRef[StepResult[E, R, C]]]) =>
+        replyTo.foreach(_ ! StepExecutor.StepCompleted[E, R, C](step.stepId, SagaResult.empty[R](), StepExecutor.State()))
         Behaviors.same
     })
   }

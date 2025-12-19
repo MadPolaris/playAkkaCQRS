@@ -39,9 +39,9 @@ trait SagaExecutorConverter extends PrimitiveConverter {
     }
   }
 
-  object ExecutionStartedConv extends ProtoConverter[ExecutionStarted[_, _], ExecutionStartedPO] {
+  object ExecutionStartedConv extends ProtoConverter[ExecutionStarted[_, _, _], ExecutionStartedPO] {
 
-    override def toProto(domain: ExecutionStarted[_, _]): ExecutionStartedPO = {
+    override def toProto(domain: ExecutionStarted[_, _, _]): ExecutionStartedPO = {
       ExecutionStartedPO(
         transactionId = domain.transactionId,
         transactionStep = Some(SagaStepConv.toProto(domain.transactionStep)), // 调用 Trait
@@ -49,7 +49,7 @@ trait SagaExecutorConverter extends PrimitiveConverter {
       )
     }
 
-    override def fromProto(proto: ExecutionStartedPO): ExecutionStarted[_, _] = {
+    override def fromProto(proto: ExecutionStartedPO): ExecutionStarted[_, _, _] = {
       ExecutionStarted(
         transactionId = proto.transactionId,
         transactionStep = proto.transactionStep
@@ -100,9 +100,9 @@ trait SagaExecutorConverter extends PrimitiveConverter {
     }
   }
 
-  object SagaStepConv extends ProtoConverter[SagaTransactionStep[_, _], SagaTransactionStepPO] {
+  object SagaStepConv extends ProtoConverter[SagaTransactionStep[_, _, _], SagaTransactionStepPO] {
 
-    def toProto(step: SagaTransactionStep[_, _]): SagaTransactionStepPO = {
+    def toProto(step: SagaTransactionStep[_, _, _]): SagaTransactionStepPO = {
       // 1. 找策略
       val strategy = extension.strategyFor(step.participant.getClass)
       // 2. 转字节
@@ -125,17 +125,17 @@ trait SagaExecutorConverter extends PrimitiveConverter {
       )
     }
 
-    def fromProto(stepPO: SagaTransactionStepPO): SagaTransactionStep[iMadzError, String] = {
+    def fromProto(stepPO: SagaTransactionStepPO): SagaTransactionStep[iMadzError, String, Any] = {
       val genericParticipant = stepPO.participant.getOrElse(throw new IllegalArgumentException("Missing participant"))
 
       // 1. 找策略
       val strategy = extension.strategyFor(genericParticipant.typeName)
       // 2. 转对象
       val participant = strategy.fromBinary(genericParticipant.payload.toByteArray)
-        .asInstanceOf[SagaParticipant[iMadzError, String]]
+        .asInstanceOf[SagaParticipant[iMadzError, String, Any]]
 
       // 3. 组装 Step
-      SagaTransactionStep[iMadzError, String](
+      SagaTransactionStep[iMadzError, String, Any](
         stepId = stepPO.stepId,
         phase = stepPO.phase match {
           case TransactionPhasePO.PREPARE_PHASE => PreparePhase

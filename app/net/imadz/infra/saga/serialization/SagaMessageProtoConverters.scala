@@ -16,7 +16,7 @@ trait SagaMessageProtoConverters extends SagaExecutorConverter {
 
   object OperationResponseConv {
 
-    def toProto(domain: OperationResponse[_, _]): OperationResponseCommandPO = {
+    def toProto(domain: OperationResponse[_, _, _]): OperationResponseCommandPO = {
       val resultOneOf = domain.result match {
         case Right(result) =>
           // 序列化泛型结果 R
@@ -42,7 +42,7 @@ trait SagaMessageProtoConverters extends SagaExecutorConverter {
       OperationResponseCommandPO(result = resultOneOf)
     }
 
-    def fromProto(wrapper: OperationResponseCommandPO): OperationResponse[Any, Any] = {
+    def fromProto(wrapper: OperationResponseCommandPO): OperationResponse[Any, Any, Any] = {
       wrapper.result match {
         case Succeed(p) => // p 是 OperationSucceedCommandPO
           val result = if (p.success.isEmpty) null else {

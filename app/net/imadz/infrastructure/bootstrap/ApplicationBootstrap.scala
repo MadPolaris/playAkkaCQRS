@@ -44,7 +44,7 @@ class ApplicationBootstrap @Inject()(
 
   // --- 2. 初始化 Saga 引擎 (Coordinator) ---
   // 来自 SagaTransactionCoordinatorBootstrap
-  initSagaTransactionCoordinatorAggregate(sharding, classicSystem.asInstanceOf[ExtendedActorSystem])
+  initSagaTransactionCoordinatorAggregate[CreditBalanceRepository](sharding, creditBalanceRepository, classicSystem.asInstanceOf[ExtendedActorSystem])
 
   // --- 3. 初始化 Saga 业务聚合根 (MoneyTransferTransaction) ---
   // 来自 TransactionBootstrap

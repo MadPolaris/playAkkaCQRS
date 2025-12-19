@@ -3,19 +3,19 @@ package net.imadz.infra.saga.handlers
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.adapter.ClassicActorRefOps
-import net.imadz.infra.saga.StepExecutor._
 import net.imadz.infra.saga.SagaParticipant._
+import net.imadz.infra.saga.StepExecutor._
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
 object StepExecutorRecoveryHandler {
-  def onRecoveryCompleted[E, R](context: ActorContext[Command], state: State[E, R]): Unit = {
+  def onRecoveryCompleted[E, R, C](context: ActorContext[Command], state: State[E, R, C]): Unit = {
 
     val replyTo = state
       .replyTo.map(context.system.classicSystem.actorSelection)
       .map(_.resolveOne(3.seconds))
-      .map(futureRef => Await.result(futureRef, 3.seconds).toTyped.asInstanceOf[ActorRef[StepResult[E, R]]])
+      .map(futureRef => Await.result(futureRef, 3.seconds).toTyped.asInstanceOf[ActorRef[StepResult[E, R, C]]])
 
     context.log.info(s"SAGA Transaction Step is Recovered on ${state}")
     state.status match {

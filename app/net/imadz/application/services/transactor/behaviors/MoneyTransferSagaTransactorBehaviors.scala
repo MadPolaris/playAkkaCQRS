@@ -82,7 +82,7 @@ object MoneyTransferSagaTransactorBehaviors {
           implicit val timeout: Timeout = 30.seconds
 
           context.ask(coordinator, (ref: ActorRef[TransactionResult]) =>
-            StartTransaction[iMadzError, String](transactionId, steps, Some(ref))
+            StartTransaction[iMadzError, String, CreditBalanceRepository](transactionId, steps, Some(ref))
           ) {
             case scala.util.Success(result) =>
               UpdateMoneyTransferTransactionStatus(Id.of(transactionId), result, cmd.replyTo)
@@ -117,25 +117,25 @@ object MoneyTransferSagaTransactorBehaviors {
   }
 
   // --- Automatic Steps Generation (TCC Pattern) ---
-  private def createSteps(from: Id, to: Id, amount: Money, repo: CreditBalanceRepository)(implicit ec: ExecutionContext): List[SagaTransactionStep[iMadzError, String]] = {
+  private def createSteps(from: Id, to: Id, amount: Money, repo: CreditBalanceRepository)(implicit ec: ExecutionContext): List[SagaTransactionStep[iMadzError, String, CreditBalanceRepository]] = {
 
     // 1. 实例化参与者
-    val fromPart = new FromAccountParticipant(from, amount, repo)
+    val fromPart = new FromAccountParticipant(from, amount)
     val toPart = new ToAccountParticipant(to, amount, repo)
 
     // 2. 编排 TCC 步骤
     List(
       // Step 1: Prepare (Reserve)
-      SagaTransactionStep("reserve-from", PreparePhase, fromPart, maxRetries = 5),
-      SagaTransactionStep("record-to", PreparePhase, toPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("reserve-from", PreparePhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("record-to", PreparePhase, toPart, maxRetries = 5),
 
       // Step 2: Commit
-      SagaTransactionStep("commit-from", CommitPhase, fromPart, maxRetries = 5),
-      SagaTransactionStep("commit-to", CommitPhase, toPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("commit-from", CommitPhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("commit-to", CommitPhase, toPart, maxRetries = 5),
 
       // Step 3: Compensate
-      SagaTransactionStep("compensate-from", CompensatePhase, fromPart, maxRetries = 5),
-      SagaTransactionStep("compensate-to", CompensatePhase, toPart, maxRetries = 5)
+      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("compensate-from", CompensatePhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("compensate-to", CompensatePhase, toPart, maxRetries = 5)
     )
   }
 }

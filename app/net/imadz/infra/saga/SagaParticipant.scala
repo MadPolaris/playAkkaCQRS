@@ -35,24 +35,24 @@ object SagaParticipant {
 
 }
 
-trait SagaParticipant[E, R] {
+trait SagaParticipant[E, R, C] {
 
   protected def logger: Logger = LoggerFactory.getLogger(getClass)
 
-  protected def doPrepare(transactionId: String): ParticipantEffect[E, R]
+  protected def doPrepare(transactionId: String, context: C): ParticipantEffect[E, R]
 
-  protected def doCommit(transactionId: String): ParticipantEffect[E, R]
+  protected def doCommit(transactionId: String, context: C): ParticipantEffect[E, R]
 
-  protected def doCompensate(transactionId: String): ParticipantEffect[E, R]
+  protected def doCompensate(transactionId: String, context: C): ParticipantEffect[E, R]
 
-  def prepare(transactionId: String)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
-    executeWithRetryClassification(doPrepare(transactionId))
+  def prepare(transactionId: String, context: C)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
+    executeWithRetryClassification(doPrepare(transactionId, context))
 
-  def commit(transactionId: String)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
-    executeWithRetryClassification(doCommit(transactionId))
+  def commit(transactionId: String, context: C)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
+    executeWithRetryClassification(doCommit(transactionId, context))
 
-  def compensate(transactionId: String)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
-    executeWithRetryClassification(doCompensate(transactionId))
+  def compensate(transactionId: String, context: C)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
+    executeWithRetryClassification(doCompensate(transactionId, context))
 
   private def executeWithRetryClassification(
                                               operation: => ParticipantEffect[E, R]
