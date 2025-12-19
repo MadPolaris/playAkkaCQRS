@@ -3,12 +3,8 @@ package net.imadz.infrastructure.bootstrap
 import akka.actor.typed.{ActorSystem, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityContext}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
-import net.imadz.application.services.transactor.MoneyTransferSagaTransactor
-import net.imadz.common.serialization.SerializationExtension
+import net.imadz.application.services.transactor.{MoneyTransferContext, MoneyTransferSagaTransactor}
 import net.imadz.infra.saga.SagaTransactionCoordinator
-import net.imadz.infrastructure.persistence.strategies.TransactionSerializationStrategies
-
-import scala.concurrent.ExecutionContext.Implicits.global
 
 trait TransactionBootstrap {
   // [修改] 增加了 system 参数
@@ -19,7 +15,7 @@ trait TransactionBootstrap {
       val coordinator = sharding.entityRefFor(SagaTransactionCoordinator.entityTypeKey, transactionId)
 
       // [修改] 使用 system.executionContext
-      MoneyTransferSagaTransactor.apply(transactionId, coordinator, repository)
+      MoneyTransferSagaTransactor.apply(transactionId, coordinator, MoneyTransferContext(repository))
     }
 
     sharding.init(Entity(MoneyTransferSagaTransactor.entityTypeKey)(behaviorFactory))

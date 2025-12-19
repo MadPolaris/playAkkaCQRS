@@ -32,8 +32,7 @@ trait SagaProtoConverters extends CreditBalanceProtoConverters {
     override def fromProto(proto: ToAccountParticipantPO): ToAccountParticipant = proto.amount.map(amount => {
       ToAccountParticipant(
         toUserId = IdConv.fromProto(proto.toUserId),
-        amount = MoneyConv.fromProto(amount),
-        repo = repository
+        amount = MoneyConv.fromProto(amount)
       )
     }).getOrElse(throw new IllegalArgumentException(s"ToAccountParticipantPO should have amount property value, but is ${proto.amount}"))
   }

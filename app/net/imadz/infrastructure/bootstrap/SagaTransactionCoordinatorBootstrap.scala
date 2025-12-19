@@ -54,7 +54,7 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
   private def createStepExecutor[C](actorContext: ActorContext[SagaTransactionCoordinator.Command],
                                  context: C, key: String, extendedActorSystem: ExtendedActorSystem): ActorRef[StepExecutor.Command] = {
     actorContext.spawn(
-      StepExecutor[Any, Any, Any](
+      StepExecutor[Any, Any, C](
         PersistenceId.ofUniqueId(key),
         context,
         defaultMaxRetries = 5,

@@ -4,7 +4,6 @@ package net.imadz.application.services.transactor
 import akka.util.Timeout
 import net.imadz.application.aggregates.CreditBalanceAggregate
 import net.imadz.application.aggregates.CreditBalanceAggregate._
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
@@ -14,40 +13,40 @@ import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, ParticipantEff
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-case class ToAccountParticipant(toUserId: Id, amount: Money, repo: CreditBalanceRepository)(implicit ec: ExecutionContext) extends SagaParticipant[iMadzError, String, CreditBalanceRepository] {
+case class ToAccountParticipant(toUserId: Id, amount: Money)(implicit ec: ExecutionContext) extends SagaParticipant[iMadzError, String, MoneyTransferContext] {
 
   implicit val timeout: Timeout = 5.seconds
 
-  override protected def doPrepare(transactionId: String, context: CreditBalanceRepository): ParticipantEffect[iMadzError, String] = {
-    val toAccountRef = context.findCreditBalanceByUserId(toUserId)
+  override protected def doPrepare(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+    val toAccountRef = context.repository.findCreditBalanceByUserId(toUserId)
 
     toAccountRef.ask(CreditBalanceAggregate.RecordIncomingCredits(Id.of(transactionId), amount, _))
       .mapTo[RecordIncomingCreditsConfirmation]
       .map(confirmation => {
-        confirmation.error.map(Left.apply)
-          .getOrElse(Right(SagaResult(confirmation.transferId.toString)))
+        confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
+          .getOrElse(Right(SagaResult[String](confirmation.transferId.toString)))
       })
   }
 
 
-  override protected def doCommit(transactionId: String, context: CreditBalanceRepository): ParticipantEffect[iMadzError, String] = {
-    val toAccountRef = context.findCreditBalanceByUserId(toUserId)
+  override protected def doCommit(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+    val toAccountRef = context.repository.findCreditBalanceByUserId(toUserId)
 
     toAccountRef.ask(CreditBalanceAggregate.CommitIncomingCredits(Id.of(transactionId), _))
       .mapTo[CommitIncomingCreditsConfirmation]
       .map(confirmation => {
-        confirmation.error.map(Left.apply)
+        confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
           .getOrElse(Right(SagaResult(confirmation.transferId.toString)))
       })
   }
 
-  override def doCompensate(transactionId: String, context: CreditBalanceRepository): ParticipantEffect[iMadzError, String] = {
-    val toAccountRef = context.findCreditBalanceByUserId(toUserId)
+  override def doCompensate(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+    val toAccountRef = context.repository.findCreditBalanceByUserId(toUserId)
 
     toAccountRef.ask(CreditBalanceAggregate.CancelIncomingCredit(Id.of(transactionId), _))
       .mapTo[CancelIncomingCreditConfirmation]
       .map(confirmation => {
-        confirmation.error.map(Left.apply)
+        confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
           .getOrElse(Right(SagaResult(confirmation.transferId.toString)))
       })
   }

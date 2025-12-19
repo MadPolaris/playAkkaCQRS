@@ -5,9 +5,8 @@ import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, RetentionCriteria}
 import akka.util.Timeout
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.services.transactor.MoneyTransferSagaTransactor._
-import net.imadz.application.services.transactor.{FromAccountParticipant, ToAccountParticipant}
+import net.imadz.application.services.transactor.{FromAccountParticipant, MoneyTransferContext, ToAccountParticipant}
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.entities.MoneyTransferTransactionEntity._
@@ -26,7 +25,7 @@ object MoneyTransferSagaTransactorBehaviors {
   def apply(
              id: String,
              coordinator: EntityRef[net.imadz.infra.saga.SagaTransactionCoordinator.Command],
-             repository: CreditBalanceRepository
+             moneyTransferContext: MoneyTransferContext
            ): Behavior[MoneyTransferTransactionCommand] = {
 
     akka.actor.typed.scaladsl.Behaviors.setup { context =>
@@ -38,7 +37,7 @@ object MoneyTransferSagaTransactorBehaviors {
 
         commandHandler = (state, command) => command match {
           case cmd: InitiateMoneyTransferTransaction =>
-            initiateHandler(state, cmd, coordinator, repository, context, id)
+            initiateHandler(state, cmd, coordinator, moneyTransferContext, context, id)
 
           case cmd: UpdateMoneyTransferTransactionStatus =>
             updateStatusHandler(state, cmd)
@@ -59,7 +58,7 @@ object MoneyTransferSagaTransactorBehaviors {
                                state: MoneyTransferTransactionState,
                                cmd: InitiateMoneyTransferTransaction,
                                coordinator: EntityRef[net.imadz.infra.saga.SagaTransactionCoordinator.Command],
-                               repository: CreditBalanceRepository,
+                               moneyTransferContext: MoneyTransferContext,
                                context: akka.actor.typed.scaladsl.ActorContext[MoneyTransferTransactionCommand],
                                id: String
                              )(implicit ec: ExecutionContext): Effect[MoneyTransferTransactionEvent, MoneyTransferTransactionState] = {
@@ -76,13 +75,13 @@ object MoneyTransferSagaTransactorBehaviors {
         // 校验成功，持久化 Initiated 事件
         Effect.persist(events).thenRun { _ =>
           // 2. [副作用] 自动生成 Steps 并调用 Coordinator
-          val steps = createSteps(cmd.fromUserId, cmd.toUserId, cmd.amount, repository)
+          val steps = createSteps(cmd.fromUserId, cmd.toUserId, cmd.amount)
           val transactionId = state.id.getOrElse(id) // 使用 PersistenceId 作为 TxId
 
           implicit val timeout: Timeout = 30.seconds
 
           context.ask(coordinator, (ref: ActorRef[TransactionResult]) =>
-            StartTransaction[iMadzError, String, CreditBalanceRepository](transactionId, steps, Some(ref))
+            StartTransaction[iMadzError, String, MoneyTransferContext](transactionId, steps, Some(ref))
           ) {
             case scala.util.Success(result) =>
               UpdateMoneyTransferTransactionStatus(Id.of(transactionId), result, cmd.replyTo)
@@ -117,25 +116,25 @@ object MoneyTransferSagaTransactorBehaviors {
   }
 
   // --- Automatic Steps Generation (TCC Pattern) ---
-  private def createSteps(from: Id, to: Id, amount: Money, repo: CreditBalanceRepository)(implicit ec: ExecutionContext): List[SagaTransactionStep[iMadzError, String, CreditBalanceRepository]] = {
+  private def createSteps(from: Id, to: Id, amount: Money)(implicit ec: ExecutionContext): List[SagaTransactionStep[iMadzError, String, MoneyTransferContext]] = {
 
     // 1. 实例化参与者
     val fromPart = new FromAccountParticipant(from, amount)
-    val toPart = new ToAccountParticipant(to, amount, repo)
+    val toPart = new ToAccountParticipant(to, amount)
 
     // 2. 编排 TCC 步骤
     List(
       // Step 1: Prepare (Reserve)
-      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("reserve-from", PreparePhase, fromPart, maxRetries = 5),
-      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("record-to", PreparePhase, toPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("reserve-from", PreparePhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("record-to", PreparePhase, toPart, maxRetries = 5),
 
       // Step 2: Commit
-      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("commit-from", CommitPhase, fromPart, maxRetries = 5),
-      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("commit-to", CommitPhase, toPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-from", CommitPhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-to", CommitPhase, toPart, maxRetries = 5),
 
       // Step 3: Compensate
-      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("compensate-from", CompensatePhase, fromPart, maxRetries = 5),
-      SagaTransactionStep[iMadzError, String, CreditBalanceRepository]("compensate-to", CompensatePhase, toPart, maxRetries = 5)
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-from", CompensatePhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-to", CompensatePhase, toPart, maxRetries = 5)
     )
   }
 }

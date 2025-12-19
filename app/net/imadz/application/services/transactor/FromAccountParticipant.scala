@@ -4,7 +4,6 @@ package net.imadz.application.services.transactor
 import akka.util.Timeout
 import net.imadz.application.aggregates.CreditBalanceAggregate
 import net.imadz.application.aggregates.CreditBalanceAggregate._
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
@@ -14,12 +13,12 @@ import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, ParticipantEff
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: ExecutionContext) extends SagaParticipant[iMadzError, String, CreditBalanceRepository] {
+case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: ExecutionContext) extends SagaParticipant[iMadzError, String, MoneyTransferContext] {
 
   implicit val timeout: Timeout = 5.seconds
 
-  override def doPrepare(transactionId: String, repo: CreditBalanceRepository): ParticipantEffect[iMadzError, String] = {
-    val fromAccountRef = repo.findCreditBalanceByUserId(fromUserId)
+  override def doPrepare(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+    val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
     fromAccountRef.ask(CreditBalanceAggregate.ReserveFunds(Id.of(transactionId), amount, _))
       .mapTo[FundsReservationConfirmation]
       .map(confirmation => {
@@ -28,8 +27,8 @@ case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: Ex
       })
   }
 
-  override def doCommit(transactionId: String, repo: CreditBalanceRepository): ParticipantEffect[iMadzError, String] = {
-    val fromAccountRef = repo.findCreditBalanceByUserId(fromUserId)
+  override def doCommit(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+    val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
 
     fromAccountRef.ask(CreditBalanceAggregate.DeductFunds(Id.of(transactionId), _))
       .mapTo[FundsDeductionConfirmation]
@@ -39,8 +38,8 @@ case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: Ex
       })
   }
 
-  override def doCompensate(transactionId: String, repo: CreditBalanceRepository): ParticipantEffect[iMadzError, String] = {
-    val fromAccountRef = repo.findCreditBalanceByUserId(fromUserId)
+  override def doCompensate(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+    val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
     fromAccountRef.ask(CreditBalanceAggregate.ReleaseReservedFunds(Id.of(transactionId), _))
       .mapTo[FundsReleaseConfirmation]
       .map(confirmation => {

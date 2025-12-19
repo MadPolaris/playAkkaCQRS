@@ -2,7 +2,6 @@ package net.imadz.application.services.transactor
 
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{EntityRef, EntityTypeKey}
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.services.transactor.behaviors.MoneyTransferSagaTransactorBehaviors
 import net.imadz.common.CborSerializable
 import net.imadz.common.CommonTypes.Id
@@ -48,9 +47,9 @@ object MoneyTransferSagaTransactor {
   def apply(
              id: String,
              coordinator: EntityRef[SagaTransactionCoordinator.Command],
-             repository: CreditBalanceRepository
+             moneyTransferContext: MoneyTransferContext
            ): Behavior[MoneyTransferTransactionCommand] = {
     // 委托给分离的行为对象
-    MoneyTransferSagaTransactorBehaviors.apply(id, coordinator, repository)
+    MoneyTransferSagaTransactorBehaviors.apply(id, coordinator, moneyTransferContext)
   }
 }
