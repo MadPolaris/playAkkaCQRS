@@ -36,27 +36,17 @@ class HomeController @Inject()(
                                 val monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
                                 val creditBalanceRepository: CreditBalanceRepository,
                                 val transactionRepository: MoneyTransferTransactionRepository,
-                                val coordinatorRepository: TransactionCoordinatorRepository,
                                 val getBalanceQuery: GetBalanceQuery,
-                                val createService: CreateCreditBalanceService,
                                 val depositService: DepositService,
+                                val moneyTransferService: MoneyTransferService,
                                 val withdrawService: WithdrawService,
                                 val controllerComponents: ControllerComponents
-                              )(implicit executionContext: ExecutionContext) extends BaseController
-  with MonthlyIncomeAndExpenseBootstrap
-  with CreditBalanceBootstrap
-//  with TransactionBootstrap
-  with SagaTransactionCoordinatorBootstrap {
+//                                , val bootstrap: net.imadz.infrastructure.bootstrap.ApplicationBootstrap
+                              )(implicit executionContext: ExecutionContext) extends BaseController {
   val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
   ScalikeJdbcSetup.init(Adapter.toTyped(system))
 
   implicit val scheduler: Scheduler = typedSystem.scheduler
-  val moneyTransferService: MoneyTransferService = new MoneyTransferService(system.toTyped, transactionRepository)
-
-  initMonthlySummaryProjection(Adapter.toTyped(system), sharding, monthlyRepository)
-  initCreditBalanceAggregate(sharding)
-  initSagaTransactionCoordinatorAggregate(sharding, creditBalanceRepository)
-//  initTransactionAggregate(sharding, coordinatorRepository, creditBalanceRepository)
 
   /**
    * Create an Action to render an HTML page.
@@ -68,12 +58,14 @@ class HomeController @Inject()(
   def index() = Action { implicit request: Request[AnyContent] =>
     Ok(views.html.index())
   }
+
   implicit val iMadzErrorFormat: OFormat[iMadzError] = Json.format[iMadzError]
   implicit val moneyFormat: Format[Money] = new Format[Money] {
     def writes(o: Money): JsValue = Json.obj(
       "amount" -> o.amount,
       "currency" -> o.currency.getCurrencyCode
     )
+
     def reads(json: JsValue): JsResult[Money] = for {
       amount <- (json \ "amount").validate[BigDecimal]
       currencyCode <- (json \ "currency").validate[String]
@@ -102,6 +94,7 @@ class HomeController @Inject()(
       case Right(id) => Json.obj("id" -> idFormat.writes(id))
     }
   }
+
   def getBalance(userId: String): Action[AnyContent] = Action.async { implicit request =>
     getBalanceQuery.fetchBalanceByUserId(Id.of(userId)).map { balance =>
       Ok(Json.toJson(balance)) // Assuming `balance` has a proper `toString` method
@@ -131,6 +124,7 @@ class HomeController @Inject()(
   implicit val idWriter: Writes[Id] = new Writes[Id] {
     override def writes(o: Id): JsValue = JsString(o.toString)
   }
+
   def transfer(fromUserId: String, toUserId: String, amount: Double): Action[AnyContent] = Action.async { implicit request =>
     moneyTransferService.transfer(Id.of(fromUserId), Id.of(toUserId), Money(amount, Currency.getInstance("CNY"))).map { confirmation =>
       Ok(Json.toJson(confirmation))

@@ -2,69 +2,77 @@ syntax = "proto3";
 
 package net.imadz.infrastructure.proto;
 
+option java_multiple_files = true;
+
 // Define the Money type
 message MoneyPO {
   double amount = 1;
   string currency = 2;
 }
 
+// --- Events ---
+
 // Define the BalanceChanged event
-message BalanceChanged {
+message BalanceChangedPO {
   MoneyPO update = 1;
   int64 timestamp = 2;
 }
 
 // Define the FundsReserved event
-message FundsReserved {
+message FundsReservedPO {
   string transferId = 1;
   MoneyPO amount = 2;
 }
 
 // Define the FundsDeducted event
-message FundsDeducted {
+message FundsDeductedPO {
   string transferId = 1;
   MoneyPO amount = 2;
 }
 
 // Define the ReservationReleased event
-message ReservationReleased {
+message ReservationReleasedPO {
   string transferId = 1;
   MoneyPO amount = 2;
 }
 
 // Define the IncomingCreditsRecorded event
-message IncomingCreditsRecorded {
+message IncomingCreditsRecordedPO {
   string transferId = 1;
   MoneyPO amount = 2;
 }
 
 // Define the IncomingCreditsCommited event
-message IncomingCreditsCommited {
+message IncomingCreditsCommitedPO {
   string transferId = 1;
 }
 
 // Define the IncomingCreditsCanceled event
-message IncomingCreditsCanceled {
+message IncomingCreditsCanceledPO {
   string transferId = 1;
 }
+
+// --- Event Union ---
 
 // Define the CreditBalanceEvent union
 message CreditBalanceEventPO {
   oneof event {
-    BalanceChanged balanceChanged = 1;
-    FundsReserved fundsReserved = 2;
-    FundsDeducted fundsDeducted = 3;
-    ReservationReleased reservationReleased = 4;
-    IncomingCreditsRecorded incomingCreditsRecorded = 5;
-    IncomingCreditsCommited incomingCreditsCommited = 6;
-    IncomingCreditsCanceled incomingCreditsCanceled = 7;
+    BalanceChangedPO balanceChanged = 1;
+    FundsReservedPO fundsReserved = 2;
+    FundsDeductedPO fundsDeducted = 3;
+    ReservationReleasedPO reservationReleased = 4;
+    IncomingCreditsRecordedPO incomingCreditsRecorded = 5;
+    IncomingCreditsCommitedPO incomingCreditsCommited = 6;
+    IncomingCreditsCanceledPO incomingCreditsCanceled = 7;
   }
 }
 
+// --- State Snapshot ---
+
 // Define the CreditBalanceState snapshot
 message CreditBalanceStatePO {
-  string userId = 1; // UUID can be represented as a string
+  string userId = 1;
   map<string, MoneyPO> accountBalance = 2;
-  map<string, MoneyPO> reservedAmount = 3;
-  map<string, MoneyPO> incomingCredits = 4;
+  map<string, MoneyPO> reservedAmount = 3; // Key is transferId
+  map<string, MoneyPO> incomingCredits = 4; // Key is transferId
 }
