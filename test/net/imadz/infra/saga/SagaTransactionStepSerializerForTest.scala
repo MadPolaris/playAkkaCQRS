@@ -9,7 +9,7 @@ class SagaTransactionStepSerializerForTest extends Serializer {
   override def identifier: Int = 1234 // Unique identifier for this serializer
 
   override def toBinary(o: AnyRef): Array[Byte] = o match {
-    case step: SagaTransactionStep[_, _] =>
+    case step: SagaTransactionStep[_, _, _] =>
       proto.saga_v2.SagaTransactionStepPO(
         stepId = step.stepId,
         phase = step.phase match {
@@ -43,7 +43,7 @@ class SagaTransactionStepSerializerForTest extends Serializer {
     )
   }
 
-  private def createParticipant(participantType: String): SagaParticipant[_, _] = {
+  private def createParticipant(participantType: String): SagaParticipant[_, _, _] = {
     // This method should create and return the appropriate SagaParticipant based on the type
     // You'll need to implement this based on your specific participants
     participantType match {

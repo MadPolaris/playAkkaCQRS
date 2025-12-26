@@ -17,7 +17,7 @@ class SagaSerializer(override val system: ExtendedActorSystem)
   override def includeManifest: Boolean = true
 
   override def toBinary(o: AnyRef): Array[Byte] = o match {
-    case response: OperationResponse[_, _] =>
+    case response: OperationResponse[_, _, _] =>
       // 这里返回的是 GeneratedMessage (SucceededPO 或 FailedPO)
       OperationResponseConv.toProto(response).toByteArray
     case _ =>
