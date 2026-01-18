@@ -5,7 +5,7 @@ import akka.actor.typed.Scheduler
 import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.util.Timeout
-import net.imadz.application.services.transactor.MoneyTransferSagaTransactor._
+import net.imadz.application.services.transactor.MoneyTransferProtocol._
 import net.imadz.application.services.transactor.MoneyTransferTransactionRepository
 import net.imadz.common.CommonTypes.{ApplicationService, Id}
 import net.imadz.domain.values.Money
