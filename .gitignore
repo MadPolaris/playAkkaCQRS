@@ -9,3 +9,10 @@ target
 /RUNNING_PID
 /null
 /htmlReport
+*.log
+*.txt
+*.json
+*.db
+*.txt
+*.md
+.g8
