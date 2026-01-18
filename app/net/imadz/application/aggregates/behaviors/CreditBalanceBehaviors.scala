@@ -1,7 +1,7 @@
 package net.imadz.application.aggregates.behaviors
 
 import akka.persistence.typed.scaladsl.Effect
-import net.imadz.application.aggregates.CreditBalanceAggregate._
+import net.imadz.application.aggregates.CreditBalanceProtocol._
 import net.imadz.common.application.CommandHandlerReplyingBehavior.runReplyingPolicy
 import net.imadz.domain.entities.CreditBalanceEntity._
 import net.imadz.domain.policy._

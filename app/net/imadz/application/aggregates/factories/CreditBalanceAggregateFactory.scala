@@ -2,7 +2,8 @@ package net.imadz.application.aggregates.factories
 
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
 import akka.util.Timeout
-import net.imadz.application.aggregates.CreditBalanceAggregate.{AddInitial, CreditBalanceCommand, CreditBalanceConfirmation, CreditBalanceEntityTypeKey}
+import net.imadz.application.aggregates.CreditBalanceProtocol.{AddInitial, CreditBalanceCommand, CreditBalanceConfirmation}
+import net.imadz.application.aggregates.CreditBalanceAggregate.CreditBalanceEntityTypeKey
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.domain.values.Money
 
