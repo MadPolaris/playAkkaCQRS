@@ -33,14 +33,14 @@ object SagaPhase {
   }
 }
 
-case class SagaTransactionStep[E, R](
-                                      stepId: String,
-                                      phase: TransactionPhase,
-                                      participant: SagaParticipant[E, R],
-                                      maxRetries: Int = 0,
-                                      timeoutDuration: FiniteDuration = 30.seconds,
-                                      retryWhenRecoveredOngoing: Boolean = true
-                                    )
+case class SagaTransactionStep[E, R, C](
+                                         stepId: String,
+                                         phase: TransactionPhase,
+                                         participant: SagaParticipant[E, R, C],
+                                         maxRetries: Int = 0,
+                                         timeoutDuration: FiniteDuration = 30.seconds,
+                                         retryWhenRecoveredOngoing: Boolean = true
+                                       )
 
 object StepExecutor {
   // @formatter:off
@@ -49,25 +49,25 @@ object StepExecutor {
 
   // Command
   sealed trait Command extends CborSerializable
-  case class Start[E, R](transactionId: String,  sagaStep: SagaTransactionStep[E, R], replyTo: Option[ActorRef[StepResult[E, R]]]) extends Command
-  case class RecoverExecution[E, R](transactionId: String, sagaStep: SagaTransactionStep[E, R], replyTo: Option[ActorRef[StepResult[E, R]]]) extends Command
-   case class OperationResponse[E, R](result: Either[RetryableOrNotException, R], replyTo: Option[ActorRef[StepResult[E, R]]]) extends Command
-   case class RetryOperation[E, R](replyTo: Option[ActorRef[StepResult[E, R]]]) extends Command
-   case class TimedOut[E, R](replyTo: Option[ActorRef[StepResult[E, R]]]) extends Command
-  sealed trait StepResult[E, R] extends CborSerializable
-  case class StepCompleted[E,R](transactionId: String, result: SagaResult[R], state: State[E, R]) extends StepResult[E, R]
-  case class StepFailed[E, R](transactionId: String, error: E, state: State[E, R]) extends StepResult[E, R]
+  case class Start[E, R, C](transactionId: String,  sagaStep: SagaTransactionStep[E, R, C], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+  case class RecoverExecution[E, R, C](transactionId: String, sagaStep: SagaTransactionStep[E, R, C], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+   case class OperationResponse[E, R, C](result: Either[RetryableOrNotException, R], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+   case class RetryOperation[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+   case class TimedOut[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+  sealed trait StepResult[E, R, C] extends CborSerializable
+  case class StepCompleted[E,R, C](transactionId: String, result: SagaResult[R], state: State[E, R, C]) extends StepResult[E, R, C]
+  case class StepFailed[E, R, C](transactionId: String, error: E, state: State[E, R, C]) extends StepResult[E, R, C]
 
   // Events
   sealed trait Event
-  case class ExecutionStarted[E, R](transactionId: String, transactionStep: SagaTransactionStep[E, R], replyToPath: String) extends Event
+  case class ExecutionStarted[E, R, C](transactionId: String, transactionStep: SagaTransactionStep[E, R, C], replyToPath: String) extends Event
   case class OperationSucceeded[R](result: R) extends Event
   case class OperationFailed(error: RetryableOrNotException) extends Event
   case class RetryScheduled(retryCount: Int) extends Event
 
   // State
-  case class State[E, R](
-                          step: Option[SagaTransactionStep[E, R]] = None,
+  case class State[E, R, C](
+                          step: Option[SagaTransactionStep[E, R, C]] = None,
                           transactionId: Option[String] = None,
                           status: Status = Created,
                           retries: Int = 0,
@@ -100,25 +100,31 @@ object StepExecutor {
   // @formatter:on
 
 
-  def apply[E, R](persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings, extendedSystem: ExtendedActorSystem): Behavior[Command] = {
-    Behaviors.setup { context =>
+  def apply[E, R, C](
+                      persistenceId: PersistenceId,
+                      context: C,
+                      defaultMaxRetries: Int,
+                      initialRetryDelay: FiniteDuration,
+                      circuitBreakerSettings: CircuitBreakerSettings,
+                      extendedSystem: ExtendedActorSystem): Behavior[Command] = {
+    Behaviors.setup { actorContext =>
       Behaviors.withTimers { timers =>
 
         val circuitBreaker: CircuitBreaker = CircuitBreaker(
-          scheduler = context.system.classicSystem.scheduler,
+          scheduler = actorContext.system.classicSystem.scheduler,
           maxFailures = circuitBreakerSettings.maxFailures,
           callTimeout = circuitBreakerSettings.callTimeout,
           resetTimeout = circuitBreakerSettings.resetTimeout
         )
 
-        EventSourcedBehavior[Command, Event, State[E, R]](
+        EventSourcedBehavior[Command, Event, State[E, R, C]](
           persistenceId = persistenceId,
-          emptyState = State[E, R](),
-          commandHandler = StepExecutorCommandHandler.commandHandler[E, R](context, timers, defaultMaxRetries, initialRetryDelay, circuitBreaker),
-          eventHandler = StepExecutorEventHandler.eventHandler[E, R]
+          emptyState = State[E, R, C](),
+          commandHandler = StepExecutorCommandHandler.commandHandler[E, R, C](actorContext, context, timers, defaultMaxRetries, initialRetryDelay, circuitBreaker),
+          eventHandler = StepExecutorEventHandler.eventHandler[E, R, C]
         ).eventAdapter(new StepExecutorEventAdapter(extendedSystem)).receiveSignal {
           case (state, RecoveryCompleted) =>
-            StepExecutorRecoveryHandler.onRecoveryCompleted[E, R](context, state)
+            StepExecutorRecoveryHandler.onRecoveryCompleted[E, R, C](actorContext, state)
         }
       }
     }

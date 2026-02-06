@@ -1,6 +1,8 @@
 package net.imadz.application.services
 
 import akka.actor.typed.Scheduler
+import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
+import net.imadz.infra.saga.SagaTransactionCoordinator
 // [NEW] 引入适配器扩展方法 .toTyped
 import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.sharding.typed.scaladsl.EntityRef
@@ -15,6 +17,11 @@ import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 
 // [CHANGE] 构造函数注入 classicSystem: akka.actor.ActorSystem
+object MoneyTransferService {
+
+  val moneyTransferCoordinatorKey = EntityTypeKey[SagaTransactionCoordinator.Command]("Saga-MoneyTransfer")
+}
+
 class MoneyTransferService @Inject()(classicSystem: akka.actor.ActorSystem, transactionRepository: MoneyTransferTransactionRepository) extends ApplicationService {
 
   // [NEW] 手动转换为 Typed ActorSystem

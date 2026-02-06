@@ -18,13 +18,13 @@ object TransactionSerializationStrategies {
 
     private val fromConv: FromAccountParticipantConv = FromAccountParticipantConv(repository)
 
-    override def toBinary(participant: SagaParticipant[_, _]): Array[Byte] = {
+    override def toBinary(participant: SagaParticipant[_, _, _]): Array[Byte] = {
       val p = participant.asInstanceOf[FromAccountParticipant]
       fromConv.toProto(p).toByteArray
     }
 
     // [关键] 按需获取 CreditBalanceRepository
-    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _] = {
+    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _, _] = {
       val po = FromAccountParticipantPO.parseFrom(bytes)
       fromConv.fromProto(po)
     }
@@ -39,13 +39,13 @@ object TransactionSerializationStrategies {
 
     private val toConv: ToAccountParticipantConv = ToAccountParticipantConv(repository)
 
-    override def toBinary(participant: SagaParticipant[_, _]): Array[Byte] = {
+    override def toBinary(participant: SagaParticipant[_, _, _]): Array[Byte] = {
       val p = participant.asInstanceOf[ToAccountParticipant]
       toConv.toProto(p).toByteArray
     }
 
     // [关键] 按需获取 CreditBalanceRepository
-    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _] = {
+    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _, _] = {
       val po = ToAccountParticipantPO.parseFrom(bytes)
       toConv.fromProto(po)
     }

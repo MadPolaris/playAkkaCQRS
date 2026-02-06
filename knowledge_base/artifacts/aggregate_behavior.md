@@ -8,11 +8,11 @@
 
 ## 2. 编码约束
 1.  **Composition Pattern**: 使用 `PartialFunction` 将不同业务块组合（如 `direct.orElse(reserve)`）。
-2.  **Domain Policy DSL**:
+2.  **Invariant Rule DSL**:
     -   **严禁**在 Behavior 中编写裸露的 `if/else` 业务判断。
-    -   **必须**调用 `domain.policy` 下的策略对象。
-    -   **语法**: `runReplyingPolicy(DepositPolicy)(state, cmd).replyWith(...)`。
-3.  **Dependencies**: 仅依赖 `DomainEntity`, `DomainPolicy` 和 `DomainService`。
+    -   **必须**调用 `domain.invariants` 下的不变量规则对象。
+    -   **语法**: `runReplyingPolicy(DepositRule)(state, cmd).replyWith(...)`。
+3.  **Dependencies**: 仅依赖 `DomainEntity`, `InvariantRule` 和 `DomainService`。
 
 ## 3. 参考模板
 ```scala
@@ -21,7 +21,7 @@ object CreditBalanceBehaviors {
   
   private def direct(state: State) = {
     case Deposit(amount, replyTo) =>
-      runReplyingPolicy(DepositPolicy)(state, amount)
+      runReplyingPolicy(DepositRule)(state, amount)
         .replyWith(replyTo)(mkError, mkSuccess)
   }
 }

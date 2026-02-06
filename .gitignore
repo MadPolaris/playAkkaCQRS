@@ -16,3 +16,8 @@ target
 *.txt
 *.md
 .g8
+/.metals
+/project/project/.bloop
+/.bloop
+/project/.bloop
+/.vscode
