@@ -9,3 +9,8 @@ target
 /RUNNING_PID
 /null
 /htmlReport
+/.metals
+/project/project/.bloop
+/.bloop
+/project/.bloop
+/.vscode
