@@ -1,10 +1,10 @@
-package net.imadz.domain.policy
+package net.imadz.domain.invariants
 
-import net.imadz.common.CommonTypes.{DomainPolicy, iMadzError}
+import net.imadz.common.CommonTypes.{InvariantRule, iMadzError}
 import net.imadz.domain.entities.CreditBalanceEntity.{BalanceChanged, CreditBalanceEvent, CreditBalanceState}
 import net.imadz.domain.values.Money
 
-object WithdrawPolicy extends DomainPolicy[CreditBalanceEvent, CreditBalanceState, Money] {
+object WithdrawRule extends InvariantRule[CreditBalanceEvent, CreditBalanceState, Money] {
 
   private val NotEnoughBalance: iMadzError = iMadzError("60002", "balance 不足扣减 或 扣减值应该为正数")
 

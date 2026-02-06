@@ -2,7 +2,7 @@ package net.imadz.common.application
 
 import akka.actor.typed.ActorRef
 import akka.persistence.typed.scaladsl.Effect
-import net.imadz.common.CommonTypes.{DomainPolicy, iMadzError}
+import net.imadz.common.CommonTypes.{InvariantRule, iMadzError}
 
 object CommandHandlerReplyingBehavior {
 
@@ -27,7 +27,7 @@ object CommandHandlerReplyingBehavior {
    * 它将 Policy 的执行与 Helper 的转换逻辑结合起来
    */
   case class RunnablePolicyWithHelper[Event, State, Param, Reply, Command](
-                                                                            policy: DomainPolicy[Event, State, Param],
+                                                                            rule: InvariantRule[Event, State, Param],
                                                                             helper: CommandHelper[Command, State, Param, Reply],
                                                                             state: State,
                                                                             command: Command
@@ -35,8 +35,8 @@ object CommandHandlerReplyingBehavior {
     def replyWith(replyTo: ActorRef[Reply]): Effect[Event, State] = {
       // 1. 提取参数
       val param = helper.toParam(state, command)
-      // 2. 执行 Policy
-      policy(state, param).fold(
+      // 2. 执行 Invariant Rule
+      rule(state, param).fold(
         // 3a. 失败：回复错误消息
         error => Effect.reply(replyTo)(helper.createFailureReply(param)(error)),
         // 3b. 成功：持久化事件 -> 更新状态(Akka负责) -> 回复成功消息(使用新状态)
@@ -50,19 +50,19 @@ object CommandHandlerReplyingBehavior {
    * 用法: runReplyingPolicy(MyPolicy, MyHelper)(state, command).replyWith(replyTo)
    */
   def runReplyingPolicy[Event, State, Param, Reply, Command](
-                                                              policy: DomainPolicy[Event, State, Param],
+                                                              rule: InvariantRule[Event, State, Param],
                                                               helper: CommandHelper[Command, State, Param, Reply]
                                                             )(state: State, command: Command): RunnablePolicyWithHelper[Event, State, Param, Reply, Command] =
-    RunnablePolicyWithHelper(policy, helper, state, command)
+    RunnablePolicyWithHelper(rule, helper, state, command)
 
   // --- 兼容旧代码 (如果还有地方在用) ---
-  case class AwaitingReplyToRunnablePolicy[Event, State, Param, ReplyMessage](policy: DomainPolicy[Event, State, Param], state: State, param: Param) {
+  case class AwaitingReplyToRunnablePolicy[Event, State, Param, ReplyMessage](rule: InvariantRule[Event, State, Param], state: State, param: Param) {
     def replyWith(replyTo: ActorRef[ReplyMessage])(leftConfirmationFactory: Param => iMadzError => ReplyMessage, rightConfirmationFactory: Param => State => ReplyMessage): Effect[Event, State] =
-      policy(state, param).fold(
+      rule(state, param).fold(
         error => Effect.reply(replyTo)(leftConfirmationFactory(param)(error)),
         events => Effect.persist(events).thenReply(replyTo)(rightConfirmationFactory(param)))
   }
 
-  def runReplyingPolicy[Event, State, Param, ReplyMessage](policy: DomainPolicy[Event, State, Param])(state: State, param: Param): AwaitingReplyToRunnablePolicy[Event, State, Param, ReplyMessage] =
-    AwaitingReplyToRunnablePolicy(policy = policy, state = state, param = param)
+  def runReplyingPolicy[Event, State, Param, ReplyMessage](rule: InvariantRule[Event, State, Param])(state: State, param: Param): AwaitingReplyToRunnablePolicy[Event, State, Param, ReplyMessage] =
+    AwaitingReplyToRunnablePolicy(rule = rule, state = state, param = param)
 }

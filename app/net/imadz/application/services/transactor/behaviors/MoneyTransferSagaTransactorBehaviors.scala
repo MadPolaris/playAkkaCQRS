@@ -10,7 +10,7 @@ import net.imadz.application.services.transactor.{FromAccountParticipant, MoneyT
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.entities.MoneyTransferTransactionEntity._
-import net.imadz.domain.policy.InitiateTransactionPolicy
+import net.imadz.domain.invariants.InitiateTransactionRule
 import net.imadz.domain.values.Money
 import net.imadz.infra.saga.SagaPhase.{CommitPhase, CompensatePhase, PreparePhase}
 import net.imadz.infra.saga.SagaTransactionCoordinator.{StartTransaction, TransactionResult}
@@ -63,8 +63,8 @@ object MoneyTransferSagaTransactorBehaviors {
                                id: String
                              )(implicit ec: ExecutionContext): Effect[MoneyTransferTransactionEvent, MoneyTransferTransactionState] = {
 
-    // 1. 调用 Policy 进行纯逻辑判断
-    val decision = InitiateTransactionPolicy(state, (cmd.fromUserId.toString, cmd.toUserId.toString, cmd.amount))
+    // 1. 调用 Invariant Rule 进行纯逻辑判断
+    val decision = InitiateTransactionRule(state, (cmd.fromUserId.toString, cmd.toUserId.toString, cmd.amount))
 
     decision match {
       case Left(error) =>
