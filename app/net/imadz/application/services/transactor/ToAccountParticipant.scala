@@ -3,7 +3,6 @@ package net.imadz.application.services.transactor
 
 import akka.util.Timeout
 import net.imadz.application.aggregates.CreditBalanceProtocol._
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
@@ -21,7 +20,7 @@ case class ToAccountParticipant(toUserId: Id, amount: Money)(implicit ec: Execut
   override protected def doPrepare(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
     val toAccountRef = context.repository.findCreditBalanceByUserId(toUserId)
 
-    toAccountRef.ask(CreditBalanceAggregate.RecordIncomingCredits(Id.of(transactionId), amount, _))
+    toAccountRef.ask(RecordIncomingCredits(Id.of(transactionId), amount, _))
       .mapTo[RecordIncomingCreditsConfirmation]
       .map(confirmation => {
         confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
@@ -34,7 +33,7 @@ case class ToAccountParticipant(toUserId: Id, amount: Money)(implicit ec: Execut
   override protected def doCommit(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
     val toAccountRef = context.repository.findCreditBalanceByUserId(toUserId)
 
-    toAccountRef.ask(CreditBalanceAggregate.CommitIncomingCredits(Id.of(transactionId), _))
+    toAccountRef.ask(CommitIncomingCredits(Id.of(transactionId), _))
       .mapTo[CommitIncomingCreditsConfirmation]
       .map(confirmation => {
         confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
@@ -45,7 +44,7 @@ case class ToAccountParticipant(toUserId: Id, amount: Money)(implicit ec: Execut
   override def doCompensate(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
     val toAccountRef = context.repository.findCreditBalanceByUserId(toUserId)
 
-    toAccountRef.ask(CreditBalanceAggregate.CancelIncomingCredit(Id.of(transactionId), _))
+    toAccountRef.ask(CancelIncomingCredit(Id.of(transactionId), _))
       .mapTo[CancelIncomingCreditConfirmation]
       .map(confirmation => {
         confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)

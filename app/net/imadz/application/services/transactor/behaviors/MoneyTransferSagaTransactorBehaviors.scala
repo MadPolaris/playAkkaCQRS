@@ -7,7 +7,7 @@ import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, RetentionC
 import akka.util.Timeout
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.services.transactor.MoneyTransferProtocol._
-import net.imadz.application.services.transactor.{FromAccountParticipant, ToAccountParticipant}
+import net.imadz.application.services.transactor.{FromAccountParticipant, MoneyTransferContext, ToAccountParticipant}
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.entities.MoneyTransferTransactionEntity._

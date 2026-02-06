@@ -3,7 +3,6 @@ package net.imadz.application.services.transactor
 
 import akka.util.Timeout
 import net.imadz.application.aggregates.CreditBalanceProtocol._
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
 
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
@@ -21,7 +20,7 @@ case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: Ex
 
   override def doPrepare(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
     val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
-    fromAccountRef.ask(CreditBalanceAggregate.ReserveFunds(Id.of(transactionId), amount, _))
+    fromAccountRef.ask(ReserveFunds(Id.of(transactionId), amount, _))
       .mapTo[FundsReservationConfirmation]
       .map(confirmation => {
         confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
@@ -33,7 +32,7 @@ case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: Ex
   override def doCommit(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
     val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
 
-    fromAccountRef.ask(CreditBalanceAggregate.DeductFunds(Id.of(transactionId), _))
+    fromAccountRef.ask(DeductFunds(Id.of(transactionId), _))
       .mapTo[FundsDeductionConfirmation]
       .map(confirmation => {
         confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
@@ -43,7 +42,7 @@ case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: Ex
 
   override def doCompensate(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
     val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
-    fromAccountRef.ask(CreditBalanceAggregate.ReleaseReservedFunds(Id.of(transactionId), _))
+    fromAccountRef.ask(ReleaseReservedFunds(Id.of(transactionId), _))
       .mapTo[FundsReleaseConfirmation]
       .map(confirmation => {
         confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)

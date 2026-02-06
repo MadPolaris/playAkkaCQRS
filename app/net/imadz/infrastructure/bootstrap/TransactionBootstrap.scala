@@ -3,8 +3,7 @@ package net.imadz.infrastructure.bootstrap
 import akka.actor.typed.Behavior
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityContext, EntityTypeKey}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
-import net.imadz.application.services.transactor.{MoneyTransferProtocol, MoneyTransferSagaTransactor}
-import net.imadz.common.serialization.SerializationExtension
+import net.imadz.application.services.transactor.{MoneyTransferContext, MoneyTransferSagaTransactor, MoneyTransferProtocol}
 import net.imadz.infra.saga.SagaTransactionCoordinator
 
 trait TransactionBootstrap {
