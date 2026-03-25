@@ -12,7 +12,7 @@ object CommonTypes {
 
   trait ReadModel
 
-  trait DomainPolicy[Event, State, Param] {
+  trait InvariantRule[Event, State, Param] {
     def apply(state: State, param: Param): Either[iMadzError, List[Event]]
   }
 

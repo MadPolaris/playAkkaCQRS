@@ -5,7 +5,7 @@ import akka.actor.typed.javadsl.Adapter
 import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.actor.{ActorSystem, typed}
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import net.imadz.application.aggregates.CreditBalanceAggregate.CreditBalanceConfirmation
+import net.imadz.application.aggregates.CreditBalanceProtocol.CreditBalanceConfirmation
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.application.queries.{GetBalanceQuery, GetRecent12MonthsIncomeAndExpenseReport}

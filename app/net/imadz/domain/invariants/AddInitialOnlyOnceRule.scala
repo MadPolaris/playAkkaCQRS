@@ -1,10 +1,10 @@
-package net.imadz.domain.policy
+package net.imadz.domain.invariants
 
-import net.imadz.common.CommonTypes.{DomainPolicy, iMadzError}
+import net.imadz.common.CommonTypes.{InvariantRule, iMadzError}
 import net.imadz.domain.entities.CreditBalanceEntity.{BalanceChanged, CreditBalanceEvent, CreditBalanceState}
 import net.imadz.domain.values.Money
 
-object AddInitialOnlyOncePolicy extends DomainPolicy[CreditBalanceEvent, CreditBalanceState, Money] {
+object AddInitialOnlyOnceRule extends InvariantRule[CreditBalanceEvent, CreditBalanceState, Money] {
 
   private val InitialConditionNotMeet: iMadzError = iMadzError("60000", "不满足 Initial 条件")
 

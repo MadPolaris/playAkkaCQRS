@@ -1,10 +1,10 @@
-package net.imadz.domain.policy
+package net.imadz.domain.invariants
 
-import net.imadz.common.CommonTypes.{DomainPolicy, Id, iMadzError}
+import net.imadz.common.CommonTypes.{InvariantRule, Id, iMadzError}
 import net.imadz.domain.entities.CreditBalanceEntity.{CreditBalanceEvent, CreditBalanceState, IncomingCreditsRecorded}
 import net.imadz.domain.values.Money
 
-object RecordIncomingCreditsPolicy extends DomainPolicy[CreditBalanceEvent, CreditBalanceState, (Id, Money)] {
+object RecordIncomingCreditsRule extends InvariantRule[CreditBalanceEvent, CreditBalanceState, (Id, Money)] {
   def apply(state: CreditBalanceState, param: (Id, Money)): Either[iMadzError, List[CreditBalanceEvent]] = {
     val (transferId, amount) = param
     state.incomingCredits.get(transferId) match {

@@ -152,10 +152,10 @@ curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
 │             │         │         ├── CreditBalanceEntity.scala
 │             │         │         └── behaviors          # Domain Entity Behaviors: Event Handler
 │             │         │             └── CreditBalanceEventHandler.scala
-│             │         ├── policy                       # Enterprise/Business Policies
-│             │         │         ├── AddInitialOnlyOncePolicy.scala
-│             │         │         ├── DepositPolicy.scala
-│             │         │         └── WithdrawPolicy.scala
+│             │         ├── invariants                    # 不变量规则 (Invariant Rules)
+│             │         │         ├── AddInitialOnlyOnceRule.scala
+│             │         │         ├── DepositRule.scala
+│             │         │         └── WithdrawRule.scala
 │             │         ├── services                     # Domain Services
 │             │         │         └── TransferDomainService.scala
 │             │         └── values                       # Domain Value Objects
@@ -220,8 +220,8 @@ curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
 - 实体(Entity):
   - 有唯一标识符的对象。根实体(RootEntity)是聚合的核心,代表聚合的整体状态。
 
-- 领域策略(DomainPolicy):
-  - 定义领域规则和约束的对象,用于实现业务逻辑。
+- 不变量规则(InvariantRule):
+  - 定义领域不变量守护规则的对象，用于验证业务规则并決策产出什么事件。
 
 - 事件处理器(EventHandler):
   - 负责响应和处理领域事件的组件。
@@ -232,8 +232,8 @@ curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
 关系:
 - 实体和值对象是领域模型的基本构建块。
 - 领域事件由实体或领域服务产生,由事件处理器处理。
-- 领域策略应用于实体和值对象,确保业务规则的执行。
-- 领域服务协调实体、值对象和领域策略的交互。
+- 不变量规则应用于实体和值对象，确保业务规则的执行。
+- 领域服务协调实体、值对象和不变量规则的交互。
 
 这些概念共同构成了领域驱动设计(DDD)的核心元素,用于建模复杂的业务领域。
 ### 应用层组件

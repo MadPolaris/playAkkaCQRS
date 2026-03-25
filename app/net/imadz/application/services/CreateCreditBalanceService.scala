@@ -2,8 +2,7 @@ package net.imadz.application.services
 
 import akka.cluster.sharding.typed.scaladsl.EntityRef
 import akka.util.Timeout
-import net.imadz.application.aggregates.CreditBalanceAggregate
-import net.imadz.application.aggregates.CreditBalanceAggregate.GetBalance
+import net.imadz.application.aggregates.CreditBalanceProtocol.{CreditBalanceCommand, GetBalance}
 import net.imadz.application.aggregates.factories.CreditBalanceAggregateFactory
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.domain.values.Money
@@ -29,12 +28,11 @@ class CreateCreditBalanceService @Inject()(factory: CreditBalanceAggregateFactor
         fetchUserCreditBalance))
   }
 
-  private def fetchUserCreditBalance(entityRef: EntityRef[CreditBalanceAggregate.CreditBalanceCommand]) = {
+  private def fetchUserCreditBalance(entityRef: EntityRef[CreditBalanceCommand]) =
     entityRef
       .ask(GetBalance.apply)
       .map(confirmation =>
         confirmation.error
           .map(Left.apply[iMadzError, List[Money]])
           .getOrElse(Right(confirmation.balances)))
-  }
 }

@@ -1,6 +1,6 @@
 package net.imadz.banking.application.aggregates.behaviors
 
-import net.imadz.application.aggregates.CreditBalanceAggregate._
+import net.imadz.application.aggregates.CreditBalanceProtocol._
 import net.imadz.application.aggregates.behaviors.CreditBalanceCommandHelpers
 import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.common.test.CommandHelperTestKit

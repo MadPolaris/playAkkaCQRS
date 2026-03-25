@@ -6,7 +6,8 @@ import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityCont
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{EventSourcedBehavior, RetentionCriteria}
 import net.imadz.application.aggregates.CreditBalanceAggregate
-import net.imadz.application.aggregates.CreditBalanceAggregate.{CreditBalanceCommand, CreditBalanceEntityTypeKey}
+import net.imadz.application.aggregates.CreditBalanceProtocol.CreditBalanceCommand
+import net.imadz.application.aggregates.CreditBalanceAggregate.CreditBalanceEntityTypeKey
 import net.imadz.application.aggregates.behaviors.CreditBalanceBehaviors
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id

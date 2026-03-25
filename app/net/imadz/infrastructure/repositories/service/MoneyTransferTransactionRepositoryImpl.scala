@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps
 import akka.actor.typed.{ActorSystem, Scheduler}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, EntityRef}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
-import net.imadz.application.services.transactor.{MoneyTransferSagaTransactor, MoneyTransferTransactionRepository}
+import net.imadz.application.services.transactor.{MoneyTransferProtocol, MoneyTransferSagaTransactor, MoneyTransferTransactionRepository}
 import net.imadz.common.CommonTypes.Id
 import play.api.Application
 
@@ -17,7 +17,7 @@ class MoneyTransferTransactionRepositoryImpl @Inject()(sharding: ClusterSharding
   implicit val ec: ExecutionContext = system.executionContext
   implicit val scheduler: Scheduler = system.scheduler
 
-  override def findTransactionById(transactionId: Id): EntityRef[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] = {
+  override def findTransactionById(transactionId: Id): EntityRef[MoneyTransferProtocol.MoneyTransferTransactionCommand] = {
     sharding.entityRefFor(MoneyTransferSagaTransactor.entityTypeKey, transactionId.toString)
   }
 }
