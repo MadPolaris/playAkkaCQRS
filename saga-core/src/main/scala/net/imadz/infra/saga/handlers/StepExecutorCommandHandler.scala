@@ -57,7 +57,7 @@ object StepExecutorCommandHandler {
           .persist(OperationFailed(error))
           .thenRun(stateUpdated => replyTo.foreach(_ ! StepFailed(state.transactionId.get, error, stateUpdated)))
 
-      case TimedOut(replyTo) if state.canScheduleRetryOnTimedOut(defaultMaxRetries) =>
+      case TimedOut(replyTo) if state.status == Ongoing && state.canScheduleRetryOnTimedOut(defaultMaxRetries) =>
         actorContext.log.warn(s"TimedOut found ${state.retries} times")
 
         val nextRetry = state.retries + 1
@@ -67,10 +67,14 @@ object StepExecutorCommandHandler {
           .persist(List(OperationFailed(RetryableFailure("timed out")), RetryScheduled(nextRetry)))
           .thenRun(_ => scheduleRetry(timers, nextDelay, replyTo))
 
-      case TimedOut(replyTo: Option[ActorRef[StepResult[E, R, C]]]) =>
+      case TimedOut(replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.status == Ongoing =>
         Effect
           .persist(OperationFailed(RetryableFailure("timed out")))
           .thenRun(stateUpdated => replyTo.foreach(_ ! StepFailed(state.transactionId.get, RetryableFailure("timed out"), stateUpdated)))
+
+      case TimedOut(_) =>
+        actorContext.log.info(s"TrxId: ${state.transactionId} | Ignoring TimedOut message because step is already in ${state.status} state")
+        Effect.none
 
       case RetryOperation(replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.canRetry =>
         state.step.zip(state.transactionId).map {
