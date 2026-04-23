@@ -230,6 +230,10 @@ object SagaTransactionCoordinator {
         )
         stepExecutor.ask((ref: ActorRef[StepResult[E, R, C]]) => StepExecutor.Start[E, R, C](state.transactionId.get, step.asInstanceOf[SagaTransactionStep[E, R, C]], Some(ref)))(askTimeout, scheduler)
           .mapTo[StepResult[E, R, C]]
+          .recover {
+            case ex: Throwable =>
+              StepExecutor.StepFailed[E, R, C](state.transactionId.get, NonRetryableFailure(s"Coordinator ask failed: ${ex.getMessage}").asInstanceOf[E], StepExecutor.State[E, R, C](step = Some(step.asInstanceOf[SagaTransactionStep[E, R, C]])))
+          }
       }
     )
 
