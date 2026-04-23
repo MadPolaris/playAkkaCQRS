@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+package net.imadz.infra.saga;
+
+option java_multiple_files = true;
+option java_package = "net.imadz.infra.saga.proto";
+
+// Enums
+enum TransactionPhasePO {
+  PREPARE_PHASE = 0;
+  COMMIT_PHASE = 1;
+  COMPENSATE_PHASE = 2;
+}
+
+enum StepStatusPO {
+  CREATED = 0;
+  ONGOING = 1;
+  SUCCEED = 2;
+  FAILED = 3;
+}
+
+
+// [关键修改]：通用的参与者容器
+message SagaParticipantPO {
+  // 业务参与者的全限定类名，例如 "net.imadz.infra.proto.FromAccountParticipantPO"
+  // 或者对应的 Scala 类名，取决于你序列化策略的映射方式
+  string type_name = 1;
+
+  // 业务参与者序列化后的二进制数据
+  bytes payload = 2;
+}
+
+// Messages
+message SagaTransactionStepPO {
+  string step_id = 1;
+  TransactionPhasePO phase = 2;
+  int32 max_retries = 3;
+  int64 timeout_duration_millis = 4;
+  bool retry_when_recovered_ongoing = 5;
+  SagaParticipantPO participant = 6;
+  string participant_type = 7;// This will be used to identify the participant implementation
+}
+
+message StepStatePO {
+  SagaTransactionStepPO step = 1;
+  string transaction_id = 2;
+  StepStatusPO status = 3;
+  int32 retries = 4;
+  RetryableOrNotExceptionPO last_error = 5;
+  bool circuit_breaker_open = 6;
+  string replyToPath = 7;
+}
+
+message RetryableOrNotExceptionPO {
+  bool is_retryable = 1;
+  string message = 2;
+}
+
+// Events
+message ExecutionStartedPO {
+  string transaction_id = 1;
+  SagaTransactionStepPO transaction_step = 2;
+  string replyToPath = 3;
+}
+
+message OperationSucceededPO {
+  string resultType = 1;
+  bytes result = 2; // Use bytes to store serialized result
+}
+
+message OperationFailedPO {
+  RetryableOrNotExceptionPO error = 1;
+}
+
+message RetryScheduledPO {
+  int32 retry_count = 1;
+}
+
+message StepExecutorEventPO {
+  oneof event {
+    ExecutionStartedPO started = 1;
+    OperationSucceededPO succeed = 2;
+    OperationFailedPO failed = 3;
+    RetryScheduledPO rescheduled = 4;
+  }
+}
+
+// Commands
+message StartCommandPO {
+  string transaction_id = 1;
+  SagaTransactionStepPO saga_step = 2;
+  string replyToPath = 3;
+}
+
+message RecoverExecutionCommandPO {
+  string transaction_id = 1;
+  SagaTransactionStepPO saga_step = 2;
+}
+
+message OperationSucceedCommandPO {
+    string successMessageType = 1;
+    bytes success = 2;
+}
+
+message OperationFailedCommandPO {
+   RetryableOrNotExceptionPO error = 1;
+}
+
+message OperationResponseCommandPO {
+  oneof result {
+    OperationSucceedCommandPO succeed = 1;
+    OperationFailedCommandPO error = 2;
+  }
+}
+
+message RetryOperationCommandPO {}
+
+message TimedOutCommandPO {}
+
+// Coordinator's Proto
+
+enum CoordinatorStatusPO {
+  TRANSACTION_CREATED = 0;
+  TRANSACTION_IN_PROGRESS = 1;
+  TRANSACTION_COMPLETED = 2;
+  TRANSACTION_FAILED = 3;
+}
+
+// Commands
+message StartTransactionPO {
+  string transaction_id = 1;
+  repeated SagaTransactionStepPO steps = 2;
+}
+
+message PhaseCompletedPO {
+  TransactionPhasePO phase = 1;
+  repeated PhaseResultPO results = 2;
+}
+
+message PhaseFailurePO {
+  TransactionPhasePO phase = 1;
+  string error_message = 2;
+  bool is_retryable = 3;
+}
+
+message PhaseResultPO {
+  oneof result {
+    string error = 1;
+    bytes success = 2;
+  }
+}
+
+// Events
+message TransactionStartedPO {
+  string transaction_id = 1;
+  repeated SagaTransactionStepPO steps = 2;
+}
+
+message PhaseSucceededPO {
+  TransactionPhasePO phase = 1;
+}
+
+message PhaseFailedPO {
+  TransactionPhasePO phase = 1;
+}
+
+message TransactionCompletedPO {
+  string transaction_id = 1;
+}
+
+message TransactionFailedPO {
+  string transaction_id = 1;
+  string reason = 2;
+}
+
+message SagaTransactionCoordinatorEventPO {
+  oneof event {
+    TransactionStartedPO started = 1;
+    PhaseSucceededPO phaseSucceeded = 2;
+    PhaseFailedPO phaseFailed = 3;
+    TransactionCompletedPO transactionCompleted = 4;
+    TransactionFailedPO transactionFailed = 5;
+  }
+}
+
+// State
+message CoordinatorStatePO {
+  string transaction_id = 1;
+  repeated SagaTransactionStepPO steps = 2;
+  TransactionPhasePO current_phase = 3;
+  CoordinatorStatusPO status = 4;
+}
