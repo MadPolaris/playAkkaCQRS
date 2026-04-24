@@ -244,7 +244,7 @@ object SagaTransactionCoordinator {
 
       val positiveResults = stepResults.foldLeft[List[Either[RetryableOrNotException, SagaResult[R]]]](Nil)((acc, result) => result match {
         case StepCompleted(tid, r, stepState) => Right(r) :: acc
-        case StepFailed(tid, e: E, stepState) => Left(NonRetryableFailure(e.toString)) :: acc
+        case StepFailed(tid, e, stepState) => Left(NonRetryableFailure(e.toString)) :: acc
       })
 
       stepResults.find(_.isInstanceOf[StepFailed[_, _, _]]).map(firstError => {

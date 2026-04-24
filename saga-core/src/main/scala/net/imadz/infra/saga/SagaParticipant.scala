@@ -68,7 +68,7 @@ trait SagaParticipant[E, R, C] {
         Success(Left(classifyFailure(e)))
       case Success(Left(e)) =>
         logger.warn(s"SagaParticipant executed failed with $e")
-        Success(Left(classifyFailure(new Exception("Operation failed"))))
+        Success(Left(classifyFailure(new Exception(s"Operation failed: $e"))))
       case Failure(e) =>
         logger.warn(s"SagaParticipant executed failed with $e")
         Success(Left(classifyFailure(e)))
