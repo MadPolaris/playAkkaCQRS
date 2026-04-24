@@ -77,9 +77,10 @@ trait SagaExecutorConverter extends PrimitiveConverter {
       if (proto.result.isEmpty) {
         null // 或者根据业务需求处理空值
       } else {
+        val clazz = system.dynamicAccess.getClassFor[Event](proto.resultType).getOrElse(classOf[java.io.Serializable])
         serialization.deserialize(
             proto.result.toByteArray,
-            serialization.serializerFor(classOf[Event]).identifier, // 使用默认或者根据 type 查找
+            serialization.serializerFor(clazz).identifier,
             proto.resultType
           ).getOrElse(throw new RuntimeException(s"Failed to deserialize result of type ${proto.resultType}"))
           .asInstanceOf[Event]

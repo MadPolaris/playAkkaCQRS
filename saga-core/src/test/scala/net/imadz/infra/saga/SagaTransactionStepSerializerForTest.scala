@@ -6,7 +6,7 @@ import net.imadz.infra.saga.SagaPhase._
 import scala.concurrent.duration.DurationLong
 
 class SagaTransactionStepSerializerForTest extends Serializer {
-  override def identifier: Int = 1234 // Unique identifier for this serializer
+  override def identifier: Int = 9999 // Unique identifier for this serializer
 
   override def toBinary(o: AnyRef): Array[Byte] = o match {
     case step: SagaTransactionStep[_, _, _] =>

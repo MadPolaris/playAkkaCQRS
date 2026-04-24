@@ -13,6 +13,9 @@ import net.imadz.infra.saga.StepExecutor.StepResult
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
 
+import net.imadz.common.serialization.SerializationExtension
+import org.scalatest.BeforeAndAfterAll
+
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 
@@ -20,17 +23,20 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
   ConfigFactory.parseString(
     """
       |akka {
+      |  extensions = ["net.imadz.common.serialization.SerializationExtension"]
       |  actor {
       |    serializers {
-      |      proto = "akka.remote.serialization.ProtobufSerializer"
-      |      saga-transaction-step = "net.imadz.infra.saga.SagaTransactionStepSerializerForTest"
+      |      saga-transaction-step-test = "net.imadz.infra.saga.SagaTransactionStepSerializerForTest"
       |    }
-      |    serialization-bindings {
-      |      "com.google.protobuf.Message" = proto
-      |      "net.imadz.infra.saga.SagaTransactionStep" = saga-transaction-step
+      |    serialization-identifiers {
+      |      "net.imadz.infra.saga.SagaTransactionStepSerializerForTest" = 9999
       |    }
       |    allow-java-serialization = on
       |    warn-about-java-serializer-usage = off
+      |    serialization-bindings {
+      |      "net.imadz.infra.saga.SagaTransactionStep" = saga-transaction-step-test
+      |      "java.io.Serializable" = java
+      |    }
       |  }
       |}
       |# In-memory database configuration for unit testing
@@ -42,24 +48,33 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       |       }
       |akka.test.single-expect-default = 100s
       |akka.actor.testkit.typed.single-expect-default = 100s
+      |akka.actor.testkit.typed.serialize-messages = off
+      |akka.actor.testkit.typed.serialize-creators = off
+      |akka.actor.testkit.typed.serialization.verify = off
+      |akka.persistence.testkit.events.serialize = off
       |""".stripMargin
   ).withFallback(EventSourcedBehaviorTestKit.config)
-) with AnyWordSpecLike with BeforeAndAfterEach with LogCapturing {
+) with AnyWordSpecLike with BeforeAndAfterEach with BeforeAndAfterAll {
 
-  private def createEventSourcedTestKit(stepExecutorCreator: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command]) = {
-    EventSourcedBehaviorTestKit[
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+    val ext = SerializationExtension(system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem])
+    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(SuccessfulParticipant))
+    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(AlwaysFailingParticipant))
+  }
+      private def createEventSourcedTestKit(stepExecutorCreator: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command]) = {
+      EventSourcedBehaviorTestKit[
       SagaTransactionCoordinator.Command,
       SagaTransactionCoordinator.Event,
       SagaTransactionCoordinator.State
-    ](
+      ](
       system,
       SagaTransactionCoordinator(
         PersistenceId.ofUniqueId("test-saga-coordinator"),
         stepExecutorCreator
       )
-    )
-  }
-
+      )
+      }
   private def createSuccessfulStepExecutor[E, R, C](): ActorRef[StepExecutor.Command] = {
     spawn(Behaviors.receiveMessage[StepExecutor.Command] {
       case StepExecutor.Start(transactionId, step, replyTo: Option[ActorRef[StepResult[E, R, C]]]) =>

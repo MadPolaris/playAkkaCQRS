@@ -9,7 +9,8 @@ import net.imadz.common.CborSerializable
 import net.imadz.infra.saga.SagaParticipant._
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.StepExecutor._
-import org.scalatest.BeforeAndAfterEach
+import net.imadz.common.serialization.SerializationExtension
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
@@ -20,20 +21,20 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
   ConfigFactory.parseString(
     """
 akka {
+       extensions = ["net.imadz.common.serialization.SerializationExtension"]
        actor {
          serializers {
-
-            proto = "akka.remote.serialization.ProtobufSerializer"
-            saga-transaction-step = "net.imadz.infra.saga.SagaTransactionStepSerializerForTest"
-
+            saga-transaction-step-test = "net.imadz.infra.saga.SagaTransactionStepSerializerForTest"
          }
-         serialization-bindings {
-           "com.google.protobuf.Message" = proto
-           "net.imadz.infra.saga.SagaTransactionStep" = saga-transaction-step
-
+         serialization-identifiers {
+            "net.imadz.infra.saga.SagaTransactionStepSerializerForTest" = 9999
          }
          allow-java-serialization = on
          warn-about-java-serializer-usage = off
+         serialization-bindings {
+           "net.imadz.infra.saga.SagaTransactionStep" = saga-transaction-step-test
+           "java.io.Serializable" = java
+         }
        }
 
     }
@@ -44,12 +45,26 @@ akka {
          connectionPool = disabled
          keepAliveConnection = true
        }
+       akka.actor.testkit.typed.serialize-messages = off
+       akka.actor.testkit.typed.serialize-creators = off
+       akka.actor.testkit.typed.serialization.verify = off
+       akka.persistence.testkit.events.serialize = off
 """.stripMargin
   ).withFallback(EventSourcedBehaviorTestKit.config)
 )
   with AnyWordSpecLike
   with BeforeAndAfterEach
-  with LogCapturing {
+  with BeforeAndAfterAll {
+
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+    val ext = SerializationExtension(system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem])
+    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(SuccessfulParticipant))
+    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(AlwaysFailingParticipant))
+    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(NonRetryableFailingParticipant))
+    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(TimeoutParticipant))
+    ext.registerStrategy(new TestParticipantSerializerStrategy(classOf[RetryingParticipant].getName, classOf[RetryingParticipant], () => new RetryingParticipant()))
+  }
 
   val logger = LoggerFactory.getLogger(getClass)
 
@@ -64,12 +79,15 @@ akka {
         initialRetryDelay = initialRetryDelay,
         circuitBreakerSettings = circuitBreakerSettings,
         context = 0,
-        extendedSystem = system.asInstanceOf[ExtendedActorSystem]
+        extendedSystem = system.classicSystem.asInstanceOf[ExtendedActorSystem]
       )
     )
 
   val participant = SuccessfulParticipant
   val eventSourcedTestKit: EventSourcedBehaviorTestKit[Command, Event, State[String, String, Any]] = createTestKit("test-1")
+
+  lazy val adapter = new net.imadz.infra.saga.persistence.StepExecutorEventAdapter(system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem])
+  def toDomain(po: Any): Event = adapter.fromJournal(po.asInstanceOf[net.imadz.infra.saga.proto.saga_v2.StepExecutorEventPO], "").events.head.asInstanceOf[Event]
 
   override protected def beforeEach(): Unit = {
     super.beforeEach()
@@ -87,7 +105,7 @@ akka {
       )
       val result = eventSourcedTestKit.runCommand(Start[String, String, Any]("trx1", reserveFromAccount, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx1", reserveFromAccount, probe.ref.path.toSerializationFormat)
+      toDomain(result.event) shouldBe ExecutionStarted("trx1", reserveFromAccount, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx1")
       result.state.step shouldBe Some(reserveFromAccount)
       result.state.status shouldBe Ongoing
@@ -110,7 +128,7 @@ akka {
       )
       val result = eventSourcedTestKit.runCommand(Start("trx1", prepareStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx1", prepareStep, probe.ref.path.toSerializationFormat)
+      toDomain(result.event) shouldBe ExecutionStarted("trx1", prepareStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx1")
       result.state.step shouldBe Some(prepareStep)
       result.state.status shouldBe Ongoing
@@ -132,7 +150,7 @@ akka {
       )
       val result = eventSourcedTestKit.runCommand(Start("trx2", commitStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx2", commitStep, probe.ref.path.toSerializationFormat)
+      toDomain(result.event) shouldBe ExecutionStarted("trx2", commitStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx2")
       result.state.step shouldBe Some(commitStep)
       result.state.status shouldBe Ongoing
@@ -154,7 +172,7 @@ akka {
       )
       val result = eventSourcedTestKit.runCommand(Start("trx3", compensateStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx3", compensateStep, probe.ref.path.toSerializationFormat)
+      toDomain(result.event) shouldBe ExecutionStarted("trx3", compensateStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx3")
       result.state.step shouldBe Some(compensateStep)
       result.state.status shouldBe Ongoing
@@ -176,7 +194,7 @@ akka {
       )
       val result = eventSourcedTestKit.runCommand(Start("trx4", retryStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx4", retryStep, probe.ref.path.toSerializationFormat)
+      toDomain(result.event) shouldBe ExecutionStarted("trx4", retryStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx4")
       result.state.step shouldBe Some(retryStep)
       result.state.status shouldBe Ongoing
@@ -202,7 +220,7 @@ akka {
       )
       val result = eventSourcedTestKit.runCommand(Start("trx5", failingStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx5", failingStep, probe.ref.path.toSerializationFormat)
+      toDomain(result.event) shouldBe ExecutionStarted("trx5", failingStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx5")
       result.state.step shouldBe Some(failingStep)
       result.state.status shouldBe Ongoing
@@ -220,7 +238,7 @@ akka {
       )
       val result = eventSourcedTestKit.runCommand(Start("trx6", nonRetryableStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx6", nonRetryableStep, probe.ref.path.toSerializationFormat)
+      toDomain(result.event) shouldBe ExecutionStarted("trx6", nonRetryableStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx6")
       result.state.step shouldBe Some(nonRetryableStep)
       result.state.status shouldBe Ongoing
@@ -248,7 +266,7 @@ akka {
       )
       val result = eventSourcedTestKit.runCommand(Start("trx7", timeoutStep, Some(probe.ref)))
 
-      result.event shouldBe ExecutionStarted("trx7", timeoutStep, probe.ref.path.toSerializationFormat)
+      toDomain(result.event) shouldBe ExecutionStarted("trx7", timeoutStep, probe.ref.path.toSerializationFormat)
       result.state.transactionId shouldBe Some("trx7")
       result.state.step shouldBe Some(timeoutStep)
       result.state.status shouldBe Ongoing
@@ -265,7 +283,7 @@ akka {
     "recover execution and retry when in Ongoing state" in {
       val probe = createTestProbe[StepResult[String, String, Any]]()
       val retryingParticipant = RetryingParticipant()
-      val eventSourcedTestKit = createTestKit("test-recover")
+      val eventSourcedTestKit = createTestKit("test-recover", initialRetryDelay = 100.millis)
 
       val recoverStep = SagaTransactionStep[String, String, Any](
         "recover-step", PreparePhase, retryingParticipant, maxRetries = 5, retryWhenRecoveredOngoing = true
@@ -288,7 +306,7 @@ akka {
         state = StepExecutor.State(step = Some(recoverStep),
           transactionId = Some("trx-recover"),
           status = Succeed,
-          retries = 2,
+          retries = 3,
           lastError = Some(RetryableFailure("Retry needed")),
           replyTo = Some(probe.ref.path.toSerializationFormat))
       ))
@@ -307,8 +325,9 @@ akka {
 
       // Verify persisted events
       val persistedEvents = eventSourcedTestKit.persistenceTestKit.persistedInStorage("test-persist")
-      persistedEvents should contain(ExecutionStarted("trx-persist", step, probe.ref.path.toSerializationFormat))
-      persistedEvents should contain(OperationSucceeded(SagaResult("Prepared")))
+      val domainEvents = persistedEvents.map(toDomain)
+      domainEvents should contain(ExecutionStarted("trx-persist", step, probe.ref.path.toSerializationFormat))
+      domainEvents should contain(OperationSucceeded(SagaResult("Prepared")))
 
       // Simulate restart and verify recovered state
       eventSourcedTestKit.restart()

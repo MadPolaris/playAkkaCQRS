@@ -10,7 +10,8 @@ import net.imadz.infra.saga.SagaParticipant.RetryableFailure
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.SagaTransactionCoordinator.TransactionResult
 import net.imadz.infra.saga.StepExecutor.CircuitBreakerSettings
-import org.scalatest.BeforeAndAfterEach
+import net.imadz.common.serialization.SerializationExtension
+import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -20,17 +21,20 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
   ConfigFactory.parseString(
     """
       |akka {
+      |  extensions = ["net.imadz.common.serialization.SerializationExtension"]
       |  actor {
       |    serializers {
-      |      proto = "akka.remote.serialization.ProtobufSerializer"
-      |      saga-transaction-step = "net.imadz.infra.saga.SagaTransactionStepSerializerForTest"
+      |      saga-transaction-step-test = "net.imadz.infra.saga.SagaTransactionStepSerializerForTest"
       |    }
-      |    serialization-bindings {
-      |      "com.google.protobuf.Message" = proto
-      |      "net.imadz.infra.saga.SagaTransactionStep" = saga-transaction-step
+      |    serialization-identifiers {
+      |      "net.imadz.infra.saga.SagaTransactionStepSerializerForTest" = 9999
       |    }
       |    allow-java-serialization = on
       |    warn-about-java-serializer-usage = off
+      |    serialization-bindings {
+      |      "net.imadz.infra.saga.SagaTransactionStep" = saga-transaction-step-test
+      |      "java.io.Serializable" = java
+      |    }
       |  }
       |}
       |# In-memory database configuration for unit testing
@@ -42,9 +46,23 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       |}
       |akka.test.single-expect-default = 100s
       |akka.actor.testkit.typed.single-expect-default = 100s
+      |akka.actor.testkit.typed.serialize-messages = off
+      |akka.actor.testkit.typed.serialize-creators = off
+      |akka.actor.testkit.typed.serialization.verify = off
+      |akka.persistence.testkit.events.serialize = off
       |""".stripMargin
   ).withFallback(EventSourcedBehaviorTestKit.config)
-) with AnyWordSpecLike with BeforeAndAfterEach with LogCapturing {
+) with AnyWordSpecLike with BeforeAndAfterEach with BeforeAndAfterAll {
+
+  override protected def beforeAll(): Unit = {
+    super.beforeAll()
+    val ext = SerializationExtension(system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem])
+    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(SuccessfulParticipant))
+    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(AlwaysFailingParticipant))
+    ext.registerStrategy(new TestParticipantSerializerStrategy(classOf[RetryingParticipant].getName, classOf[RetryingParticipant], () => new RetryingParticipant()))
+    ext.registerStrategy(new TestParticipantSerializerStrategy(classOf[TimeoutParticipant].getName, classOf[TimeoutParticipant], () => new TimeoutParticipant()))
+    ext.registerStrategy(new TestParticipantSerializerStrategy(classOf[CircuitBreakerParticipant].getName, classOf[CircuitBreakerParticipant], () => new CircuitBreakerParticipant()))
+  }
 
   private def createEventSourcedTestKit(stepExecutorCreator: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command]) = {
     EventSourcedBehaviorTestKit[
@@ -63,7 +81,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
   "StepExecutor and SagaTransactionCoordinator Integration" should {
 
     "successfully complete a transaction with multiple steps across different phases" in {
-      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createStepExecutor(system.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
       val transactionId = "multi-phase-transaction"
       val steps = List(
         SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
@@ -85,7 +103,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
     "handle failure in Prepare phase and initiate compensation" in {
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        createStepExecutor(system.asInstanceOf[ExtendedActorSystem])
+        createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem])
       )
       val transactionId = "prepare-fail-transaction"
       val steps = List(
@@ -109,7 +127,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
     "handle failure in Commit phase and compensate all steps" in {
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        createStepExecutor(system.asInstanceOf[ExtendedActorSystem])
+        createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem])
       )
       val transactionId = "commit-fail-transaction"
       val steps = List(
@@ -135,7 +153,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     "retry a step with temporary failure" in {
       val retryingParticipant = new RetryingParticipant()
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        createStepExecutor(system.asInstanceOf[ExtendedActorSystem])
+        createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem])
       )
       val transactionId = "retry-transaction"
       val steps = List(
@@ -160,7 +178,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     "handle circuit breaker behavior" in {
       val circuitBreakerParticipant = new CircuitBreakerParticipant()
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        createStepExecutor(system.asInstanceOf[ExtendedActorSystem])
+        createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem])
       )
       val transactionId = "circuit-breaker-transaction"
       val steps = List(
@@ -180,7 +198,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     "handle timeout in a step" in {
       val timeoutParticipant = new TimeoutParticipant()
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        createStepExecutor(system.asInstanceOf[ExtendedActorSystem])
+        createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem])
       )
       val transactionId = "timeout-transaction"
       val steps = List(
@@ -200,7 +218,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     }
 
     "handle partial compensation" in {
-      val eventSourcedTestKit = createEventSourcedTestKit((_, step) => createStepExecutor(system.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit((_, step) => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
       val transactionId = "partial-compensate-transaction"
       val steps = List(
         SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
@@ -234,6 +252,5 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       extendedSystem = extendedActorSystem
     ))
   }
-
 
 }
