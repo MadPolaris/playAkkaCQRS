@@ -114,6 +114,7 @@ object SagaTransactionCoordinator {
   case object InProgress extends Status
   case object Completed extends Status
   case object Failed extends Status
+  case object Compensating extends Status
 
   // @formatter:on
 
@@ -160,32 +161,25 @@ object SagaTransactionCoordinator {
                                      stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command],
                                      replyTo: Option[ActorRef[TransactionResult]]
                                    )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
-    if (results.forall(_.isRight)) {
-      phase match {
-        case PreparePhase =>
-          Effect
-            .persist(PhaseSucceeded(PreparePhase))
-            .thenRun { _ => executePhase(context, state.copy(currentPhase = CommitPhase), stepExecutorFactory, trace, replyTo) }
-        case CommitPhase =>
-          Effect.persist(
-            List(
-              PhaseSucceeded(CommitPhase),
-              TransactionCompleted(state.transactionId.get)
-            )
-          ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = true, stateNew, trace)))
-        case CompensatePhase =>
-          Effect.persist(
-            List(
-              PhaseSucceeded(CompensatePhase),
-              TransactionFailed(state.transactionId.get, "transaction failed but compensated")
-            )
-          ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, trace)))
-      }
-    } else {
-      // If any step in the phase failed, start compensation
-      Effect
-        .persist(TransactionFailed(state.transactionId.get, s"Phase $phase failed"))
-        .thenRun { _ => executePhase(context, state.copy(currentPhase = CompensatePhase), stepExecutorFactory, trace, replyTo) }
+    phase match {
+      case PreparePhase =>
+        Effect
+          .persist(PhaseSucceeded(PreparePhase))
+          .thenRun { stateNew => executePhase(context, stateNew, stepExecutorFactory, trace, replyTo) }
+      case CommitPhase =>
+        Effect.persist(
+          List(
+            PhaseSucceeded(CommitPhase),
+            TransactionCompleted(state.transactionId.get)
+          )
+        ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = true, stateNew, trace)))
+      case CompensatePhase =>
+        Effect.persist(
+          List(
+            PhaseSucceeded(CompensatePhase),
+            TransactionFailed(state.transactionId.get, "transaction failed but compensated")
+          )
+        ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, trace)))
     }
   }
 
@@ -198,15 +192,19 @@ object SagaTransactionCoordinator {
                                   stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command],
                                   replyTo: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
-    Effect
-      .persist(PhaseFailed(phase), TransactionFailed(state.transactionId.get, s"Phase $phase failed with error: ${error.message}"))
-      .thenRun { stateNew =>
-        if (phase != CompensatePhase) {
-          executePhase(context, state.copy(currentPhase = CompensatePhase), stepExecutorFactory, trace, replyTo)
-        } else {
+    if (phase != CompensatePhase) {
+      Effect
+        .persist(PhaseFailed(phase))
+        .thenRun { stateNew =>
+          executePhase(context, stateNew, stepExecutorFactory, trace, replyTo)
+        }
+    } else {
+      Effect
+        .persist(PhaseFailed(phase), TransactionFailed(state.transactionId.get, s"Phase $phase failed with error: ${error.message}"))
+        .thenRun { stateNew =>
           replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, trace))
         }
-      }
+    }
   }
 
   private def executePhase[E, R, C](
@@ -264,8 +262,8 @@ object SagaTransactionCoordinator {
         state.copy(transactionId = Some(transactionId), steps = steps, status = InProgress)
       case PhaseFailed(phase) =>
         phase match {
-          case PreparePhase => state.copy(currentPhase = CompensatePhase, status = Failed)
-          case CommitPhase => state.copy(currentPhase = CompensatePhase, status = Failed)
+          case PreparePhase => state.copy(currentPhase = CompensatePhase, status = Compensating)
+          case CommitPhase => state.copy(currentPhase = CompensatePhase, status = Compensating)
           case CompensatePhase => state.copy(status = Failed)
         }
       case PhaseSucceeded(phase) =>
