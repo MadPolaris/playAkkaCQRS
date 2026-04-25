@@ -119,7 +119,14 @@ object SagaTransactionCoordinator {
       emptyState = State(),
       commandHandler = commandHandler(context, stepExecutorFactory),
       eventHandler = eventHandler
-    )
+    ).receiveSignal {
+      case (state, akka.persistence.typed.RecoveryCompleted) =>
+        context.log.info(s"RecoveryCompleted for coordinator: ${persistenceId.id}, state: $state")
+        if (state.status == InProgress || state.status == Compensating) {
+          context.log.info(s"Resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase}")
+          executePhase(context, state, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], None)
+        }
+    }
   }
 
   def commandHandler(

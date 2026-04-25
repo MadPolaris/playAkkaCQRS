@@ -303,6 +303,13 @@ akka {
 
       eventSourcedTestKit.runCommand(Start("trx-persist", step, Some(probe.ref)))
 
+      // Wait for completion
+      probe.expectMessage(5.seconds, StepCompleted[String, String, Any](
+        transactionId = "trx-persist",
+        stepId = step.stepId,
+        result = SagaResult("Prepared")
+      ))
+
       // Verify persisted events
       val persistedEvents = eventSourcedTestKit.persistenceTestKit.persistedInStorage("test-persist")
       val domainEvents = persistedEvents.map(toDomain)

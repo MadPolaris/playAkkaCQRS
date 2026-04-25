@@ -244,5 +244,45 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       )
     }
 
+    "resume execution upon RecoveryCompleted when in InProgress state" in {
+      val transactionId = "recover-in-progress-transaction"
+      val steps = List(
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step2", CommitPhase, SuccessfulParticipant, 2)
+      )
+
+      var useHangingExecutor = true
+      def hangingStepExecutorCreator(): ActorRef[StepExecutor.Command] = {
+        spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+          case _ => Behaviors.same
+        })
+      }
+
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => {
+        if (useHangingExecutor) hangingStepExecutorCreator()
+        else createSuccessfulStepExecutor()
+      })
+
+      val prob = createTestProbe[TransactionResult]()
+      val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref)))
+
+      result.event shouldBe SagaTransactionCoordinator.TransactionStarted(transactionId, steps)
+      result.state.status shouldBe SagaTransactionCoordinator.InProgress
+
+      // Now we change the flag and restart to simulate JVM restart and recovery
+      useHangingExecutor = false
+      eventSourcedTestKit.restart()
+
+      // After restart, the recovery will trigger RecoveryCompleted, which will resume the transaction
+      // and it should complete successfully because it now uses SuccessfulStepExecutor.
+      var attempts = 0
+      while (eventSourcedTestKit.getState().status != SagaTransactionCoordinator.Completed && attempts < 50) {
+        Thread.sleep(100)
+        attempts += 1
+      }
+      
+      eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.Completed
+    }
+
   }
 }

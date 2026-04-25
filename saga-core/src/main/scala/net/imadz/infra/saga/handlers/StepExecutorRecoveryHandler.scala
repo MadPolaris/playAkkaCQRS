@@ -12,10 +12,9 @@ import scala.concurrent.duration.DurationInt
 object StepExecutorRecoveryHandler {
   def onRecoveryCompleted[E, R, C](context: ActorContext[Command], state: State[E, R, C]): Unit = {
 
-    val replyTo = state
-      .replyTo.map(context.system.classicSystem.actorSelection)
-      .map(_.resolveOne(3.seconds))
-      .map(futureRef => Await.result(futureRef, 3.seconds).toTyped.asInstanceOf[ActorRef[StepResult[E, R, C]]])
+    val replyTo = state.replyTo.map { pathString =>
+      akka.actor.typed.ActorRefResolver(context.system).resolveActorRef[StepResult[E, R, C]](pathString)
+    }
 
     context.log.info(s"SAGA Transaction Step is Recovered on ${state}")
     state.status match {
