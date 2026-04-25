@@ -55,8 +55,8 @@ object StepExecutor {
    case class RetryOperation[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
    case class TimedOut[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
   sealed trait StepResult[E, R, C] extends CborSerializable
-  case class StepCompleted[E,R, C](transactionId: String, result: SagaResult[R], state: State[E, R, C]) extends StepResult[E, R, C]
-  case class StepFailed[E, R, C](transactionId: String, error: E, state: State[E, R, C]) extends StepResult[E, R, C]
+  case class StepCompleted[E,R, C](transactionId: String, stepId: String, result: SagaResult[R]) extends StepResult[E, R, C]
+  case class StepFailed[E, R, C](transactionId: String, stepId: String, error: RetryableOrNotException) extends StepResult[E, R, C]
 
   // Events
   sealed trait Event

@@ -39,7 +39,7 @@ object StepExecutorCommandHandler {
           .persist(OperationSucceeded(result))
           .thenRun(updatedState => updatedState.status match {
             case Succeed => // Notify success
-              replyTo.foreach(_ ! StepCompleted[E, R, C](state.transactionId.get, result.asInstanceOf[SagaResult[R]], updatedState))
+              replyTo.foreach(_ ! StepCompleted[E, R, C](state.transactionId.get, state.step.get.stepId, result.asInstanceOf[SagaResult[R]]))
             case _ => // Unexpected state
           })
 
@@ -55,7 +55,7 @@ object StepExecutorCommandHandler {
       case OperationResponse(Left(error), replyTo: Option[ActorRef[StepResult[E, R, C]]]) =>
         Effect
           .persist(OperationFailed(error))
-          .thenRun(stateUpdated => replyTo.foreach(_ ! StepFailed(state.transactionId.get, error, stateUpdated)))
+          .thenRun(_ => replyTo.foreach(_ ! StepFailed(state.transactionId.get, state.step.get.stepId, error)))
 
       case TimedOut(replyTo) if state.status == Ongoing && state.canScheduleRetryOnTimedOut(defaultMaxRetries) =>
         actorContext.log.warn(s"TimedOut found ${state.retries} times")
@@ -70,7 +70,7 @@ object StepExecutorCommandHandler {
       case TimedOut(replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.status == Ongoing =>
         Effect
           .persist(OperationFailed(RetryableFailure("timed out")))
-          .thenRun(stateUpdated => replyTo.foreach(_ ! StepFailed(state.transactionId.get, RetryableFailure("timed out"), stateUpdated)))
+          .thenRun(_ => replyTo.foreach(_ ! StepFailed(state.transactionId.get, state.step.get.stepId, RetryableFailure("timed out"))))
 
       case TimedOut(_) =>
         actorContext.log.info(s"TrxId: ${state.transactionId} | Ignoring TimedOut message because step is already in ${state.status} state")

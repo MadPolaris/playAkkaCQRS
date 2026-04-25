@@ -24,8 +24,8 @@ object SagaTransactionCoordinator {
   // Commands
   sealed trait Command extends CborSerializable
   case class StartTransaction[E, R, C](transactionId: String, steps: List[SagaTransactionStep[E, R, C]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
-  private case class PhaseCompleted(phase: TransactionPhase, results: List[Either[RetryableOrNotException, Any]], stepTraces: List[StepExecutor.State[_, _, _]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
-  private case class PhaseFailure(phase: TransactionPhase, error: RetryableOrNotException, stepTraces: List[StepExecutor.State[_, _, _]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
+  private case class PhaseCompleted(phase: TransactionPhase, results: List[Either[RetryableOrNotException, Any]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
+  private case class PhaseFailure(phase: TransactionPhase, error: RetryableOrNotException, replyTo: Option[ActorRef[TransactionResult]]) extends Command
   case class TracingStep(
                           stepNumber: Int,
                           stepId: String,
@@ -84,15 +84,7 @@ object SagaTransactionCoordinator {
                         errorType: String,
                         isRetryable: Boolean
                       )
-  case class TransactionResult(successful: Boolean, state: State, stepTraces: List[StepExecutor.State[_, _, _]]){
-    
-    def orderedSteps: Seq[StepExecutor.State[_, _, _]]= stepTraces.reverse
-
-    lazy val tracingSteps: List[TracingStep] = orderedSteps.zipWithIndex.map(step=> TracingStep.fromStepExecutorState(step._1, step._2)).toList
-    def failReason: String = tracingSteps.filter(step => step.error.nonEmpty).map(_.toString).mkString(";")
-
-  }
-
+  case class TransactionResult(successful: Boolean, state: State, failReason: String = "")
   // Events
   sealed trait Event extends CborSerializable
   case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _, _]]) extends Event
@@ -139,14 +131,14 @@ object SagaTransactionCoordinator {
         Effect
           .persist(TransactionStarted(transactionId, steps))
           .thenRun { _ =>
-            executePhase(context, State(Some(transactionId), steps, PreparePhase, InProgress), stepExecutorFactory, Nil, replyTo)
+            executePhase(context, State(Some(transactionId), steps, PreparePhase, InProgress), stepExecutorFactory, replyTo)
           }
 
-      case PhaseCompleted(phase, results, trace, replyTo) =>
-        handlePhaseCompletion(context, state, phase, results, trace, stepExecutorFactory, replyTo)
+      case PhaseCompleted(phase, results, replyTo) =>
+        handlePhaseCompletion(context, state, phase, results, stepExecutorFactory, replyTo)
 
-      case PhaseFailure(phase, error, trace, replyTo) =>
-        handlePhaseFailure(context, state, phase, error, trace, stepExecutorFactory, replyTo)
+      case PhaseFailure(phase, error, replyTo) =>
+        handlePhaseFailure(context, state, phase, error, stepExecutorFactory, replyTo)
 
       case _ => Effect.none
     }
@@ -157,7 +149,6 @@ object SagaTransactionCoordinator {
                                      state: State,
                                      phase: TransactionPhase,
                                      results: List[Either[RetryableOrNotException, Any]],
-                                     trace: List[StepExecutor.State[_, _, _]],
                                      stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command],
                                      replyTo: Option[ActorRef[TransactionResult]]
                                    )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
@@ -165,21 +156,21 @@ object SagaTransactionCoordinator {
       case PreparePhase =>
         Effect
           .persist(PhaseSucceeded(PreparePhase))
-          .thenRun { stateNew => executePhase(context, stateNew, stepExecutorFactory, trace, replyTo) }
+          .thenRun { stateNew => executePhase(context, stateNew, stepExecutorFactory, replyTo) }
       case CommitPhase =>
         Effect.persist(
           List(
             PhaseSucceeded(CommitPhase),
             TransactionCompleted(state.transactionId.get)
           )
-        ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = true, stateNew, trace)))
+        ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = true, stateNew)))
       case CompensatePhase =>
         Effect.persist(
           List(
             PhaseSucceeded(CompensatePhase),
             TransactionFailed(state.transactionId.get, "transaction failed but compensated")
           )
-        ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, trace)))
+        ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = false, stateNew)))
     }
   }
 
@@ -188,7 +179,6 @@ object SagaTransactionCoordinator {
                                   state: State,
                                   phase: TransactionPhase,
                                   error: RetryableOrNotException,
-                                  trace: List[StepExecutor.State[_, _, _]],
                                   stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command],
                                   replyTo: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
@@ -196,13 +186,13 @@ object SagaTransactionCoordinator {
       Effect
         .persist(PhaseFailed(phase))
         .thenRun { stateNew =>
-          executePhase(context, stateNew, stepExecutorFactory, trace, replyTo)
+          executePhase(context, stateNew, stepExecutorFactory, replyTo)
         }
     } else {
       Effect
         .persist(PhaseFailed(phase), TransactionFailed(state.transactionId.get, s"Phase $phase failed with error: ${error.message}"))
         .thenRun { stateNew =>
-          replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, trace))
+          replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, s"Phase $phase failed with error: ${error.message}"))
         }
     }
   }
@@ -211,7 +201,6 @@ object SagaTransactionCoordinator {
                                   context: ActorContext[Command],
                                   state: State,
                                   stepExecutorFactory: (String, SagaTransactionStep[E, R, C]) => ActorRef[StepExecutor.Command],
-                                  trace: List[StepExecutor.State[_, _, _]],
                                   replyTo: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, askTimeout: Timeout): Unit = {
 
@@ -230,27 +219,22 @@ object SagaTransactionCoordinator {
           .mapTo[StepResult[E, R, C]]
           .recover {
             case ex: Throwable =>
-              StepExecutor.StepFailed[E, R, C](state.transactionId.get, NonRetryableFailure(s"Coordinator ask failed: ${ex.getMessage}").asInstanceOf[E], StepExecutor.State[E, R, C](step = Some(step.asInstanceOf[SagaTransactionStep[E, R, C]])))
+              StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, NonRetryableFailure(s"Coordinator ask failed: ${ex.getMessage}"))
           }
       }
     )
 
     futureResults.foreach(stepResults => {
 
-      val stepStateTrace = stepResults.foldLeft(trace)((acc, result) => result match {
-        case StepCompleted(tid, r, stepState) => stepState :: acc
-        case StepFailed(tid, e, stepState) => stepState :: acc
-      })
-
       val positiveResults = stepResults.foldLeft[List[Either[RetryableOrNotException, SagaResult[R]]]](Nil)((acc, result) => result match {
-        case StepCompleted(tid, r, stepState) => Right(r) :: acc
-        case StepFailed(tid, e, stepState) => Left(NonRetryableFailure(e.toString)) :: acc
+        case StepCompleted(tid, sid, r) => Right(r) :: acc
+        case StepFailed(tid, sid, e) => Left(NonRetryableFailure(e.toString)) :: acc
       })
 
       stepResults.find(_.isInstanceOf[StepFailed[_, _, _]]).map(firstError => {
-        context.self ! PhaseFailure(state.currentPhase, NonRetryableFailure(firstError.toString), stepStateTrace, replyTo)
+        context.self ! PhaseFailure(state.currentPhase, NonRetryableFailure(firstError.toString), replyTo)
       }).getOrElse({
-        context.self ! PhaseCompleted(state.currentPhase, positiveResults, stepStateTrace, replyTo)
+        context.self ! PhaseCompleted(state.currentPhase, positiveResults, replyTo)
       })
 
     })

@@ -78,7 +78,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
   private def createSuccessfulStepExecutor[E, R, C](): ActorRef[StepExecutor.Command] = {
     spawn(Behaviors.receiveMessage[StepExecutor.Command] {
       case StepExecutor.Start(transactionId, step, replyTo: Option[ActorRef[StepResult[E, R, C]]]) =>
-        replyTo.foreach(_ ! StepExecutor.StepCompleted[E, R, C](step.stepId, SagaResult.empty[R](), StepExecutor.State()))
+        replyTo.foreach(_ ! StepExecutor.StepCompleted[E, R, C](transactionId, step.stepId, SagaResult.empty[R]()))
         Behaviors.same
     })
   }
@@ -86,7 +86,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
   private def createFailingStepExecutor(): ActorRef[StepExecutor.Command] = {
     spawn(Behaviors.receiveMessage[StepExecutor.Command] {
       case StepExecutor.Start(transactionId, step, replyTo) =>
-        replyTo.foreach(_ ! StepExecutor.StepFailed(transactionId, Left(NonRetryableFailure("Test failure")), StepExecutor.State()))
+        replyTo.foreach(_ ! StepExecutor.StepFailed(transactionId, step.stepId, NonRetryableFailure("Test failure")))
         Behaviors.same
     })
   }
@@ -115,9 +115,8 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
           transactionId = Some(transactionId),
           steps = steps,
           currentPhase = CommitPhase,
-          status = SagaTransactionCoordinator.Completed,
-        ),
-        stepTraces = List.fill(4)(StepExecutor.State())
+          status = SagaTransactionCoordinator.Completed
+        )
       )
     }
 
@@ -145,9 +144,8 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
           transactionId = Some(transactionId),
           steps = steps,
           currentPhase = CompensatePhase,
-          status = SagaTransactionCoordinator.Failed,
-        ),
-        stepTraces = List(StepExecutor.State(), StepExecutor.State())
+          status = SagaTransactionCoordinator.Failed
+        )
       )
     }
 
@@ -175,9 +173,8 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
           transactionId = Some(transactionId),
           steps = steps,
           currentPhase = CompensatePhase,
-          status = SagaTransactionCoordinator.Failed,
-        ),
-        stepTraces = List(StepExecutor.State(), StepExecutor.State())
+          status = SagaTransactionCoordinator.Failed
+        )
       )
     }
     "handle failure during CommitPhase and successfully compensate" in {
@@ -208,9 +205,8 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
           transactionId = Some(transactionId),
           steps = steps,
           currentPhase = CompensatePhase,
-          status = SagaTransactionCoordinator.Failed,
-        ),
-        stepTraces = List.fill(6)(StepExecutor.State())
+          status = SagaTransactionCoordinator.Failed
+        )
       )
     }
 
@@ -242,9 +238,9 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
           transactionId = Some(transactionId),
           steps = steps,
           currentPhase = CompensatePhase,
-          status = SagaTransactionCoordinator.Failed,
+          status = SagaTransactionCoordinator.Failed
         ),
-        stepTraces = List.fill(6)(StepExecutor.State())
+        failReason = "Phase compensate failed with error: StepFailed(compensate-partial-fail-transaction,compensate1,net.imadz.infra.saga.SagaParticipant$NonRetryableFailure: Test failure)"
       )
     }
 

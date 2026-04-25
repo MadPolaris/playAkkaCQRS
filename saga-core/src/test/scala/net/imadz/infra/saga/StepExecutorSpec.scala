@@ -112,9 +112,8 @@ akka {
 
       probe.expectMessage(3.seconds, StepCompleted[String, String, Any](
         transactionId = "trx1",
-        result = SagaResult("Prepared"),
-        state = StepExecutor.State(step = Some(reserveFromAccount), transactionId = Some("trx1"), status = Succeed,
-          replyTo = Some(probe.ref.path.toSerializationFormat))
+        stepId = reserveFromAccount.stepId,
+        result = SagaResult("Prepared")
       ))
 
     }
@@ -135,9 +134,8 @@ akka {
 
       probe.expectMessage(5.seconds, StepCompleted[String, String, Any](
         transactionId = "trx1",
-        result = SagaResult("Prepared"),
-        state = StepExecutor.State(step = Some(prepareStep), transactionId = Some("trx1"), status = Succeed
-          , replyTo = Some(probe.ref.path.toSerializationFormat))
+        stepId = prepareStep.stepId,
+        result = SagaResult("Prepared")
       ))
     }
 
@@ -157,9 +155,8 @@ akka {
 
       probe.expectMessage(5.seconds, StepCompleted[String, String, Any](
         transactionId = "trx2",
-        result = SagaResult("Committed"),
-        state = StepExecutor.State(step = Some(commitStep), transactionId = Some("trx2"), status = Succeed
-          , replyTo = Some(probe.ref.path.toSerializationFormat))
+        stepId = commitStep.stepId,
+        result = SagaResult("Committed")
       ))
     }
 
@@ -179,8 +176,8 @@ akka {
 
       probe.expectMessage(5.seconds, StepCompleted[String, String, Any](
         transactionId = "trx3",
-        result = SagaResult("Compensated"),
-        state = StepExecutor.State(step = Some(compensateStep), transactionId = Some("trx3"), status = Succeed, replyTo = Some(probe.ref.path.toSerializationFormat))
+        stepId = compensateStep.stepId,
+        result = SagaResult("Compensated")
       ))
     }
 
@@ -201,12 +198,8 @@ akka {
 
       probe.expectMessage(10.seconds, StepCompleted[String, String, Any](
         transactionId = "trx4",
-        result = SagaResult("Success after retry"),
-        state = StepExecutor.State(step = Some(retryStep), transactionId = Some("trx4"), status = Succeed,
-          retries = 2,
-          lastError = Some(RetryableFailure("Retry needed")),
-          replyTo = Some(probe.ref.path.toSerializationFormat)
-        )
+        stepId = "retry-step",
+        result = SagaResult("Success after retry")
       ))
     }
 
@@ -246,13 +239,7 @@ akka {
       probe.expectMessage(5.seconds, StepFailed[RetryableOrNotException, String, Any](
         transactionId = "trx6",
         error = NonRetryableFailure("Critical error"),
-        state = StepExecutor.State(
-          step = Some(nonRetryableStep),
-          transactionId = Some("trx6"),
-          status = Failed,
-          lastError = Some(NonRetryableFailure("Critical error")),
-          replyTo = Some(probe.ref.path.toSerializationFormat)
-        )
+        stepId = "non-retryable-step"
       ))
     }
 
@@ -273,10 +260,8 @@ akka {
 
       probe.expectMessage(1000.seconds, StepFailed[RetryableOrNotException, String, Any](
         transactionId = "trx7",
-        error = RetryableFailure("timed out"),
-        state = StepExecutor.State(step = Some(timeoutStep), transactionId = Some("trx7"), status = Failed,
-          lastError = Some(RetryableFailure("timed out")),
-          replyTo = Some(probe.ref.path.toSerializationFormat))
+        stepId = "timeout-step",
+        error = RetryableFailure("timed out")
       ))
     }
 
@@ -302,13 +287,8 @@ akka {
       // The actor should automatically retry the operation
       probe.expectMessage(10.seconds, StepCompleted[String, String, Any](
         transactionId = "trx-recover",
-        result = SagaResult("Success after retry"),
-        state = StepExecutor.State(step = Some(recoverStep),
-          transactionId = Some("trx-recover"),
-          status = Succeed,
-          retries = 3,
-          lastError = Some(RetryableFailure("Retry needed")),
-          replyTo = Some(probe.ref.path.toSerializationFormat))
+        stepId = "recover-step",
+        result = SagaResult("Success after retry")
       ))
     }
 
