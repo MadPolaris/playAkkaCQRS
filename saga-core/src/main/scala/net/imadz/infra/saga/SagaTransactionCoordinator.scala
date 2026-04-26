@@ -93,6 +93,7 @@ object SagaTransactionCoordinator {
   case class PhaseFailed(phase: TransactionPhase) extends Event
   case class TransactionCompleted(transactionId: String) extends Event
   case class TransactionFailed(transactionId: String, reason: String) extends Event
+  case class TransactionSuspended(transactionId: String, reason: String) extends Event
 
   // State
   case class State(
@@ -108,6 +109,7 @@ object SagaTransactionCoordinator {
   case object Completed extends Status
   case object Failed extends Status
   case object Compensating extends Status
+  case object Suspended extends Status
 
   // @formatter:on
 
@@ -217,7 +219,7 @@ object SagaTransactionCoordinator {
         }
     } else {
       Effect
-        .persist(PhaseFailed(phase), TransactionFailed(state.transactionId.get, s"Phase $phase failed with error: ${error.message}"))
+        .persist(PhaseFailed(phase), TransactionSuspended(state.transactionId.get, s"Phase $phase failed with error: ${error.message}"))
         .thenRun { (stateNew: State) =>
           replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, s"Phase $phase failed with error: ${error.message}"))
         }
@@ -302,7 +304,7 @@ object SagaTransactionCoordinator {
         phase match {
           case PreparePhase => state.copy(currentPhase = CompensatePhase, status = Compensating)
           case CommitPhase => state.copy(currentPhase = CompensatePhase, status = Compensating)
-          case CompensatePhase => state.copy(status = Failed)
+          case CompensatePhase => state
         }
       case PhaseSucceeded(phase) =>
         phase match {
@@ -314,6 +316,8 @@ object SagaTransactionCoordinator {
         state.copy(status = Completed)
       case TransactionFailed(_, _) =>
         state.copy(status = Failed)
+      case TransactionSuspended(_, _) =>
+        state.copy(status = Suspended)
     }
   }
 }

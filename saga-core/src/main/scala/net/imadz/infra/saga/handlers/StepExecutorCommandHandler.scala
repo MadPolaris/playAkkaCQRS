@@ -22,6 +22,16 @@ object StepExecutorCommandHandler {
                                circuitBreaker: CircuitBreaker
                              ): (State[E, R, C], Command) => Effect[Event, State[E, R, C]] = { (state, command) =>
     command match {
+      case startMsg @ Start(transactionId, step, replyTo) if state.status == Succeed =>
+        val typedReplyTo = replyTo.asInstanceOf[Option[ActorRef[StepResult[E, R, C]]]]
+        typedReplyTo.foreach(_ ! StepCompleted[E, R, C](transactionId, step.stepId, state.result.get.asInstanceOf[SagaResult[R]]))
+        Effect.none
+
+      case startMsg @ Start(transactionId, step, replyTo) if state.status == Failed =>
+        val typedReplyTo = replyTo.asInstanceOf[Option[ActorRef[StepResult[E, R, C]]]]
+        typedReplyTo.foreach(_ ! StepFailed[E, R, C](transactionId, step.stepId, state.lastError.getOrElse(NonRetryableFailure("Unknown error"))))
+        Effect.none
+
       case Start(transactionId, step, replyTo: Some[ActorRef[StepResult[E, R, C]]]) if state.canStart =>
         Effect
           .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo)))

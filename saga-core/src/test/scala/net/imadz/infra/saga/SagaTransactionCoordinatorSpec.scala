@@ -241,7 +241,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
           transactionId = Some(transactionId),
           steps = steps,
           currentPhase = CompensatePhase,
-          status = SagaTransactionCoordinator.Failed
+          status = SagaTransactionCoordinator.Suspended
         ),
         failReason = "Phase compensate failed with error: StepFailed(compensate-partial-fail-transaction,compensate1,net.imadz.infra.saga.SagaParticipant$NonRetryableFailure: Test failure)"
       )

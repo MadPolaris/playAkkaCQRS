@@ -229,7 +229,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       val result = probe.receiveMessage(10.seconds)
 
       result.successful shouldBe false
-      result.state.status shouldBe SagaTransactionCoordinator.Failed
+      result.state.status shouldBe SagaTransactionCoordinator.Suspended
       result.state.currentPhase shouldBe CompensatePhase
     }
   }
