@@ -313,5 +313,52 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       // We just need to check the event is emitted.
     }
 
+    "handle ask timeout by querying status and eventually completing" in {
+      val transactionId = "timeout-query-status-transaction"
+      val steps = List(
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2)
+      )
+
+      def slowStepExecutorCreator(): ActorRef[StepExecutor.Command] = {
+        spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+          case StepExecutor.Start(transactionId, step, replyTo) =>
+            // Do not reply immediately to simulate ask timeout
+            Behaviors.same
+          case qs: StepExecutor.QueryStatus[_, _, _] =>
+            // Reply with Succeed to simulate it finished later
+            qs.replyTo.asInstanceOf[ActorRef[StepExecutor.State[Any, Any, Any]]] ! StepExecutor.State(
+              status = StepExecutor.Succeed,
+              result = Some(SagaResult.empty[Any]())
+            )
+            Behaviors.same
+          case msg => 
+            Behaviors.same
+        })
+      }
+
+      import akka.util.Timeout
+      implicit val askTimeout: Timeout = Timeout(1.second)
+
+      val coordinator = spawn(SagaTransactionCoordinator(
+        akka.persistence.typed.PersistenceId.ofUniqueId("test-timeout-query-status"),
+        (_, _) => slowStepExecutorCreator()
+      )(system.executionContext, askTimeout))
+
+      val prob = createTestProbe[TransactionResult]()
+      coordinator ! SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref))
+
+      val expected = prob.receiveMessage(10.seconds)
+
+      expected shouldBe TransactionResult(
+        successful = true,
+        SagaTransactionCoordinator.State(
+          transactionId = Some(transactionId),
+          steps = steps,
+          currentPhase = CommitPhase,
+          status = SagaTransactionCoordinator.Completed
+        )
+      )
+    }
+
   }
 }

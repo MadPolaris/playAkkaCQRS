@@ -54,6 +54,7 @@ object StepExecutor {
    case class OperationResponse[E, R, C](result: Either[RetryableOrNotException, R], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
    case class RetryOperation[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
    case class TimedOut[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+   case class QueryStatus[E, R, C](replyTo: ActorRef[State[E, R, C]]) extends Command
   sealed trait StepResult[E, R, C] extends CborSerializable
   case class StepCompleted[E,R, C](transactionId: String, stepId: String, result: SagaResult[R]) extends StepResult[E, R, C]
   case class StepFailed[E, R, C](transactionId: String, stepId: String, error: RetryableOrNotException) extends StepResult[E, R, C]
@@ -72,6 +73,7 @@ object StepExecutor {
                           status: Status = Created,
                           retries: Int = 0,
                           lastError: Option[RetryableOrNotException] = None,
+                          result: Option[R] = None,
                           circuitBreakerOpen: Boolean = false,
                           replyTo: Option[String] = None
                         ) extends CborSerializable {
@@ -129,5 +131,4 @@ object StepExecutor {
       }
     }
   }
-
 }

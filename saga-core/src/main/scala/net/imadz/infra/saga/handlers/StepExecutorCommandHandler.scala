@@ -85,6 +85,11 @@ object StepExecutorCommandHandler {
             Effect.none[Event, State[E, R, C]]
               .thenRun(_ => executeOperation[E, R, C](actorContext, context, step.phase, step, state.transactionId.get, circuitBreaker, replyTo))
         }.getOrElse(Effect.none)
+
+      case qs: QueryStatus[E, R, C] =>
+        qs.replyTo ! state
+        Effect.none
+
       case msg =>
         actorContext.log.warn(s"msg: $msg is not processed")
         Effect.none

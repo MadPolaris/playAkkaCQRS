@@ -10,8 +10,8 @@ object StepExecutorEventHandler {
         state.copy(transactionId = Some(transactionId),
           step = Some(step.asInstanceOf[SagaTransactionStep[E, R, C]]), status = Ongoing,
           replyTo = Some(replyTo))
-      case OperationSucceeded(_) =>
-        state.copy(status = Succeed)
+      case OperationSucceeded(result) =>
+        state.copy(status = Succeed, result = Some(result.asInstanceOf[R]))
       case OperationFailed(error) =>
         state.copy(status = Failed, lastError = Some(error))
       case RetryScheduled(_) =>

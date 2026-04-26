@@ -236,6 +236,7 @@ object SagaTransactionCoordinator {
 
     import akka.actor.typed.scaladsl.AskPattern._
     implicit val scheduler: Scheduler = context.system.scheduler
+    val log = context.log
 
     val futureResults: Future[List[StepResult[E, R, C]]] = Future.sequence(
       stepsInPhase.map { step =>
@@ -245,9 +246,34 @@ object SagaTransactionCoordinator {
         )
         stepExecutor.ask((ref: ActorRef[StepResult[E, R, C]]) => StepExecutor.Start[E, R, C](state.transactionId.get, step.asInstanceOf[SagaTransactionStep[E, R, C]], Some(ref)))(askTimeout, scheduler)
           .mapTo[StepResult[E, R, C]]
-          .recover {
+          .recoverWith {
+            case _: java.util.concurrent.TimeoutException | _: akka.pattern.AskTimeoutException =>
+              log.warn(s"Coordinator ask timed out for step ${step.stepId}, querying status...")
+              def pollStatus(retries: Int): Future[StepResult[E, R, C]] = {
+                log.info(s"Polling status for step ${step.stepId}, retries left: $retries")
+                stepExecutor.ask((ref: ActorRef[StepExecutor.State[E, R, C]]) => StepExecutor.QueryStatus[E, R, C](ref))(askTimeout, scheduler)
+                  .flatMap { executorState =>
+                    executorState.status match {
+                      case StepExecutor.Succeed =>
+                        Future.successful(StepExecutor.StepCompleted[E, R, C](state.transactionId.get, step.stepId, executorState.result.get.asInstanceOf[SagaResult[R]]))
+                      case StepExecutor.Failed =>
+                        Future.successful(StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, executorState.lastError.getOrElse(NonRetryableFailure("Unknown error"))))
+                      case _ if retries > 0 =>
+                        akka.pattern.after(2.seconds, context.system.classicSystem.scheduler)(pollStatus(retries - 1))
+                      case _ =>
+                        Future.successful(StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, RetryableFailure(s"Step still ongoing after status queries")))
+                    }
+                  }
+                  .recover {
+                    case ex: Throwable =>
+                      log.warn(s"Coordinator query status failed: ${ex.getMessage}")
+                      StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, NonRetryableFailure(s"Coordinator query status failed: ${ex.getMessage}"))
+                  }
+              }
+              pollStatus(3)
             case ex: Throwable =>
-              StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, NonRetryableFailure(s"Coordinator ask failed: ${ex.getMessage}"))
+              log.error(s"Coordinator ask failed with unexpected exception: ${ex.getClass.getName} - ${ex.getMessage}")
+              Future.successful(StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, NonRetryableFailure(s"Coordinator ask failed: ${ex.getMessage}")))
           }
       }
     )
