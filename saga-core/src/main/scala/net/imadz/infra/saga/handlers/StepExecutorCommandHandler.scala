@@ -37,11 +37,12 @@ object StepExecutorCommandHandler {
       case OperationResponse(Right(result), replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.status == Ongoing =>
         Effect
           .persist(OperationSucceeded(result))
-          .thenRun(updatedState => updatedState.status match {
+          .thenRun((updatedState: State[E, R, C]) => updatedState.status match {
             case Succeed => // Notify success
               replyTo.foreach(_ ! StepCompleted[E, R, C](state.transactionId.get, state.step.get.stepId, result.asInstanceOf[SagaResult[R]]))
             case _ => // Unexpected state
           })
+          .thenStop()
 
       case OperationResponse(Left(error: RetryableFailure), replyTo) if state.canScheduleRetryOnFailure(defaultMaxRetries) =>
 
@@ -55,7 +56,8 @@ object StepExecutorCommandHandler {
       case OperationResponse(Left(error), replyTo: Option[ActorRef[StepResult[E, R, C]]]) =>
         Effect
           .persist(OperationFailed(error))
-          .thenRun(_ => replyTo.foreach(_ ! StepFailed(state.transactionId.get, state.step.get.stepId, error)))
+          .thenRun((_: State[E, R, C]) => replyTo.foreach(_ ! StepFailed(state.transactionId.get, state.step.get.stepId, error)))
+          .thenStop()
 
       case TimedOut(replyTo) if state.status == Ongoing && state.canScheduleRetryOnTimedOut(defaultMaxRetries) =>
         actorContext.log.warn(s"TimedOut found ${state.retries} times")
@@ -70,7 +72,8 @@ object StepExecutorCommandHandler {
       case TimedOut(replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.status == Ongoing =>
         Effect
           .persist(OperationFailed(RetryableFailure("timed out")))
-          .thenRun(_ => replyTo.foreach(_ ! StepFailed(state.transactionId.get, state.step.get.stepId, RetryableFailure("timed out"))))
+          .thenRun((_: State[E, R, C]) => replyTo.foreach(_ ! StepFailed(state.transactionId.get, state.step.get.stepId, RetryableFailure("timed out"))))
+          .thenStop()
 
       case TimedOut(_) =>
         actorContext.log.info(s"TrxId: ${state.transactionId} | Ignoring TimedOut message because step is already in ${state.status} state")

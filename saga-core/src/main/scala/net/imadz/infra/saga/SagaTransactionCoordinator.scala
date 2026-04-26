@@ -24,6 +24,7 @@ object SagaTransactionCoordinator {
   // Commands
   sealed trait Command extends CborSerializable
   case class StartTransaction[E, R, C](transactionId: String, steps: List[SagaTransactionStep[E, R, C]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
+  case object TransactionTimeout extends Command
   private case class PhaseCompleted(phase: TransactionPhase, results: List[Either[RetryableOrNotException, Any]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
   private case class PhaseFailure(phase: TransactionPhase, error: RetryableOrNotException, replyTo: Option[ActorRef[TransactionResult]]) extends Command
   case class TracingStep(
@@ -110,36 +111,53 @@ object SagaTransactionCoordinator {
 
   // @formatter:on
 
+  import scala.concurrent.duration._
+
+  case object TransactionTimeoutKey
+
   def apply(
              persistenceId: PersistenceId,
              stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command]
            )(implicit ec: ExecutionContext, timeout: Timeout): Behavior[Command] = Behaviors.setup { context =>
-    EventSourcedBehavior[Command, Event, State](
-      persistenceId = persistenceId,
-      emptyState = State(),
-      commandHandler = commandHandler(context, stepExecutorFactory),
-      eventHandler = eventHandler
-    ).receiveSignal {
-      case (state, akka.persistence.typed.RecoveryCompleted) =>
-        context.log.info(s"RecoveryCompleted for coordinator: ${persistenceId.id}, state: $state")
-        if (state.status == InProgress || state.status == Compensating) {
-          context.log.info(s"Resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase}")
-          executePhase(context, state, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], None)
-        }
+    Behaviors.withTimers { timers =>
+      EventSourcedBehavior[Command, Event, State](
+        persistenceId = persistenceId,
+        emptyState = State(),
+        commandHandler = commandHandler(context, timers, stepExecutorFactory),
+        eventHandler = eventHandler
+      ).receiveSignal {
+        case (state, akka.persistence.typed.RecoveryCompleted) =>
+          context.log.info(s"RecoveryCompleted for coordinator: ${persistenceId.id}, state: $state")
+          if (state.status == InProgress || state.status == Compensating) {
+            timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, 5.minutes)
+            context.log.info(s"Resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase}")
+            executePhase(context, state, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], None)
+          }
+      }
     }
   }
 
   def commandHandler(
                       context: ActorContext[Command],
+                      timers: akka.actor.typed.scaladsl.TimerScheduler[Command],
                       stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command]
                     )(implicit ec: ExecutionContext, timeout: Timeout): (State, Command) => Effect[Event, State] = { (state, command) =>
     command match {
       case StartTransaction(transactionId, steps, replyTo) if state.status == Created =>
+        timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, 5.minutes)
         Effect
           .persist(TransactionStarted(transactionId, steps))
           .thenRun { _ =>
             executePhase(context, State(Some(transactionId), steps, PreparePhase, InProgress), stepExecutorFactory, replyTo)
           }
+
+      case TransactionTimeout =>
+        if (state.status == InProgress || state.status == Compensating) {
+          context.log.warn(s"Transaction ${state.transactionId.getOrElse("")} timed out at phase ${state.currentPhase}")
+          handlePhaseFailure(context, state, state.currentPhase, NonRetryableFailure("Global transaction timeout"), stepExecutorFactory, None)
+        } else {
+          Effect.none
+        }
 
       case PhaseCompleted(phase, results, replyTo) =>
         handlePhaseCompletion(context, state, phase, results, stepExecutorFactory, replyTo)
@@ -170,14 +188,16 @@ object SagaTransactionCoordinator {
             PhaseSucceeded(CommitPhase),
             TransactionCompleted(state.transactionId.get)
           )
-        ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = true, stateNew)))
+        ).thenRun((stateNew: State) => replyTo.foreach(_ ! TransactionResult(successful = true, stateNew)))
+         .thenStop()
       case CompensatePhase =>
         Effect.persist(
           List(
             PhaseSucceeded(CompensatePhase),
             TransactionFailed(state.transactionId.get, "transaction failed but compensated")
           )
-        ).thenRun(stateNew => replyTo.foreach(_ ! TransactionResult(successful = false, stateNew)))
+        ).thenRun((stateNew: State) => replyTo.foreach(_ ! TransactionResult(successful = false, stateNew)))
+         .thenStop()
     }
   }
 
@@ -198,9 +218,10 @@ object SagaTransactionCoordinator {
     } else {
       Effect
         .persist(PhaseFailed(phase), TransactionFailed(state.transactionId.get, s"Phase $phase failed with error: ${error.message}"))
-        .thenRun { stateNew =>
+        .thenRun { (stateNew: State) =>
           replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, s"Phase $phase failed with error: ${error.message}"))
         }
+        .thenStop()
     }
   }
 
