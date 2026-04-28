@@ -10,13 +10,15 @@
         .container { max-width: 1200px; margin: 0 auto; }
         h1 { color: #00d4ff; border-bottom: 2px solid #333; padding-bottom: 10px; }
         
-        .dashboard { display: grid; grid-template-columns: 300px 1fr; gap: 20px; margin-top: 20px; }
+        .dashboard { display: grid; grid-template-columns: 320px 1fr; gap: 20px; margin-top: 20px; }
         
         .control-panel { background: #252525; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .control-panel h2 { font-size: 1.2rem; margin-top: 0; color: #ffca28; }
         .btn { display: block; width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center; transition: background 0.3s; }
         .btn-primary { background: #007bff; color: white; }
         .btn-primary:hover { background: #0056b3; }
+        .btn-warning { background: #ffca28; color: #000; }
+        .btn-warning:hover { background: #ffb300; }
         
         .fault-injection { margin-top: 20px; border-top: 1px solid #444; padding-top: 20px; }
         .step-config { margin-bottom: 15px; }
@@ -24,19 +26,18 @@
         select { width: 100%; padding: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
         
         .visualization { background: #252525; padding: 20px; border-radius: 8px; position: relative; min-height: 500px; }
-        .dag-container { display: flex; flex-direction: column; align-items: center; gap: 40px; margin-top: 40px; }
+        .dag-container { display: flex; flex-direction: column; align-items: center; gap: 30px; margin-top: 10px; }
         .phase-row { display: flex; justify-content: center; gap: 30px; width: 100%; }
         
-        .node { width: 150px; height: 80px; background: #444; border: 2px solid #666; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: all 0.5s; font-size: 0.9rem; }
+        .node { width: 140px; height: 70px; background: #444; border: 2px solid #666; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: all 0.5s; font-size: 0.85rem; }
         .node .label { font-weight: bold; }
-        .node .phase { font-size: 0.7rem; color: #aaa; }
+        .node .phase { font-size: 0.65rem; color: #aaa; }
         
         .node.pending { background: #444; border-color: #666; }
         .node.ongoing { background: #0056b3; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; animation: pulse 1.5s infinite; }
         .node.success { background: #2e7d32; border-color: #4caf50; }
         .node.failed { background: #c62828; border-color: #f44336; }
         .node.retrying { background: #ef6c00; border-color: #ffca28; border-style: dashed; }
-        .node.suspended { background: #ef6c00; border-color: #ff9800; }
         
         @@keyframes pulse {
             0% { transform: scale(1); }
@@ -44,7 +45,7 @@
             100% { transform: scale(1); }
         }
         
-        .logs { margin-top: 20px; background: #000; padding: 15px; border-radius: 8px; height: 200px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; border: 1px solid #333; }
+        .logs { margin-top: 20px; background: #000; padding: 15px; border-radius: 8px; height: 180px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; border: 1px solid #333; }
         .log-entry { margin-bottom: 4px; border-left: 3px solid #555; padding-left: 8px; }
         .log-time { color: #888; margin-right: 10px; }
         .log-type { font-weight: bold; margin-right: 10px; }
@@ -63,8 +64,12 @@
         <div class="dashboard">
             <div class="control-panel">
                 <h2>Control Center</h2>
+                <div style="margin-bottom: 15px; padding: 10px; background: #333; border-radius: 4px;">
+                    <input type="checkbox" id="singleStepMode"> <label for="singleStepMode">Single Step Mode (Interactive)</label>
+                </div>
                 <button class="btn btn-primary" id="startBtn">🚀 Start Transaction</button>
-                <div id="statusInfo" style="margin-top: 10px; font-size: 0.8rem; color: #aaa;">Ready.</div>
+                <button class="btn btn-warning" id="proceedBtn" style="display:none;">⏩ Proceed Next Phase</button>
+                <div id="statusInfo" style="margin-top: 10px; font-size: 0.8rem; color: #ffca28;">Ready.</div>
                 <div class="fault-injection">
                     <h2>Fault Injection</h2>
                     <div class="step-config">
@@ -128,11 +133,14 @@
     </div>
     <script>
         const logContainer = document.getElementById('logContainer');
+        const proceedBtn = document.getElementById('proceedBtn');
+        let currentTransactionId = null;
+
         function addLog(type, msg) {
             const entry = document.createElement('div');
             entry.className = 'log-entry type-' + type;
             const now = new Date();
-            const timeStr = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+            const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0');
             entry.innerHTML = '<span class="log-time">' + timeStr + '</span> <span class="log-type">' + type + '</span> ' + msg;
             logContainer.prepend(entry);
         }
@@ -146,7 +154,8 @@
             const data = event.data;
             if (event.type === 'TransactionStarted') {
                 document.querySelectorAll('.node').forEach(function(n) { n.className = 'node pending'; });
-                addLog(event.type, 'Transaction ' + data.transactionId + ' started.');
+                addLog(event.type, 'Transaction ' + data.transactionId.substring(0,8) + ' started.');
+                currentTransactionId = data.transactionId;
             } else if (event.type === 'StepOngoing') {
                 updateNode(data.stepId, data.phase, 'ongoing');
             } else if (event.type === 'StepCompleted') {
@@ -161,18 +170,40 @@
                 }
             } else if (event.type === 'TransactionCompleted') {
                 addLog(event.type, 'SUCCESS');
+                document.getElementById('statusInfo').innerText = 'Completed.';
+                proceedBtn.style.display = 'none';
             } else if (event.type === 'TransactionFailed') {
                 addLog(event.type, 'FAILED: ' + data.reason);
+                document.getElementById('statusInfo').innerText = 'Failed.';
+                proceedBtn.style.display = 'none';
             } else if (event.type === 'TransactionSuspended') {
-                addLog(event.type, 'SUSPENDED: ' + data.reason);
+                if (data.reason === 'MANUAL_PAUSE') {
+                   addLog('System', 'PAUSED - Waiting for manual proceed');
+                   document.getElementById('statusInfo').innerText = 'PAUSED';
+                   proceedBtn.style.display = 'block';
+                } else {
+                   addLog(event.type, 'SUSPENDED: ' + data.reason);
+                   document.getElementById('statusInfo').innerText = 'SUSPENDED';
+                   proceedBtn.style.display = 'none';
+                }
             }
         };
         document.getElementById('startBtn').onclick = function() {
+            proceedBtn.style.display = 'none';
+            const isSingleStep = document.getElementById('singleStepMode').checked;
             ['Step-A', 'Step-B', 'Step-C'].forEach(function(sid) {
                 const b = document.getElementById('config-' + sid).value;
                 fetch('/api/saga/inject-fault/' + sid + '/' + b, { method: 'POST' });
             });
-            fetch('/api/saga/trigger-showcase', { method: 'POST' });
+            fetch('/api/saga/trigger-showcase/' + isSingleStep, { method: 'POST' })
+                .then(r => r.json())
+                .then(d => { currentTransactionId = d.transactionId; });
+        };
+        proceedBtn.onclick = function() {
+            if (currentTransactionId) {
+                proceedBtn.style.display = 'none';
+                fetch('/api/saga/proceed/' + currentTransactionId, { method: 'POST' });
+            }
         };
     </script>
 </body>

@@ -38,12 +38,38 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
     override def toProto(e: TransactionStarted): TransactionStartedPO = TransactionStartedPO(
       transactionId = e.transactionId,
       steps = e.steps.map(SagaStepConv.toProto),
-      traceId = e.traceId
+      traceId = e.traceId,
+      singleStep = e.singleStep
     )
 
     override def fromProto(p: TransactionStartedPO): TransactionStarted = TransactionStarted(
       transactionId = p.transactionId,
       steps = p.steps.map(SagaStepConv.fromProto).toList,
+      traceId = p.traceId,
+      singleStep = p.singleStep
+    )
+  }
+
+  object TransactionPausedConv extends ProtoConverter[TransactionPaused, TransactionPausedPO] {
+    override def toProto(e: TransactionPaused): TransactionPausedPO = TransactionPausedPO(
+      transactionId = e.transactionId,
+      traceId = e.traceId
+    )
+
+    override def fromProto(p: TransactionPausedPO): TransactionPaused = TransactionPaused(
+      transactionId = p.transactionId,
+      traceId = p.traceId
+    )
+  }
+
+  object TransactionResumedConv extends ProtoConverter[TransactionResumed, TransactionResumedPO] {
+    override def toProto(e: TransactionResumed): TransactionResumedPO = TransactionResumedPO(
+      transactionId = e.transactionId,
+      traceId = e.traceId
+    )
+
+    override def fromProto(p: TransactionResumedPO): TransactionResumed = TransactionResumed(
+      transactionId = p.transactionId,
       traceId = p.traceId
     )
   }
@@ -115,7 +141,9 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
         case Compensating => CoordinatorStatusPO.TRANSACTION_COMPENSATING
         case Suspended => CoordinatorStatusPO.TRANSACTION_SUSPENDED
       },
-      traceId = s.traceId
+      traceId = s.traceId,
+      singleStep = s.singleStep,
+      isPaused = s.isPaused
     )
 
     override def fromProto(p: CoordinatorStatePO): State = State(
@@ -131,7 +159,9 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
         case CoordinatorStatusPO.TRANSACTION_SUSPENDED => Suspended
         case _ => Created
       },
-      traceId = p.traceId
+      traceId = p.traceId,
+      singleStep = p.singleStep,
+      isPaused = p.isPaused
     )
   }
 }

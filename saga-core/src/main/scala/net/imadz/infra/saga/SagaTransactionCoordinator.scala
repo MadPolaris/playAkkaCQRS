@@ -23,8 +23,11 @@ object SagaTransactionCoordinator {
   // @formatter:off
   // Commands
   sealed trait Command extends CborSerializable
-  case class StartTransaction[E, R, C](transactionId: String, steps: List[SagaTransactionStep[E, R, C]], replyTo: Option[ActorRef[TransactionResult]], traceId: String = "") extends Command
+  case class StartTransaction[E, R, C](transactionId: String, steps: List[SagaTransactionStep[E, R, C]], replyTo: Option[ActorRef[TransactionResult]], traceId: String = "", singleStep: Boolean = false) extends Command
   case object TransactionTimeout extends Command
+  case class ProceedNext(replyTo: Option[ActorRef[TransactionResult]]) extends Command
+  case class TransactionPaused(transactionId: String, traceId: String) extends Command with Event
+  case class TransactionResumed(transactionId: String, traceId: String) extends Command with Event
   private case class PhaseCompleted(phase: TransactionPhase, results: List[Either[RetryableOrNotException, Any]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
   private case class PhaseFailure(phase: TransactionPhase, error: RetryableOrNotException, replyTo: Option[ActorRef[TransactionResult]]) extends Command
   case class TracingStep(
@@ -88,7 +91,7 @@ object SagaTransactionCoordinator {
   case class TransactionResult(successful: Boolean, state: State, failReason: String = "")
   // Events
   sealed trait Event extends CborSerializable
-  case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _, _]], traceId: String = "") extends Event
+  case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _, _]], traceId: String = "", singleStep: Boolean = false) extends Event
   case class PhaseSucceeded(phase: TransactionPhase) extends Event
   case class PhaseFailed(phase: TransactionPhase) extends Event
   case class TransactionCompleted(transactionId: String) extends Event
@@ -101,7 +104,9 @@ object SagaTransactionCoordinator {
                     steps: List[SagaTransactionStep[_, _, _]] = List.empty,
                     currentPhase: TransactionPhase = PreparePhase,
                     status: Status = Created,
-                    traceId: String = ""
+                    traceId: String = "",
+                    singleStep: Boolean = false,
+                    isPaused: Boolean = false
                   )
 
   sealed trait Status
@@ -132,10 +137,12 @@ object SagaTransactionCoordinator {
       ).receiveSignal {
         case (state, akka.persistence.typed.RecoveryCompleted) =>
           context.log.info(s"[TraceID: ${state.traceId}] RecoveryCompleted for coordinator: ${persistenceId.id}, state: $state")
-          if (state.status == InProgress || state.status == Compensating) {
+          if ((state.status == InProgress || state.status == Compensating) && !state.isPaused) {
             timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, globalTimeout)
             context.log.info(s"[TraceID: ${state.traceId}] Resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase}")
             executePhase(context, state, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], None)
+          } else if (state.isPaused) {
+            context.log.info(s"[TraceID: ${state.traceId}] Transaction ${state.transactionId.getOrElse("")} recovered in PAUSED state. Waiting for ProceedNext.")
           }
       }
     }
@@ -148,15 +155,23 @@ object SagaTransactionCoordinator {
                       globalTimeout: FiniteDuration
                     )(implicit ec: ExecutionContext, timeout: Timeout): (State, Command) => Effect[Event, State] = { (state, command) =>
     command match {
-      case StartTransaction(transactionId, steps, replyTo, reqTraceId) if state.status == Created =>
+      case StartTransaction(transactionId, steps, replyTo, reqTraceId, singleStep) if state.status == Created =>
         val traceId = if (reqTraceId.isEmpty) transactionId else reqTraceId
         timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, globalTimeout)
-        Effect
-          .persist(TransactionStarted(transactionId, steps, traceId))
-          .thenRun { _ =>
-            context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionStarted(transactionId, steps.map(_.stepId), traceId))
-            executePhase(context, State(Some(transactionId), steps, PreparePhase, InProgress, traceId), stepExecutorFactory, replyTo)
-          }
+        
+        val startEffect = Effect.persist[Event, State](TransactionStarted(transactionId, steps, traceId, singleStep))
+        
+        if (singleStep) {
+           startEffect.thenRun { (_: State) =>
+              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionStarted(transactionId, steps.map(_.stepId), traceId))
+              context.self ! TransactionPaused(transactionId, traceId) // Internal signal to pause
+           }
+        } else {
+           startEffect.thenRun { (stateNew: State) =>
+              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionStarted(transactionId, steps.map(_.stepId), traceId))
+              executePhase(context, stateNew, stepExecutorFactory, replyTo)
+           }
+        }
 
       case TransactionTimeout =>
         if (state.status == InProgress || state.status == Compensating) {
@@ -164,6 +179,20 @@ object SagaTransactionCoordinator {
           handlePhaseFailure(context, state, state.currentPhase, NonRetryableFailure("Global transaction timeout"), stepExecutorFactory, None)
         } else {
           Effect.none
+        }
+
+      case ProceedNext(replyTo) if state.isPaused =>
+        Effect
+          .persist[Event, State](TransactionResumed(state.transactionId.get, state.traceId))
+          .thenRun { (stateNew: State) =>
+            context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepOngoing(stateNew.transactionId.get, "SYSTEM", "RESUME", stateNew.traceId)) // Special log
+            executePhase(context, stateNew, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], replyTo)
+          }
+
+      // Internal command sent to self to persist pause
+      case p: TransactionPaused =>
+        Effect.persist[Event, State](p).thenRun { (_: State) =>
+           context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionSuspended(p.transactionId, "MANUAL_PAUSE", p.traceId)) // Reuse suspended for UI
         }
 
       case PhaseCompleted(phase, results, replyTo) =>
@@ -186,9 +215,14 @@ object SagaTransactionCoordinator {
                                    )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
     phase match {
       case PreparePhase =>
-        Effect
-          .persist(PhaseSucceeded(PreparePhase))
-          .thenRun { stateNew => executePhase(context, stateNew, stepExecutorFactory, replyTo) }
+        val persistEffect = Effect.persist[Event, State](PhaseSucceeded(PreparePhase))
+        if (state.singleStep) {
+           persistEffect.thenRun { (stateNew: State) =>
+              context.self ! TransactionPaused(stateNew.transactionId.get, stateNew.traceId)
+           }
+        } else {
+           persistEffect.thenRun { (stateNew: State) => executePhase(context, stateNew, stepExecutorFactory, replyTo) }
+        }
       case CommitPhase =>
         Effect.persist(
           List(
@@ -223,11 +257,16 @@ object SagaTransactionCoordinator {
                                   replyTo: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
     if (phase != CompensatePhase) {
-      Effect
-        .persist(PhaseFailed(phase))
-        .thenRun { stateNew =>
-          executePhase(context, stateNew, stepExecutorFactory, replyTo)
-        }
+      val persistEffect = Effect.persist[Event, State](PhaseFailed(phase))
+      if (state.singleStep) {
+         persistEffect.thenRun { (stateNew: State) =>
+            context.self ! TransactionPaused(stateNew.transactionId.get, stateNew.traceId)
+         }
+      } else {
+         persistEffect.thenRun { (stateNew: State) =>
+            executePhase(context, stateNew, stepExecutorFactory, replyTo)
+         }
+      }
     } else {
       val reason = s"Phase $phase failed with error: ${error.message}"
       Effect
@@ -316,8 +355,15 @@ object SagaTransactionCoordinator {
 
   def eventHandler: (State, Event) => State = { (state, event) =>
     event match {
-      case TransactionStarted(transactionId, steps, traceId) =>
-        state.copy(transactionId = Some(transactionId), steps = steps, status = InProgress, traceId = traceId)
+      case TransactionStarted(transactionId, steps, traceId, singleStep) =>
+        state.copy(transactionId = Some(transactionId), steps = steps, status = InProgress, traceId = traceId, singleStep = singleStep)
+      
+      case TransactionPaused(_, _) =>
+        state.copy(isPaused = true)
+      
+      case TransactionResumed(_, _) =>
+        state.copy(isPaused = false)
+
       case PhaseFailed(phase) =>
         phase match {
           case PreparePhase => state.copy(currentPhase = CompensatePhase, status = Compensating)

@@ -138,6 +138,7 @@ message StartTransactionPO {
   string transaction_id = 1;
   repeated SagaTransactionStepPO steps = 2;
   string trace_id = 3;
+  bool single_step = 4;
 }
 
 message PhaseCompletedPO {
@@ -163,6 +164,17 @@ message TransactionStartedPO {
   string transaction_id = 1;
   repeated SagaTransactionStepPO steps = 2;
   string trace_id = 3;
+  bool single_step = 4;
+}
+
+message TransactionPausedPO {
+  string transaction_id = 1;
+  string trace_id = 2;
+}
+
+message TransactionResumedPO {
+  string transaction_id = 1;
+  string trace_id = 2;
 }
 
 message PhaseSucceededPO {
@@ -195,6 +207,8 @@ message SagaTransactionCoordinatorEventPO {
     TransactionCompletedPO transactionCompleted = 4;
     TransactionFailedPO transactionFailed = 5;
     TransactionSuspendedPO suspended = 6;
+    TransactionPausedPO paused = 7;
+    TransactionResumedPO resumed = 8;
   }
 }
 
@@ -205,4 +219,6 @@ message CoordinatorStatePO {
   TransactionPhasePO current_phase = 3;
   CoordinatorStatusPO status = 4;
   string trace_id = 5;
+  bool single_step = 6;
+  bool is_paused = 7;
 }

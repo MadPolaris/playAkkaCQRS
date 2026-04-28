@@ -44,6 +44,12 @@ class SagaTransactionCoordinatorEventAdapter(override val system: ExtendedActorS
 
       case evt: SagaTransactionCoordinator.TransactionSuspended =>
         SagaTransactionCoordinatorEventPO.Event.Suspended(TransactionSuspendedConv.toProto(evt))
+
+      case evt: SagaTransactionCoordinator.TransactionPaused =>
+        SagaTransactionCoordinatorEventPO.Event.Paused(TransactionPausedConv.toProto(evt))
+
+      case evt: SagaTransactionCoordinator.TransactionResumed =>
+        SagaTransactionCoordinatorEventPO.Event.Resumed(TransactionResumedConv.toProto(evt))
     }
     SagaTransactionCoordinatorEventPO(payload)
   }
@@ -67,6 +73,12 @@ class SagaTransactionCoordinatorEventAdapter(override val system: ExtendedActorS
 
       case SagaTransactionCoordinatorEventPO.Event.Suspended(po) =>
         EventSeq.single(TransactionSuspendedConv.fromProto(po))
+
+      case SagaTransactionCoordinatorEventPO.Event.Paused(po) =>
+        EventSeq.single(TransactionPausedConv.fromProto(po))
+
+      case SagaTransactionCoordinatorEventPO.Event.Resumed(po) =>
+        EventSeq.single(TransactionResumedConv.fromProto(po))
 
       case _ =>
         EventSeq.empty

@@ -79,7 +79,7 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     Ok(Json.obj("status" -> "ok", "stepId" -> stepId, "behavior" -> behavior))
   }
 
-  def triggerShowcase() = Action {
+  def triggerShowcase(singleStep: Boolean) = Action {
     import akka.cluster.sharding.typed.scaladsl.ClusterSharding
     import net.imadz.infra.saga.{SagaTransactionStep, SagaPhase}
     import net.imadz.infra.saga.SagaTransactionCoordinator.StartTransaction
@@ -103,8 +103,21 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     import net.imadz.application.services.MoneyTransferService
     val coordinatorRef = sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId)
     
-    coordinatorRef ! StartTransaction(transactionId, steps, None, traceId)
+    coordinatorRef ! StartTransaction(transactionId, steps, None, traceId, singleStep)
     
     Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId, "traceId" -> traceId))
+  }
+
+  def proceed(transactionId: String) = Action {
+    import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+    import net.imadz.infra.saga.SagaTransactionCoordinator.ProceedNext
+
+    val sharding = ClusterSharding(typedSystem)
+    import net.imadz.application.services.MoneyTransferService
+    val coordinatorRef = sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId)
+    
+    coordinatorRef ! ProceedNext(None)
+    
+    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId))
   }
 }
