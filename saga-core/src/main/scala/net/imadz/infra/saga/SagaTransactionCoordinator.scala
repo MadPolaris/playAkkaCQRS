@@ -154,6 +154,7 @@ object SagaTransactionCoordinator {
         Effect
           .persist(TransactionStarted(transactionId, steps, traceId))
           .thenRun { _ =>
+            context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionStarted(transactionId, steps.map(_.stepId), traceId))
             executePhase(context, State(Some(transactionId), steps, PreparePhase, InProgress, traceId), stepExecutorFactory, replyTo)
           }
 
@@ -194,7 +195,10 @@ object SagaTransactionCoordinator {
             PhaseSucceeded(CommitPhase),
             TransactionCompleted(state.transactionId.get)
           )
-        ).thenRun((stateNew: State) => replyTo.foreach(_ ! TransactionResult(successful = true, stateNew)))
+        ).thenRun((stateNew: State) => {
+          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionCompleted(state.transactionId.get, stateNew.traceId))
+          replyTo.foreach(_ ! TransactionResult(successful = true, stateNew))
+        })
          .thenStop()
       case CompensatePhase =>
         Effect.persist(
@@ -202,7 +206,10 @@ object SagaTransactionCoordinator {
             PhaseSucceeded(CompensatePhase),
             TransactionFailed(state.transactionId.get, "transaction failed but compensated")
           )
-        ).thenRun((stateNew: State) => replyTo.foreach(_ ! TransactionResult(successful = false, stateNew)))
+        ).thenRun((stateNew: State) => {
+          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionFailed(state.transactionId.get, "transaction failed but compensated", stateNew.traceId))
+          replyTo.foreach(_ ! TransactionResult(successful = false, stateNew))
+        })
          .thenStop()
     }
   }
@@ -222,10 +229,12 @@ object SagaTransactionCoordinator {
           executePhase(context, stateNew, stepExecutorFactory, replyTo)
         }
     } else {
+      val reason = s"Phase $phase failed with error: ${error.message}"
       Effect
-        .persist(PhaseFailed(phase), TransactionSuspended(state.transactionId.get, s"Phase $phase failed with error: ${error.message}"))
+        .persist(PhaseFailed(phase), TransactionSuspended(state.transactionId.get, reason))
         .thenRun { (stateNew: State) =>
-          replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, s"Phase $phase failed with error: ${error.message}"))
+          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionSuspended(state.transactionId.get, reason, stateNew.traceId))
+          replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, reason))
         }
         .thenStop()
     }

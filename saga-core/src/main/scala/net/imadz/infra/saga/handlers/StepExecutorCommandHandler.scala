@@ -7,7 +7,7 @@ import akka.persistence.typed.scaladsl.Effect
 import net.imadz.infra.saga.SagaParticipant._
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.StepExecutor._
-import net.imadz.infra.saga.{SagaParticipant, SagaTransactionStep}
+import net.imadz.infra.saga.{SagaParticipant, SagaProgressEvent, SagaTransactionStep}
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.duration.FiniteDuration
@@ -33,12 +33,13 @@ object StepExecutorCommandHandler {
         Effect.none
 
       case Start(transactionId, step, replyTo, traceId) if state.canStart =>
+        actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepOngoing(transactionId, step.stepId, step.phase.toString, traceId))
         Effect
           .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
           .thenRun(_ => executeOperation(actorContext, context, step.phase, step, transactionId, traceId, circuitBreaker, replyTo))
 
       case RecoverExecution(transactionId, step, replyTo, traceId) if state.canRecover =>
-
+        actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepOngoing(transactionId, step.stepId, step.phase.toString, traceId))
         Effect
           .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
           .thenRun(_ => executeOperation(actorContext, context, step.phase, step, transactionId, traceId, circuitBreaker, replyTo))
@@ -49,6 +50,7 @@ object StepExecutorCommandHandler {
           .persist(OperationSucceeded(result))
           .thenRun((updatedState: State[E, R, C]) => updatedState.status match {
             case Succeed => // Notify success
+              actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepCompleted(state.transactionId.get, state.step.get.stepId, state.step.get.phase.toString, state.traceId.getOrElse("")))
               replyTo.foreach(_ ! StepCompleted[E, R, C](state.transactionId.get, state.step.get.stepId, result))
             case _ => // Unexpected state
           })
@@ -59,11 +61,14 @@ object StepExecutorCommandHandler {
         val nextRetry = state.retries + 1
         val nextDelay = calculateBackoffDelay(initialRetryDelay, nextRetry)
 
+        actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepFailed(state.transactionId.get, state.step.get.stepId, state.step.get.phase.toString, s"Retryable failure (attempt $nextRetry): ${error.message}", state.traceId.getOrElse("")))
+
         Effect
           .persist(List(OperationFailed(error), RetryScheduled(nextRetry)))
           .thenRun(_ => scheduleRetry(timers, nextDelay, replyTo))
 
       case OperationResponse(Left(error), replyTo: Option[ActorRef[StepResult[E, R, C]]]) =>
+        actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepFailed(state.transactionId.get, state.step.get.stepId, state.step.get.phase.toString, error.message, state.traceId.getOrElse("")))
         Effect
           .persist(OperationFailed(error))
           .thenRun((_: State[E, R, C]) => replyTo.foreach(_ ! StepFailed(state.transactionId.get, state.step.get.stepId, error)))
@@ -75,11 +80,14 @@ object StepExecutorCommandHandler {
         val nextRetry = state.retries + 1
         val nextDelay = calculateBackoffDelay(initialRetryDelay, nextRetry)
 
+        actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepFailed(state.transactionId.get, state.step.get.stepId, state.step.get.phase.toString, s"Timeout (attempt $nextRetry)", state.traceId.getOrElse("")))
+
         Effect
           .persist(List(OperationFailed(RetryableFailure("timed out")), RetryScheduled(nextRetry)))
           .thenRun(_ => scheduleRetry(timers, nextDelay, replyTo))
 
       case TimedOut(replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.status == Ongoing =>
+        actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepFailed(state.transactionId.get, state.step.get.stepId, state.step.get.phase.toString, "Timeout limit reached", state.traceId.getOrElse("")))
         Effect
           .persist(OperationFailed(RetryableFailure("timed out")))
           .thenRun((_: State[E, R, C]) => replyTo.foreach(_ ! StepFailed(state.transactionId.get, state.step.get.stepId, RetryableFailure("timed out"))))
@@ -135,8 +143,8 @@ object StepExecutorCommandHandler {
       case scala.util.Success(result: Either[RetryableOrNotException, SagaResult[R]]) =>
         actorContext.self ! OperationResponse(result, replyTo)
       case scala.util.Failure(exception) =>
-        logger.warn(s"$exception found while processing ${step}")
-        actorContext.self ! OperationResponse(Left(NonRetryableFailure(exception.getMessage)), replyTo)
+        logger.error(s"Operation failed with exception for step ${step.stepId}", exception)
+        actorContext.self ! OperationResponse(Left(NonRetryableFailure(s"Operation failed: ${exception.getMessage}")), replyTo)
     }
   }
 

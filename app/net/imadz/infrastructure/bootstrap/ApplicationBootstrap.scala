@@ -38,6 +38,7 @@ class ApplicationBootstrap @Inject()(
   // 2. 注册您的业务策略 (这一步就是"挂号")
   serializationExtension.registerStrategy(TransactionSerializationStrategies.FromAccountStrategy(creditBalanceRepository))
   serializationExtension.registerStrategy(TransactionSerializationStrategies.ToAccountStrategy(creditBalanceRepository))
+  serializationExtension.registerStrategy(net.imadz.application.services.transactor.ShowcaseStrategy)
 
 
   // --- 1. 初始化标准聚合根 (CreditBalance) ---

@@ -12,3 +12,9 @@ GET     /balance/:userId                controllers.HomeController.getBalance(us
 POST    /deposit/:userId/:amount        controllers.HomeController.deposit(userId: String, amount: Double)
 POST    /withdraw/:userId/:amount       controllers.HomeController.withdraw(userId: String, amount: Double)
 POST    /transfer/:fromUserId/:toUserId/:amount   controllers.HomeController.transfer(fromUserId: String, toUserId: String, amount: Double)
+
+# Showcase
+GET     /showcase                   controllers.ShowcaseController.index()
+GET     /ws/saga/events             controllers.ShowcaseController.socket
+POST    /api/saga/inject-fault/:stepId/:behavior  controllers.ShowcaseController.injectFault(stepId: String, behavior: String)
+POST    /api/saga/trigger-showcase  controllers.ShowcaseController.triggerShowcase()

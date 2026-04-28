@@ -88,7 +88,7 @@ object MoneyTransferSagaTransactorBehaviors {
               UpdateMoneyTransferTransactionStatus(Id.of(transactionId), result, cmd.replyTo)
             case scala.util.Failure(ex) =>
               // Ask 失败处理
-              val failedResult = TransactionResult(successful = false, null, Nil)
+              val failedResult = TransactionResult(successful = false, net.imadz.infra.saga.SagaTransactionCoordinator.State(traceId = ""))
               UpdateMoneyTransferTransactionStatus(Id.of(transactionId), failedResult, cmd.replyTo)
           }
         }
@@ -111,7 +111,22 @@ object MoneyTransferSagaTransactorBehaviors {
       TransactionResultConfirmation(
         cmd.id,
         if (cmd.newStatus.successful) None else Some(cmd.newStatus.failReason),
-        cmd.newStatus.tracingSteps
+        cmd.newStatus.state.steps.zipWithIndex.map { case (step, idx) =>
+           net.imadz.infra.saga.SagaTransactionCoordinator.TracingStep(
+             stepNumber = idx + 1,
+             stepId = step.stepId,
+             stepType = step.getClass.getSimpleName,
+             phase = step.phase.toString,
+             participant = step.participant.getClass.getSimpleName,
+             status = "Unknown", // At this level we only have the step definition
+             retries = 0,
+             maxRetries = step.maxRetries,
+             timeoutInMillis = step.timeoutDuration.toMillis,
+             retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
+             circuitBreakerOpen = false,
+             error = None
+           )
+        }
       )
     }
   }
@@ -126,16 +141,16 @@ object MoneyTransferSagaTransactorBehaviors {
     // 2. 编排 TCC 步骤
     List(
       // Step 1: Prepare (Reserve)
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("reserve-from", PreparePhase, fromPart, maxRetries = 5),
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("record-to", PreparePhase, toPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("reserve-from", PreparePhase, fromPart, maxRetries = 5, traceId = ""),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("record-to", PreparePhase, toPart, maxRetries = 5, traceId = ""),
 
       // Step 2: Commit
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-from", CommitPhase, fromPart, maxRetries = 5),
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-to", CommitPhase, toPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-from", CommitPhase, fromPart, maxRetries = 5, traceId = ""),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-to", CommitPhase, toPart, maxRetries = 5, traceId = ""),
 
       // Step 3: Compensate
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-from", CompensatePhase, fromPart, maxRetries = 5),
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-to", CompensatePhase, toPart, maxRetries = 5)
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-from", CompensatePhase, fromPart, maxRetries = 5, traceId = ""),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-to", CompensatePhase, toPart, maxRetries = 5, traceId = "")
     )
   }
 }

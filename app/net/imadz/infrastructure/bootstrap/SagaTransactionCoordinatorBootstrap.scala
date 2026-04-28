@@ -36,16 +36,18 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
     Behaviors.logMessages(LogOptions().withLogger(LoggerFactory.getLogger("iMadz")).withLevel(Level.INFO),
       Behaviors
         .setup { actorContext =>
-          EventSourcedBehavior(
-            persistenceId = PersistenceId(entityTypeKey.name, transactionId.toString),
-            emptyState = SagaTransactionCoordinator.State.apply(),
-            commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, (key, step) =>
-              createStepExecutor(actorContext, context, key, system)),
-            eventHandler = SagaTransactionCoordinator.eventHandler
-          ).withTagger(_ => Set(tag))
-            .eventAdapter(new SagaTransactionCoordinatorEventAdapter(system))
-            .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
-            .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))
+          Behaviors.withTimers { timers =>
+            EventSourcedBehavior(
+              persistenceId = PersistenceId(entityTypeKey.name, transactionId.toString),
+              emptyState = SagaTransactionCoordinator.State.apply(),
+              commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, timers, (key, step) =>
+                createStepExecutor(actorContext, context, key, system), 5.minutes),
+              eventHandler = SagaTransactionCoordinator.eventHandler
+            ).withTagger(_ => Set(tag))
+              .eventAdapter(new SagaTransactionCoordinatorEventAdapter(system))
+              .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+              .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))
+          }
         })
   }
 

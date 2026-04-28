@@ -1,0 +1,179 @@
+@()
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Saga Core Industrial Showcase</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #00d4ff; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        
+        .dashboard { display: grid; grid-template-columns: 300px 1fr; gap: 20px; margin-top: 20px; }
+        
+        .control-panel { background: #252525; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .control-panel h2 { font-size: 1.2rem; margin-top: 0; color: #ffca28; }
+        .btn { display: block; width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center; transition: background 0.3s; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-primary:hover { background: #0056b3; }
+        
+        .fault-injection { margin-top: 20px; border-top: 1px solid #444; padding-top: 20px; }
+        .step-config { margin-bottom: 15px; }
+        .step-name { font-weight: bold; margin-bottom: 5px; display: block; }
+        select { width: 100%; padding: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
+        
+        .visualization { background: #252525; padding: 20px; border-radius: 8px; position: relative; min-height: 500px; }
+        .dag-container { display: flex; flex-direction: column; align-items: center; gap: 40px; margin-top: 40px; }
+        .phase-row { display: flex; justify-content: center; gap: 30px; width: 100%; }
+        
+        .node { width: 150px; height: 80px; background: #444; border: 2px solid #666; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: all 0.5s; font-size: 0.9rem; }
+        .node .label { font-weight: bold; }
+        .node .phase { font-size: 0.7rem; color: #aaa; }
+        
+        .node.pending { background: #444; border-color: #666; }
+        .node.ongoing { background: #0056b3; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; animation: pulse 1.5s infinite; }
+        .node.success { background: #2e7d32; border-color: #4caf50; }
+        .node.failed { background: #c62828; border-color: #f44336; }
+        .node.retrying { background: #ef6c00; border-color: #ffca28; border-style: dashed; }
+        .node.suspended { background: #ef6c00; border-color: #ff9800; }
+        
+        @@keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .logs { margin-top: 20px; background: #000; padding: 15px; border-radius: 8px; height: 200px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.85rem; border: 1px solid #333; }
+        .log-entry { margin-bottom: 4px; border-left: 3px solid #555; padding-left: 8px; }
+        .log-time { color: #888; margin-right: 10px; }
+        .log-type { font-weight: bold; margin-right: 10px; }
+        .type-TransactionStarted { color: #ffca28; }
+        .type-StepOngoing { color: #00d4ff; }
+        .type-StepCompleted { color: #4caf50; }
+        .type-StepFailed { color: #f44336; }
+        .type-TransactionCompleted { color: #4caf50; border-left-color: #4caf50; background: rgba(76, 175, 80, 0.1); }
+        .type-TransactionFailed { color: #f44336; border-left-color: #f44336; background: rgba(244, 67, 54, 0.1); }
+        .type-TransactionSuspended { color: #ff9800; border-left-color: #ff9800; background: rgba(255, 152, 0, 0.1); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Saga Core Industrial Showcase</h1>
+        <div class="dashboard">
+            <div class="control-panel">
+                <h2>Control Center</h2>
+                <button class="btn btn-primary" id="startBtn">🚀 Start Transaction</button>
+                <div id="statusInfo" style="margin-top: 10px; font-size: 0.8rem; color: #aaa;">Ready.</div>
+                <div class="fault-injection">
+                    <h2>Fault Injection</h2>
+                    <div class="step-config">
+                        <span class="step-name">Step-A Behavior</span>
+                        <select id="config-Step-A">
+                            <option value="success">Always Success</option>
+                            <option value="failtwicethensucceed">Fail Twice then Success (Retry Demo)</option>
+                            <option value="failretryable">Retryable Failure</option>
+                            <option value="failnonretryable">Non-Retryable Failure</option>
+                            <option value="timeout">Simulate Timeout (10s)</option>
+                        </select>
+                    </div>
+                    <div class="step-config">
+                        <span class="step-name">Step-B Behavior</span>
+                        <select id="config-Step-B">
+                            <option value="success">Always Success</option>
+                            <option value="failtwicethensucceed">Fail Twice then Success (Retry Demo)</option>
+                            <option value="failretryable">Retryable Failure</option>
+                            <option value="failnonretryable">Non-Retryable Failure</option>
+                            <option value="timeout">Simulate Timeout (10s)</option>
+                        </select>
+                    </div>
+                    <div class="step-config">
+                        <span class="step-name">Step-C Behavior</span>
+                        <select id="config-Step-C">
+                            <option value="success">Always Success</option>
+                            <option value="failtwicethensucceed">Fail Twice then Success (Retry Demo)</option>
+                            <option value="failretryable">Retryable Failure</option>
+                            <option value="failnonretryable">Non-Retryable Failure</option>
+                            <option value="timeout">Simulate Timeout (10s)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="visualization">
+                <div class="dag-container">
+                    <div class="phase-label" style="color: #ffca28;">--- PREPARE PHASE ---</div>
+                    <div class="phase-row">
+                        <div class="node pending" id="node-Step-A-prepare"><span class="label">Step A</span><span class="phase">Prepare</span></div>
+                        <div class="node pending" id="node-Step-B-prepare"><span class="label">Step B</span><span class="phase">Prepare</span></div>
+                        <div class="node pending" id="node-Step-C-prepare"><span class="label">Step C</span><span class="phase">Prepare</span></div>
+                    </div>
+                    <div class="phase-label" style="color: #4caf50;">--- COMMIT PHASE ---</div>
+                    <div class="phase-row">
+                        <div class="node pending" id="node-Step-A-commit"><span class="label">Step A</span><span class="phase">Commit</span></div>
+                        <div class="node pending" id="node-Step-B-commit"><span class="label">Step B</span><span class="phase">Commit</span></div>
+                        <div class="node pending" id="node-Step-C-commit"><span class="label">Step C</span><span class="phase">Commit</span></div>
+                    </div>
+                    <div class="phase-label" style="color: #f44336;">--- COMPENSATE PHASE ---</div>
+                    <div class="phase-row">
+                        <div class="node pending" id="node-Step-A-compensate"><span class="label">Step A</span><span class="phase">Compensate</span></div>
+                        <div class="node pending" id="node-Step-B-compensate"><span class="label">Step B</span><span class="phase">Compensate</span></div>
+                        <div class="node pending" id="node-Step-C-compensate"><span class="label">Step C</span><span class="phase">Compensate</span></div>
+                    </div>
+                </div>
+                <div class="logs" id="logContainer">
+                    <div class="log-entry"><span class="log-time">--:--:--</span> <span class="log-type">System</span> Dashboard initialized.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const logContainer = document.getElementById('logContainer');
+        function addLog(type, msg) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry type-' + type;
+            const now = new Date();
+            const timeStr = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+            entry.innerHTML = '<span class="log-time">' + timeStr + '</span> <span class="log-type">' + type + '</span> ' + msg;
+            logContainer.prepend(entry);
+        }
+        function updateNode(stepId, phase, status) {
+            const node = document.getElementById('node-' + stepId + '-' + phase.toLowerCase());
+            if (node) node.className = 'node ' + status;
+        }
+        const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
+        ws.onmessage = function(msg) {
+            const event = JSON.parse(msg.data);
+            const data = event.data;
+            if (event.type === 'TransactionStarted') {
+                document.querySelectorAll('.node').forEach(function(n) { n.className = 'node pending'; });
+                addLog(event.type, 'Transaction ' + data.transactionId + ' started.');
+            } else if (event.type === 'StepOngoing') {
+                updateNode(data.stepId, data.phase, 'ongoing');
+            } else if (event.type === 'StepCompleted') {
+                updateNode(data.stepId, data.phase, 'success');
+            } else if (event.type === 'StepFailed') {
+                if (data.error && (data.error.indexOf('Retryable') !== -1 || data.error.indexOf('attempt') !== -1)) {
+                    updateNode(data.stepId, data.phase, 'retrying');
+                    addLog(event.type, 'Step ' + data.stepId + ' in ' + data.phase + ' retrying: ' + data.error);
+                } else {
+                    updateNode(data.stepId, data.phase, 'failed');
+                    addLog(event.type, 'Step ' + data.stepId + ' in ' + data.phase + ' FAILED: ' + (data.error || 'Unknown error'));
+                }
+            } else if (event.type === 'TransactionCompleted') {
+                addLog(event.type, 'SUCCESS');
+            } else if (event.type === 'TransactionFailed') {
+                addLog(event.type, 'FAILED: ' + data.reason);
+            } else if (event.type === 'TransactionSuspended') {
+                addLog(event.type, 'SUSPENDED: ' + data.reason);
+            }
+        };
+        document.getElementById('startBtn').onclick = function() {
+            ['Step-A', 'Step-B', 'Step-C'].forEach(function(sid) {
+                const b = document.getElementById('config-' + sid).value;
+                fetch('/api/saga/inject-fault/' + sid + '/' + b, { method: 'POST' });
+            });
+            fetch('/api/saga/trigger-showcase', { method: 'POST' });
+        };
+    </script>
+</body>
+</html>

@@ -81,7 +81,7 @@ object StepExecutor {
                         ) extends CborSerializable {
     def canRetry: Boolean = this.status == Ongoing
 
-    def canScheduleRetryOnTimedOut(defaultMaxRetries: Int): Boolean = this.status == Ongoing && this.maxRetriesReached(defaultMaxRetries)
+    def canScheduleRetryOnTimedOut(defaultMaxRetries: Int): Boolean = this.status == Ongoing && !this.maxRetriesReached(defaultMaxRetries)
 
     def canScheduleRetryOnFailure(defaultMaxRetries: Int): Boolean = ((this.status == Ongoing || this.status == Failed)
       && !this.maxRetriesReached(defaultMaxRetries))
@@ -91,7 +91,7 @@ object StepExecutor {
     def canRecover: Boolean = this.status == Ongoing && this.step.exists(_.retryWhenRecoveredOngoing)
 
     private def maxRetriesReached(defaultMaxRetries: Int): Boolean = {
-      this.retries >= this.step.map(_.maxRetries).getOrElse(defaultMaxRetries)
+      this.retries > this.step.map(_.maxRetries).getOrElse(defaultMaxRetries)
     }
   }
 

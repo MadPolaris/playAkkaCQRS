@@ -97,6 +97,8 @@ trait SagaParticipant[E, R, C] {
   protected def customClassification: PartialFunction[Throwable, RetryableOrNotException]
 
   private def fallbackClassification: PartialFunction[Throwable, RetryableOrNotException] = {
+    case e: Exception if e.getMessage != null && e.getMessage.contains("RetryableFailure") => 
+      RetryableFailure(e.getMessage)
     case e => NonRetryableFailure("Unclassified error: " + e.getClass.getName + ":" + e.getMessage)
   }
 
