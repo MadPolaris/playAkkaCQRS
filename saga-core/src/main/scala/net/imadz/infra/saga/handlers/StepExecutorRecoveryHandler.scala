@@ -38,13 +38,13 @@ object StepExecutorRecoveryHandler {
         }
         }
       case Ongoing =>
-        state.step.zip(state.transactionId).foreach { case (step, trxId) =>
+        state.step.zip(state.transactionId).zip(state.traceId).foreach { case ((step, trxId), traceId) =>
           if (step.retryWhenRecoveredOngoing) {
-            context.log.info(s"TrxId: ${state.transactionId} Phase: ${step.phase} StepKey: ${step.stepId} | Take RetryOperation on Ongoing state")
+            context.log.info(s"[TraceID: $traceId] TrxId: $trxId Phase: ${step.phase} StepKey: ${step.stepId} | Take RecoverExecution on Ongoing state")
 
-            context.self ! RecoverExecution(trxId, step, replyTo)
+            context.self ! RecoverExecution(trxId, step, replyTo, traceId)
           } else {
-            context.log.info(s"TrxId: ${state.transactionId} Phase: ${step.phase} StepKey: ${step.stepId} | No need to take RetryOperation on Ongoing state while retryWhenRecoveredOngoing is ${step.retryWhenRecoveredOngoing}")
+            context.log.info(s"[TraceID: $traceId] TrxId: $trxId Phase: ${step.phase} StepKey: ${step.stepId} | No need to take RecoverExecution on Ongoing state while retryWhenRecoveredOngoing is ${step.retryWhenRecoveredOngoing}")
           }
         }
     }

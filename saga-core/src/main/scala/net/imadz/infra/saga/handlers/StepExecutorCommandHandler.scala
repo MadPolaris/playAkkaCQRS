@@ -22,26 +22,26 @@ object StepExecutorCommandHandler {
                                circuitBreaker: CircuitBreaker
                              ): (State[E, R, C], Command) => Effect[Event, State[E, R, C]] = { (state, command) =>
     command match {
-      case startMsg @ Start(transactionId, step, replyTo) if state.status == Succeed =>
+      case startMsg @ Start(transactionId, step, replyTo, traceId) if state.status == Succeed =>
         val typedReplyTo = replyTo.asInstanceOf[Option[ActorRef[StepResult[E, R, C]]]]
-        typedReplyTo.foreach(_ ! StepCompleted[E, R, C](transactionId, step.stepId, state.result.get.asInstanceOf[SagaResult[R]]))
+        typedReplyTo.foreach(_ ! StepCompleted[E, R, C](transactionId, step.stepId, state.result.get))
         Effect.none
 
-      case startMsg @ Start(transactionId, step, replyTo) if state.status == Failed =>
+      case startMsg @ Start(transactionId, step, replyTo, traceId) if state.status == Failed =>
         val typedReplyTo = replyTo.asInstanceOf[Option[ActorRef[StepResult[E, R, C]]]]
         typedReplyTo.foreach(_ ! StepFailed[E, R, C](transactionId, step.stepId, state.lastError.getOrElse(NonRetryableFailure("Unknown error"))))
         Effect.none
 
-      case Start(transactionId, step, replyTo: Some[ActorRef[StepResult[E, R, C]]]) if state.canStart =>
+      case Start(transactionId, step, replyTo, traceId) if state.canStart =>
         Effect
-          .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo)))
-          .thenRun(_ => executeOperation(actorContext, context, step.phase, step, transactionId, circuitBreaker, replyTo))
+          .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
+          .thenRun(_ => executeOperation(actorContext, context, step.phase, step, transactionId, traceId, circuitBreaker, replyTo))
 
-      case RecoverExecution(transactionId, step, replyTo) if state.canRecover =>
+      case RecoverExecution(transactionId, step, replyTo, traceId) if state.canRecover =>
 
         Effect
-          .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo)))
-          .thenRun(_ => executeOperation(actorContext, context, step.phase, step, transactionId, circuitBreaker, replyTo))
+          .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
+          .thenRun(_ => executeOperation(actorContext, context, step.phase, step, transactionId, traceId, circuitBreaker, replyTo))
 
 
       case OperationResponse(Right(result), replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.status == Ongoing =>
@@ -49,7 +49,7 @@ object StepExecutorCommandHandler {
           .persist(OperationSucceeded(result))
           .thenRun((updatedState: State[E, R, C]) => updatedState.status match {
             case Succeed => // Notify success
-              replyTo.foreach(_ ! StepCompleted[E, R, C](state.transactionId.get, state.step.get.stepId, result.asInstanceOf[SagaResult[R]]))
+              replyTo.foreach(_ ! StepCompleted[E, R, C](state.transactionId.get, state.step.get.stepId, result))
             case _ => // Unexpected state
           })
           .thenStop()
@@ -90,10 +90,10 @@ object StepExecutorCommandHandler {
         Effect.none
 
       case RetryOperation(replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.canRetry =>
-        state.step.zip(state.transactionId).map {
-          case (step, trxId) =>
+        state.step.zip(state.transactionId).zip(state.traceId).map {
+          case ((step, trxId), traceId) =>
             Effect.none[Event, State[E, R, C]]
-              .thenRun(_ => executeOperation[E, R, C](actorContext, context, step.phase, step, state.transactionId.get, circuitBreaker, replyTo))
+              .thenRun(_ => executeOperation[E, R, C](actorContext, context, step.phase, step, trxId, traceId, circuitBreaker, replyTo))
         }.getOrElse(Effect.none)
 
       case qs: QueryStatus[E, R, C] =>
@@ -114,6 +114,7 @@ object StepExecutorCommandHandler {
                                          stepPhase: TransactionPhase,
                                          step: SagaTransactionStep[E, R, C],
                                          transactionId: String,
+                                         traceId: String,
                                          circuitBreaker: CircuitBreaker,
                                          replyTo: Option[ActorRef[StepResult[E, R, C]]]
                                        ): Unit = {
@@ -123,15 +124,15 @@ object StepExecutorCommandHandler {
 
     val eventualStepResult: SagaParticipant.ParticipantEffect[RetryableOrNotException, R] = stepPhase match {
       case PreparePhase =>
-        step.participant.prepare(transactionId, context)
+        step.participant.prepare(transactionId, context, traceId)
       case CommitPhase =>
-        step.participant.commit(transactionId, context)
+        step.participant.commit(transactionId, context, traceId)
       case CompensatePhase =>
-        step.participant.compensate(transactionId, context)
+        step.participant.compensate(transactionId, context, traceId)
     }
 
     circuitBreaker.withCircuitBreaker(eventualStepResult).onComplete {
-      case scala.util.Success(result: Either[RetryableOrNotException, R]) =>
+      case scala.util.Success(result: Either[RetryableOrNotException, SagaResult[R]]) =>
         actorContext.self ! OperationResponse(result, replyTo)
       case scala.util.Failure(exception) =>
         logger.warn(s"$exception found while processing ${step}")

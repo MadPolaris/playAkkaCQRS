@@ -37,9 +37,10 @@ case class SagaTransactionStep[E, R, C](
                                          stepId: String,
                                          phase: TransactionPhase,
                                          participant: SagaParticipant[E, R, C],
-                                         maxRetries: Int = 0,
-                                         timeoutDuration: FiniteDuration = 30.seconds,
-                                         retryWhenRecoveredOngoing: Boolean = true
+                                         maxRetries: Int = 3,
+                                         timeoutDuration: FiniteDuration = 5.seconds,
+                                         retryWhenRecoveredOngoing: Boolean = false,
+                                         traceId: String = ""
                                        )
 
 object StepExecutor {
@@ -49,9 +50,9 @@ object StepExecutor {
 
   // Command
   sealed trait Command extends CborSerializable
-  case class Start[E, R, C](transactionId: String,  sagaStep: SagaTransactionStep[E, R, C], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
-  case class RecoverExecution[E, R, C](transactionId: String, sagaStep: SagaTransactionStep[E, R, C], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
-   case class OperationResponse[E, R, C](result: Either[RetryableOrNotException, R], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+  case class Start[E, R, C](transactionId: String,  sagaStep: SagaTransactionStep[E, R, C], replyTo: Option[ActorRef[StepResult[E, R, C]]], traceId: String) extends Command
+  case class RecoverExecution[E, R, C](transactionId: String, sagaStep: SagaTransactionStep[E, R, C], replyTo: Option[ActorRef[StepResult[E, R, C]]], traceId: String) extends Command
+   case class OperationResponse[E, R, C](result: Either[RetryableOrNotException, SagaResult[R]], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
    case class RetryOperation[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
    case class TimedOut[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
    case class QueryStatus[E, R, C](replyTo: ActorRef[State[E, R, C]]) extends Command
@@ -61,8 +62,8 @@ object StepExecutor {
 
   // Events
   sealed trait Event
-  case class ExecutionStarted[E, R, C](transactionId: String, transactionStep: SagaTransactionStep[E, R, C], replyToPath: String) extends Event
-  case class OperationSucceeded[R](result: R) extends Event
+  case class ExecutionStarted[E, R, C](transactionId: String, transactionStep: SagaTransactionStep[E, R, C], replyToPath: String, traceId: String) extends Event
+  case class OperationSucceeded[R](result: SagaResult[R]) extends Event
   case class OperationFailed(error: RetryableOrNotException) extends Event
   case class RetryScheduled(retryCount: Int) extends Event
 
@@ -70,10 +71,11 @@ object StepExecutor {
   case class State[E, R, C](
                           step: Option[SagaTransactionStep[E, R, C]] = None,
                           transactionId: Option[String] = None,
+                          traceId: Option[String] = None,
                           status: Status = Created,
                           retries: Int = 0,
                           lastError: Option[RetryableOrNotException] = None,
-                          result: Option[R] = None,
+                          result: Option[SagaResult[R]] = None,
                           circuitBreakerOpen: Boolean = false,
                           replyTo: Option[String] = None
                         ) extends CborSerializable {

@@ -39,6 +39,7 @@ message SagaTransactionStepPO {
   bool retry_when_recovered_ongoing = 5;
   SagaParticipantPO participant = 6;
   string participant_type = 7;// This will be used to identify the participant implementation
+  string trace_id = 8;
 }
 
 message StepStatePO {
@@ -49,6 +50,7 @@ message StepStatePO {
   RetryableOrNotExceptionPO last_error = 5;
   bool circuit_breaker_open = 6;
   string replyToPath = 7;
+  string trace_id = 8;
 }
 
 message RetryableOrNotExceptionPO {
@@ -61,6 +63,7 @@ message ExecutionStartedPO {
   string transaction_id = 1;
   SagaTransactionStepPO transaction_step = 2;
   string replyToPath = 3;
+  string trace_id = 4;
 }
 
 message OperationSucceededPO {
@@ -90,11 +93,13 @@ message StartCommandPO {
   string transaction_id = 1;
   SagaTransactionStepPO saga_step = 2;
   string replyToPath = 3;
+  string trace_id = 4;
 }
 
 message RecoverExecutionCommandPO {
   string transaction_id = 1;
   SagaTransactionStepPO saga_step = 2;
+  string trace_id = 3;
 }
 
 message OperationSucceedCommandPO {
@@ -125,12 +130,14 @@ enum CoordinatorStatusPO {
   TRANSACTION_COMPLETED = 2;
   TRANSACTION_FAILED = 3;
   TRANSACTION_COMPENSATING = 4;
+  TRANSACTION_SUSPENDED = 5;
 }
 
 // Commands
 message StartTransactionPO {
   string transaction_id = 1;
   repeated SagaTransactionStepPO steps = 2;
+  string trace_id = 3;
 }
 
 message PhaseCompletedPO {
@@ -155,6 +162,7 @@ message PhaseResultPO {
 message TransactionStartedPO {
   string transaction_id = 1;
   repeated SagaTransactionStepPO steps = 2;
+  string trace_id = 3;
 }
 
 message PhaseSucceededPO {
@@ -174,6 +182,11 @@ message TransactionFailedPO {
   string reason = 2;
 }
 
+message TransactionSuspendedPO {
+  string transaction_id = 1;
+  string reason = 2;
+}
+
 message SagaTransactionCoordinatorEventPO {
   oneof event {
     TransactionStartedPO started = 1;
@@ -181,6 +194,7 @@ message SagaTransactionCoordinatorEventPO {
     PhaseFailedPO phaseFailed = 3;
     TransactionCompletedPO transactionCompleted = 4;
     TransactionFailedPO transactionFailed = 5;
+    TransactionSuspendedPO suspended = 6;
   }
 }
 
@@ -190,4 +204,5 @@ message CoordinatorStatePO {
   repeated SagaTransactionStepPO steps = 2;
   TransactionPhasePO current_phase = 3;
   CoordinatorStatusPO status = 4;
+  string trace_id = 5;
 }

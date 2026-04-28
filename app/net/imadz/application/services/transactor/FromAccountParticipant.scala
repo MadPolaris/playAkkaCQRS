@@ -18,7 +18,7 @@ case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: Ex
   implicit val timeout: Timeout = 5.seconds
 
 
-  override def doPrepare(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+  override def doPrepare(transactionId: String, context: MoneyTransferContext, traceId: String): ParticipantEffect[iMadzError, String] = {
     val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
     fromAccountRef.ask(ReserveFunds(Id.of(transactionId), amount, _))
       .mapTo[FundsReservationConfirmation]
@@ -29,7 +29,7 @@ case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: Ex
   }
 
 
-  override def doCommit(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+  override def doCommit(transactionId: String, context: MoneyTransferContext, traceId: String): ParticipantEffect[iMadzError, String] = {
     val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
 
     fromAccountRef.ask(DeductFunds(Id.of(transactionId), _))
@@ -40,7 +40,7 @@ case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: Ex
       })
   }
 
-  override def doCompensate(transactionId: String, context: MoneyTransferContext): ParticipantEffect[iMadzError, String] = {
+  override def doCompensate(transactionId: String, context: MoneyTransferContext, traceId: String): ParticipantEffect[iMadzError, String] = {
     val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
     fromAccountRef.ask(ReleaseReservedFunds(Id.of(transactionId), _))
       .mapTo[FundsReleaseConfirmation]

@@ -37,14 +37,14 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
   object TransactionStartedConv extends ProtoConverter[TransactionStarted, TransactionStartedPO] {
     override def toProto(e: TransactionStarted): TransactionStartedPO = TransactionStartedPO(
       transactionId = e.transactionId,
-      // [关键] 直接调用 SagaStepProtoMapper 的 toStepPO
-      steps = e.steps.map(SagaStepConv.toProto)
+      steps = e.steps.map(SagaStepConv.toProto),
+      traceId = e.traceId
     )
 
     override def fromProto(p: TransactionStartedPO): TransactionStarted = TransactionStarted(
       transactionId = p.transactionId,
-      // [关键] 直接调用 SagaStepProtoMapper 的 fromStepPO
-      steps = p.steps.map(SagaStepConv.fromProto).toList
+      steps = p.steps.map(SagaStepConv.fromProto).toList,
+      traceId = p.traceId
     )
   }
 
@@ -87,6 +87,51 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
     override def fromProto(p: TransactionFailedPO): TransactionFailed = TransactionFailed(
       transactionId = p.transactionId,
       reason = p.reason
+    )
+  }
+
+  object TransactionSuspendedConv extends ProtoConverter[TransactionSuspended, TransactionSuspendedPO] {
+    override def toProto(e: TransactionSuspended): TransactionSuspendedPO = TransactionSuspendedPO(
+      transactionId = e.transactionId,
+      reason = e.reason
+    )
+
+    override def fromProto(p: TransactionSuspendedPO): TransactionSuspended = TransactionSuspended(
+      transactionId = p.transactionId,
+      reason = p.reason
+    )
+  }
+
+  object CoordinatorStateConv extends ProtoConverter[State, CoordinatorStatePO] {
+    override def toProto(s: State): CoordinatorStatePO = CoordinatorStatePO(
+      transactionId = s.transactionId.getOrElse(""),
+      steps = s.steps.map(SagaStepConv.toProto),
+      currentPhase = PhaseConv.toProto(s.currentPhase),
+      status = s.status match {
+        case Created => CoordinatorStatusPO.TRANSACTION_CREATED
+        case InProgress => CoordinatorStatusPO.TRANSACTION_IN_PROGRESS
+        case Completed => CoordinatorStatusPO.TRANSACTION_COMPLETED
+        case Failed => CoordinatorStatusPO.TRANSACTION_FAILED
+        case Compensating => CoordinatorStatusPO.TRANSACTION_COMPENSATING
+        case Suspended => CoordinatorStatusPO.TRANSACTION_SUSPENDED
+      },
+      traceId = s.traceId
+    )
+
+    override def fromProto(p: CoordinatorStatePO): State = State(
+      transactionId = Some(p.transactionId).filter(_.nonEmpty),
+      steps = p.steps.map(SagaStepConv.fromProto).toList,
+      currentPhase = PhaseConv.fromProto(p.currentPhase),
+      status = p.status match {
+        case CoordinatorStatusPO.TRANSACTION_CREATED => Created
+        case CoordinatorStatusPO.TRANSACTION_IN_PROGRESS => InProgress
+        case CoordinatorStatusPO.TRANSACTION_COMPLETED => Completed
+        case CoordinatorStatusPO.TRANSACTION_FAILED => Failed
+        case CoordinatorStatusPO.TRANSACTION_COMPENSATING => Compensating
+        case CoordinatorStatusPO.TRANSACTION_SUSPENDED => Suspended
+        case _ => Created
+      },
+      traceId = p.traceId
     )
   }
 }

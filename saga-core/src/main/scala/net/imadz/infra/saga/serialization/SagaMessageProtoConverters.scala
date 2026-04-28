@@ -52,7 +52,8 @@ trait SagaMessageProtoConverters extends SagaExecutorConverter {
               p.successMessageType // Proto 字段名: successMessageType
             ).get
           }
-          OperationResponse(Right(result), None)
+          import net.imadz.infra.saga.SagaParticipant.SagaResult
+          OperationResponse(Right(result.asInstanceOf[SagaResult[Any]]), None)
 
         case Error(p) => // p 是 OperationFailedCommandPO
           val errPO = p.error.getOrElse(RetryableOrNotExceptionPO.defaultInstance)

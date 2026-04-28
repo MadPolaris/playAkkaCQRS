@@ -39,38 +39,39 @@ trait SagaParticipant[E, R, C] {
 
   protected def logger: Logger = LoggerFactory.getLogger(getClass)
 
-  protected def doPrepare(transactionId: String, context: C): ParticipantEffect[E, R]
+  protected def doPrepare(transactionId: String, context: C, traceId: String): ParticipantEffect[E, R]
 
-  protected def doCommit(transactionId: String, context: C): ParticipantEffect[E, R]
+  protected def doCommit(transactionId: String, context: C, traceId: String): ParticipantEffect[E, R]
 
-  protected def doCompensate(transactionId: String, context: C): ParticipantEffect[E, R]
+  protected def doCompensate(transactionId: String, context: C, traceId: String): ParticipantEffect[E, R]
 
-  def prepare(transactionId: String, context: C)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
-    executeWithRetryClassification(doPrepare(transactionId, context))
+  def prepare(transactionId: String, context: C, traceId: String)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
+    executeWithRetryClassification(doPrepare(transactionId, context, traceId), traceId)
 
-  def commit(transactionId: String, context: C)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
-    executeWithRetryClassification(doCommit(transactionId, context))
+  def commit(transactionId: String, context: C, traceId: String)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
+    executeWithRetryClassification(doCommit(transactionId, context, traceId), traceId)
 
-  def compensate(transactionId: String, context: C)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
-    executeWithRetryClassification(doCompensate(transactionId, context))
+  def compensate(transactionId: String, context: C, traceId: String)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
+    executeWithRetryClassification(doCompensate(transactionId, context, traceId), traceId)
 
   private def executeWithRetryClassification(
-                                              operation: => ParticipantEffect[E, R]
+                                              operation: => ParticipantEffect[E, R],
+                                              traceId: String
                                             )(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] = {
-    logger.debug("SagaParticipant is executing...")
+    logger.debug(s"[TraceID: $traceId] SagaParticipant is executing...")
 
     operation.transform {
       case Success(Right(r)) =>
-        logger.info("SagaParticipant executed successfully with right result")
+        logger.info(s"[TraceID: $traceId] SagaParticipant executed successfully with right result")
         Success(Right(r))
       case Success(Left(e@net.imadz.common.CommonTypes.iMadzError(code, message))) =>
-        logger.warn(s"SagaParticipant executed failed with $e")
+        logger.warn(s"[TraceID: $traceId] SagaParticipant executed failed with $e")
         Success(Left(classifyFailure(e)))
       case Success(Left(e)) =>
-        logger.warn(s"SagaParticipant executed failed with $e")
+        logger.warn(s"[TraceID: $traceId] SagaParticipant executed failed with $e")
         Success(Left(classifyFailure(new Exception(s"Operation failed: $e"))))
       case Failure(e) =>
-        logger.warn(s"SagaParticipant executed failed with $e")
+        logger.warn(s"[TraceID: $traceId] SagaParticipant executed failed with $e")
         Success(Left(classifyFailure(e)))
     }
   }

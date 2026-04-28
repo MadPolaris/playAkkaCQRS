@@ -23,7 +23,7 @@ object SagaTransactionCoordinator {
   // @formatter:off
   // Commands
   sealed trait Command extends CborSerializable
-  case class StartTransaction[E, R, C](transactionId: String, steps: List[SagaTransactionStep[E, R, C]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
+  case class StartTransaction[E, R, C](transactionId: String, steps: List[SagaTransactionStep[E, R, C]], replyTo: Option[ActorRef[TransactionResult]], traceId: String = "") extends Command
   case object TransactionTimeout extends Command
   private case class PhaseCompleted(phase: TransactionPhase, results: List[Either[RetryableOrNotException, Any]], replyTo: Option[ActorRef[TransactionResult]]) extends Command
   private case class PhaseFailure(phase: TransactionPhase, error: RetryableOrNotException, replyTo: Option[ActorRef[TransactionResult]]) extends Command
@@ -88,7 +88,7 @@ object SagaTransactionCoordinator {
   case class TransactionResult(successful: Boolean, state: State, failReason: String = "")
   // Events
   sealed trait Event extends CborSerializable
-  case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _, _]]) extends Event
+  case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _, _]], traceId: String = "") extends Event
   case class PhaseSucceeded(phase: TransactionPhase) extends Event
   case class PhaseFailed(phase: TransactionPhase) extends Event
   case class TransactionCompleted(transactionId: String) extends Event
@@ -100,7 +100,8 @@ object SagaTransactionCoordinator {
                     transactionId: Option[String] = None,
                     steps: List[SagaTransactionStep[_, _, _]] = List.empty,
                     currentPhase: TransactionPhase = PreparePhase,
-                    status: Status = Created
+                    status: Status = Created,
+                    traceId: String = ""
                   )
 
   sealed trait Status
@@ -119,20 +120,21 @@ object SagaTransactionCoordinator {
 
   def apply(
              persistenceId: PersistenceId,
-             stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command]
+             stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command],
+             globalTimeout: FiniteDuration = 5.minutes
            )(implicit ec: ExecutionContext, timeout: Timeout): Behavior[Command] = Behaviors.setup { context =>
     Behaviors.withTimers { timers =>
       EventSourcedBehavior[Command, Event, State](
         persistenceId = persistenceId,
         emptyState = State(),
-        commandHandler = commandHandler(context, timers, stepExecutorFactory),
+        commandHandler = commandHandler(context, timers, stepExecutorFactory, globalTimeout),
         eventHandler = eventHandler
       ).receiveSignal {
         case (state, akka.persistence.typed.RecoveryCompleted) =>
-          context.log.info(s"RecoveryCompleted for coordinator: ${persistenceId.id}, state: $state")
+          context.log.info(s"[TraceID: ${state.traceId}] RecoveryCompleted for coordinator: ${persistenceId.id}, state: $state")
           if (state.status == InProgress || state.status == Compensating) {
-            timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, 5.minutes)
-            context.log.info(s"Resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase}")
+            timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, globalTimeout)
+            context.log.info(s"[TraceID: ${state.traceId}] Resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase}")
             executePhase(context, state, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], None)
           }
       }
@@ -142,20 +144,22 @@ object SagaTransactionCoordinator {
   def commandHandler(
                       context: ActorContext[Command],
                       timers: akka.actor.typed.scaladsl.TimerScheduler[Command],
-                      stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command]
+                      stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command],
+                      globalTimeout: FiniteDuration
                     )(implicit ec: ExecutionContext, timeout: Timeout): (State, Command) => Effect[Event, State] = { (state, command) =>
     command match {
-      case StartTransaction(transactionId, steps, replyTo) if state.status == Created =>
-        timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, 5.minutes)
+      case StartTransaction(transactionId, steps, replyTo, reqTraceId) if state.status == Created =>
+        val traceId = if (reqTraceId.isEmpty) transactionId else reqTraceId
+        timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, globalTimeout)
         Effect
-          .persist(TransactionStarted(transactionId, steps))
+          .persist(TransactionStarted(transactionId, steps, traceId))
           .thenRun { _ =>
-            executePhase(context, State(Some(transactionId), steps, PreparePhase, InProgress), stepExecutorFactory, replyTo)
+            executePhase(context, State(Some(transactionId), steps, PreparePhase, InProgress, traceId), stepExecutorFactory, replyTo)
           }
 
       case TransactionTimeout =>
         if (state.status == InProgress || state.status == Compensating) {
-          context.log.warn(s"Transaction ${state.transactionId.getOrElse("")} timed out at phase ${state.currentPhase}")
+          context.log.warn(s"[TraceID: ${state.traceId}] Transaction ${state.transactionId.getOrElse("")} timed out at phase ${state.currentPhase}")
           handlePhaseFailure(context, state, state.currentPhase, NonRetryableFailure("Global transaction timeout"), stepExecutorFactory, None)
         } else {
           Effect.none
@@ -234,7 +238,7 @@ object SagaTransactionCoordinator {
                                   replyTo: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, askTimeout: Timeout): Unit = {
 
-    val stepsInPhase = state.steps.filter(_.phase == state.currentPhase)
+    val stepsInPhase = state.steps.filter(_.phase == state.currentPhase).asInstanceOf[List[SagaTransactionStep[E, R, C]]]
 
     import akka.actor.typed.scaladsl.AskPattern._
     implicit val scheduler: Scheduler = context.system.scheduler
@@ -244,21 +248,26 @@ object SagaTransactionCoordinator {
       stepsInPhase.map { step =>
         val stepExecutor = stepExecutorFactory(
           s"${state.transactionId.get}-${step.stepId}-${state.currentPhase}",
-          step.asInstanceOf[SagaTransactionStep[E, R, C]]
+          step
         )
-        stepExecutor.ask((ref: ActorRef[StepResult[E, R, C]]) => StepExecutor.Start[E, R, C](state.transactionId.get, step.asInstanceOf[SagaTransactionStep[E, R, C]], Some(ref)))(askTimeout, scheduler)
+        stepExecutor.ask((ref: ActorRef[StepResult[E, R, C]]) => StepExecutor.Start[E, R, C](state.transactionId.get, step, Some(ref), state.traceId))(askTimeout, scheduler)
           .mapTo[StepResult[E, R, C]]
           .recoverWith {
             case _: java.util.concurrent.TimeoutException | _: akka.pattern.AskTimeoutException =>
-              log.warn(s"Coordinator ask timed out for step ${step.stepId}, querying status...")
+              log.warn(s"[TraceID: ${state.traceId}] Coordinator ask timed out for step ${step.stepId}, querying status...")
               def pollStatus(retries: Int): Future[StepResult[E, R, C]] = {
-                log.info(s"Polling status for step ${step.stepId}, retries left: $retries")
+                log.info(s"[TraceID: ${state.traceId}] Polling status for step ${step.stepId}, retries left: $retries")
                 stepExecutor.ask((ref: ActorRef[StepExecutor.State[E, R, C]]) => StepExecutor.QueryStatus[E, R, C](ref))(askTimeout, scheduler)
                   .flatMap { executorState =>
                     executorState.status match {
                       case StepExecutor.Succeed =>
-                        Future.successful(StepExecutor.StepCompleted[E, R, C](state.transactionId.get, step.stepId, executorState.result.get.asInstanceOf[SagaResult[R]]))
-                      case StepExecutor.Failed =>
+                        executorState.result match {
+                          case Some(res) =>
+                            Future.successful(StepExecutor.StepCompleted[E, R, C](state.transactionId.get, step.stepId, res))
+                          case None =>
+                            log.error(s"[TraceID: ${state.traceId}] Step ${step.stepId} succeeded but no result found")
+                            Future.failed(new RuntimeException("Step succeeded but no result found"))
+                        }                      case StepExecutor.Failed =>
                         Future.successful(StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, executorState.lastError.getOrElse(NonRetryableFailure("Unknown error"))))
                       case _ if retries > 0 =>
                         akka.pattern.after(2.seconds, context.system.classicSystem.scheduler)(pollStatus(retries - 1))
@@ -268,13 +277,13 @@ object SagaTransactionCoordinator {
                   }
                   .recover {
                     case ex: Throwable =>
-                      log.warn(s"Coordinator query status failed: ${ex.getMessage}")
+                      log.warn(s"[TraceID: ${state.traceId}] Coordinator query status failed: ${ex.getMessage}")
                       StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, NonRetryableFailure(s"Coordinator query status failed: ${ex.getMessage}"))
                   }
               }
               pollStatus(3)
             case ex: Throwable =>
-              log.error(s"Coordinator ask failed with unexpected exception: ${ex.getClass.getName} - ${ex.getMessage}")
+              log.error(s"[TraceID: ${state.traceId}] Coordinator ask failed with unexpected exception: ${ex.getClass.getName} - ${ex.getMessage}")
               Future.successful(StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, NonRetryableFailure(s"Coordinator ask failed: ${ex.getMessage}")))
           }
       }
@@ -298,8 +307,8 @@ object SagaTransactionCoordinator {
 
   def eventHandler: (State, Event) => State = { (state, event) =>
     event match {
-      case TransactionStarted(transactionId, steps) =>
-        state.copy(transactionId = Some(transactionId), steps = steps, status = InProgress)
+      case TransactionStarted(transactionId, steps, traceId) =>
+        state.copy(transactionId = Some(transactionId), steps = steps, status = InProgress, traceId = traceId)
       case PhaseFailed(phase) =>
         phase match {
           case PreparePhase => state.copy(currentPhase = CompensatePhase, status = Compensating)

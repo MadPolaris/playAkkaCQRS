@@ -26,7 +26,7 @@ class StepExecutorEventAdapter(override val system: ExtendedActorSystem)
   override def toJournal(e: Event): StepExecutorEventPO = {
     val payload: StepExecutorEventPO.Event = e match {
 
-      case e@ExecutionStarted(_, _, _) =>
+      case e@ExecutionStarted(_, _, _, _) =>
         Started(ExecutionStartedConv.toProto(e))
 
       case event@OperationSucceeded(_) =>

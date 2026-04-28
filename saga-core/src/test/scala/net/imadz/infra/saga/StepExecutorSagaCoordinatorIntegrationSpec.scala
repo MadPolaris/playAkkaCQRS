@@ -91,7 +91,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       )
       val probe = createTestProbe[TransactionResult]()
 
-      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref), "test-trace-id"))
 
       val result = probe.receiveMessage(10.seconds)
 
@@ -114,7 +114,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       )
       val probe = createTestProbe[TransactionResult]()
 
-      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref), "test-trace-id"))
 
       val result = probe.receiveMessage(10.seconds)
 
@@ -138,7 +138,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       )
       val probe = createTestProbe[TransactionResult]()
 
-      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref), "test-trace-id"))
 
       val result = probe.receiveMessage(10.seconds)
 
@@ -159,7 +159,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       )
       val probe = createTestProbe[TransactionResult]()
 
-      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref), "test-trace-id"))
 
       val result = probe.receiveMessage(10.seconds)
 
@@ -181,7 +181,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
         SagaTransactionStep("circuit-breaker-step", PreparePhase, circuitBreakerParticipant, 10, 1.seconds))
       val probe = createTestProbe[TransactionResult]()
 
-      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref), "test-trace-id"))
 
       val result = probe.receiveMessage(15.seconds)
 
@@ -202,7 +202,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       )
       val probe = createTestProbe[TransactionResult]()
 
-      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref), "test-trace-id"))
 
       val result = probe.receiveMessage(10.seconds)
 
@@ -224,7 +224,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       )
       val probe = createTestProbe[TransactionResult]()
 
-      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref)))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref), "test-trace-id"))
 
       val result = probe.receiveMessage(10.seconds)
 

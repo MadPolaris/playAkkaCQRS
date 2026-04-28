@@ -44,7 +44,8 @@ trait SagaExecutorConverter extends PrimitiveConverter {
       ExecutionStartedPO(
         transactionId = domain.transactionId,
         transactionStep = Some(SagaStepConv.toProto(domain.transactionStep)), // 调用 Trait
-        replyToPath = domain.replyToPath
+        replyToPath = domain.replyToPath,
+        traceId = domain.traceId
       )
     }
 
@@ -54,7 +55,8 @@ trait SagaExecutorConverter extends PrimitiveConverter {
         transactionStep = proto.transactionStep
           .map(SagaStepConv.fromProto)
           .getOrElse(throw new IllegalArgumentException(s"proto.startedEvent.transactionStep should not be None: ${proto.transactionId}")),
-        replyToPath = proto.replyToPath
+        replyToPath = proto.replyToPath,
+        traceId = proto.traceId
       )
     }
   }
@@ -121,7 +123,8 @@ trait SagaExecutorConverter extends PrimitiveConverter {
         participant = Some(SagaParticipantPO(typeName, ByteString.copyFrom(payloadBytes))),
         maxRetries = step.maxRetries,
         timeoutDurationMillis = step.timeoutDuration.toMillis,
-        retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing
+        retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
+        traceId = step.traceId
       )
     }
 
@@ -146,7 +149,8 @@ trait SagaExecutorConverter extends PrimitiveConverter {
         participant = participant,
         maxRetries = stepPO.maxRetries,
         timeoutDuration = stepPO.timeoutDurationMillis.millis,
-        retryWhenRecoveredOngoing = stepPO.retryWhenRecoveredOngoing
+        retryWhenRecoveredOngoing = stepPO.retryWhenRecoveredOngoing,
+        traceId = stepPO.traceId
       )
 
     }
