@@ -40,6 +40,7 @@ message SagaTransactionStepPO {
   SagaParticipantPO participant = 6;
   string participant_type = 7;// This will be used to identify the participant implementation
   string trace_id = 8;
+  int32 step_group = 9;
 }
 
 message StepStatePO {
@@ -71,6 +72,11 @@ message OperationSucceededPO {
   bytes result = 2; // Use bytes to store serialized result
 }
 
+message ManualFixCompletedPO {
+  string resultType = 1;
+  bytes result = 2;
+}
+
 message OperationFailedPO {
   RetryableOrNotExceptionPO error = 1;
 }
@@ -85,6 +91,7 @@ message StepExecutorEventPO {
     OperationSucceededPO succeed = 2;
     OperationFailedPO failed = 3;
     RetryScheduledPO rescheduled = 4;
+    ManualFixCompletedPO manual_fixed = 5;
   }
 }
 
@@ -199,6 +206,20 @@ message TransactionSuspendedPO {
   string reason = 2;
 }
 
+message TransactionResolvedPO {
+  string transaction_id = 1;
+}
+
+message StepGroupSucceededPO {
+  TransactionPhasePO phase = 1;
+  int32 group = 2;
+}
+
+message TransactionRetriedPO {
+  string transaction_id = 1;
+  TransactionPhasePO phase = 2;
+}
+
 message SagaTransactionCoordinatorEventPO {
   oneof event {
     TransactionStartedPO started = 1;
@@ -209,6 +230,9 @@ message SagaTransactionCoordinatorEventPO {
     TransactionSuspendedPO suspended = 6;
     TransactionPausedPO paused = 7;
     TransactionResumedPO resumed = 8;
+    TransactionResolvedPO resolved = 9;
+    StepGroupSucceededPO stepGroupSucceeded = 10;
+    TransactionRetriedPO retried = 11;
   }
 }
 
@@ -221,4 +245,5 @@ message CoordinatorStatePO {
   string trace_id = 5;
   bool single_step = 6;
   bool is_paused = 7;
+  int32 current_step_group = 8;
 }

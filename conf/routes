@@ -19,3 +19,6 @@ GET     /ws/saga/events             controllers.ShowcaseController.socket
 POST    /api/saga/inject-fault/:stepId/:behavior  controllers.ShowcaseController.injectFault(stepId: String, behavior: String)
 POST    /api/saga/trigger-showcase/:singleStep    controllers.ShowcaseController.triggerShowcase(singleStep: Boolean)
 POST    /api/saga/proceed/:transactionId          controllers.ShowcaseController.proceed(transactionId: String)
+POST    /api/saga/fix-step/:transactionId/:stepId/:phase controllers.ShowcaseController.fixStep(transactionId: String, stepId: String, phase: String)
+POST    /api/saga/resume/:transactionId           controllers.ShowcaseController.resume(transactionId: String)
+POST    /api/saga/retry-phase/:transactionId      controllers.ShowcaseController.retryPhase(transactionId: String)

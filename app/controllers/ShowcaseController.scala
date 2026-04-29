@@ -89,15 +89,20 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     val traceId = s"TRACE-${transactionId.substring(0, 8)}"
     
     val steps = List(
-      SagaTransactionStep("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId),
-      SagaTransactionStep("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId),
-      SagaTransactionStep("Step-C", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId),
-      SagaTransactionStep("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId),
-      SagaTransactionStep("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId),
-      SagaTransactionStep("Step-C", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId),
-      SagaTransactionStep("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId),
-      SagaTransactionStep("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId),
-      SagaTransactionStep("Step-C", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId)
+      // Prepare Phase
+      SagaTransactionStep("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId, stepGroup = 1),
+      SagaTransactionStep("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId, stepGroup = 2),
+      SagaTransactionStep("Step-C", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId, stepGroup = 2),
+      
+      // Commit Phase
+      SagaTransactionStep("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId, stepGroup = 1),
+      SagaTransactionStep("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId, stepGroup = 2),
+      SagaTransactionStep("Step-C", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId, stepGroup = 2),
+      
+      // Compensate Phase
+      SagaTransactionStep("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId, stepGroup = 1),
+      SagaTransactionStep("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId, stepGroup = 2),
+      SagaTransactionStep("Step-C", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId, stepGroup = 2)
     )
 
     import net.imadz.application.services.MoneyTransferService
@@ -118,6 +123,53 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     
     coordinatorRef ! ProceedNext(None)
     
+    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId))
+  }
+
+  def fixStep(transactionId: String, stepId: String, phase: String) = Action {
+    import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+    import net.imadz.infra.saga.SagaTransactionCoordinator.ManualFixStep
+    import net.imadz.infra.saga.SagaPhase
+
+    val sharding = ClusterSharding(typedSystem)
+    import net.imadz.application.services.MoneyTransferService
+    val coordinatorRef = sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId)
+
+    val p = phase.toLowerCase match {
+      case "prepare" => SagaPhase.PreparePhase
+      case "commit" => SagaPhase.CommitPhase
+      case "compensate" => SagaPhase.CompensatePhase
+      case _ => SagaPhase.PreparePhase
+    }
+
+    coordinatorRef ! ManualFixStep(stepId, p, None)
+
+    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId, "stepId" -> stepId, "phase" -> phase))
+  }
+
+  def resume(transactionId: String) = Action {
+    import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+    import net.imadz.infra.saga.SagaTransactionCoordinator.ResolveSuspended
+
+    val sharding = ClusterSharding(typedSystem)
+    import net.imadz.application.services.MoneyTransferService
+    val coordinatorRef = sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId)
+
+    coordinatorRef ! ResolveSuspended(None)
+
+    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId))
+  }
+
+  def retryPhase(transactionId: String) = Action {
+    import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+    import net.imadz.infra.saga.SagaTransactionCoordinator.RetryCurrentPhase
+
+    val sharding = ClusterSharding(typedSystem)
+    import net.imadz.application.services.MoneyTransferService
+    val coordinatorRef = sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId)
+
+    coordinatorRef ! RetryCurrentPhase(None)
+
     Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId))
   }
 }

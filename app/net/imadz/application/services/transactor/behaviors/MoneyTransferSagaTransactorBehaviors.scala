@@ -42,6 +42,12 @@ object MoneyTransferSagaTransactorBehaviors {
 
           case cmd: UpdateMoneyTransferTransactionStatus =>
             updateStatusHandler(state, cmd)
+
+          case cmd: AdminManualFixStep =>
+            adminManualFixStepHandler(state, cmd, coordinator)
+
+          case cmd: AdminResumeTransaction =>
+            adminResumeTransactionHandler(state, cmd, coordinator, context)
         },
 
         eventHandler = (state, event) => state.applyEvent(event)
@@ -51,6 +57,46 @@ object MoneyTransferSagaTransactorBehaviors {
         .eventAdapter(new TransactionEventAdapter)
         .snapshotAdapter(new TransactionSnapshotAdapter)
     }
+  }
+
+  private def adminManualFixStepHandler(
+                                         state: MoneyTransferTransactionState,
+                                         cmd: AdminManualFixStep,
+                                         coordinator: EntityRef[net.imadz.infra.saga.SagaTransactionCoordinator.Command]
+                                       ): Effect[MoneyTransferTransactionEvent, MoneyTransferTransactionState] = {
+    val phase = cmd.phase.toLowerCase match {
+      case "prepare" => PreparePhase
+      case "commit" => CommitPhase
+      case "compensate" => CompensatePhase
+      case _ => PreparePhase // Default
+    }
+
+    coordinator ! net.imadz.infra.saga.SagaTransactionCoordinator.ManualFixStep(cmd.stepId, phase, None)
+    
+    Effect.reply(cmd.replyTo)(TransactionResultConfirmation(Id.of(state.id.getOrElse("")), None, Nil))
+  }
+
+  private def adminResumeTransactionHandler(
+                                             state: MoneyTransferTransactionState,
+                                             cmd: AdminResumeTransaction,
+                                             coordinator: EntityRef[net.imadz.infra.saga.SagaTransactionCoordinator.Command],
+                                             context: akka.actor.typed.scaladsl.ActorContext[MoneyTransferTransactionCommand]
+                                           )(implicit ec: ExecutionContext): Effect[MoneyTransferTransactionEvent, MoneyTransferTransactionState] = {
+    
+    implicit val timeout: Timeout = 30.seconds
+    val transactionId = state.id.getOrElse("")
+
+    context.ask(coordinator, (ref: ActorRef[TransactionResult]) =>
+      net.imadz.infra.saga.SagaTransactionCoordinator.ResolveSuspended(Some(ref))
+    ) {
+      case scala.util.Success(result) =>
+        UpdateMoneyTransferTransactionStatus(Id.of(transactionId), result, cmd.replyTo)
+      case scala.util.Failure(ex) =>
+        val failedResult = TransactionResult(successful = false, net.imadz.infra.saga.SagaTransactionCoordinator.State(traceId = ""))
+        UpdateMoneyTransferTransactionStatus(Id.of(transactionId), failedResult, cmd.replyTo)
+    }
+
+    Effect.none
   }
 
   // --- Handlers ---

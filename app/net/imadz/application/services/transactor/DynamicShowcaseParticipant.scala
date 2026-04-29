@@ -68,18 +68,15 @@ class DynamicShowcaseParticipant(val participantId: String) extends SagaParticip
       case Success => 
         delay(1.second)(Right(SagaResult(s"$participantId-$phase-success")))
       
-      case FailTwiceThenSucceed =>
+      case FailRetryable | FailTwiceThenSucceed =>
         if (currentAttempt <= 2) {
           logger.warn(s"[TraceID: $traceId] Step $participantId ($phase) failing intentionally (attempt $currentAttempt/2)")
-          // Use Future.failed with specific message that our new classification understands
           Future.failed(new Exception(s"RetryableFailure: Simulated transient error (attempt $currentAttempt)"))
         } else {
           logger.info(s"[TraceID: $traceId] Step $participantId ($phase) succeeding after $currentAttempt attempts")
           delay(1.second)(Right(SagaResult(s"$participantId-$phase-healed")))
         }
 
-      case FailRetryable => 
-        Future.failed(new Exception("RetryableFailure: Manual retryable error"))
       case FailNonRetryable => 
         Future.failed(new Exception("NonRetryable: Manual non-retryable error"))
       case Timeout => 

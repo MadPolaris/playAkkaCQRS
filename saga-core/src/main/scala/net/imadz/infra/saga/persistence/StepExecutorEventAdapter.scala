@@ -32,6 +32,9 @@ class StepExecutorEventAdapter(override val system: ExtendedActorSystem)
       case event@OperationSucceeded(_) =>
         Succeed(OperationSucceededConv.toProto(event))
 
+      case event@ManualFixCompleted(_) =>
+        StepExecutorEventPO.Event.ManualFixed(ManualFixCompletedConv.toProto(event))
+
       case err: OperationFailed =>
         Failed(FailedConv.toProto(err))
 
@@ -48,6 +51,8 @@ class StepExecutorEventAdapter(override val system: ExtendedActorSystem)
         EventSeq.single(ExecutionStartedConv.fromProto(po))
       case Succeed(po) =>
         EventSeq.single(OperationSucceededConv.fromProto(po))
+      case StepExecutorEventPO.Event.ManualFixed(po) =>
+        EventSeq.single(ManualFixCompletedConv.fromProto(po))
       case Failed(po) =>
         EventSeq.single(FailedConv.fromProto(po))
       case Rescheduled(po) =>

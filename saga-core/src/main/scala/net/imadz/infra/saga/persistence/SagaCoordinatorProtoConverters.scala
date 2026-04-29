@@ -94,6 +94,30 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
     )
   }
 
+  object StepGroupSucceededConv extends ProtoConverter[StepGroupSucceeded, StepGroupSucceededPO] {
+    override def toProto(e: StepGroupSucceeded): StepGroupSucceededPO = StepGroupSucceededPO(
+      phase = PhaseConv.toProto(e.phase),
+      group = e.group
+    )
+
+    override def fromProto(p: StepGroupSucceededPO): StepGroupSucceeded = StepGroupSucceeded(
+      phase = PhaseConv.fromProto(p.phase),
+      group = p.group
+    )
+  }
+
+  object TransactionRetriedConv extends ProtoConverter[TransactionRetried, TransactionRetriedPO] {
+    override def toProto(e: TransactionRetried): TransactionRetriedPO = TransactionRetriedPO(
+      transactionId = e.transactionId,
+      phase = PhaseConv.toProto(e.phase)
+    )
+
+    override def fromProto(p: TransactionRetriedPO): TransactionRetried = TransactionRetried(
+      transactionId = p.transactionId,
+      phase = PhaseConv.fromProto(p.phase)
+    )
+  }
+
   object TransactionCompletedConv extends ProtoConverter[TransactionCompleted, TransactionCompletedPO] {
     override def toProto(e: TransactionCompleted): TransactionCompletedPO = TransactionCompletedPO(
       transactionId = e.transactionId
@@ -128,6 +152,16 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
     )
   }
 
+  object TransactionResolvedConv extends ProtoConverter[TransactionResolved, TransactionResolvedPO] {
+    override def toProto(e: TransactionResolved): TransactionResolvedPO = TransactionResolvedPO(
+      transactionId = e.transactionId
+    )
+
+    override def fromProto(p: TransactionResolvedPO): TransactionResolved = TransactionResolved(
+      transactionId = p.transactionId
+    )
+  }
+
   object CoordinatorStateConv extends ProtoConverter[State, CoordinatorStatePO] {
     override def toProto(s: State): CoordinatorStatePO = CoordinatorStatePO(
       transactionId = s.transactionId.getOrElse(""),
@@ -143,7 +177,8 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
       },
       traceId = s.traceId,
       singleStep = s.singleStep,
-      isPaused = s.isPaused
+      isPaused = s.isPaused,
+      currentStepGroup = s.currentStepGroup
     )
 
     override def fromProto(p: CoordinatorStatePO): State = State(
@@ -161,7 +196,8 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
       },
       traceId = p.traceId,
       singleStep = p.singleStep,
-      isPaused = p.isPaused
+      isPaused = p.isPaused,
+      currentStepGroup = if (p.currentStepGroup == 0) 1 else p.currentStepGroup
     )
   }
 }

@@ -6,7 +6,7 @@ import com.google.protobuf.ByteString
 import net.imadz.common.serialization.{PrimitiveConverter, SerializationExtension}
 import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException}
 import net.imadz.infra.saga.SagaPhase._
-import net.imadz.infra.saga.StepExecutor.{Event, ExecutionStarted, OperationFailed, RetryScheduled}
+import net.imadz.infra.saga.StepExecutor.{Event, ExecutionStarted, ManualFixCompleted, OperationFailed, RetryScheduled}
 import net.imadz.infra.saga.proto.saga_v2._
 import net.imadz.infra.saga.{SagaParticipant, SagaTransactionStep}
 
@@ -90,6 +90,35 @@ trait SagaExecutorConverter extends PrimitiveConverter {
     }
   }
 
+  object ManualFixCompletedConv extends ProtoConverter[Event, ManualFixCompletedPO] {
+
+    override def toProto(domain: Event): ManualFixCompletedPO = {
+      // 使用 Akka Serialization 将结果转为字节
+      val serializer = serialization.findSerializerFor(domain.asInstanceOf[AnyRef])
+      val bytes = serializer.toBinary(domain.asInstanceOf[AnyRef])
+      val manifest = Serializers.manifestFor(serializer, domain.asInstanceOf[AnyRef])
+
+      ManualFixCompletedPO(
+        resultType = manifest,
+        result = ByteString.copyFrom(bytes)
+      )
+    }
+
+    override def fromProto(proto: ManualFixCompletedPO): Event = {
+      if (proto.result.isEmpty) {
+        null
+      } else {
+        val clazz = system.dynamicAccess.getClassFor[Event](proto.resultType).getOrElse(classOf[java.io.Serializable])
+        serialization.deserialize(
+          proto.result.toByteArray,
+          serialization.serializerFor(clazz).identifier,
+          proto.resultType
+        ).getOrElse(throw new RuntimeException(s"Failed to deserialize result of type ${proto.resultType}"))
+          .asInstanceOf[Event]
+      }
+    }
+  }
+
   object RetryableOrNotExceptionConv extends ProtoConverter[RetryableOrNotException, RetryableOrNotExceptionPO] {
     override def toProto(err: RetryableOrNotException): RetryableOrNotExceptionPO = RetryableOrNotExceptionPO(
       message = if (err.message != null) err.message else "",
@@ -124,7 +153,8 @@ trait SagaExecutorConverter extends PrimitiveConverter {
         maxRetries = step.maxRetries,
         timeoutDurationMillis = step.timeoutDuration.toMillis,
         retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
-        traceId = step.traceId
+        traceId = step.traceId,
+        stepGroup = step.stepGroup
       )
     }
 
@@ -150,7 +180,8 @@ trait SagaExecutorConverter extends PrimitiveConverter {
         maxRetries = stepPO.maxRetries,
         timeoutDuration = stepPO.timeoutDurationMillis.millis,
         retryWhenRecoveredOngoing = stepPO.retryWhenRecoveredOngoing,
-        traceId = stepPO.traceId
+        traceId = stepPO.traceId,
+        stepGroup = if (stepPO.stepGroup == 0) 1 else stepPO.stepGroup
       )
 
     }

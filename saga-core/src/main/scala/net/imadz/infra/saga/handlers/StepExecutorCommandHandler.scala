@@ -108,6 +108,21 @@ object StepExecutorCommandHandler {
         qs.replyTo ! state
         Effect.none
 
+      case ManualFix(replyTo) =>
+        actorContext.log.info(s"ManualFix received for transaction ${state.transactionId.getOrElse("unknown")} step ${state.step.map(_.stepId).getOrElse("unknown")}")
+        val typedReplyTo = replyTo.asInstanceOf[Option[ActorRef[StepResult[E, R, C]]]]
+        // 假设手动修复成功，返回一个空的成功的 SagaResult
+        val manualResult = net.imadz.infra.saga.SagaParticipant.SagaResult.empty[R]()
+        Effect
+          .persist(ManualFixCompleted(manualResult))
+          .thenRun((updatedState: State[E, R, C]) => {
+             actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(
+               SagaProgressEvent.StepCompleted(state.transactionId.get, state.step.get.stepId, state.step.get.phase.toString, state.traceId.getOrElse(""), isManual = true)
+             )
+             typedReplyTo.foreach(_ ! StepCompleted[E, R, C](state.transactionId.get, state.step.get.stepId, manualResult))
+          })
+          .thenStop()
+
       case msg =>
         actorContext.log.warn(s"msg: $msg is not processed")
         Effect.none

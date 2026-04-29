@@ -27,6 +27,18 @@ object MoneyTransferProtocol {
                                                    replyTo: ActorRef[TransactionResultConfirmation]
                                                  ) extends MoneyTransferTransactionCommand
 
+  // 管理员命令：手动修复特定步骤
+  case class AdminManualFixStep(
+                                 stepId: String,
+                                 phase: String,
+                                 replyTo: ActorRef[TransactionResultConfirmation]
+                               ) extends MoneyTransferTransactionCommand
+
+  // 管理员命令：在手动修复后恢复事务执行
+  case class AdminResumeTransaction(
+                                     replyTo: ActorRef[TransactionResultConfirmation]
+                                   ) extends MoneyTransferTransactionCommand
+
   // --- Replies ---
   case class TransactionResultConfirmation(
                                             transactionId: Id,
