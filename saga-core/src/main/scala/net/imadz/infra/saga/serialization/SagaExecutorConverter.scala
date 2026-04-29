@@ -153,7 +153,6 @@ trait SagaExecutorConverter extends PrimitiveConverter {
         maxRetries = step.maxRetries,
         timeoutDurationMillis = step.timeoutDuration.toMillis,
         retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
-        traceId = step.traceId,
         stepGroup = step.stepGroup
       )
     }
@@ -180,7 +179,6 @@ trait SagaExecutorConverter extends PrimitiveConverter {
         maxRetries = stepPO.maxRetries,
         timeoutDuration = stepPO.timeoutDurationMillis.millis,
         retryWhenRecoveredOngoing = stepPO.retryWhenRecoveredOngoing,
-        traceId = stepPO.traceId,
         stepGroup = if (stepPO.stepGroup == 0) 1 else stepPO.stepGroup
       )
 

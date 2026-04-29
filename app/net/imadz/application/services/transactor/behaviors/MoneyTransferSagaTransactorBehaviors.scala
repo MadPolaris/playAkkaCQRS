@@ -186,17 +186,14 @@ object MoneyTransferSagaTransactorBehaviors {
 
     // 2. 编排 TCC 步骤
     List(
-      // Step 1: Prepare (Reserve)
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("reserve-from", PreparePhase, fromPart, maxRetries = 5, traceId = ""),
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("record-to", PreparePhase, toPart, maxRetries = 5, traceId = ""),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("reserve-from", PreparePhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("record-to", PreparePhase, toPart, maxRetries = 5),
 
-      // Step 2: Commit
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-from", CommitPhase, fromPart, maxRetries = 5, traceId = ""),
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-to", CommitPhase, toPart, maxRetries = 5, traceId = ""),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-from", CommitPhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("commit-to", CommitPhase, toPart, maxRetries = 5),
 
-      // Step 3: Compensate
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-from", CompensatePhase, fromPart, maxRetries = 5, traceId = ""),
-      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-to", CompensatePhase, toPart, maxRetries = 5, traceId = "")
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-from", CompensatePhase, fromPart, maxRetries = 5),
+      SagaTransactionStep[iMadzError, String, MoneyTransferContext]("compensate-to", CompensatePhase, toPart, maxRetries = 5)
     )
   }
 }

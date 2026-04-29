@@ -40,7 +40,6 @@ case class SagaTransactionStep[E, R, C](
                                          maxRetries: Int = 3,
                                          timeoutDuration: FiniteDuration = 5.seconds,
                                          retryWhenRecoveredOngoing: Boolean = false,
-                                         traceId: String = "",
                                          stepGroup: Int = 1
                                        )
 

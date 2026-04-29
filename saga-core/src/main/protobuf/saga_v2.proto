@@ -39,7 +39,6 @@ message SagaTransactionStepPO {
   bool retry_when_recovered_ongoing = 5;
   SagaParticipantPO participant = 6;
   string participant_type = 7;// This will be used to identify the participant implementation
-  string trace_id = 8;
   int32 step_group = 9;
 }
 

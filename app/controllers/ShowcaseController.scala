@@ -90,19 +90,19 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     
     val steps = List(
       // Prepare Phase
-      SagaTransactionStep("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId, stepGroup = 2),
+      SagaTransactionStep("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep("Step-C", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2),
       
       // Commit Phase
-      SagaTransactionStep("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId, stepGroup = 2),
+      SagaTransactionStep("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep("Step-C", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2),
       
       // Compensate Phase
-      SagaTransactionStep("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, traceId = traceId, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, traceId = traceId, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-C"), 3, traceId = traceId, stepGroup = 2)
+      SagaTransactionStep("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep("Step-C", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2)
     )
 
     import net.imadz.application.services.MoneyTransferService
