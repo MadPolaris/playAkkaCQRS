@@ -71,8 +71,7 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
         "step1",
         PreparePhase,
         SuccessfulParticipant,
-        2,
-        traceId = "test-trace-id"
+        2
       )
 
       ref ! Start[String, String, Any]("trx1", reserveFromAccount, Some(probe.ref), "test-trace-id")
@@ -94,8 +93,7 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
         "step1",
         PreparePhase,
         AlwaysFailingParticipant,
-        2,
-        traceId = "test-trace-id"
+        2
       )
 
       ref ! Start("trx6", nonRetryableStep, Some(probe.ref), "test-trace-id")
@@ -109,7 +107,7 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
       val persistenceId = "test-step-executor-query"
       val ref = spawn(stepExecutorBehavior(persistenceId))
       
-      val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, TimeoutParticipant(), 2, traceId = "test-trace-id")
+      val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, TimeoutParticipant(), 2)
       val probe = createTestProbe[StepResult[String, String, Any]]()
       
       ref ! Start("trx-persist", step, Some(probe.ref), "test-trace-id")
@@ -128,7 +126,7 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
       val ref = spawn(stepExecutorBehavior(persistenceId))
       val probe = createTestProbe[StepResult[String, String, Any]]()
 
-      val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, SuccessfulParticipant, 2, traceId = "test-trace-id")
+      val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, SuccessfulParticipant, 2)
       
       // 1. First execution
       ref ! Start("trx-idempotent", step, Some(probe.ref), "test-trace-id")

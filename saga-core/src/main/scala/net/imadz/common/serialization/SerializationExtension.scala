@@ -2,6 +2,7 @@ package net.imadz.common.serialization
 
 import akka.actor.{ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
 import net.imadz.infra.saga.serialization.SagaParticipantSerializerStrategy
+import org.slf4j.LoggerFactory
 
 import java.util.concurrent.ConcurrentHashMap
 
@@ -33,6 +34,14 @@ object SerializationExtension extends ExtensionId[SerializationExtensionImpl] wi
     if (s == null) throw new IllegalArgumentException(s"No strategy for manifest: $manifest")
     s
   }
+
+  def validateStrategies(): Unit = {
+    if (classToStrategy.isEmpty) {
+      LoggerFactory.getLogger(getClass).warn("No saga participant serialization strategies registered! This may cause recovery failures.")
+    } else {
+      LoggerFactory.getLogger(getClass).info(s"SerializationExtension validated with ${classToStrategy.size()} strategies registered.")
+    }
+  }
 }
 
 trait SerializationExtension {
@@ -41,6 +50,8 @@ trait SerializationExtension {
   def strategyFor(clazz: Class[_]): SagaParticipantSerializerStrategy
 
   def strategyFor(manifest: String): SagaParticipantSerializerStrategy
+
+  def validateStrategies(): Unit
 }
 
 class SerializationExtensionImpl(system: ExtendedActorSystem) extends Extension with SerializationExtension {
@@ -56,5 +67,9 @@ class SerializationExtensionImpl(system: ExtendedActorSystem) extends Extension 
 
   def strategyFor(manifest: String): SagaParticipantSerializerStrategy = {
     SerializationExtension.strategyFor(manifest)
+  }
+
+  def validateStrategies(): Unit = {
+    SerializationExtension.validateStrategies()
   }
 }

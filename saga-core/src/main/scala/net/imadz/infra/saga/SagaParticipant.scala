@@ -64,7 +64,7 @@ trait SagaParticipant[E, R, C] {
       case Success(Right(r)) =>
         logger.info(s"[TraceID: $traceId] SagaParticipant executed successfully with right result")
         Success(Right(r))
-      case Success(Left(e@net.imadz.common.CommonTypes.iMadzError(code, message))) =>
+      case Success(Left(e: Throwable)) =>
         logger.warn(s"[TraceID: $traceId] SagaParticipant executed failed with $e")
         Success(Left(classifyFailure(e)))
       case Success(Left(e)) =>
@@ -77,8 +77,8 @@ trait SagaParticipant[E, R, C] {
   }
 
   private def classifyFailure(e: Throwable): RetryableOrNotException = {
-    val retryableOrNotException = defaultClassification
-      .orElse(customClassification)
+    val retryableOrNotException = customClassification
+      .orElse(defaultClassification)
       .orElse(fallbackClassification)
       .apply(e)
 

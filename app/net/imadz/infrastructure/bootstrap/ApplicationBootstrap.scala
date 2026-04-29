@@ -39,6 +39,7 @@ class ApplicationBootstrap @Inject()(
   serializationExtension.registerStrategy(TransactionSerializationStrategies.FromAccountStrategy(creditBalanceRepository))
   serializationExtension.registerStrategy(TransactionSerializationStrategies.ToAccountStrategy(creditBalanceRepository))
   serializationExtension.registerStrategy(net.imadz.application.services.transactor.ShowcaseStrategy)
+  serializationExtension.validateStrategies()
 
 
   // --- 1. 初始化标准聚合根 (CreditBalance) ---

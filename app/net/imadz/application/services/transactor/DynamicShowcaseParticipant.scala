@@ -88,6 +88,7 @@ class DynamicShowcaseParticipant(val participantId: String) extends SagaParticip
   }
 
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = {
+    case e: Exception if e.getMessage != null && e.getMessage.contains("RetryableFailure") => RetryableFailure(e.getMessage)
     case e: RuntimeException => NonRetryableFailure(e.getMessage)
   }
 }

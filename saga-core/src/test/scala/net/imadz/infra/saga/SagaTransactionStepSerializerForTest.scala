@@ -12,15 +12,11 @@ class SagaTransactionStepSerializerForTest extends Serializer {
   override def toBinary(o: AnyRef): Array[Byte] = o match {
     case step: SagaTransactionStep[_, _, _] =>
       val stepIdBytes = step.stepId.getBytes("UTF-8")
-      val traceIdBytes = step.traceId.getBytes("UTF-8")
       val participantClassName = step.participant.getClass.getName.getBytes("UTF-8")
-      val buffer = ByteBuffer.allocate(4 + stepIdBytes.length + 4 + traceIdBytes.length + 4 + participantClassName.length + 4 + 8 + 1)
+      val buffer = ByteBuffer.allocate(4 + stepIdBytes.length + 4 + participantClassName.length + 4 + 8 + 1)
       
       buffer.putInt(stepIdBytes.length)
       buffer.put(stepIdBytes)
-      
-      buffer.putInt(traceIdBytes.length)
-      buffer.put(traceIdBytes)
       
       buffer.putInt(participantClassName.length)
       buffer.put(participantClassName)
@@ -45,11 +41,6 @@ class SagaTransactionStepSerializerForTest extends Serializer {
     val stepIdBytes = new Array[Byte](stepIdLen)
     buffer.get(stepIdBytes)
     val stepId = new String(stepIdBytes, "UTF-8")
-    
-    val traceIdLen = buffer.getInt()
-    val traceIdBytes = new Array[Byte](traceIdLen)
-    buffer.get(traceIdBytes)
-    val traceId = new String(traceIdBytes, "UTF-8")
     
     val participantClassNameLen = buffer.getInt()
     val participantClassNameBytes = new Array[Byte](participantClassNameLen)
@@ -82,8 +73,7 @@ class SagaTransactionStepSerializerForTest extends Serializer {
       participant = participant.asInstanceOf[SagaParticipant[Any, Any, Any]],
       maxRetries = 5,
       timeoutDuration = scala.concurrent.duration.Duration(timeoutMillis, "millis"),
-      retryWhenRecoveredOngoing = retryWhenRecoveredOngoing,
-      traceId = traceId
+      retryWhenRecoveredOngoing = retryWhenRecoveredOngoing
     )
   }
 }

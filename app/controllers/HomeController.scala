@@ -74,7 +74,7 @@ class HomeController @Inject()(
   implicit val idFormat: Format[Id] = new Format[Id] {
     override def writes(o: Id): JsValue = JsString(o.toString)
 
-    override def reads(json: JsValue): JsResult[Id] = JsSuccess(Id.of(json.toString()))
+    override def reads(json: JsValue): JsResult[Id] = json.validate[String].map(Id.of)
   }
 
 

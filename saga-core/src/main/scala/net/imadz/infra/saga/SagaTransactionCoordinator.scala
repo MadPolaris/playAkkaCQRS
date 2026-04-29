@@ -206,8 +206,12 @@ object SagaTransactionCoordinator {
           }
 
       case ProceedNextGroup(replyTo) =>
-        context.log.info(s"[TraceID: ${state.traceId}] Proceeding to next group ${state.currentStepGroup} in phase ${state.currentPhase}")
-        executePhase(context, state, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], replyTo)
+        if ((state.status == InProgress || state.status == Compensating) && !state.isPaused) {
+          context.log.info(s"[TraceID: ${state.traceId}] Proceeding to next group ${state.currentStepGroup} in phase ${state.currentPhase}")
+          executePhase(context, state, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], replyTo)
+        } else {
+          context.log.info(s"Ignoring ProceedNextGroup because state is ${state.status} and paused=${state.isPaused}")
+        }
         Effect.none
 
       case RetryCurrentPhase(replyTo) =>
@@ -340,8 +344,7 @@ object SagaTransactionCoordinator {
                                   replyTo: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
     if (phase != CompensatePhase) {
-      val maxGroupInCompensate = state.steps.filter(_.phase == CompensatePhase).map(_.stepGroup).distinct.sorted.reverse.headOption.getOrElse(1)
-      val persistEffect = Effect.persist[Event, State](List(PhaseFailed(phase), StepGroupSucceeded(CompensatePhase, maxGroupInCompensate + 1))) // Offset to trigger reset in eventHandler
+      val persistEffect = Effect.persist[Event, State](PhaseFailed(phase))
       
       if (state.singleStep) {
          persistEffect.thenRun { (stateNew: State) =>
@@ -411,7 +414,11 @@ object SagaTransactionCoordinator {
                         }                      case StepExecutor.Failed =>
                         Future.successful(StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, executorState.lastError.getOrElse(NonRetryableFailure("Unknown error"))))
                       case _ if retries > 0 =>
-                        akka.pattern.after(2.seconds, context.system.classicSystem.scheduler)(pollStatus(retries - 1))
+                        val promise = scala.concurrent.Promise[StepResult[E, R, C]]()
+                        context.system.scheduler.scheduleOnce(2.seconds, new Runnable {
+                          override def run(): Unit = promise.completeWith(pollStatus(retries - 1))
+                        })
+                        promise.future
                       case _ =>
                         Future.successful(StepExecutor.StepFailed[E, R, C](state.transactionId.get, step.stepId, RetryableFailure(s"Step still ongoing after status queries")))
                     }
@@ -459,9 +466,10 @@ object SagaTransactionCoordinator {
         state.copy(isPaused = false)
 
       case PhaseFailed(phase) =>
+        val maxGroupInCompensate = state.steps.filter(_.phase == CompensatePhase).map(_.stepGroup).distinct.sorted.lastOption.getOrElse(1)
         phase match {
-          case PreparePhase => state.copy(currentPhase = CompensatePhase, status = Compensating)
-          case CommitPhase => state.copy(currentPhase = CompensatePhase, status = Compensating)
+          case PreparePhase => state.copy(currentPhase = CompensatePhase, status = Compensating, currentStepGroup = maxGroupInCompensate)
+          case CommitPhase => state.copy(currentPhase = CompensatePhase, status = Compensating, currentStepGroup = maxGroupInCompensate)
           case CompensatePhase => state
         }
       case StepGroupSucceeded(phase, group) =>

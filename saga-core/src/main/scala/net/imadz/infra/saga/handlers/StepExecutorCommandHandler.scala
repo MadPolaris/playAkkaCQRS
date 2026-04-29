@@ -36,16 +36,17 @@ object StepExecutorCommandHandler {
         actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepOngoing(transactionId, step.stepId, step.phase.toString, traceId))
         Effect
           .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
-          .thenRun(_ => executeOperation(actorContext, context, step.phase, step, transactionId, traceId, circuitBreaker, replyTo))
+          .thenRun(_ => executeOperation(actorContext, context, timers, step.phase, step, transactionId, traceId, circuitBreaker, replyTo))
 
       case RecoverExecution(transactionId, step, replyTo, traceId) if state.canRecover =>
         actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepOngoing(transactionId, step.stepId, step.phase.toString, traceId))
         Effect
           .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
-          .thenRun(_ => executeOperation(actorContext, context, step.phase, step, transactionId, traceId, circuitBreaker, replyTo))
+          .thenRun(_ => executeOperation(actorContext, context, timers, step.phase, step, transactionId, traceId, circuitBreaker, replyTo))
 
 
       case OperationResponse(Right(result), replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.status == Ongoing =>
+        timers.cancel("StepTimeout")
         Effect
           .persist(OperationSucceeded(result))
           .thenRun((updatedState: State[E, R, C]) => updatedState.status match {
@@ -57,7 +58,7 @@ object StepExecutorCommandHandler {
           .thenStop()
 
       case OperationResponse(Left(error: RetryableFailure), replyTo) if state.canScheduleRetryOnFailure(defaultMaxRetries) =>
-
+        timers.cancel("StepTimeout")
         val nextRetry = state.retries + 1
         val nextDelay = calculateBackoffDelay(initialRetryDelay, nextRetry)
 
@@ -68,6 +69,7 @@ object StepExecutorCommandHandler {
           .thenRun(_ => scheduleRetry(timers, nextDelay, replyTo))
 
       case OperationResponse(Left(error), replyTo: Option[ActorRef[StepResult[E, R, C]]]) =>
+        timers.cancel("StepTimeout")
         actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepFailed(state.transactionId.get, state.step.get.stepId, state.step.get.phase.toString, error.message, state.traceId.getOrElse("")))
         Effect
           .persist(OperationFailed(error))
@@ -101,7 +103,7 @@ object StepExecutorCommandHandler {
         state.step.zip(state.transactionId).zip(state.traceId).map {
           case ((step, trxId), traceId) =>
             Effect.none[Event, State[E, R, C]]
-              .thenRun(_ => executeOperation[E, R, C](actorContext, context, step.phase, step, trxId, traceId, circuitBreaker, replyTo))
+              .thenRun(_ => executeOperation[E, R, C](actorContext, context, timers, step.phase, step, trxId, traceId, circuitBreaker, replyTo))
         }.getOrElse(Effect.none)
 
       case qs: QueryStatus[E, R, C] =>
@@ -109,6 +111,7 @@ object StepExecutorCommandHandler {
         Effect.none
 
       case ManualFix(replyTo) =>
+        timers.cancel("StepTimeout")
         actorContext.log.info(s"ManualFix received for transaction ${state.transactionId.getOrElse("unknown")} step ${state.step.map(_.stepId).getOrElse("unknown")}")
         val typedReplyTo = replyTo.asInstanceOf[Option[ActorRef[StepResult[E, R, C]]]]
         // 假设手动修复成功，返回一个空的成功的 SagaResult
@@ -130,10 +133,10 @@ object StepExecutorCommandHandler {
   }
 
   private val logger = LoggerFactory.getLogger(getClass)
-
   private def executeOperation[E, R, C](
                                          actorContext: akka.actor.typed.scaladsl.ActorContext[Command],
                                          context: C,
+                                         timers: TimerScheduler[Command],
                                          stepPhase: TransactionPhase,
                                          step: SagaTransactionStep[E, R, C],
                                          transactionId: String,
@@ -143,7 +146,7 @@ object StepExecutorCommandHandler {
                                        ): Unit = {
     import actorContext.executionContext
 
-    actorContext.scheduleOnce(step.timeoutDuration, actorContext.self, TimedOut(replyTo))
+    timers.startSingleTimer("StepTimeout", TimedOut(replyTo), step.timeoutDuration)
 
     val eventualStepResult: SagaParticipant.ParticipantEffect[RetryableOrNotException, R] = stepPhase match {
       case PreparePhase =>

@@ -10,6 +10,7 @@ import akka.util.Timeout
 import net.imadz.application.services.transactor.MoneyTransferProtocol._
 import net.imadz.application.services.transactor.MoneyTransferTransactionRepository
 import net.imadz.common.CommonTypes.{ApplicationService, Id}
+import net.imadz.common.Id
 import net.imadz.domain.values.Money
 
 import javax.inject.Inject
@@ -32,7 +33,7 @@ class MoneyTransferService @Inject()(classicSystem: akka.actor.ActorSystem, tran
   implicit val scheduler: Scheduler = system.scheduler
 
   def transfer(fromUserId: Id, toUserId: Id, amount: Money): Future[TransactionResultConfirmation] = {
-    val transactionId = java.util.UUID.randomUUID()
+    val transactionId = Id.of(java.util.UUID.randomUUID().toString)
     for {
       completionResult <- initiateTransaction(fromUserId, toUserId, amount, transactionId)
     } yield completionResult

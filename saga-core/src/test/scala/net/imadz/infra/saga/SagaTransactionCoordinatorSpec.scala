@@ -105,10 +105,10 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createSuccessfulStepExecutor())
       val transactionId = "test-transaction"
       val steps = List(
-        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("step2", PreparePhase, SuccessfulParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("step3", CommitPhase, SuccessfulParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("step4", CommitPhase, SuccessfulParticipant, 2, traceId = "test-trace-id")
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step2", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step3", CommitPhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step4", CommitPhase, SuccessfulParticipant, 2)
       )
       val prob = createTestProbe[TransactionResult]()
       val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
@@ -137,8 +137,8 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       )
       val transactionId = "failed-transaction"
       val steps = List(
-        SagaTransactionStep("step1", PreparePhase, AlwaysFailingParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("step2", CompensatePhase, SuccessfulParticipant, 2, traceId = "test-trace-id")
+        SagaTransactionStep("step1", PreparePhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("step2", CompensatePhase, SuccessfulParticipant, 2)
       )
       val prob = createTestProbe[TransactionResult]()
       val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
@@ -167,12 +167,12 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       )
       val transactionId = "compensate-partial-fail-transaction"
       val steps = List(
-        SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("prepare2", PreparePhase, SuccessfulParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("commit1", CommitPhase, SuccessfulParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("commit2", CommitPhase, AlwaysFailingParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("compensate1", CompensatePhase, AlwaysFailingParticipant, 2, traceId = "test-trace-id"),
-        SagaTransactionStep("compensate2", CompensatePhase, SuccessfulParticipant, 2, traceId = "test-trace-id")
+        SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("prepare2", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("commit1", CommitPhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("commit2", CommitPhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("compensate1", CompensatePhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("compensate2", CompensatePhase, SuccessfulParticipant, 2)
       )
       val prob = createTestProbe[TransactionResult]()
       val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
@@ -198,7 +198,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
     "should resume execution upon RecoveryCompleted when in InProgress state" in {
       val transactionId = "recover-in-progress-transaction"
       val steps = List(
-        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2, traceId = "test-trace-id")
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2)
       )
       
       // Use a custom executor that hangs initially
@@ -240,7 +240,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
     "should handle TransactionTimeout and fail the transaction" in {
       val transactionId = "timeout-transaction"
       val steps = List(
-        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2, traceId = "test-trace-id")
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2)
       )
 
       val prob = createTestProbe[TransactionResult]()
@@ -273,7 +273,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
     "handle ask timeout by querying status and eventually completing" in {
       val transactionId = "timeout-query-status-transaction"
       val steps = List(
-        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2, traceId = "test-trace-id")
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2)
       )
 
       def slowStepExecutorCreator(): ActorRef[StepExecutor.Command] = {

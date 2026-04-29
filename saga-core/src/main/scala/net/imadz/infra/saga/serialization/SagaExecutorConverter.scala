@@ -77,7 +77,7 @@ trait SagaExecutorConverter extends PrimitiveConverter {
 
     override def fromProto(proto: OperationSucceededPO): Event = {
       if (proto.result.isEmpty) {
-        null // 或者根据业务需求处理空值
+        net.imadz.infra.saga.StepExecutor.OperationSucceeded(net.imadz.infra.saga.SagaParticipant.SagaResult.empty[Any]())
       } else {
         val clazz = system.dynamicAccess.getClassFor[Event](proto.resultType).getOrElse(classOf[java.io.Serializable])
         serialization.deserialize(
@@ -106,7 +106,7 @@ trait SagaExecutorConverter extends PrimitiveConverter {
 
     override def fromProto(proto: ManualFixCompletedPO): Event = {
       if (proto.result.isEmpty) {
-        null
+        net.imadz.infra.saga.StepExecutor.ManualFixCompleted(net.imadz.infra.saga.SagaParticipant.SagaResult.empty[Any]())
       } else {
         val clazz = system.dynamicAccess.getClassFor[Event](proto.resultType).getOrElse(classOf[java.io.Serializable])
         serialization.deserialize(
