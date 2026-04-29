@@ -1,7 +1,25 @@
 name := """minimal-cqrs"""
-organization := "net.imadz"
+
+inThisBuild(List(
+  organization := "net.imadz",
+  version := "0.1-SNAPSHOT",
+  organizationName := "MadPolaris",
+  organizationHomepage := Some(url("https://github.com/MadPolaris")),
+  homepage := Some(url("https://github.com/MadPolaris/playAkkaCQRS")),
+  licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+  developers := List(
+    Developer(
+      "MadPolaris",
+      "MadPolaris Team",
+      "zhongdj@gmail.com",
+      url("https://github.com/MadPolaris")
+    )
+  ),
+  sonatypeCredentialHost := "s01.oss.sonatype.org",
+  sonatypeRepository := "https://s01.oss.sonatype.org/service/local"
+))
+
 logLevel := Level.Warn
-version := "1.0-SNAPSHOT"
 
 val akkaVersion = "2.6.20"
 val AkkaManagementVersion = "1.1.4"
@@ -12,8 +30,6 @@ val SlickVersion = "3.3.3"
 val MongoPluginVersion = "3.0.8"
 
 lazy val commonSettings = Seq(
-  organization := "net.imadz",
-  version := "1.0-SNAPSHOT",
   scalaVersion := "2.13.14",
   semanticdbEnabled := true,
   semanticdbVersion := "4.9.7",
@@ -95,6 +111,7 @@ lazy val root = (project in file("."))
   .aggregate(commonCore, sagaCore)
   .settings(
     commonSettings,
+    publish / skip := true,
     name := "minimal-cqrs",
     dockerBaseImage := "docker.io/library/adoptopenjdk:11-jre-hotspot",
     dockerUsername := sys.props.get("docker.username"),
