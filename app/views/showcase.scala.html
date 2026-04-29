@@ -23,6 +23,8 @@
         .btn-success:hover { background: #1b5e20; }
         .btn-danger { background: #c62828; color: white; }
         .btn-danger:hover { background: #b71c1c; }
+        .btn-info { background: #17a2b8; color: white; }
+        .btn-info:hover { background: #138496; }
         .btn-small { padding: 4px 8px; font-size: 0.7rem; width: auto; display: inline-block; margin: 0; }
         
         .fault-injection { margin-top: 20px; border-top: 1px solid #444; padding-top: 20px; }
@@ -80,6 +82,12 @@
         .type-StepFailed { color: #f44336; }
         .type-TransactionCompleted { color: #4caf50; background: rgba(76, 175, 80, 0.1); }
         .type-TransactionSuspended { color: #ff9800; background: rgba(255, 152, 0, 0.1); }
+        
+        .admin-fix-panel { margin-top: 20px; padding: 10px; background: #333; border-radius: 4px; border-left: 4px solid #c62828; }
+        .admin-fix-panel input { width: 100%; padding: 8px; margin-bottom: 10px; background: #222; color: #fff; border: 1px solid #555; box-sizing: border-box; }
+
+        .replay-panel { margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; border-top: 4px solid #17a2b8; }
+        .replay-panel input { width: 100%; padding: 10px; background: #111; color: #00d4ff; border: 1px solid #444; border-radius: 4px; margin-bottom: 10px; font-family: monospace; }
     </style>
 </head>
 <body>
@@ -98,6 +106,12 @@
                 
                 <div id="statusInfo" style="margin: 10px 0; font-weight: bold; text-align: center; color: #ffca28;">Ready.</div>
                 
+                <div class="replay-panel">
+                    <h3 style="font-size: 0.9rem; color: #17a2b8; margin-top: 0;">Time Machine (Replay)</h3>
+                    <input type="text" id="replayTxId" placeholder="Enter Transaction ID">
+                    <button class="btn btn-info" id="replayBtn">🎞️ Replay History</button>
+                </div>
+
                 <div class="admin-fix-panel" id="manualFixPanel" style="display:none;">
                     <h3 style="font-size: 0.9rem; color: #f44336; margin-top: 0;">Emergency Fix</h3>
                     <input type="text" id="manualStepId" placeholder="Step ID (e.g. Step-A)">
@@ -119,7 +133,6 @@
                             <option value="failnonretryable">Non-Retryable Fail</option>
                         </select>
                     </div>
-                    <!-- Other steps... -->
                     <div class="step-config">
                         <span class="step-name">Step-B Behavior</span>
                         <select id="config-Step-B">
@@ -140,7 +153,6 @@
             </div>
             
             <div class="visualization" id="dagContainer">
-                <!-- Columns... (Keep previous logic) -->
                 <div class="phase-column">
                     <div class="phase-header" style="background: #ffca28; color: #000;">PREPARE</div>
                     <div class="group-row" data-group="1">
@@ -188,6 +200,8 @@
         const retryBtn = document.getElementById('retryBtn');
         const resumeBtn = document.getElementById('resumeBtn');
         const manualFixPanel = document.getElementById('manualFixPanel');
+        const replayBtn = document.getElementById('replayBtn');
+        const replayTxIdInput = document.getElementById('replayTxId');
         let currentTransactionId = null;
 
         function addLog(type, msg) {
@@ -198,18 +212,15 @@
             entry.innerHTML = '<span class="log-time">' + timeStr + '</span> <span class="log-type">' + type + '</span> ' + msg;
             logContainer.prepend(entry);
         }
-        
         function updateNode(stepId, phase, status) {
-            const node = document.getElementById('node-' + stepId + '-' + phase.toLowerCase());
+            const phaseKey = (phase || '').toLowerCase().replace('phase', '');
+            const node = document.getElementById('node-' + stepId + '-' + phaseKey);
             if (node) {
                 if (status === 'ongoing') node.classList.remove('suspended');
                 node.className = 'node ' + status;
             }
         }
-        
-        const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
-        ws.onmessage = function(msg) {
-            const event = JSON.parse(msg.data);
+        function handleEvent(event) {
             const data = event.data;
             const statusInfo = document.getElementById('statusInfo');
             
@@ -222,6 +233,7 @@
                 proceedBtn.style.display = 'none';
                 retryBtn.style.display = 'none';
                 resumeBtn.style.display = 'none';
+                manualFixPanel.style.display = 'none';
             } else if (event.type === 'StepOngoing') {
                 updateNode(data.stepId, data.phase, 'ongoing');
             } else if (event.type === 'StepCompleted') {
@@ -231,7 +243,7 @@
                 updateNode(data.stepId, data.phase, isRetryable ? 'retrying' : 'failed');
                 if (!isRetryable) {
                     addLog(event.type, 'Step ' + data.stepId + ' FAILED.');
-                    retryBtn.style.display = 'block'; // Show retry when failed
+                    retryBtn.style.display = 'block';
                 }
             } else if (event.type === 'TransactionCompleted') {
                 addLog(event.type, 'SUCCESS: ALL STEPS COMPLETED');
@@ -258,6 +270,11 @@
                    document.querySelectorAll('.node.failed, .node.retrying').forEach(n => n.classList.add('suspended'));
                 }
             }
+        }
+        
+        const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
+        ws.onmessage = function(msg) {
+            handleEvent(JSON.parse(msg.data));
         };
 
         document.getElementById('startBtn').onclick = () => {
@@ -265,7 +282,7 @@
                 fetch('/api/saga/inject-fault/' + sid + '/' + document.getElementById('config-' + sid).value, { method: 'POST' });
             });
             fetch('/api/saga/trigger-showcase/' + document.getElementById('singleStepMode').checked, { method: 'POST' })
-                .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; });
+                .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; });
         };
 
         proceedBtn.onclick = () => { if (currentTransactionId) fetch('/api/saga/proceed/' + currentTransactionId, { method: 'POST' }); };
@@ -291,6 +308,53 @@
             const sid = document.getElementById('manualStepId').value;
             const ph = document.getElementById('manualPhase').value;
             if (sid) doFix(sid, ph, null);
+        };
+
+        // Time Machine Paced Replay Logic
+        replayBtn.onclick = () => {
+            let txId = replayTxIdInput.value.trim();
+            if (!txId) return alert("Please enter a Transaction ID");
+            
+            const uuidMatch = txId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+            if (uuidMatch) txId = uuidMatch[0];
+            
+            addLog('System', 'Time Machine: Loading historical timeline...');
+            fetch('/api/saga/history/' + txId)
+                .then(r => r.json())
+                .then(dataList => {
+                    if (dataList.length === 0) return alert("No history found.");
+                    
+                    // Reset UI
+                    document.querySelectorAll('.node').forEach(n => { n.className = 'node pending'; n.classList.remove('suspended'); });
+                    addLog('System', 'Paced replay of ' + dataList.length + ' events starting...');
+                    
+                    let cursor = 0;
+                    
+                    function playNext() {
+                        if (cursor >= dataList.length) {
+                            addLog('System', 'Replay finished.');
+                            return;
+                        }
+                        
+                        const currentItem = dataList[cursor];
+                        handleEvent(currentItem.event);
+                        
+                        cursor++;
+                        if (cursor < dataList.length) {
+                            const nextItem = dataList[cursor];
+                            // 计算原始间隔
+                            const realGap = nextItem.timestamp - currentItem.timestamp;
+                            // 归一化间隔：最小 400ms 保证看清动画，最大 2000ms 避免枯燥
+                            const pacedGap = Math.min(2000, Math.max(400, realGap));
+                            
+                            setTimeout(playNext, pacedGap);
+                        } else {
+                            setTimeout(playNext, 500);
+                        }
+                    }
+                    
+                    playNext();
+                });
         };
     </script>
 </body>

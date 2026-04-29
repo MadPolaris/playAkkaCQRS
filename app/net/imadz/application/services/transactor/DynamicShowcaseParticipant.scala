@@ -58,27 +58,30 @@ class DynamicShowcaseParticipant(val participantId: String) extends SagaParticip
     execute(transactionId, "compensate", traceId)
 
   private def execute(transactionId: String, phase: String, traceId: String): ParticipantEffect[Any, String] = {
+    import scala.concurrent.ExecutionContext.Implicits.global
     val behavior = getBehavior(participantId)
     val counterKey = s"$transactionId-$participantId-$phase"
     val currentAttempt = attemptCounters.compute(counterKey, (_, v) => if (v == null) 1 else v + 1)
-
-    logger.info(s"[TraceID: $traceId] Step $participantId ($phase) execution attempt: $currentAttempt, Behavior: $behavior")
     
+    logger.info(s"[TraceID: $traceId] Step $participantId ($phase) execution attempt: $currentAttempt, Behavior: $behavior")
+
+    val randomDelay = (3000 + scala.util.Random.nextInt(2000)).milliseconds
+
     behavior match {
       case Success => 
-        delay(1.second)(Right(SagaResult(s"$participantId-$phase-success")))
-      
+        delay(randomDelay)(Right(SagaResult(s"$participantId-$phase-success")))
+
       case FailRetryable | FailTwiceThenSucceed =>
         if (currentAttempt <= 2) {
           logger.warn(s"[TraceID: $traceId] Step $participantId ($phase) failing intentionally (attempt $currentAttempt/2)")
-          Future.failed(new Exception(s"RetryableFailure: Simulated transient error (attempt $currentAttempt)"))
+          delay(randomDelay)(()).flatMap(_ => Future.failed(new Exception(s"RetryableFailure: Simulated transient error (attempt $currentAttempt)")))
         } else {
           logger.info(s"[TraceID: $traceId] Step $participantId ($phase) succeeding after $currentAttempt attempts")
-          delay(1.second)(Right(SagaResult(s"$participantId-$phase-healed")))
+          delay(randomDelay)(Right(SagaResult(s"$participantId-$phase-healed")))
         }
 
       case FailNonRetryable => 
-        Future.failed(new Exception("NonRetryable: Manual non-retryable error"))
+        delay(randomDelay)(()).flatMap(_ => Future.failed(new Exception("NonRetryable: Manual non-retryable error")))
       case Timeout => 
         delay(10.seconds)(Right(SagaResult("Timeout simulated")))
     }
