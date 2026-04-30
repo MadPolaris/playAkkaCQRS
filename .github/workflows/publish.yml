@@ -37,9 +37,18 @@ jobs:
           gpg_private_key: ${{ secrets.PGP_SECRET }}
           passphrase: ${{ secrets.PGP_PASSPHRASE }}
 
+      - name: Check Secrets Accessibility
+        run: |
+          echo "Checking if secrets are available in the environment..."
+          if [ -n "${{ secrets.OSSRH_USERNAME }}" ]; then echo "OSSRH_USERNAME: OK"; else echo "OSSRH_USERNAME: MISSING"; fi
+          if [ -n "${{ secrets.OSSRH_PASSWORD }}" ]; then echo "OSSRH_PASSWORD: OK"; else echo "OSSRH_PASSWORD: MISSING"; fi
+          if [ -n "${{ secrets.PGP_SECRET }}" ]; then echo "PGP_SECRET: OK"; else echo "PGP_SECRET: MISSING"; fi
+          if [ -n "${{ secrets.PGP_PASSPHRASE }}" ]; then echo "PGP_PASSPHRASE: OK"; else echo "PGP_PASSPHRASE: MISSING"; fi
+
       - name: Publish to Sonatype
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           SONATYPE_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
           SONATYPE_USERNAME: ${{ secrets.OSSRH_USERNAME }}
+          CI_RELEASE: true
         run: sbt ci-release
