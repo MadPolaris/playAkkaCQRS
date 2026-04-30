@@ -48,8 +48,10 @@ jobs:
       - name: Publish to Sonatype
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          PGP_SECRET: ${{ secrets.PGP_SECRET }}
+          PGP_SECRET_RAW: ${{ secrets.PGP_SECRET }}
           SONATYPE_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
           SONATYPE_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           CI_RELEASE: true
-        run: sbt ci-release
+        run: |
+          export PGP_SECRET=$(echo "$PGP_SECRET_RAW" | base64 -w 0)
+          sbt ci-release
