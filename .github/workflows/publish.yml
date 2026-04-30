@@ -25,7 +25,7 @@ jobs:
         uses: crazy-max/ghaction-import-gpg@v5
         with:
           gpg_private_key: ${{ secrets.PGP_SECRET }}
-          # passphrase: ${{ secrets.PGP_PASSPHRASE }} # 如果你生成私钥时设置了密码，请取消注释并在 GitHub 配置此 Secret
+          passphrase: ${{ secrets.PGP_PASSPHRASE }}
 
       - name: Publish to Sonatype
         env:
