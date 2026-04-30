@@ -2,7 +2,6 @@ name := """minimal-cqrs"""
 
 inThisBuild(List(
   organization := "net.imadz",
-  version := "0.1-SNAPSHOT",
   organizationName := "MadPolaris",
   organizationHomepage := Some(url("https://github.com/MadPolaris")),
   homepage := Some(url("https://github.com/MadPolaris/playAkkaCQRS")),
