@@ -14,8 +14,7 @@ inThisBuild(List(
       url("https://github.com/MadPolaris")
     )
   ),
-  sonatypeCredentialHost := "s01.oss.sonatype.org",
-  sonatypeRepository := "https://s01.oss.sonatype.org/service/local"
+  sonatypeCredentialHost := "central.sonatype.com"
 ))
 
 logLevel := Level.Warn
