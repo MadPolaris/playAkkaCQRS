@@ -62,12 +62,20 @@ object StepExecutor {
   case class StepFailed[E, R, C](transactionId: String, stepId: String, error: RetryableOrNotException) extends StepResult[E, R, C]
 
   // Events
-  sealed trait Event
-  case class ExecutionStarted[E, R, C](transactionId: String, transactionStep: SagaTransactionStep[E, R, C], replyToPath: String, traceId: String) extends Event
-  case class OperationSucceeded[R](result: SagaResult[R]) extends Event
-  case class ManualFixCompleted[R](result: SagaResult[R]) extends Event
-  case class OperationFailed(error: RetryableOrNotException) extends Event
-  case class RetryScheduled(retryCount: Int) extends Event
+  sealed trait Event {
+    def transactionId: String
+    def stepId: String
+    def phase: String
+    def traceId: String
+  }
+  case class ExecutionStarted[E, R, C](transactionId: String, transactionStep: SagaTransactionStep[E, R, C], replyToPath: String, traceId: String) extends Event {
+    override def stepId: String = transactionStep.stepId
+    override def phase: String = transactionStep.phase.toString
+  }
+  case class OperationSucceeded[R](transactionId: String, stepId: String, phase: String, traceId: String, result: SagaResult[R]) extends Event
+  case class ManualFixCompleted[R](transactionId: String, stepId: String, phase: String, traceId: String, result: SagaResult[R]) extends Event
+  case class OperationFailed(transactionId: String, stepId: String, phase: String, traceId: String, error: RetryableOrNotException) extends Event
+  case class RetryScheduled(transactionId: String, stepId: String, phase: String, traceId: String, retryCount: Int) extends Event
 
   // State
   case class State[E, R, C](

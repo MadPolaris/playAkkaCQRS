@@ -29,10 +29,10 @@ class StepExecutorEventAdapter(override val system: ExtendedActorSystem)
       case e@ExecutionStarted(_, _, _, _) =>
         Started(ExecutionStartedConv.toProto(e))
 
-      case event@OperationSucceeded(_) =>
+      case event: OperationSucceeded[_] =>
         Succeed(OperationSucceededConv.toProto(event))
 
-      case event@ManualFixCompleted(_) =>
+      case event: ManualFixCompleted[_] =>
         StepExecutorEventPO.Event.ManualFixed(ManualFixCompletedConv.toProto(event))
 
       case err: OperationFailed =>

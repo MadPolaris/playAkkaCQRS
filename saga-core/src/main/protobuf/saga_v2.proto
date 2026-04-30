@@ -69,19 +69,35 @@ message ExecutionStartedPO {
 message OperationSucceededPO {
   string resultType = 1;
   bytes result = 2; // Use bytes to store serialized result
+  string transaction_id = 3;
+  string step_id = 4;
+  string phase = 5;
+  string trace_id = 6;
 }
 
 message ManualFixCompletedPO {
   string resultType = 1;
   bytes result = 2;
+  string transaction_id = 3;
+  string step_id = 4;
+  string phase = 5;
+  string trace_id = 6;
 }
 
 message OperationFailedPO {
   RetryableOrNotExceptionPO error = 1;
+  string transaction_id = 2;
+  string step_id = 3;
+  string phase = 4;
+  string trace_id = 5;
 }
 
 message RetryScheduledPO {
   int32 retry_count = 1;
+  string transaction_id = 2;
+  string step_id = 3;
+  string phase = 4;
+  string trace_id = 5;
 }
 
 message StepExecutorEventPO {
@@ -185,10 +201,12 @@ message TransactionResumedPO {
 
 message PhaseSucceededPO {
   TransactionPhasePO phase = 1;
+  string transaction_id = 2;
 }
 
 message PhaseFailedPO {
   TransactionPhasePO phase = 1;
+  string transaction_id = 2;
 }
 
 message TransactionCompletedPO {
@@ -212,6 +230,7 @@ message TransactionResolvedPO {
 message StepGroupSucceededPO {
   TransactionPhasePO phase = 1;
   int32 group = 2;
+  string transaction_id = 3;
 }
 
 message TransactionRetriedPO {

@@ -1,4 +1,4 @@
-package net.imadz.infra.saga
+package net.imadz.application.events
 
 import net.imadz.common.CborSerializable
 

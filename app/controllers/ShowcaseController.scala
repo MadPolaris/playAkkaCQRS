@@ -10,7 +10,8 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Keep, MergeHub, Sink, Source}
 import akka.contrib.persistence.mongodb.MongoReadJournal
 import net.imadz.application.services.transactor.DynamicShowcaseParticipant
-import net.imadz.infra.saga.SagaProgressEvent
+import net.imadz.application.events.SagaProgressEvent
+import net.imadz.infra.saga.{SagaTransactionCoordinator, StepExecutor}
 import play.api.libs.json.{JsValue, Json, Writes}
 import play.api.mvc._
 
@@ -40,8 +41,31 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
   // --- Real-time WebSocket ---
   private val (hubSink, hubSource) = MergeHub.source[SagaProgressEvent].toMat(BroadcastHub.sink[SagaProgressEvent])(Keep.both).run()
   private val bridgeActor = system.actorOf(akka.actor.Props(new akka.actor.Actor {
-    override def preStart(): Unit = { system.eventStream.subscribe(self, classOf[SagaProgressEvent]) }
-    def receive: Receive = { case e: SagaProgressEvent => Source.single(e).runWith(hubSink) }
+    override def preStart(): Unit = {
+      system.eventStream.subscribe(self, classOf[SagaTransactionCoordinator.Event])
+      system.eventStream.subscribe(self, classOf[StepExecutor.Event])
+    }
+    def receive: Receive = {
+      case e: SagaTransactionCoordinator.Event =>
+        val pEvt = e match {
+          case ex: SagaTransactionCoordinator.TransactionStarted => SagaProgressEvent.TransactionStarted(ex.transactionId, ex.steps.map(_.stepId), ex.traceId)
+          case ex: SagaTransactionCoordinator.TransactionCompleted => SagaProgressEvent.TransactionCompleted(ex.transactionId, "")
+          case ex: SagaTransactionCoordinator.TransactionFailed => SagaProgressEvent.TransactionFailed(ex.transactionId, ex.reason, "")
+          case ex: SagaTransactionCoordinator.TransactionSuspended => SagaProgressEvent.TransactionSuspended(ex.transactionId, ex.reason, "")
+          case _ => null
+        }
+        if (pEvt != null) Source.single(pEvt).runWith(hubSink)
+
+      case e: StepExecutor.Event =>
+        val pEvt = e match {
+          case ex: StepExecutor.ExecutionStarted[_, _, _] => SagaProgressEvent.StepOngoing(ex.transactionId, ex.stepId, ex.phase, ex.traceId)
+          case ex: StepExecutor.OperationSucceeded[_] => SagaProgressEvent.StepCompleted(ex.transactionId, ex.stepId, ex.phase, ex.traceId, isManual = false)
+          case ex: StepExecutor.ManualFixCompleted[_] => SagaProgressEvent.StepCompleted(ex.transactionId, ex.stepId, ex.phase, ex.traceId, isManual = true)
+          case StepExecutor.OperationFailed(txId, sid, ph, tid, err) => SagaProgressEvent.StepFailed(txId, sid, ph, err.message, tid)
+          case StepExecutor.RetryScheduled(txId, sid, ph, tid, c) => SagaProgressEvent.StepFailed(txId, sid, ph, s"Retry #$c", tid)
+        }
+        if (pEvt != null) Source.single(pEvt).runWith(hubSink)
+    }
   }))
 
   def socket = WebSocket.accept[String, String] { request =>
@@ -172,11 +196,11 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
 
     val stepEnvelopes = stepEvts.map { case (ts, sid, ph, evt) =>
       val pEvt = evt match {
-        case _: ExecutionStarted[_, _, _] => SagaProgressEvent.StepOngoing(txId, sid, ph, "")
-        case OperationSucceeded(_) => SagaProgressEvent.StepCompleted(txId, sid, ph, "", isManual = false)
-        case ManualFixCompleted(_) => SagaProgressEvent.StepCompleted(txId, sid, ph, "", isManual = true)
-        case OperationFailed(err) => SagaProgressEvent.StepFailed(txId, sid, ph, err.message, "")
-        case RetryScheduled(c) => SagaProgressEvent.StepFailed(txId, sid, ph, s"Retry #$c", "")
+        case ex: ExecutionStarted[_, _, _] => SagaProgressEvent.StepOngoing(txId, sid, ph, ex.traceId)
+        case ex: OperationSucceeded[_] => SagaProgressEvent.StepCompleted(txId, sid, ph, ex.traceId, isManual = false)
+        case ex: ManualFixCompleted[_] => SagaProgressEvent.StepCompleted(txId, sid, ph, ex.traceId, isManual = true)
+        case ex: OperationFailed => SagaProgressEvent.StepFailed(txId, sid, ph, ex.error.message, ex.traceId)
+        case ex: RetryScheduled => SagaProgressEvent.StepFailed(txId, sid, ph, s"Retry #${ex.retryCount}", ex.traceId)
         case _ => null
       }
       (ts, pEvt)

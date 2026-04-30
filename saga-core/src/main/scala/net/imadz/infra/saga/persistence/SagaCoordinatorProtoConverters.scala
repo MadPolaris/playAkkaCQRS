@@ -76,33 +76,39 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
 
   object PhaseSucceededConv extends ProtoConverter[PhaseSucceeded, PhaseSucceededPO] {
     override def toProto(e: PhaseSucceeded): PhaseSucceededPO = PhaseSucceededPO(
-      phase = PhaseConv.toProto(e.phase)
+      phase = PhaseConv.toProto(e.phase),
+      transactionId = e.transactionId
     )
 
     override def fromProto(p: PhaseSucceededPO): PhaseSucceeded = PhaseSucceeded(
-      phase = PhaseConv.fromProto(p.phase)
+      phase = PhaseConv.fromProto(p.phase),
+      transactionId = p.transactionId
     )
   }
 
   object PhaseFailedConv extends ProtoConverter[PhaseFailed, PhaseFailedPO] {
     override def toProto(e: PhaseFailed): PhaseFailedPO = PhaseFailedPO(
-      phase = PhaseConv.toProto(e.phase)
+      phase = PhaseConv.toProto(e.phase),
+      transactionId = e.transactionId
     )
 
     override def fromProto(p: PhaseFailedPO): PhaseFailed = PhaseFailed(
-      phase = PhaseConv.fromProto(p.phase)
+      phase = PhaseConv.fromProto(p.phase),
+      transactionId = p.transactionId
     )
   }
 
   object StepGroupSucceededConv extends ProtoConverter[StepGroupSucceeded, StepGroupSucceededPO] {
     override def toProto(e: StepGroupSucceeded): StepGroupSucceededPO = StepGroupSucceededPO(
       phase = PhaseConv.toProto(e.phase),
-      group = e.group
+      group = e.group,
+      transactionId = e.transactionId
     )
 
     override def fromProto(p: StepGroupSucceededPO): StepGroupSucceeded = StepGroupSucceeded(
       phase = PhaseConv.fromProto(p.phase),
-      group = p.group
+      group = p.group,
+      transactionId = p.transactionId
     )
   }
 

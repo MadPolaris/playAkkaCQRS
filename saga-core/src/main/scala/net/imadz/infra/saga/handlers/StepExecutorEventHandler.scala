@@ -11,14 +11,14 @@ object StepExecutorEventHandler {
         state.copy(transactionId = Some(transactionId),
           step = Some(step.asInstanceOf[SagaTransactionStep[E, R, C]]), status = Ongoing,
           replyTo = Some(replyTo), traceId = Some(traceId))
-      case OperationSucceeded(result) =>
+      case OperationSucceeded(_, _, _, _, result) =>
         state.copy(status = Succeed, result = Some(result.asInstanceOf[SagaResult[R]]))
-      case ManualFixCompleted(result) =>
+      case ManualFixCompleted(_, _, _, _, result) =>
         state.copy(status = Succeed, result = Some(result.asInstanceOf[SagaResult[R]]))
-      case OperationFailed(error) =>
+      case OperationFailed(_, _, _, _, error) =>
         val newStatus = if (error.isInstanceOf[net.imadz.infra.saga.SagaParticipant.RetryableFailure]) Ongoing else Failed
         state.copy(status = newStatus, lastError = Some(error))
-      case RetryScheduled(_) =>
+      case RetryScheduled(_, _, _, _, _) =>
         state.copy(retries = state.retries + 1, status = Ongoing)
 
     }

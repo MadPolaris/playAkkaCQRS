@@ -4,9 +4,9 @@ import akka.actor.ExtendedActorSystem
 import akka.serialization.Serializers
 import com.google.protobuf.ByteString
 import net.imadz.common.serialization.{PrimitiveConverter, SerializationExtension}
-import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException}
+import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException, SagaResult}
 import net.imadz.infra.saga.SagaPhase._
-import net.imadz.infra.saga.StepExecutor.{Event, ExecutionStarted, ManualFixCompleted, OperationFailed, RetryScheduled}
+import net.imadz.infra.saga.StepExecutor.{Event, ExecutionStarted, ManualFixCompleted, OperationFailed, OperationSucceeded, RetryScheduled}
 import net.imadz.infra.saga.proto.saga_v2._
 import net.imadz.infra.saga.{SagaParticipant, SagaTransactionStep}
 
@@ -20,21 +20,35 @@ trait SagaExecutorConverter extends PrimitiveConverter {
 
   object RetryScheduledConv extends ProtoConverter[RetryScheduled, RetryScheduledPO] {
     override def toProto(domain: RetryScheduled): RetryScheduledPO = RetryScheduledPO(
-      retryCount = domain.retryCount
+      retryCount = domain.retryCount,
+      transactionId = domain.transactionId,
+      stepId = domain.stepId,
+      phase = domain.phase,
+      traceId = domain.traceId
     )
 
     override def fromProto(proto: RetryScheduledPO): RetryScheduled = {
-      RetryScheduled(proto.retryCount)
+      RetryScheduled(proto.transactionId, proto.stepId, proto.phase, proto.traceId, proto.retryCount)
     }
   }
 
   object FailedConv extends ProtoConverter[OperationFailed, OperationFailedPO] {
     override def toProto(domain: OperationFailed): OperationFailedPO = OperationFailedPO(
-      Some(RetryableOrNotExceptionConv.toProto(domain.error))
+      error = Some(RetryableOrNotExceptionConv.toProto(domain.error)),
+      transactionId = domain.transactionId,
+      stepId = domain.stepId,
+      phase = domain.phase,
+      traceId = domain.traceId
     )
 
     override def fromProto(proto: OperationFailedPO): OperationFailed = {
-      OperationFailed(RetryableOrNotExceptionConv.fromProto(proto.error.getOrElse(throw new IllegalArgumentException(s"proto.error should not be empty"))))
+      OperationFailed(
+        proto.transactionId,
+        proto.stepId,
+        proto.phase,
+        proto.traceId,
+        RetryableOrNotExceptionConv.fromProto(proto.error.getOrElse(throw new IllegalArgumentException(s"proto.error should not be empty")))
+      )
     }
   }
 
@@ -61,61 +75,70 @@ trait SagaExecutorConverter extends PrimitiveConverter {
     }
   }
 
-  object OperationSucceededConv extends ProtoConverter[Event, OperationSucceededPO] {
+  object OperationSucceededConv extends ProtoConverter[OperationSucceeded[_], OperationSucceededPO] {
 
-    override def toProto(domain: Event): OperationSucceededPO = {
-      // 使用 Akka Serialization 将结果转为字节
-      val serializer = serialization.findSerializerFor(domain.asInstanceOf[AnyRef])
-      val bytes = serializer.toBinary(domain.asInstanceOf[AnyRef])
-      val manifest = Serializers.manifestFor(serializer, domain.asInstanceOf[AnyRef])
+    override def toProto(domain: OperationSucceeded[_]): OperationSucceededPO = {
+      val resultRef = domain.result.asInstanceOf[AnyRef]
+      val serializer = serialization.findSerializerFor(resultRef)
+      val bytes = serializer.toBinary(resultRef)
+      val manifest = Serializers.manifestFor(serializer, resultRef)
 
       OperationSucceededPO(
         resultType = manifest,
-        result = ByteString.copyFrom(bytes)
+        result = ByteString.copyFrom(bytes),
+        transactionId = domain.transactionId,
+        stepId = domain.stepId,
+        phase = domain.phase,
+        traceId = domain.traceId
       )
     }
 
-    override def fromProto(proto: OperationSucceededPO): Event = {
-      if (proto.result.isEmpty) {
-        net.imadz.infra.saga.StepExecutor.OperationSucceeded(net.imadz.infra.saga.SagaParticipant.SagaResult.empty[Any]())
+    override def fromProto(proto: OperationSucceededPO): OperationSucceeded[_] = {
+      val result = if (proto.result.isEmpty) {
+        SagaResult.empty[Any]()
       } else {
-        val clazz = system.dynamicAccess.getClassFor[Event](proto.resultType).getOrElse(classOf[java.io.Serializable])
         serialization.deserialize(
-            proto.result.toByteArray,
-            serialization.serializerFor(clazz).identifier,
-            proto.resultType
-          ).getOrElse(throw new RuntimeException(s"Failed to deserialize result of type ${proto.resultType}"))
-          .asInstanceOf[Event]
+          proto.result.toByteArray,
+          serialization.serializerFor(classOf[SagaResult[Any]]).identifier,
+          proto.resultType
+        ).getOrElse(throw new RuntimeException(s"Failed to deserialize result of type ${proto.resultType}"))
+          .asInstanceOf[SagaResult[Any]]
       }
+      OperationSucceeded(proto.transactionId, proto.stepId, proto.phase, proto.traceId, result)
     }
   }
 
-  object ManualFixCompletedConv extends ProtoConverter[Event, ManualFixCompletedPO] {
+  object ManualFixCompletedConv extends ProtoConverter[ManualFixCompleted[_], ManualFixCompletedPO] {
 
-    override def toProto(domain: Event): ManualFixCompletedPO = {
-      // 使用 Akka Serialization 将结果转为字节
-      val serializer = serialization.findSerializerFor(domain.asInstanceOf[AnyRef])
-      val bytes = serializer.toBinary(domain.asInstanceOf[AnyRef])
-      val manifest = Serializers.manifestFor(serializer, domain.asInstanceOf[AnyRef])
+    override def toProto(domain: ManualFixCompleted[_]): ManualFixCompletedPO = {
+      val resultRef = domain.result.asInstanceOf[AnyRef]
+      val serializer = serialization.findSerializerFor(resultRef)
+      val bytes = serializer.toBinary(resultRef)
+      val manifest = Serializers.manifestFor(serializer, resultRef)
 
       ManualFixCompletedPO(
         resultType = manifest,
-        result = ByteString.copyFrom(bytes)
+        result = ByteString.copyFrom(bytes),
+        transactionId = domain.transactionId,
+        stepId = domain.stepId,
+        phase = domain.phase,
+        traceId = domain.traceId
       )
     }
 
-    override def fromProto(proto: ManualFixCompletedPO): Event = {
-      if (proto.result.isEmpty) {
-        net.imadz.infra.saga.StepExecutor.ManualFixCompleted(net.imadz.infra.saga.SagaParticipant.SagaResult.empty[Any]())
+    override def fromProto(proto: ManualFixCompletedPO): ManualFixCompleted[_] = {
+      val result = if (proto.result.isEmpty) {
+        SagaResult.empty[Any]()
       } else {
-        val clazz = system.dynamicAccess.getClassFor[Event](proto.resultType).getOrElse(classOf[java.io.Serializable])
         serialization.deserialize(
           proto.result.toByteArray,
-          serialization.serializerFor(clazz).identifier,
+          serialization.serializerFor(classOf[SagaResult[Any]]).identifier,
           proto.resultType
         ).getOrElse(throw new RuntimeException(s"Failed to deserialize result of type ${proto.resultType}"))
-          .asInstanceOf[Event]
+          .asInstanceOf[SagaResult[Any]]
       }
+      ManualFixCompleted(proto.transactionId, proto.stepId, proto.phase, proto.traceId, result)
+
     }
   }
 
@@ -149,42 +172,34 @@ trait SagaExecutorConverter extends PrimitiveConverter {
           case CommitPhase => TransactionPhasePO.COMMIT_PHASE
           case CompensatePhase => TransactionPhasePO.COMPENSATE_PHASE
         },
-        participant = Some(SagaParticipantPO(typeName, ByteString.copyFrom(payloadBytes))),
         maxRetries = step.maxRetries,
         timeoutDurationMillis = step.timeoutDuration.toMillis,
         retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
+        participant = Some(SagaParticipantPO(typeName, ByteString.copyFrom(payloadBytes))),
+        participantType = typeName,
         stepGroup = step.stepGroup
       )
     }
 
-    def fromProto(stepPO: SagaTransactionStepPO): SagaTransactionStep[Any, Any, Any] = {
-      val genericParticipant = stepPO.participant.getOrElse(throw new IllegalArgumentException("Missing participant"))
+    def fromProto(proto: SagaTransactionStepPO): SagaTransactionStep[Any, Any, Any] = {
+      val participantPO = proto.participant.getOrElse(throw new IllegalArgumentException("SagaTransactionStepPO.participant should not be empty"))
+      val strategy = extension.strategyFor(participantPO.typeName)
+      val participant = strategy.fromBinary(participantPO.payload.toByteArray).asInstanceOf[SagaParticipant[Any, Any, Any]]
 
-      // 1. 找策略
-      val strategy = extension.strategyFor(genericParticipant.typeName)
-      // 2. 转对象
-      val participant = strategy.fromBinary(genericParticipant.payload.toByteArray)
-        .asInstanceOf[SagaParticipant[Any, Any, Any]]
-
-      // 3. 组装 Step
-      SagaTransactionStep[Any, Any, Any](
-        stepId = stepPO.stepId,
-        phase = stepPO.phase match {
+      SagaTransactionStep(
+        stepId = proto.stepId,
+        phase = proto.phase match {
           case TransactionPhasePO.PREPARE_PHASE => PreparePhase
           case TransactionPhasePO.COMMIT_PHASE => CommitPhase
           case TransactionPhasePO.COMPENSATE_PHASE => CompensatePhase
           case _ => PreparePhase
         },
         participant = participant,
-        maxRetries = stepPO.maxRetries,
-        timeoutDuration = stepPO.timeoutDurationMillis.millis,
-        retryWhenRecoveredOngoing = stepPO.retryWhenRecoveredOngoing,
-        stepGroup = if (stepPO.stepGroup == 0) 1 else stepPO.stepGroup
+        maxRetries = proto.maxRetries,
+        timeoutDuration = proto.timeoutDurationMillis.millis,
+        retryWhenRecoveredOngoing = proto.retryWhenRecoveredOngoing,
+        stepGroup = proto.stepGroup
       )
-
     }
-
   }
-
-
 }

@@ -94,11 +94,13 @@ object SagaTransactionCoordinator {
                       )
   case class TransactionResult(successful: Boolean, state: State, failReason: String = "")
   // Events
-  sealed trait Event extends CborSerializable
+  sealed trait Event extends CborSerializable {
+    def transactionId: String
+  }
   case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _, _]], traceId: String = "", singleStep: Boolean = false) extends Event
-  case class PhaseSucceeded(phase: TransactionPhase) extends Event
-  case class StepGroupSucceeded(phase: TransactionPhase, group: Int) extends Event
-  case class PhaseFailed(phase: TransactionPhase) extends Event
+  case class PhaseSucceeded(transactionId: String, phase: TransactionPhase) extends Event
+  case class StepGroupSucceeded(transactionId: String, phase: TransactionPhase, group: Int) extends Event
+  case class PhaseFailed(transactionId: String, phase: TransactionPhase) extends Event
   case class TransactionCompleted(transactionId: String) extends Event
   case class TransactionFailed(transactionId: String, reason: String) extends Event
   case class TransactionSuspended(transactionId: String, reason: String) extends Event
@@ -171,12 +173,12 @@ object SagaTransactionCoordinator {
         
         if (singleStep) {
            startEffect.thenRun { (_: State) =>
-              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionStarted(transactionId, steps.map(_.stepId), traceId))
+              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionStarted(transactionId, steps, traceId))
               context.self ! TransactionPaused(transactionId, traceId) // Internal signal to pause
            }
         } else {
            startEffect.thenRun { (stateNew: State) =>
-              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionStarted(transactionId, steps.map(_.stepId), traceId))
+              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionStarted(transactionId, steps, traceId))
               executePhase(context, stateNew, stepExecutorFactory, replyTo)
            }
         }
@@ -193,7 +195,6 @@ object SagaTransactionCoordinator {
         Effect
           .persist[Event, State](TransactionResumed(state.transactionId.get, state.traceId))
           .thenRun { (stateNew: State) =>
-            context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepOngoing(stateNew.transactionId.get, "SYSTEM", "RESUME", stateNew.traceId)) // Special log
             executePhase(context, stateNew, stepExecutorFactory.asInstanceOf[(String, SagaTransactionStep[Any, Any, Any]) => ActorRef[StepExecutor.Command]], replyTo)
           }
 
@@ -246,7 +247,8 @@ object SagaTransactionCoordinator {
       // Internal command sent to self to persist pause
       case p: TransactionPaused =>
         Effect.persist[Event, State](p).thenRun { (_: State) =>
-           context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionSuspended(p.transactionId, "MANUAL_PAUSE", p.traceId)) // Reuse suspended for UI
+           context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionSuspended(p.transactionId, "MANUAL_PAUSE")) // Reuse suspended for UI
+
         }
 
       case PhaseCompleted(phase, results, replyTo) =>
@@ -275,7 +277,8 @@ object SagaTransactionCoordinator {
         val nextGroupOpt = groupsInPhase.find(_ > state.currentStepGroup)
         nextGroupOpt match {
           case Some(nextGroup) =>
-             Effect.persist(StepGroupSucceeded(PreparePhase, state.currentStepGroup)).thenRun { (stateNew: State) =>
+             Effect.persist(StepGroupSucceeded(state.transactionId.get, PreparePhase, state.currentStepGroup)).thenRun { (stateNew: State) =>
+                context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(StepGroupSucceeded(state.transactionId.get, PreparePhase, state.currentStepGroup))
                 if (state.singleStep) {
                    context.self ! TransactionPaused(stateNew.transactionId.get, stateNew.traceId)
                 } else {
@@ -283,13 +286,17 @@ object SagaTransactionCoordinator {
                 }
              }
           case None => // All groups in Prepare finished
-            val persistEffect = Effect.persist[Event, State](PhaseSucceeded(PreparePhase))
+            val persistEffect = Effect.persist[Event, State](PhaseSucceeded(state.transactionId.get, PreparePhase))
             if (state.singleStep) {
                persistEffect.thenRun { (stateNew: State) =>
+                  context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseSucceeded(state.transactionId.get, PreparePhase))
                   context.self ! TransactionPaused(stateNew.transactionId.get, stateNew.traceId)
                }
             } else {
-               persistEffect.thenRun { (stateNew: State) => executePhase(context, stateNew, stepExecutorFactory, replyTo) }
+               persistEffect.thenRun { (stateNew: State) =>
+                 context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseSucceeded(state.transactionId.get, PreparePhase))
+                 executePhase(context, stateNew, stepExecutorFactory, replyTo)
+               }
             }
         }
 
@@ -297,17 +304,19 @@ object SagaTransactionCoordinator {
         val nextGroupOpt = groupsInPhase.find(_ > state.currentStepGroup)
         nextGroupOpt match {
            case Some(nextGroup) =>
-              Effect.persist(StepGroupSucceeded(CommitPhase, state.currentStepGroup)).thenRun { (_: State) =>
+              Effect.persist(StepGroupSucceeded(state.transactionId.get, CommitPhase, state.currentStepGroup)).thenRun { (_: State) =>
+                 context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(StepGroupSucceeded(state.transactionId.get, CommitPhase, state.currentStepGroup))
                  context.self ! ProceedNextGroup(replyTo)
               }
            case None =>
               Effect.persist(
                 List(
-                  PhaseSucceeded(CommitPhase),
+                  PhaseSucceeded(state.transactionId.get, CommitPhase),
                   TransactionCompleted(state.transactionId.get)
                 )
               ).thenRun((stateNew: State) => {
-                context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionCompleted(state.transactionId.get, stateNew.traceId))
+                context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseSucceeded(state.transactionId.get, CommitPhase))
+                context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionCompleted(state.transactionId.get))
                 replyTo.foreach(_ ! TransactionResult(successful = true, stateNew))
               })
                .thenStop()
@@ -317,17 +326,19 @@ object SagaTransactionCoordinator {
         val nextGroupOpt = groupsInPhase.reverse.find(_ < state.currentStepGroup)
         nextGroupOpt match {
            case Some(nextGroup) =>
-              Effect.persist(StepGroupSucceeded(CompensatePhase, state.currentStepGroup)).thenRun { (_: State) =>
+              Effect.persist(StepGroupSucceeded(state.transactionId.get, CompensatePhase, state.currentStepGroup)).thenRun { (_: State) =>
+                 context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(StepGroupSucceeded(state.transactionId.get, CompensatePhase, state.currentStepGroup))
                  context.self ! ProceedNextGroup(replyTo)
               }
            case None =>
               Effect.persist(
                 List(
-                  PhaseSucceeded(CompensatePhase),
+                  PhaseSucceeded(state.transactionId.get, CompensatePhase),
                   TransactionFailed(state.transactionId.get, "transaction failed but compensated")
                 )
               ).thenRun((stateNew: State) => {
-                context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionFailed(state.transactionId.get, "transaction failed but compensated", stateNew.traceId))
+                context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseSucceeded(state.transactionId.get, CompensatePhase))
+                context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionFailed(state.transactionId.get, "transaction failed but compensated"))
                 replyTo.foreach(_ ! TransactionResult(successful = false, stateNew))
               })
                .thenStop()
@@ -344,23 +355,26 @@ object SagaTransactionCoordinator {
                                   replyTo: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
     if (phase != CompensatePhase) {
-      val persistEffect = Effect.persist[Event, State](PhaseFailed(phase))
+      val persistEffect = Effect.persist[Event, State](PhaseFailed(state.transactionId.get, phase))
       
       if (state.singleStep) {
          persistEffect.thenRun { (stateNew: State) =>
+            context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(state.transactionId.get, phase))
             context.self ! TransactionPaused(stateNew.transactionId.get, stateNew.traceId)
          }
       } else {
          persistEffect.thenRun { (stateNew: State) =>
+            context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(state.transactionId.get, phase))
             executePhase(context, stateNew, stepExecutorFactory, replyTo)
          }
       }
     } else {
       val reason = s"Phase $phase failed with error: ${error.message}"
       Effect
-        .persist(PhaseFailed(phase), TransactionSuspended(state.transactionId.get, reason))
+        .persist(PhaseFailed(state.transactionId.get, phase), TransactionSuspended(state.transactionId.get, reason))
         .thenRun { (stateNew: State) =>
-          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.TransactionSuspended(state.transactionId.get, reason, stateNew.traceId))
+          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(state.transactionId.get, phase))
+          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionSuspended(state.transactionId.get, reason))
           replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, reason))
         }
         .thenStop()
@@ -465,14 +479,14 @@ object SagaTransactionCoordinator {
       case TransactionResumed(_, _) =>
         state.copy(isPaused = false)
 
-      case PhaseFailed(phase) =>
+      case PhaseFailed(_, phase) =>
         val maxGroupInCompensate = state.steps.filter(_.phase == CompensatePhase).map(_.stepGroup).distinct.sorted.lastOption.getOrElse(1)
         phase match {
           case PreparePhase => state.copy(currentPhase = CompensatePhase, status = Compensating, currentStepGroup = maxGroupInCompensate)
           case CommitPhase => state.copy(currentPhase = CompensatePhase, status = Compensating, currentStepGroup = maxGroupInCompensate)
           case CompensatePhase => state
         }
-      case StepGroupSucceeded(phase, group) =>
+      case StepGroupSucceeded(_, phase, group) =>
         val groupsInPhase = state.steps.filter(_.phase == phase).map(_.stepGroup).distinct.sorted
         if (phase == CompensatePhase) {
           val nextGroup = groupsInPhase.reverse.find(_ < group).getOrElse(groupsInPhase.headOption.getOrElse(1))
@@ -481,7 +495,7 @@ object SagaTransactionCoordinator {
           val nextGroup = groupsInPhase.find(_ > group).getOrElse(groupsInPhase.lastOption.getOrElse(1))
           state.copy(currentStepGroup = nextGroup)
         }
-      case PhaseSucceeded(phase) =>
+      case PhaseSucceeded(_, phase) =>
         phase match {
           case PreparePhase => 
             val firstGroupInCommit = state.steps.filter(_.phase == CommitPhase).map(_.stepGroup).distinct.sorted.headOption.getOrElse(1)
