@@ -27,20 +27,10 @@ jobs:
       - name: Publish to Sonatype
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
-          PGP_SECRET: ${{ secrets.PGP_SECRET }}
+          PGP_SECRET_RAW: ${{ secrets.PGP_SECRET }}
           SONATYPE_PASSWORD: ${{ secrets.OSSRH_PASSWORD }}
           SONATYPE_USERNAME: ${{ secrets.OSSRH_USERNAME }}
           CI_RELEASE: publishSigned
         run: |
-          # If PGP_SECRET is not already base64 encoded, sbt-ci-release might fail or use gpg.
-          # sbt-ci-release 1.5.12+ handles armored keys if they are base64 encoded in the PGP_SECRET env var.
-          # However, many users store the raw armored key in the secret.
-          # We'll try to detect if it's base64 and encode if not, or just pass it through.
-          # The most reliable way for sbt-ci-release is to have PGP_SECRET as base64(armored_key).
-          if [[ "$PGP_SECRET" != *" "* && "$PGP_SECRET" == *"="* ]]; then
-            echo "PGP_SECRET looks like it might already be base64 encoded."
-          else
-            echo "Encoding PGP_SECRET to base64..."
-            export PGP_SECRET=$(printf "%s" "$PGP_SECRET" | base64 -w 0)
-          fi
+          export PGP_SECRET=$(echo "$PGP_SECRET_RAW" | base64 -w 0)
           sbt ci-release
