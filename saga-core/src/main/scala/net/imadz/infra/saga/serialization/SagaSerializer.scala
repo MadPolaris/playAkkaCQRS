@@ -18,17 +18,17 @@ class SagaSerializer(override val system: ExtendedActorSystem)
 
   override def toBinary(o: AnyRef): Array[Byte] = o match {
     case response: OperationResponse[_, _, _] =>
-      // 这里返回的是 GeneratedMessage (SucceededPO 或 FailedPO)
+      // This returns a GeneratedMessage (SucceededPO or FailedPO)
       OperationResponseConv.toProto(response).toByteArray
     case _ =>
       throw new IllegalArgumentException(s"Cannot serialize object of type ${o.getClass}")
   }
 
-  // 确认一下 SagaSerializer 的 fromBinary 逻辑是否匹配
+  // Confirm if the fromBinary logic of SagaSerializer matches
   override def fromBinary(bytes: Array[Byte], manifest: Option[Class[_]]): AnyRef = {
-    // 直接解析最外层 Wrapper
+    // Directly parse the outermost Wrapper
     val wrapper = OperationResponseCommandPO.parseFrom(bytes)
-    // 交给 Converter 拆包
+    // Hand over to Converter to unpack
     OperationResponseConv.fromProto(wrapper)
   }
 }

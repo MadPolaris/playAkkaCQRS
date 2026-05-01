@@ -8,60 +8,44 @@ import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
 import net.imadz.common.CborSerializable
 import net.imadz.infra.saga.SagaParticipant.{RetryableOrNotException, SagaResult}
-import net.imadz.infra.saga.SagaPhase.TransactionPhase
 import net.imadz.infra.saga.handlers.{StepExecutorCommandHandler, StepExecutorEventHandler, StepExecutorRecoveryHandler}
 import net.imadz.infra.saga.persistence.StepExecutorEventAdapter
 
 import scala.concurrent.duration._
 
-object SagaPhase {
-  // Value Object
-  sealed trait TransactionPhase extends CborSerializable {
-    val key: String = toString
-  }
-
-  case object PreparePhase extends TransactionPhase {
-    override def toString: String = "prepare"
-  }
-
-  case object CommitPhase extends TransactionPhase {
-    override def toString: String = "commit"
-  }
-
-  case object CompensatePhase extends TransactionPhase {
-    override def toString: String = "compensate"
-  }
-}
-
-case class SagaTransactionStep[E, R, C](
-                                         stepId: String,
-                                         phase: TransactionPhase,
-                                         participant: SagaParticipant[E, R, C],
-                                         maxRetries: Int = 3,
-                                         timeoutDuration: FiniteDuration = 5.seconds,
-                                         retryWhenRecoveredOngoing: Boolean = false,
-                                         stepGroup: Int = 1
-                                       )
-
+/**
+ * Executes a single step of a Saga.
+ * It manages retries, timeouts, and circuit breaking for the step execution.
+ */
 object StepExecutor {
   // @formatter:off
-  // Value Class
+  /**
+   * Configuration for the circuit breaker used in step execution.
+   */
   case class CircuitBreakerSettings(maxFailures: Int, callTimeout: FiniteDuration, resetTimeout: FiniteDuration)
 
-  // Command
+  /**
+   * The commands that the StepExecutor can process.
+   */
   sealed trait Command extends CborSerializable
   case class Start[E, R, C](transactionId: String,  sagaStep: SagaTransactionStep[E, R, C], replyTo: Option[ActorRef[StepResult[E, R, C]]], traceId: String) extends Command
   case class RecoverExecution[E, R, C](transactionId: String, sagaStep: SagaTransactionStep[E, R, C], replyTo: Option[ActorRef[StepResult[E, R, C]]], traceId: String) extends Command
-   case class OperationResponse[E, R, C](result: Either[RetryableOrNotException, SagaResult[R]], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
-   case class RetryOperation[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
-   case class TimedOut[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
-   case class QueryStatus[E, R, C](replyTo: ActorRef[State[E, R, C]]) extends Command
-   case class ManualFix[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+  case class OperationResponse[E, R, C](result: Either[RetryableOrNotException, SagaResult[R]], replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+  case class RetryOperation[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+  case class TimedOut[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+  case class QueryStatus[E, R, C](replyTo: ActorRef[State[E, R, C]]) extends Command
+  case class ManualFix[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+
+  /**
+   * The results returned by the StepExecutor.
+   */
   sealed trait StepResult[E, R, C] extends CborSerializable
   case class StepCompleted[E,R, C](transactionId: String, stepId: String, result: SagaResult[R]) extends StepResult[E, R, C]
   case class StepFailed[E, R, C](transactionId: String, stepId: String, error: RetryableOrNotException) extends StepResult[E, R, C]
 
-  // Events
+  /**
+   * Events persisted by the StepExecutor.
+   */
   sealed trait Event {
     def transactionId: String
     def stepId: String
@@ -77,7 +61,9 @@ object StepExecutor {
   case class OperationFailed(transactionId: String, stepId: String, phase: String, traceId: String, error: RetryableOrNotException) extends Event
   case class RetryScheduled(transactionId: String, stepId: String, phase: String, traceId: String, retryCount: Int) extends Event
 
-  // State
+  /**
+   * Represents the state of a single step execution.
+   */
   case class State[E, R, C](
                           step: Option[SagaTransactionStep[E, R, C]] = None,
                           transactionId: Option[String] = None,
@@ -105,6 +91,9 @@ object StepExecutor {
     }
   }
 
+  /**
+   * The status of a step execution.
+   */
   sealed trait Status extends CborSerializable
   case object Created extends Status
   case object Ongoing extends Status
@@ -113,7 +102,17 @@ object StepExecutor {
 
   // @formatter:on
 
-
+  /**
+   * Creates a new StepExecutor.
+   *
+   * @param persistenceId the unique persistence identifier
+   * @param context the context provided to the saga participant
+   * @param defaultMaxRetries default maximum number of retries if not specified in the step
+   * @param initialRetryDelay initial delay for backoff retries
+   * @param circuitBreakerSettings settings for the circuit breaker
+   * @param extendedSystem the classic actor system
+   * @return the actor behavior
+   */
   def apply[E, R, C](
                       persistenceId: PersistenceId,
                       context: C,

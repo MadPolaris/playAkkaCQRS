@@ -20,13 +20,13 @@ enum StepStatusPO {
 }
 
 
-// [关键修改]：通用的参与者容器
+// [Key Modification]: Generic participant container
 message SagaParticipantPO {
-  // 业务参与者的全限定类名，例如 "net.imadz.infra.proto.FromAccountParticipantPO"
-  // 或者对应的 Scala 类名，取决于你序列化策略的映射方式
+  // Fully qualified class name of the business participant, e.g., "net.imadz.infra.proto.FromAccountParticipantPO"
+  // or the corresponding Scala class name, depending on how your serialization strategy is mapped
   string type_name = 1;
 
-  // 业务参与者序列化后的二进制数据
+  // Serialized binary data of the business participant
   bytes payload = 2;
 }
 
@@ -179,6 +179,7 @@ message PhaseResultPO {
     string error = 1;
     bytes success = 2;
   }
+  string success_type = 3;
 }
 
 // Events
@@ -238,6 +239,19 @@ message TransactionRetriedPO {
   TransactionPhasePO phase = 2;
 }
 
+message StepGroupStartedPO {
+  string transaction_id = 1;
+  TransactionPhasePO phase = 2;
+  int32 group = 3;
+  repeated string step_ids = 4;
+}
+
+message StepResultReceivedPO {
+  string transaction_id = 1;
+  string step_id = 2;
+  PhaseResultPO result = 3;
+}
+
 message SagaTransactionCoordinatorEventPO {
   oneof event {
     TransactionStartedPO started = 1;
@@ -251,6 +265,8 @@ message SagaTransactionCoordinatorEventPO {
     TransactionResolvedPO resolved = 9;
     StepGroupSucceededPO stepGroupSucceeded = 10;
     TransactionRetriedPO retried = 11;
+    StepGroupStartedPO stepGroupStarted = 12;
+    StepResultReceivedPO stepResultReceived = 13;
   }
 }
 
@@ -264,4 +280,6 @@ message CoordinatorStatePO {
   bool single_step = 6;
   bool is_paused = 7;
   int32 current_step_group = 8;
+  repeated string pending_steps = 9;
+  repeated PhaseResultPO phase_results = 10;
 }

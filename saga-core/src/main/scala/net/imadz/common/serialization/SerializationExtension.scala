@@ -13,7 +13,7 @@ object SerializationExtension extends ExtensionId[SerializationExtensionImpl] wi
 
   override def apply(system: ActorSystem): SerializationExtensionImpl = system.extension(this)
 
-  // --- 2. 策略注册表 (保持不变) ---
+  // --- 2. Strategy Registry (remains unchanged) ---
   private val classToStrategy = new ConcurrentHashMap[Class[_], SagaParticipantSerializerStrategy]()
   private val manifestToStrategy = new ConcurrentHashMap[String, SagaParticipantSerializerStrategy]()
 

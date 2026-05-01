@@ -9,18 +9,18 @@ import net.imadz.infra.saga.serialization.SagaExecutorConverter
 
 /**
  * StepExecutorEventAdapter
- * * 职责：
- * 1. 领域事件 <-> Proto 转换
- * 2. 混入 SagaStepProtoMapper 复用 Step 转换逻辑
- * 3. 使用 Akka Serialization 处理泛型 Result
- * 4. 使用 SerializationExtension 处理 Participant 多态
+ * * Responsibilities:
+ * 1. Domain Event <-> Proto conversion
+ * 2. Mixes in SagaStepProtoMapper to reuse Step conversion logic
+ * 3. Uses Akka Serialization to handle generic Result
+ * 4. Uses SerializationExtension to handle Participant polymorphism
  */
 class StepExecutorEventAdapter(override val system: ExtendedActorSystem)
   extends EventAdapter[Event, StepExecutorEventPO]
     with SagaExecutorConverter {
 
 
-  // 2. 获取 Akka 原生序列化入口 (用于 Result 序列化)
+  // 2. Get Akka's native serialization entry point (used for Result serialization)
   override def manifest(event: Event): String = event.getClass.getCanonicalName
 
   override def toJournal(e: Event): StepExecutorEventPO = {

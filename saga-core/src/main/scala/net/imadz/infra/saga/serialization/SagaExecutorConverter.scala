@@ -57,7 +57,7 @@ trait SagaExecutorConverter extends PrimitiveConverter {
     override def toProto(domain: ExecutionStarted[_, _, _]): ExecutionStartedPO = {
       ExecutionStartedPO(
         transactionId = domain.transactionId,
-        transactionStep = Some(SagaStepConv.toProto(domain.transactionStep)), // 调用 Trait
+        transactionStep = Some(SagaStepConv.toProto(domain.transactionStep)), // Call Trait
         replyToPath = domain.replyToPath,
         traceId = domain.traceId
       )
@@ -157,16 +157,16 @@ trait SagaExecutorConverter extends PrimitiveConverter {
   object SagaStepConv extends ProtoConverter[SagaTransactionStep[_, _, _], SagaTransactionStepPO] {
 
     def toProto(step: SagaTransactionStep[_, _, _]): SagaTransactionStepPO = {
-      // 1. 找策略
+      // 1. Find strategy
       val strategy = extension.strategyFor(step.participant.getClass)
-      // 2. 转字节
+      // 2. Convert to bytes
       val payloadBytes = strategy.toBinary(step.participant)
       val typeName = strategy.manifest
 
-      // 3. 组装 PO
+      // 3. Assemble PO
       SagaTransactionStepPO(
         stepId = step.stepId,
-        // Phase 转换逻辑
+        // Phase conversion logic
         phase = step.phase match {
           case PreparePhase => TransactionPhasePO.PREPARE_PHASE
           case CommitPhase => TransactionPhasePO.COMMIT_PHASE

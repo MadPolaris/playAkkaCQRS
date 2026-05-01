@@ -66,17 +66,17 @@ trait SagaParticipant[E, R, C] {
         Success(Right(r))
       case Success(Left(e: Throwable)) =>
         logger.warn(s"[TraceID: $traceId] SagaParticipant executed failed with $e")
-        Success(Left(classifyFailure(e)))
+        Success(Left(classify(e)))
       case Success(Left(e)) =>
         logger.warn(s"[TraceID: $traceId] SagaParticipant executed failed with $e")
-        Success(Left(classifyFailure(new Exception(s"Operation failed: $e"))))
+        Success(Left(classify(new Exception(s"Operation failed: $e"))))
       case Failure(e) =>
         logger.warn(s"[TraceID: $traceId] SagaParticipant executed failed with $e")
-        Success(Left(classifyFailure(e)))
+        Success(Left(classify(e)))
     }
   }
 
-  private def classifyFailure(e: Throwable): RetryableOrNotException = {
+  def classify(e: Throwable): RetryableOrNotException = {
     val retryableOrNotException = customClassification
       .orElse(defaultClassification)
       .orElse(fallbackClassification)
@@ -92,6 +92,7 @@ trait SagaParticipant[E, R, C] {
     case _: ConnectException => RetryableFailure("Connection failed")
     case _: SQLTransientException => RetryableFailure("Transient database error")
     case _: IllegalArgumentException => NonRetryableFailure("Invalid argument")
+    case _: akka.pattern.CircuitBreakerOpenException => RetryableFailure("Circuit breaker is open")
   }
 
   protected def customClassification: PartialFunction[Throwable, RetryableOrNotException]

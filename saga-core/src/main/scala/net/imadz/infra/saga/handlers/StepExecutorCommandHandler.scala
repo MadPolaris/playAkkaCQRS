@@ -34,17 +34,17 @@ object StepExecutorCommandHandler {
 
       case Start(transactionId, step, replyTo, traceId) if state.canStart =>
         Effect
-          .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
+          .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo)(actorContext), traceId))
           .thenRun((updatedState: State[E, R, C]) => {
-            actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
+            actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(ExecutionStarted(transactionId, step, serializeActorRef(replyTo)(actorContext), traceId))
             executeOperation(actorContext, context, timers, step.phase, step, transactionId, traceId, circuitBreaker, replyTo)
           })
 
       case RecoverExecution(transactionId, step, replyTo, traceId) if state.canRecover =>
         Effect
-          .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
+          .persist(ExecutionStarted(transactionId, step, serializeActorRef(replyTo)(actorContext), traceId))
           .thenRun((updatedState: State[E, R, C]) => {
-            actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(ExecutionStarted(transactionId, step, serializeActorRef(replyTo), traceId))
+            actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(ExecutionStarted(transactionId, step, serializeActorRef(replyTo)(actorContext), traceId))
             executeOperation(actorContext, context, timers, step.phase, step, transactionId, traceId, circuitBreaker, replyTo)
           })
 
@@ -147,7 +147,7 @@ object StepExecutorCommandHandler {
         timers.cancel("StepTimeout")
         actorContext.log.info(s"ManualFix received for transaction ${state.transactionId.getOrElse("unknown")} step ${state.step.map(_.stepId).getOrElse("unknown")}")
         val typedReplyTo = replyTo.asInstanceOf[Option[ActorRef[StepResult[E, R, C]]]]
-        // 假设手动修复成功，返回一个空的成功的 SagaResult
+        // Assume manual fix is successful, return an empty successful SagaResult
         val manualResult = net.imadz.infra.saga.SagaParticipant.SagaResult.empty[R]()
         val txId = state.transactionId.get
         val sid = state.step.get.stepId
@@ -169,6 +169,10 @@ object StepExecutorCommandHandler {
   }
 
   private val logger = LoggerFactory.getLogger(getClass)
+
+  /**
+   * Executes the operation associated with the saga step.
+   */
   private def executeOperation[E, R, C](
                                          actorContext: akka.actor.typed.scaladsl.ActorContext[Command],
                                          context: C,
@@ -198,7 +202,7 @@ object StepExecutorCommandHandler {
         actorContext.self ! OperationResponse(result, replyTo)
       case scala.util.Failure(exception) =>
         logger.error(s"Operation failed with exception for step ${step.stepId}", exception)
-        actorContext.self ! OperationResponse(Left(NonRetryableFailure(s"Operation failed: ${exception.getMessage}")), replyTo)
+        actorContext.self ! OperationResponse(Left(step.participant.classify(exception)), replyTo)
     }
   }
 
@@ -211,8 +215,11 @@ object StepExecutorCommandHandler {
   }
 
 
-  private def serializeActorRef(replyTo: Option[ActorRef[_]]) = {
-    replyTo.map(_.path.toSerializationFormat).getOrElse("")
+  /**
+   * Serializes an ActorRef into a string format that can be persisted.
+   */
+  private def serializeActorRef(replyTo: Option[ActorRef[_]])(implicit context: akka.actor.typed.scaladsl.ActorContext[_]): String = {
+    replyTo.map(ref => akka.actor.typed.ActorRefResolver(context.system).toSerializationFormat(ref)).getOrElse("")
   }
 
 }

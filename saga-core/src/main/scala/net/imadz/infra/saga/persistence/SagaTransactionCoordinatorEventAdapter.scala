@@ -12,15 +12,15 @@ import scala.concurrent.ExecutionContext
 /**
  * SagaTransactionCoordinatorEventAdapter
  *
- * 实现了 Converter 分离的设计：
- * 1. 混入 SagaCoordinatorProtoConverters 获取所有转换逻辑
- * 2. 注入 ExtendedActorSystem 获取 SerializationExtension
+ * Implements a design with separated converters:
+ * 1. Mixes in SagaCoordinatorProtoConverters to get all conversion logic
+ * 2. Injects ExtendedActorSystem to obtain SerializationExtension
  */
 class SagaTransactionCoordinatorEventAdapter(override val system: ExtendedActorSystem)
   extends EventAdapter[SagaTransactionCoordinator.Event, SagaTransactionCoordinatorEventPO]
     with SagaCoordinatorProtoConverters {
 
-  // 如果 Mapper 内部需要 EC (目前不需要，但保留以防万一)
+  // If ExecutionContext is needed inside Mapper (not currently required, but kept just in case)
   implicit val ec: ExecutionContext = system.dispatcher
 
   override def manifest(event: SagaTransactionCoordinator.Event): String = ""
@@ -59,6 +59,12 @@ class SagaTransactionCoordinatorEventAdapter(override val system: ExtendedActorS
 
       case evt: SagaTransactionCoordinator.TransactionRetried =>
         SagaTransactionCoordinatorEventPO.Event.Retried(TransactionRetriedConv.toProto(evt))
+
+      case evt: SagaTransactionCoordinator.StepGroupStarted =>
+        SagaTransactionCoordinatorEventPO.Event.StepGroupStarted(StepGroupStartedConv.toProto(evt))
+
+      case evt: SagaTransactionCoordinator.StepResultReceived =>
+        SagaTransactionCoordinatorEventPO.Event.StepResultReceived(StepResultReceivedConv.toProto(evt))
     }
     SagaTransactionCoordinatorEventPO(payload)
   }
@@ -97,6 +103,12 @@ class SagaTransactionCoordinatorEventAdapter(override val system: ExtendedActorS
 
       case SagaTransactionCoordinatorEventPO.Event.Retried(po) =>
         EventSeq.single(TransactionRetriedConv.fromProto(po))
+
+      case SagaTransactionCoordinatorEventPO.Event.StepGroupStarted(po) =>
+        EventSeq.single(StepGroupStartedConv.fromProto(po))
+
+      case SagaTransactionCoordinatorEventPO.Event.StepResultReceived(po) =>
+        EventSeq.single(StepResultReceivedConv.fromProto(po))
 
       case _ =>
         EventSeq.empty

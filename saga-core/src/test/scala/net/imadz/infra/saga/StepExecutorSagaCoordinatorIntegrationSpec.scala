@@ -178,7 +178,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       )
       val transactionId = "circuit-breaker-transaction"
       val steps = List(
-        SagaTransactionStep("circuit-breaker-step", PreparePhase, circuitBreakerParticipant, 10, 1.seconds))
+        SagaTransactionStep("circuit-breaker-step", PreparePhase, circuitBreakerParticipant, 4, 1.seconds))
       val probe = createTestProbe[TransactionResult]()
 
       eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(probe.ref), "test-trace-id"))

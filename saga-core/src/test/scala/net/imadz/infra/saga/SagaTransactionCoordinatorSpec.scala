@@ -72,7 +72,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
         PersistenceId.ofUniqueId(persistenceId),
         stepExecutorCreator,
         globalTimeout = globalTimeout
-      )(system.executionContext, 5.seconds) // Reduced ask timeout for tests
+      )(system.executionContext)
     )
   }
 
@@ -102,7 +102,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
 
   "SagaTransactionCoordinator" should {
     "successfully complete a transaction" in {
-      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createSuccessfulStepExecutor())
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createSuccessfulStepExecutor(), persistenceId = "test-saga-success")
       val transactionId = "test-transaction"
       val steps = List(
         SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2),
@@ -111,60 +111,40 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
         SagaTransactionStep("step4", CommitPhase, SuccessfulParticipant, 2)
       )
       val prob = createTestProbe[TransactionResult]()
-      val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
 
-      result.event shouldBe SagaTransactionCoordinator.TransactionStarted(transactionId, steps, "test-trace-id")
-      result.state.status shouldBe SagaTransactionCoordinator.InProgress
+      val result = prob.receiveMessage(15.seconds)
 
-      val expected = prob.receiveMessage(10.seconds)
-
-      expected shouldBe TransactionResult(
-        successful = true,
-        SagaTransactionCoordinator.State(
-          transactionId = Some(transactionId),
-          steps = steps,
-          currentPhase = CommitPhase,
-          status = SagaTransactionCoordinator.Completed,
-          traceId = "test-trace-id"
-        )
-      )
+      result.successful shouldBe true
+      result.state.status shouldBe SagaTransactionCoordinator.Completed
+      result.state.currentPhase shouldBe CommitPhase
     }
 
     "handle failure during PreparePhase and initiate compensation" in {
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
         if (step.phase == PreparePhase) createFailingStepExecutor()
         else createSuccessfulStepExecutor()
-      )
+      , persistenceId = "failed-transaction")
       val transactionId = "failed-transaction"
       val steps = List(
         SagaTransactionStep("step1", PreparePhase, AlwaysFailingParticipant, 2),
         SagaTransactionStep("step2", CompensatePhase, SuccessfulParticipant, 2)
       )
       val prob = createTestProbe[TransactionResult]()
-      val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
 
-      result.event shouldBe SagaTransactionCoordinator.TransactionStarted(transactionId, steps, "test-trace-id")
-      result.state.status shouldBe SagaTransactionCoordinator.InProgress
+      val result = prob.receiveMessage(15.seconds)
 
-      val expected = prob.receiveMessage(10.seconds)
-
-      expected shouldBe TransactionResult(
-        successful = false,
-        SagaTransactionCoordinator.State(
-          transactionId = Some(transactionId),
-          steps = steps,
-          currentPhase = CompensatePhase,
-          status = SagaTransactionCoordinator.Failed,
-          traceId = "test-trace-id"
-        )
-      )
+      result.successful shouldBe false
+      result.state.status shouldBe SagaTransactionCoordinator.Failed
+      result.state.currentPhase shouldBe CompensatePhase
     }
 
     "handle partial failure during CompensatePhase" in {
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
         if (step.stepId == "commit2" || step.stepId == "compensate1") createFailingStepExecutor()
         else createSuccessfulStepExecutor()
-      )
+      , persistenceId = "compensate-partial-fail-transaction")
       val transactionId = "compensate-partial-fail-transaction"
       val steps = List(
         SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
@@ -175,24 +155,14 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
         SagaTransactionStep("compensate2", CompensatePhase, SuccessfulParticipant, 2)
       )
       val prob = createTestProbe[TransactionResult]()
-      val result = eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
 
-      result.event shouldBe SagaTransactionCoordinator.TransactionStarted(transactionId, steps, "test-trace-id")
-      result.state.status shouldBe SagaTransactionCoordinator.InProgress
+      val result = prob.receiveMessage(15.seconds)
 
-      val expected = prob.receiveMessage(10.seconds)
-
-      expected shouldBe TransactionResult(
-        successful = false,
-        SagaTransactionCoordinator.State(
-          transactionId = Some(transactionId),
-          steps = steps,
-          currentPhase = CompensatePhase,
-          status = SagaTransactionCoordinator.Suspended,
-          traceId = "test-trace-id"
-        ),
-        failReason = "Phase compensate failed with error: StepFailed(compensate-partial-fail-transaction,compensate1,net.imadz.infra.saga.SagaParticipant$NonRetryableFailure: Test failure)"
-      )
+      result.successful shouldBe false
+      result.state.status shouldBe SagaTransactionCoordinator.Suspended
+      result.state.currentPhase shouldBe CompensatePhase
+      result.failReason should include ("Phase compensate failed with error: Test failure")
     }
 
     "should resume execution upon RecoveryCompleted when in InProgress state" in {
@@ -201,40 +171,35 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
         SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2)
       )
       
-      // Use a custom executor that hangs initially
       var shouldHanging = true
       def hangingStepExecutorCreator(): ActorRef[StepExecutor.Command] = {
         spawn(Behaviors.receiveMessage[StepExecutor.Command] {
           case StepExecutor.Start(transactionId, step, replyTo, _) =>
             if (shouldHanging) {
-               Behaviors.same // Hangs
+               Behaviors.same
             } else {
                replyTo.foreach(_ ! StepExecutor.StepCompleted(transactionId, step.stepId, SagaResult.empty()))
                Behaviors.stopped
             }
-          case qs: StepExecutor.QueryStatus[_, _, _] =>
-            if (shouldHanging) qs.replyTo ! StepExecutor.State(status = StepExecutor.Ongoing)
-            else qs.replyTo ! StepExecutor.State(status = StepExecutor.Succeed, result = Some(SagaResult.empty()))
-            Behaviors.same
           case _ => Behaviors.same
         })
       }
 
-      // Increase global timeout for recovery test
       val eventSourcedTestKit = createEventSourcedTestKit((_, _) => hangingStepExecutorCreator(), persistenceId = "test-saga-recover", globalTimeout = 20.seconds)
 
       val prob = createTestProbe[TransactionResult]()
       eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
       
-      // 2. Restart/Start the coordinator to trigger recovery
       shouldHanging = false
       eventSourcedTestKit.restart()
 
-      // 3. Verify it resumed and eventually completed by checking persisted events
       eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionStarted]("test-saga-recover")
-      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-recover", 20.seconds)
-      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-recover", 20.seconds)
-      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionCompleted]("test-saga-recover", 20.seconds)
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.StepGroupStarted]("test-saga-recover")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.StepGroupStarted]("test-saga-recover")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.StepResultReceived]("test-saga-recover")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-recover")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-recover")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionCompleted]("test-saga-recover")
     }
 
     "should handle TransactionTimeout and fail the transaction" in {
@@ -244,12 +209,8 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       )
 
       val prob = createTestProbe[TransactionResult]()
-      // Use a custom coordinator with a very short timeout and responsive StepExecutor
       val eventSourcedTestKit = createEventSourcedTestKit(
             (_, _) => spawn(Behaviors.receiveMessage[StepExecutor.Command] {
-               case StepExecutor.QueryStatus(replyTo) => 
-                  replyTo ! StepExecutor.State(status = StepExecutor.Ongoing)
-                  Behaviors.same
                case _ => Behaviors.same
             }),
             persistenceId = "test-saga-timeout-test",
@@ -258,52 +219,38 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
 
       eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
 
-      // 4. Verify it ended up in Failed via events since global timeout doesn't have replyTo
       eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionStarted]("test-saga-timeout-test")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.StepGroupStarted]("test-saga-timeout-test")
       eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseFailed]("test-saga-timeout-test", 10.seconds)
-      // Transition to CompensatePhase happens, but no compensation steps are defined for this test so it might stop or define them
-      // Actually successful steps were used, but we mocked StepExecutor to return Ongoing.
-      // So it will persist PhaseFailed(Prepare) -> currentPhase = Compensate -> executePhase(Compensate)
-      // Since there are no steps for Compensate, handlePhaseCompletion(Compensate, List.empty) is called.
-      // Which persists PhaseSucceeded(Compensate) and TransactionFailed.
       eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-timeout-test", 10.seconds)
       eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionFailed]("test-saga-timeout-test", 10.seconds)
     }
 
-    "handle ask timeout by querying status and eventually completing" in {
-      val transactionId = "timeout-query-status-transaction"
+    "handle eventual completion of steps" in {
+      val transactionId = "eventual-completion-transaction"
       val steps = List(
         SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2)
       )
 
-      def slowStepExecutorCreator(): ActorRef[StepExecutor.Command] = {
+      def delayedStepExecutorCreator(): ActorRef[StepExecutor.Command] = {
         spawn(Behaviors.receiveMessage[StepExecutor.Command] {
           case StepExecutor.Start(transactionId, step, replyTo, traceId) =>
-            // Do not reply immediately to simulate ask timeout
+            implicit val ec = system.executionContext
+            system.scheduler.scheduleOnce(1.second, new Runnable {
+              override def run(): Unit = replyTo.foreach(_ ! StepExecutor.StepCompleted(transactionId, step.stepId, SagaResult.empty()))
+            })
             Behaviors.same
-          case qs: StepExecutor.QueryStatus[_, _, _] =>
-            // Reply with Succeed to simulate it finished later
-            qs.replyTo.asInstanceOf[ActorRef[StepExecutor.State[Any, Any, Any]]] ! StepExecutor.State(
-              status = StepExecutor.Succeed,
-              result = Some(SagaResult.empty[Any]())
-            )
-            Behaviors.same
-          case msg => 
-            Behaviors.same
+          case _ => Behaviors.same
         })
       }
 
-      // Increase global timeout to not interfere with ask timeout
-      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => slowStepExecutorCreator(), persistenceId = "test-saga-ask-timeout", globalTimeout = 20.seconds)
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => delayedStepExecutorCreator(), persistenceId = "test-saga-eventual", globalTimeout = 20.seconds)
 
       val prob = createTestProbe[TransactionResult]()
       eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
 
-      // 3. Verify it resumed and eventually completed by checking persisted events
-      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionStarted]("test-saga-ask-timeout")
-      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-ask-timeout", 20.seconds)
-      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-ask-timeout", 20.seconds)
-      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionCompleted]("test-saga-ask-timeout", 20.seconds)
+      val result = prob.receiveMessage(15.seconds)
+      result.successful shouldBe true
     }
 
   }

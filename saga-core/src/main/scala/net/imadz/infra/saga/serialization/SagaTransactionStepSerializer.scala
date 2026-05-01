@@ -4,7 +4,7 @@ import akka.actor.ExtendedActorSystem
 import akka.serialization.Serializer
 
 import scala.util.{Failure, Success, Try}
-// 假设这些 Proto 也是框架的一部分
+// Assume these Protos are also part of the framework
 import net.imadz.infra.saga.SagaTransactionStep
 import net.imadz.infra.saga.proto.saga_v2.SagaTransactionStepPO
 

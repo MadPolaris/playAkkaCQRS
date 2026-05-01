@@ -1,6 +1,8 @@
 package net.imadz.infra.saga.persistence.converters
 
-import net.imadz.common.serialization.{PrimitiveConverter, SerializationExtensionImpl}
+import akka.serialization.Serializers
+import net.imadz.common.serialization.PrimitiveConverter
+import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException, SagaResult}
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.SagaTransactionCoordinator._
 import net.imadz.infra.saga.proto.saga_v2._
@@ -8,15 +10,15 @@ import net.imadz.infra.saga.serialization.SagaExecutorConverter
 
 /**
  * SagaCoordinatorProtoConverters
- * 职责：
- * 1. 定义 SagaTransactionCoordinator 相关事件的 ProtoConverter
- * 2. 混入 SagaStepProtoMapper 以复用 Step 的转换能力
- * 3. 混入 PrimitiveConverter 以获得基础转换能力
+ * Responsibility:
+ * 1. Define ProtoConverters for SagaTransactionCoordinator events and state.
+ * 2. Mix in SagaExecutorConverter to reuse Step and Participant conversion.
+ * 3. Mix in PrimitiveConverter for basic conversion capabilities.
  */
 trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecutorConverter {
 
 
-  // --- Phase Converter (枚举转换) ---
+  // --- Phase Converter ---
   object PhaseConv extends ProtoConverter[TransactionPhase, TransactionPhasePO] {
     override def toProto(domain: TransactionPhase): TransactionPhasePO = domain match {
       case PreparePhase => TransactionPhasePO.PREPARE_PHASE
@@ -28,7 +30,35 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
       case TransactionPhasePO.PREPARE_PHASE => PreparePhase
       case TransactionPhasePO.COMMIT_PHASE => CommitPhase
       case TransactionPhasePO.COMPENSATE_PHASE => CompensatePhase
-      case _ => PreparePhase // Default or throw
+      case _ => PreparePhase
+    }
+  }
+
+  // --- Utility Converters ---
+
+  object PhaseResultConv extends ProtoConverter[Either[RetryableOrNotException, Any], PhaseResultPO] {
+    override def toProto(e: Either[RetryableOrNotException, Any]): PhaseResultPO = e match {
+      case Left(err) => 
+        PhaseResultPO(result = PhaseResultPO.Result.Error(err.message))
+      case Right(res) => 
+        val resRef = res.asInstanceOf[AnyRef]
+        val serializer = serialization.findSerializerFor(resRef)
+        val bytes = serializer.toBinary(resRef)
+        val manifest = Serializers.manifestFor(serializer, resRef)
+        PhaseResultPO(result = PhaseResultPO.Result.Success(com.google.protobuf.ByteString.copyFrom(bytes)), successType = manifest)
+    }
+
+    override def fromProto(p: PhaseResultPO): Either[RetryableOrNotException, Any] = p.result match {
+      case PhaseResultPO.Result.Error(msg) => 
+        Left(NonRetryableFailure(msg))
+      case PhaseResultPO.Result.Success(bytes) => 
+        val res = serialization.deserialize(
+          bytes.toByteArray,
+          serialization.serializerFor(classOf[SagaResult[Any]]).identifier,
+          p.successType
+        ).getOrElse(throw new RuntimeException(s"Failed to deserialize phase result of type ${p.successType}"))
+        Right(res)
+      case _ => Left(NonRetryableFailure("Unknown result"))
     }
   }
 
@@ -168,6 +198,38 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
     )
   }
 
+  object StepGroupStartedConv extends ProtoConverter[StepGroupStarted, StepGroupStartedPO] {
+    override def toProto(e: StepGroupStarted): StepGroupStartedPO = StepGroupStartedPO(
+      transactionId = e.transactionId,
+      phase = PhaseConv.toProto(e.phase),
+      group = e.group,
+      stepIds = e.stepIds.toList
+    )
+
+    override def fromProto(p: StepGroupStartedPO): StepGroupStarted = StepGroupStarted(
+      transactionId = p.transactionId,
+      phase = PhaseConv.fromProto(p.phase),
+      group = p.group,
+      stepIds = p.stepIds.toSet
+    )
+  }
+
+  object StepResultReceivedConv extends ProtoConverter[StepResultReceived, StepResultReceivedPO] {
+    override def toProto(e: StepResultReceived): StepResultReceivedPO = StepResultReceivedPO(
+      transactionId = e.transactionId,
+      stepId = e.stepId,
+      result = Some(PhaseResultConv.toProto(e.result))
+    )
+
+    override def fromProto(p: StepResultReceivedPO): StepResultReceived = StepResultReceived(
+      transactionId = p.transactionId,
+      stepId = p.stepId,
+      result = p.result.map(PhaseResultConv.fromProto).getOrElse(Left(NonRetryableFailure("Missing result")))
+    )
+  }
+
+  // --- State Converter ---
+
   object CoordinatorStateConv extends ProtoConverter[State, CoordinatorStatePO] {
     override def toProto(s: State): CoordinatorStatePO = CoordinatorStatePO(
       transactionId = s.transactionId.getOrElse(""),
@@ -184,7 +246,9 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
       traceId = s.traceId,
       singleStep = s.singleStep,
       isPaused = s.isPaused,
-      currentStepGroup = s.currentStepGroup
+      currentStepGroup = s.currentStepGroup,
+      pendingSteps = s.pendingSteps.toList,
+      phaseResults = s.phaseResults.map(PhaseResultConv.toProto)
     )
 
     override def fromProto(p: CoordinatorStatePO): State = State(
@@ -203,7 +267,9 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
       traceId = p.traceId,
       singleStep = p.singleStep,
       isPaused = p.isPaused,
-      currentStepGroup = if (p.currentStepGroup == 0) 1 else p.currentStepGroup
+      currentStepGroup = if (p.currentStepGroup == 0) 1 else p.currentStepGroup,
+      pendingSteps = p.pendingSteps.toSet,
+      phaseResults = p.phaseResults.map(PhaseResultConv.fromProto).toList
     )
   }
 }
