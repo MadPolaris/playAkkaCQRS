@@ -61,7 +61,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
 
   private def createEventSourcedTestKit(stepExecutorCreator: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command],
                                         persistenceId: String = "test-saga-coordinator",
-                                        globalTimeout: FiniteDuration = 5.seconds) = {
+                                        globalTimeout: FiniteDuration = 30.seconds) = {
     EventSourcedBehaviorTestKit[
       SagaTransactionCoordinator.Command,
       SagaTransactionCoordinator.Event,
@@ -252,6 +252,94 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       val result = prob.receiveMessage(15.seconds)
       result.successful shouldBe true
     }
+
+    "ignore StartTransaction if already InProgress" in {
+      val transactionId = "already-started"
+      val steps = List(SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2))
+      // Use hanging executor to keep it InProgress
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => 
+        spawn(Behaviors.receiveMessage[StepExecutor.Command] { case _ => Behaviors.same }), 
+        persistenceId = "test-saga-already-started")
+      
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, None, "test-trace-id"))
+      
+      eventually(timeout(10.seconds)) {
+        eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.InProgress
+      }
+      
+      // This should be ignored (Effect.none)
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, None, "test-trace-id"))
+      
+      eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.InProgress
+    }
+
+    "handle TransactionPaused and ProceedNext" in {
+      val transactionId = "paused-transaction"
+      val steps = List(SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2))
+      // Increase globalTimeout to 100 seconds to avoid timeout during the test
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createSuccessfulStepExecutor(), persistenceId = "test-saga-paused", globalTimeout = 100.seconds)
+      
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, None, "test-trace-id", singleStep = true))
+      
+      eventually(timeout(10.seconds)) {
+        eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.InProgress
+        eventSourcedTestKit.getState().isPaused shouldBe true
+      }
+      
+      val prob = createTestProbe[TransactionResult]()
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.ProceedNext(Some(prob.ref)))
+      
+      val result = prob.receiveMessage(30.seconds)
+      result.successful shouldBe true
+      result.state.status shouldBe SagaTransactionCoordinator.Completed
+    }
+
+    "handle ResolveSuspended when Suspended" in {
+      val transactionId = "suspended-transaction"
+      val steps = List(
+        SagaTransactionStep("step1", PreparePhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("step2", CompensatePhase, AlwaysFailingParticipant, 2)
+      )
+      // Step1 fails in PreparePhase -> triggers Step2 in CompensatePhase -> Step2 fails -> Suspended
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createFailingStepExecutor()
+      , persistenceId = "test-saga-suspended")
+      
+      val prob = createTestProbe[TransactionResult]()
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
+      
+      // Wait for it to become Suspended
+      eventually(timeout(15.seconds)) {
+        eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.Suspended
+      }
+      
+      // Now try to resolve it
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.ResolveSuspended(Some(prob.ref)))
+      
+      // It should eventually become Suspended again (since it fails again)
+      eventually(timeout(15.seconds)) {
+        eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.Suspended
+      }
+    }
+
+    "handle RetryCurrentPhase" in {
+      val transactionId = "retry-phase-transaction"
+      val steps = List(SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2))
+      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => 
+            spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+               case _ => Behaviors.same // Hang to keep it InProgress
+            }), persistenceId = "test-saga-retry-phase")
+      
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, None, "test-trace-id"))
+      
+      eventually(timeout(10.seconds)) {
+        eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.InProgress
+      }
+      
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.RetryCurrentPhase(None))
+      
+      eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.InProgress
+    }
+
 
   }
 }

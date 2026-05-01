@@ -1,7 +1,6 @@
 package controllers
 
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.eventstream.EventStream.Subscribe
 import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.persistence.query.PersistenceQuery
@@ -11,7 +10,7 @@ import akka.stream.scaladsl.{BroadcastHub, Keep, MergeHub, Sink, Source}
 import akka.contrib.persistence.mongodb.MongoReadJournal
 import net.imadz.application.services.transactor.DynamicShowcaseParticipant
 import net.imadz.application.events.SagaProgressEvent
-import net.imadz.infra.saga.{SagaTransactionCoordinator, StepExecutor}
+import net.imadz.infra.saga.{SagaPhase, SagaTransactionCoordinator, SagaTransactionStep, StepExecutor}
 import play.api.libs.json.{JsValue, Json, Writes}
 import play.api.mvc._
 
@@ -63,17 +62,51 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
           case ex: StepExecutor.ManualFixCompleted[_] => SagaProgressEvent.StepCompleted(ex.transactionId, ex.stepId, ex.phase, ex.traceId, isManual = true)
           case StepExecutor.OperationFailed(txId, sid, ph, tid, err) => SagaProgressEvent.StepFailed(txId, sid, ph, err.message, tid)
           case StepExecutor.RetryScheduled(txId, sid, ph, tid, c) => SagaProgressEvent.StepFailed(txId, sid, ph, s"Retry #$c", tid)
+          case _ => null
         }
         if (pEvt != null) Source.single(pEvt).runWith(hubSink)
     }
   }))
 
-  def socket = WebSocket.accept[String, String] { request =>
-    akka.stream.scaladsl.Flow.fromSinkAndSource(Sink.ignore, hubSource.map(e => Json.toJson(e)(sagaProgressEventWrites).toString()))
-  }
-
   // --- Actions ---
   def index() = Action { implicit request: Request[AnyContent] => Ok(views.html.showcase()) }
+
+  case class Scenario(id: String, name: String, steps: List[SagaTransactionStep[Any, String, Any]], behaviors: Map[String, DynamicShowcaseParticipant.Behavior])
+
+  private val scenarios: Map[String, Scenario] = Map(
+    "happy" -> Scenario("happy", "Happy Path (Success)", List(
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2)
+    ), Map("Step-A" -> DynamicShowcaseParticipant.Success, "Step-B" -> DynamicShowcaseParticipant.Success)),
+
+    "retry" -> Scenario("retry", "Retryable Failure", List(
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2)
+    ), Map("Step-A" -> DynamicShowcaseParticipant.Success, "Step-B" -> DynamicShowcaseParticipant.FailTwiceThenSucceed)),
+
+    "compensation" -> Scenario("compensation", "Compensation (Prepare Failure)", List(
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2)
+    ), Map("Step-A" -> DynamicShowcaseParticipant.Success, "Step-B" -> DynamicShowcaseParticipant.FailNonRetryable)),
+
+    "suspended" -> Scenario("suspended", "Suspended (Compensation Failure)", List(
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2)
+    ), Map("Step-A" -> DynamicShowcaseParticipant.FailNonRetryable, "Step-B" -> DynamicShowcaseParticipant.FailNonRetryable)),
+
+    "timeout" -> Scenario("timeout", "Global Timeout", List(
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2)
+    ), Map("Step-A" -> DynamicShowcaseParticipant.Success, "Step-B" -> DynamicShowcaseParticipant.Timeout))
+  )
 
   def injectFault(stepId: String, behavior: String) = Action {
     val b = behavior.toLowerCase match {
@@ -88,26 +121,44 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     Ok(Json.obj("status" -> "ok", "stepId" -> stepId, "behavior" -> behavior))
   }
 
-  def triggerShowcase(singleStep: Boolean) = Action {
-    import net.imadz.infra.saga.{SagaTransactionStep, SagaPhase}
-    import net.imadz.infra.saga.SagaTransactionCoordinator.StartTransaction
+  def triggerScenario(scenarioId: String, singleStep: Boolean) = Action {
     val sharding = ClusterSharding(typedSystem)
     val transactionId = java.util.UUID.randomUUID().toString
     val traceId = s"TRACE-${transactionId.substring(0, 8)}"
-    val steps = List(
-      SagaTransactionStep("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2)
-    )
+    
+    val scenario = scenarios.getOrElse(scenarioId, Scenario("custom", "Custom", Nil, Map.empty))
+    
+    // Apply scenario behaviors
+    scenario.behaviors.foreach { case (sid, b) => DynamicShowcaseParticipant.setBehavior(sid, b) }
+    
+    val steps: List[SagaTransactionStep[Any, String, Any]] = if (scenario.id == "custom") {
+       // Default steps for custom mode
+       List(
+         SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+         SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+         SagaTransactionStep[Any, String, Any]("Step-C", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2),
+         SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+         SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+         SagaTransactionStep[Any, String, Any]("Step-C", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2),
+         SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+         SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+         SagaTransactionStep[Any, String, Any]("Step-C", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2)
+       )
+    } else {
+       scenario.steps
+    }
+
     import net.imadz.application.services.MoneyTransferService
-    sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! StartTransaction(transactionId, steps, None, traceId, singleStep)
-    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId, "traceId" -> traceId))
+    sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! SagaTransactionCoordinator.StartTransaction(transactionId, steps, None, traceId, singleStep)
+    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId, "traceId" -> traceId, "scenario" -> scenario.name))
+  }
+
+  def triggerShowcase(singleStep: Boolean) = Action {
+    Redirect(routes.ShowcaseController.triggerScenario("custom", singleStep))
+  }
+
+  def socket = WebSocket.accept[String, String] { request =>
+    akka.stream.scaladsl.Flow.fromSinkAndSource(Sink.ignore, hubSource.map(e => Json.toJson(e)(sagaProgressEventWrites).toString()))
   }
 
   def proceed(transactionId: String) = Action {
@@ -207,7 +258,6 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     }
 
     (coordEnvelopes ++ stepEnvelopes).filter(_._2 != null).sortBy { case (ts, evt) =>
-      // 核心修正：因果律权重系统
       val phasePriority = evt match {
         case _: SagaProgressEvent.TransactionStarted => 0
         case e: SagaProgressEvent.StepOngoing => getPhaseWeight(e.phase)
@@ -216,7 +266,6 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
         case _: SagaProgressEvent.TransactionCompleted | _: SagaProgressEvent.TransactionFailed | _: SagaProgressEvent.TransactionSuspended => 1000
         case _ => 500
       }
-      // 最终排序：物理时间戳为大背景，相位优先级解决微小偏差
       (ts, phasePriority)
     }.map { case (ts, evt) =>
       Json.obj("timestamp" -> ts, "event" -> Json.toJson(evt.asInstanceOf[SagaProgressEvent])(sagaProgressEventWrites))

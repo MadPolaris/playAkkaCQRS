@@ -261,27 +261,38 @@ object SagaTransactionCoordinatorCommandHandler {
                                   replyTo: Option[ActorRef[TransactionResult]]
                                 ): Effect[Event, State] = {
     if (phase != CompensatePhase) {
-      val persistEffect = Effect.persist[Event, State](PhaseFailed(state.transactionId.get, phase))
-      if (state.singleStep) {
-        persistEffect.thenRun { (stateNew: State) =>
-          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(state.transactionId.get, phase))
-          context.self ! TransactionPaused(stateNew.transactionId.get, stateNew.traceId)
-        }
-      } else {
-        persistEffect.thenRun { (stateNew: State) =>
-          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(state.transactionId.get, phase))
-          startPhase(context, stateNew, stepExecutorFactory, replyTo)
-        }
+      state.transactionId match {
+        case Some(tid) =>
+          val persistEffect = Effect.persist[Event, State](PhaseFailed(tid, phase))
+          if (state.singleStep) {
+            persistEffect.thenRun { (stateNew: State) =>
+              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(tid, phase))
+              context.self ! TransactionPaused(tid, stateNew.traceId)
+            }
+          } else {
+            persistEffect.thenRun { (stateNew: State) =>
+              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(tid, phase))
+              startPhase(context, stateNew, stepExecutorFactory, replyTo)
+            }
+          }
+        case None =>
+          context.log.error(s"Phase $phase failed but transactionId is missing in state!")
+          Effect.none
       }
     } else {
       val reason = s"Phase $phase failed with error: ${error.message}"
-      Effect.persist(List(PhaseFailed(state.transactionId.get, phase), TransactionSuspended(state.transactionId.get, reason)))
-        .thenRun { (stateNew: State) =>
-          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(state.transactionId.get, phase))
-          context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionSuspended(state.transactionId.get, reason))
-          replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, reason))
-        }
-        .thenStop()
+      state.transactionId match {
+        case Some(tid) =>
+          Effect.persist(List(PhaseFailed(tid, phase), TransactionSuspended(tid, reason)))
+            .thenRun { (stateNew: State) =>
+              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(PhaseFailed(tid, phase))
+              context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionSuspended(tid, reason))
+              replyTo.foreach(_ ! TransactionResult(successful = false, stateNew, reason))
+            }
+        case None =>
+          context.log.error(s"Phase $phase failed but transactionId is missing in state!")
+          Effect.none
+      }
     }
   }
 }

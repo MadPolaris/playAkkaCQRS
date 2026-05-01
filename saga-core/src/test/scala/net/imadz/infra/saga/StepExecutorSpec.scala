@@ -139,8 +139,74 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
       val probe2 = createTestProbe[StepResult[String, String, Any]]()
       ref2 ! Start("trx-idempotent", step, Some(probe2.ref), "test-trace-id")
       
-      // Should return cached result without re-executing
+      // Should return cached result without re-execution
       probe2.expectMessage(20.seconds, StepCompleted[String, String, Any]("trx-idempotent", "step1", SagaResult("Prepared")))
     }
+
+    "recovery: resume execution when recovered in Ongoing state" in {
+      val persistenceId = "test-step-executor-recovery-ongoing"
+      val eventSourcedTestKit = EventSourcedBehaviorTestKit[Command, Event, State[String, String, Any]](
+        system,
+        stepExecutorBehavior(persistenceId)
+      )
+      
+      val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, TimeoutParticipant(), 2, retryWhenRecoveredOngoing = true)
+      val probe = createTestProbe[StepResult[String, String, Any]]()
+      
+      // 1. Start execution (it will hang because of TimeoutParticipant)
+      eventSourcedTestKit.runCommand(Start("trx-ongoing", step, Some(probe.ref), "test-trace-id"))
+      eventSourcedTestKit.getState().status shouldBe Ongoing
+      
+      // 2. Restart the actor
+      eventSourcedTestKit.restart()
+      
+      // 3. Upon recovery, it should send RecoverExecution to itself and resume
+      // Since TimeoutParticipant still hangs, we just check that it's still Ongoing and traceId is preserved
+      eventSourcedTestKit.getState().status shouldBe Ongoing
+      eventSourcedTestKit.getState().traceId shouldBe Some("test-trace-id")
+    }
+
+    "recovery: retry when recovered in Failed state with RetryableFailure" in {
+      val persistenceId = "test-step-executor-recovery-failed"
+      val eventSourcedTestKit = EventSourcedBehaviorTestKit[Command, Event, State[String, String, Any]](
+        system,
+        stepExecutorBehavior(persistenceId)
+      )
+      
+      val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, AlwaysFailingParticipant, 5)
+      val probe = createTestProbe[StepResult[String, String, Any]]()
+      
+      // 1. Execute and fail
+      eventSourcedTestKit.runCommand(Start("trx-failed", step, Some(probe.ref), "test-trace-id"))
+      
+      eventually(timeout(10.seconds)) {
+        eventSourcedTestKit.getState().status shouldBe Failed
+      }
+      val initialRetries = eventSourcedTestKit.getState().retries
+      
+      // 2. Restart
+      eventSourcedTestKit.restart()
+      
+      // 3. Upon recovery, it should trigger RetryOperation
+      // We check that retries eventually incremented (meaning it retried)
+      eventually(timeout(20.seconds)) {
+         eventSourcedTestKit.getState().retries should be > initialRetries
+      }
+    }
+
+
+
+    "handle NonRetryableFailure correctly" in {
+       val persistenceId = "test-step-executor-non-retryable-direct"
+       val ref = spawn(stepExecutorBehavior(persistenceId))
+       val probe = createTestProbe[StepResult[String, String, Any]]()
+
+       val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, NonRetryableFailingParticipant, 2)
+       ref ! Start("trx-non-retry", step, Some(probe.ref), "test-trace-id")
+       
+       val result = probe.receiveMessage(10.seconds).asInstanceOf[StepFailed[String, String, Any]]
+       result.error shouldBe a [NonRetryableFailure]
+    }
+
   }
 }

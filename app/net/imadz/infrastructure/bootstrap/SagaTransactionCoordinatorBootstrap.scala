@@ -9,6 +9,7 @@ import akka.persistence.typed.scaladsl.{EventSourcedBehavior, RetentionCriteria}
 import akka.util.Timeout
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id
+import net.imadz.infra.saga.handlers.{SagaTransactionCoordinatorCommandHandler, SagaTransactionCoordinatorEventHandler, SagaTransactionCoordinatorRecoveryHandler}
 import net.imadz.infra.saga.persistence.SagaTransactionCoordinatorEventAdapter
 import net.imadz.infra.saga.{ForSaga, SagaTransactionCoordinator, StepExecutor}
 import org.slf4j.LoggerFactory
@@ -31,7 +32,6 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
   }
 
   private def apply[C](entityTypeKey: EntityTypeKey[SagaTransactionCoordinator.Command], transactionId: Id, context: C, tag: String, system: ExtendedActorSystem): Behavior[SagaTransactionCoordinator.Command] = {
-    implicit val askTimeout: Timeout = Timeout(30.seconds)
 
     Behaviors.logMessages(LogOptions().withLogger(LoggerFactory.getLogger("iMadz")).withLevel(Level.INFO),
       Behaviors
@@ -40,10 +40,14 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
             EventSourcedBehavior(
               persistenceId = PersistenceId(entityTypeKey.name, transactionId.toString),
               emptyState = SagaTransactionCoordinator.State.apply(),
-              commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, timers, (key, step) =>
+              commandHandler = SagaTransactionCoordinatorCommandHandler.commandHandler(actorContext, timers, (key, _) =>
                 createStepExecutor(actorContext, context, key, system), 5.minutes),
-              eventHandler = SagaTransactionCoordinator.eventHandler
-            ).withTagger(_ => Set(tag))
+              eventHandler = SagaTransactionCoordinatorEventHandler.eventHandler
+            ).receiveSignal {
+              case (state, akka.persistence.typed.RecoveryCompleted) =>
+                SagaTransactionCoordinatorRecoveryHandler.onRecoveryCompleted(actorContext, timers, state, (key, _) =>
+                  createStepExecutor(actorContext, context, key, system), 5.minutes)
+            }.withTagger(_ => Set(tag))
               .eventAdapter(new SagaTransactionCoordinatorEventAdapter(system))
               .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
               .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))

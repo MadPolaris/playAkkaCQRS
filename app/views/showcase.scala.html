@@ -96,6 +96,19 @@
         <div class="dashboard">
             <div class="control-panel">
                 <h2>Control Center</h2>
+                
+                <div class="step-config">
+                    <span class="step-name">Execution Scenario</span>
+                    <select id="scenarioId">
+                        <option value="happy">Happy Path (Success)</option>
+                        <option value="retry">Retryable Failure</option>
+                        <option value="compensation">Compensation (Prepare Failure)</option>
+                        <option value="suspended">Suspended (Compensation Failure)</option>
+                        <option value="timeout">Global Timeout</option>
+                        <option value="custom">-- Custom Fault Injection --</option>
+                    </select>
+                </div>
+
                 <div style="margin-bottom: 15px; padding: 10px; background: #333; border-radius: 4px;">
                     <input type="checkbox" id="singleStepMode"> <label for="singleStepMode">Single Step Mode</label>
                 </div>
@@ -278,11 +291,19 @@
         };
 
         document.getElementById('startBtn').onclick = () => {
-            ['Step-A', 'Step-B', 'Step-C'].forEach(sid => {
-                fetch('/api/saga/inject-fault/' + sid + '/' + document.getElementById('config-' + sid).value, { method: 'POST' });
-            });
-            fetch('/api/saga/trigger-showcase/' + document.getElementById('singleStepMode').checked, { method: 'POST' })
-                .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; });
+            const scenarioId = document.getElementById('scenarioId').value;
+            const singleStep = document.getElementById('singleStepMode').checked;
+
+            if (scenarioId === 'custom') {
+                ['Step-A', 'Step-B', 'Step-C'].forEach(sid => {
+                    fetch('/api/saga/inject-fault/' + sid + '/' + document.getElementById('config-' + sid).value, { method: 'POST' });
+                });
+                fetch('/api/saga/trigger-showcase/' + singleStep, { method: 'POST' })
+                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; });
+            } else {
+                fetch('/api/saga/trigger-scenario/' + scenarioId + '/' + singleStep, { method: 'POST' })
+                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; });
+            }
         };
 
         proceedBtn.onclick = () => { if (currentTransactionId) fetch('/api/saga/proceed/' + currentTransactionId, { method: 'POST' }); };
