@@ -33,6 +33,12 @@ object SagaParticipant {
 
   case class NonRetryableFailure(message: String) extends RuntimeException(message) with RetryableOrNotException
 
+  /**
+   * Throw or return this exception in doCompensate if the transaction is not found
+   * or already rolled back. The Saga engine will treat it as a successful compensation.
+   */
+  case class CompensationIgnoredException(message: String = "Transaction not found or already rolled back") extends RuntimeException(message)
+
 }
 
 trait SagaParticipant[E, R, C] {
@@ -52,7 +58,12 @@ trait SagaParticipant[E, R, C] {
     executeWithRetryClassification(doCommit(transactionId, context, traceId), traceId)
 
   def compensate(transactionId: String, context: C, traceId: String)(implicit ec: ExecutionContext): ParticipantEffect[RetryableOrNotException, R] =
-    executeWithRetryClassification(doCompensate(transactionId, context, traceId), traceId)
+    executeWithRetryClassification(doCompensate(transactionId, context, traceId), traceId).map {
+      case Left(e) if e.message.contains("CompensationIgnoredException") =>
+        logger.info(s"[TraceID: $traceId] Compensation treated as success (ignored): ${e.message}")
+        Right(SagaResult.empty[R]().copy(message = Some(e.message)))
+      case other => other
+    }
 
   private def executeWithRetryClassification(
                                               operation: => ParticipantEffect[E, R],
