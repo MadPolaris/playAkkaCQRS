@@ -136,7 +136,10 @@ object SagaTransactionCoordinatorCommandHandler {
                           replyTo: Option[ActorRef[TransactionResult]]
                         ): Unit = {
     val plan = ExecutionPlan(state.steps)
-    val stepsInPhase = plan.getSteps(state.currentPhase, state.currentStepGroup)
+    val stepsInPhase = plan.getSteps(state.currentPhase, state.currentStepGroup).filter { step =>
+      if (state.currentPhase == CompensatePhase) state.successfulSteps.contains(step.stepId)
+      else true
+    }
 
     if (stepsInPhase.isEmpty) {
       context.log.info(s"[TraceID: ${state.traceId}] No steps found for phase ${state.currentPhase} and group ${state.currentStepGroup}, completing group/phase...")

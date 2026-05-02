@@ -94,9 +94,14 @@ object SagaTransactionCoordinatorEventHandler {
         )
 
       case StepResultReceived(_, stepId, result) =>
+        val updatedSuccessful = result match {
+          case Right(_) if state.currentPhase != CompensatePhase => state.successfulSteps + stepId
+          case _ => state.successfulSteps
+        }
         state.copy(
           pendingSteps = state.pendingSteps - stepId,
-          phaseResults = result :: state.phaseResults
+          phaseResults = result :: state.phaseResults,
+          successfulSteps = updatedSuccessful
         )
     }
   }

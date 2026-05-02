@@ -142,17 +142,17 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
 
     "handle partial failure during CompensatePhase" in {
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) =>
-        if (step.stepId == "commit2" || step.stepId == "compensate1") createFailingStepExecutor()
+        if ((step.stepId == "step2" && step.phase == CommitPhase) || (step.stepId == "step1" && step.phase == CompensatePhase)) createFailingStepExecutor()
         else createSuccessfulStepExecutor()
       , persistenceId = "compensate-partial-fail-transaction")
       val transactionId = "compensate-partial-fail-transaction"
       val steps = List(
-        SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
-        SagaTransactionStep("prepare2", PreparePhase, SuccessfulParticipant, 2),
-        SagaTransactionStep("commit1", CommitPhase, SuccessfulParticipant, 2),
-        SagaTransactionStep("commit2", CommitPhase, AlwaysFailingParticipant, 2),
-        SagaTransactionStep("compensate1", CompensatePhase, AlwaysFailingParticipant, 2),
-        SagaTransactionStep("compensate2", CompensatePhase, SuccessfulParticipant, 2)
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step2", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step1", CommitPhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step2", CommitPhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("step1", CompensatePhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("step2", CompensatePhase, SuccessfulParticipant, 2)
       )
       val prob = createTestProbe[TransactionResult]()
       eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
@@ -318,30 +318,33 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
     "handle ResolveSuspended when Suspended" in {
       val transactionId = "suspended-transaction"
       val steps = List(
-        SagaTransactionStep("step1", PreparePhase, AlwaysFailingParticipant, 2),
-        SagaTransactionStep("step2", CompensatePhase, AlwaysFailingParticipant, 2)
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step2", PreparePhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("step1", CompensatePhase, AlwaysFailingParticipant, 2)
       )
-      // Step1 fails in PreparePhase -> triggers Step2 in CompensatePhase -> Step2 fails -> Suspended
-      val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createFailingStepExecutor()
+      // Step1 succeeds in Prepare, Step2 fails in Prepare -> Phase fails -> CompensatePhase.
+      // In CompensatePhase, step1 is compensated. Since it uses AlwaysFailingParticipant, compensation fails -> Suspended.
+      val eventSourcedTestKit = createEventSourcedTestKit((_, step) => 
+        if (step.phase == PreparePhase && step.stepId == "step1") createSuccessfulStepExecutor()
+        else createFailingStepExecutor()
       , persistenceId = "test-saga-suspended")
-      
+
       val prob = createTestProbe[TransactionResult]()
       eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id"))
-      
+
       // Wait for it to become Suspended
       eventually(timeout(15.seconds)) {
         eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.Suspended
       }
-      
+
       // Now try to resolve it
       eventSourcedTestKit.runCommand(SagaTransactionCoordinator.ResolveSuspended(Some(prob.ref)))
-      
+
       // It should eventually become Suspended again (since it fails again)
       eventually(timeout(15.seconds)) {
         eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.Suspended
       }
     }
-
     "handle RetryCurrentPhase" in {
       val transactionId = "retry-phase-transaction"
       val steps = List(SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2))

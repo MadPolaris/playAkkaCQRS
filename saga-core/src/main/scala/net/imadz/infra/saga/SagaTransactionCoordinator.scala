@@ -156,7 +156,8 @@ object SagaTransactionCoordinator {
                     isPaused: Boolean = false,
                     currentStepGroup: Int = 1,
                     pendingSteps: Set[String] = Set.empty,
-                    phaseResults: List[Either[RetryableOrNotException, Any]] = List.empty
+                    phaseResults: List[Either[RetryableOrNotException, Any]] = List.empty,
+                    successfulSteps: Set[String] = Set.empty
                   )
 
   /**

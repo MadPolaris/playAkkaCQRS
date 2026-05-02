@@ -215,12 +215,12 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       val eventSourcedTestKit = createEventSourcedTestKit((_, step) => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
       val transactionId = "partial-compensate-transaction"
       val steps = List(
-        SagaTransactionStep("prepare1", PreparePhase, SuccessfulParticipant, 2),
-        SagaTransactionStep("prepare2", PreparePhase, SuccessfulParticipant, 2),
-        SagaTransactionStep("commit1", CommitPhase, SuccessfulParticipant, 2),
-        SagaTransactionStep("commit2", CommitPhase, AlwaysFailingParticipant, 2),
-        SagaTransactionStep("compensate1", CompensatePhase, AlwaysFailingParticipant, 2),
-        SagaTransactionStep("compensate2", CompensatePhase, SuccessfulParticipant, 2)
+        SagaTransactionStep("step1", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step2", PreparePhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step1", CommitPhase, SuccessfulParticipant, 2),
+        SagaTransactionStep("step2", CommitPhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("step1", CompensatePhase, AlwaysFailingParticipant, 2),
+        SagaTransactionStep("step2", CompensatePhase, SuccessfulParticipant, 2)
       )
       val probe = createTestProbe[TransactionResult]()
 
