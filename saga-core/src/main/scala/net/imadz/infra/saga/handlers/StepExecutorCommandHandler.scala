@@ -135,8 +135,12 @@ object StepExecutorCommandHandler {
       case RetryOperation(replyTo: Option[ActorRef[StepResult[E, R, C]]]) if state.canRetry =>
         state.step.zip(state.transactionId).zip(state.traceId).map {
           case ((step, trxId), traceId) =>
-            Effect.none[Event, State[E, R, C]]
-              .thenRun(_ => executeOperation[E, R, C](actorContext, context, timers, step.phase, step, trxId, traceId, circuitBreaker, replyTo))
+            Effect
+              .persist(ExecutionStarted(trxId, step, serializeActorRef(replyTo)(actorContext), traceId))
+              .thenRun((updatedState: State[E, R, C]) => {
+                actorContext.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(ExecutionStarted(trxId, step, serializeActorRef(replyTo)(actorContext), traceId))
+                executeOperation[E, R, C](actorContext, context, timers, step.phase, step, trxId, traceId, circuitBreaker, replyTo)
+              })
         }.getOrElse(Effect.none)
 
       case qs: QueryStatus[E, R, C] =>

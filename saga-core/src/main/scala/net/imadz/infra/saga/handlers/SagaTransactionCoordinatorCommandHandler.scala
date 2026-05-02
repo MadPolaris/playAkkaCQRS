@@ -157,9 +157,14 @@ object SagaTransactionCoordinatorCommandHandler {
                                 stepExecutorFactory: (String, SagaTransactionStep[_, _, _]) => ActorRef[StepExecutor.Command],
                                 replyTo: Option[ActorRef[TransactionResult]]
                               ): Effect[Event, State] = {
-    val stepId = result match {
-      case StepCompleted(_, sid, _) => sid
-      case StepFailed(_, sid, _) => sid
+    val (resultTxId, stepId) = result match {
+      case StepCompleted(tid, sid, _) => (tid, sid)
+      case StepFailed(tid, sid, _) => (tid, sid)
+    }
+    
+    if (!state.transactionId.contains(resultTxId)) {
+      context.log.warn(s"Ignoring StepResult for mismatched transactionId. Expected ${state.transactionId}, got $resultTxId")
+      return Effect.none
     }
     
     val sagaResult: Either[RetryableOrNotException, Any] = result match {

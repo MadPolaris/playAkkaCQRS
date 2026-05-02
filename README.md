@@ -98,6 +98,29 @@ features:
 - A simplified implementation of a SAGA-style distributed transaction coordinator is included, which includes
   consistency and persistence operations for multiple participants, abandoning atomicity and isolation.
 
+### Saga Distributed Transaction Lifecycle
+
+The engine implements a **Backward Recovery** strategy to ensure eventual consistency across distributed participants.
+
+#### 1. Transaction Phases
+- **Prepare Phase**: The coordinator executes all participants' `doPrepare` logic in defined step groups.
+- **Commit Phase**: Triggered only if **all** prepare steps succeed. Executes participants' `doCommit` logic.
+- **Compensate Phase**: Triggered if **any** step fails in either the Prepare or Commit phases. Executes the `doCompensate` logic of participants.
+
+#### 2. Failure Recovery Strategy (Decision Matrix)
+
+| Failure Phase | Triggering Condition | Engine Action | Final State |
+| :--- | :--- | :--- | :--- |
+| **Prepare** | Logic Error / Timeout | **Compensate** | `FAILED` (Consistent Rollback) |
+| **Commit** | Physical Failure / Timeout | **Compensate** | `FAILED` (Consistent Rollback) |
+| **Compensate** | Any Error / Timeout | **Halt & Suspend** | `SUSPENDED` (Needs Manual Fix) |
+
+#### 3. Key Design Principles
+- **Selective Compensation**: Only participants that **successfully completed** their Prepare phase will be compensated. Steps that never started or failed during Prepare are skipped during rollback.
+- **Result Atomicity (Map-based)**: Step results are tracked in a `Map`. A manual fix or successful retry will overwrite previous failures, allowing the state machine to advance correctly.
+- **Suspended State**: If compensation fails, the transaction is "Hanging". Operators can use the **Manual Fix** capability via the UI/API to correct the participant state and then trigger **Retry Phase** to complete the rollback.
+- **Persistence Guarantee**: Every state transition is backed by Akka Persistence (Event Sourcing). If the coordinator crashes or passivates, it recovers its exact progress, including the list of successfully prepared steps.
+
 This document first introduces the concepts and relationships of the components in the scaffold, and then provides
 detailed code examples in order.
 

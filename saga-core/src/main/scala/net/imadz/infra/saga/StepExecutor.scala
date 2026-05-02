@@ -75,7 +75,7 @@ object StepExecutor {
                           circuitBreakerOpen: Boolean = false,
                           replyTo: Option[String] = None
                         ) extends CborSerializable {
-    def canRetry: Boolean = this.status == Ongoing
+    def canRetry: Boolean = this.status == Ongoing || this.status == Failed
 
     def canScheduleRetryOnTimedOut(defaultMaxRetries: Int): Boolean = this.status == Ongoing && !this.maxRetriesReached(defaultMaxRetries)
 

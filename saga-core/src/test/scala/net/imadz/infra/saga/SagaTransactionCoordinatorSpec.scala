@@ -279,19 +279,40 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       // Increase globalTimeout to 100 seconds to avoid timeout during the test
       val eventSourcedTestKit = createEventSourcedTestKit((_, _) => createSuccessfulStepExecutor(), persistenceId = "test-saga-paused", globalTimeout = 100.seconds)
       
-      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, None, "test-trace-id", singleStep = true))
+      val prob = createTestProbe[TransactionResult]()
+      // It will pause immediately after TransactionStarted
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.StartTransaction(transactionId, steps, Some(prob.ref), "test-trace-id", singleStep = true))
       
       eventually(timeout(10.seconds)) {
         eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.InProgress
         eventSourcedTestKit.getState().isPaused shouldBe true
       }
       
-      val prob = createTestProbe[TransactionResult]()
+      // It paused after TransactionStarted. Proceed to StartStepGroup (Prepare)
       eventSourcedTestKit.runCommand(SagaTransactionCoordinator.ProceedNext(Some(prob.ref)))
       
-      val result = prob.receiveMessage(30.seconds)
-      result.successful shouldBe true
-      result.state.status shouldBe SagaTransactionCoordinator.Completed
+      // Now it will execute step1. Since singleStep=true, it will pause after PhaseSucceeded(Prepare) because there is only 1 group
+      eventually(timeout(10.seconds)) {
+        eventSourcedTestKit.getState().status shouldBe SagaTransactionCoordinator.InProgress
+        eventSourcedTestKit.getState().isPaused shouldBe true
+        eventSourcedTestKit.getState().currentPhase shouldBe CommitPhase // The phase gets advanced before pausing in state? Wait, state transitions on PhaseSucceeded to CommitPhase!
+      }
+      
+      // Proceed to Start Commit phase. Commit phase does not pause on singleStep in handlePhaseCompletion, so it will run to Completion
+      eventSourcedTestKit.runCommand(SagaTransactionCoordinator.ProceedNext(Some(prob.ref)))
+
+      // Check for completion event
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionStarted]("test-saga-paused")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionPaused]("test-saga-paused")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionResumed]("test-saga-paused")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.StepGroupStarted]("test-saga-paused")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.StepResultReceived]("test-saga-paused")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-paused")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionPaused]("test-saga-paused")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionResumed]("test-saga-paused")
+      // No steps in commit phase, so it jumps directly to PhaseSucceeded and TransactionCompleted
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.PhaseSucceeded]("test-saga-paused")
+      eventSourcedTestKit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinator.TransactionCompleted]("test-saga-paused")
     }
 
     "handle ResolveSuspended when Suspended" in {

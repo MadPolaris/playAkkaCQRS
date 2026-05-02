@@ -16,10 +16,9 @@ object StepExecutorEventHandler {
       case ManualFixCompleted(_, _, _, _, result) =>
         state.copy(status = Succeed, result = Some(result.asInstanceOf[SagaResult[R]]))
       case OperationFailed(_, _, _, _, error) =>
-        val newStatus = if (error.isInstanceOf[net.imadz.infra.saga.SagaParticipant.RetryableFailure]) Ongoing else Failed
-        state.copy(status = newStatus, lastError = Some(error))
+        state.copy(status = Failed, lastError = Some(error))
       case RetryScheduled(_, _, _, _, _) =>
-        state.copy(retries = state.retries + 1, status = Ongoing)
+        state.copy(retries = state.retries + 1)
 
     }
   }
