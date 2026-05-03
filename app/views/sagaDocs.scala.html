@@ -1,0 +1,157 @@
+@(activePage: String, markdownContent: String)(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="@messages.lang.code">
+<head>
+    <meta charset="UTF-8">
+    <title>Saga Framework - @activePage.capitalize</title>
+    <!-- GitHub Markdown CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
+    <!-- Highlight.js -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/scala.min.js"></script>
+    
+    <!-- Mermaid JS -->
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@@10.9.1/dist/mermaid.min.js"></script>
+    <!-- Marked JS -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@@12.0.0/lib/marked.umd.min.js"></script>
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; background-color: #0d1117; color: #c9d1d9; margin: 0; padding: 0; }
+        .container { display: flex; max-width: 1400px; margin: 0 auto; min-height: 100vh; }
+        header { background: #161b22; border-bottom: 1px solid #30363d; padding: 15px 40px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 1000; }
+        header h1 { margin: 0; font-size: 1.2rem; color: #58a6ff; }
+        header h1 a { color: inherit; text-decoration: none; }
+        .nav-links a { color: #8b949e; text-decoration: none; margin-left: 20px; font-size: 0.9rem; transition: color 0.2s; }
+        .nav-links a:hover { color: #58a6ff; }
+        .nav-links a.active { color: #f0f6fc; font-weight: bold; }
+        aside { width: 280px; background: #0d1117; border-right: 1px solid #30363d; padding: 40px 20px; position: sticky; top: 60px; height: calc(100vh - 60px); overflow-y: auto; box-sizing: border-box; }
+        .sidebar-nav h3 { font-size: 0.75rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 15px; }
+        .sidebar-nav ul { list-style: none; padding: 0; margin: 0; }
+        .sidebar-nav li { margin-bottom: 8px; }
+        .sidebar-nav a { display: block; padding: 8px 12px; color: #c9d1d9; text-decoration: none; border-radius: 6px; font-size: 0.95rem; transition: background 0.2s, color 0.2s; }
+        .sidebar-nav a:hover { background: #161b22; color: #58a6ff; }
+        .sidebar-nav a.active { background: #1f6feb; color: #ffffff; font-weight: bold; }
+        main { flex: 1; padding: 40px 60px; overflow-x: hidden; }
+        .markdown-body { background-color: transparent !important; color: #c9d1d9 !important; font-size: 16px; line-height: 1.6; }
+        .markdown-body h1, .markdown-body h2 { border-bottom: 1px solid #30363d !important; padding-bottom: 0.3em; }
+        .markdown-body pre { background-color: #161b22 !important; border: 1px solid #30363d !important; border-radius: 6px; padding: 16px; overflow: auto; margin: 1em 0; }
+        .markdown-body code { background-color: rgba(110, 118, 129, 0.4); border-radius: 6px; padding: 0.2em 0.4em; font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace; }
+        .markdown-body pre code { background-color: transparent !important; padding: 0; border-radius: 0; }
+        .mermaid { background: #161b22; padding: 24px; border: 1px solid #30363d; border-radius: 8px; margin: 24px 0; display: flex; justify-content: center; min-height: 50px; overflow-x: auto; }
+        footer { margin-top: 60px; padding-top: 20px; border-top: 1px solid #30363d; color: #8b949e; font-size: 0.8rem; text-align: center; padding-bottom: 40px; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0d1117; z-index: 9999; display: flex; align-items: center; justify-content: center; transition: opacity 0.5s; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #30363d; border-top: 4px solid #58a6ff; border-radius: 50%; animation: spin 1s linear infinite; }
+        @@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay"><div class="spinner"></div></div>
+    <header>
+        <h1><a href="/showcase">Saga Framework Showcase</a></h1>
+        <div class="nav-links">
+            <a href="/showcase">@messages("showcase.dashboard")</a>
+            <a href="/docs/saga/overview" class="active">@messages("showcase.documentation")</a>
+            <a href="/lang/en">EN</a>
+            <a href="/lang/zh">ZH</a>
+        </div>
+    </header>
+    <div class="container">
+        <aside>
+            <nav class="sidebar-nav">
+                <h3>@messages("showcase.documentation")</h3>
+                <ul>
+                    <li><a href="/docs/saga/overview" class="@if(activePage == "overview"){active}">@messages("showcase.docs.overview")</a></li>
+                    <li><a href="/docs/saga/architecture" class="@if(activePage == "architecture"){active}">@messages("showcase.docs.architecture")</a></li>
+                    <li><a href="/docs/saga/guide" class="@if(activePage == "guide"){active}">@messages("showcase.docs.guide")</a></li>
+                </ul>
+            </nav>
+        </aside>
+        <main>
+            <article id="content" class="markdown-body"></article>
+            <footer>&copy; 2026 iMadz Saga Framework. All rights reserved.</footer>
+        </main>
+    </div>
+
+    <script id="markdown-data" type="text/markdown">@Html(markdownContent)</script>
+
+    <script>
+        window.addEventListener('load', async () => {
+            const overlay = document.getElementById('loading-overlay');
+            
+            try {
+                // 1. Initialize Mermaid
+                mermaid.initialize({
+                    startOnLoad: false,
+                    theme: 'dark',
+                    securityLevel: 'loose',
+                    themeVariables: {
+                        darkMode: true,
+                        background: '#161b22',
+                        primaryColor: '#58a6ff',
+                        mainBkg: '#161b22',
+                        textColor: '#c9d1d9'
+                    }
+                });
+
+                // 2. Configure Marked
+                const rawMarkdown = document.getElementById('markdown-data').textContent;
+                
+                // Use custom renderer to handle mermaid and highlight.js
+                const renderer = new marked.Renderer();
+                renderer.code = function(code, lang) {
+                    // Detect if code is an object (marked v12) or string (marked < v12)
+                    let text = code;
+                    let language = lang;
+                    if (typeof code === 'object') {
+                        text = code.text;
+                        language = code.lang;
+                    }
+                    
+                    if (language === 'mermaid') {
+                        return '<div class="mermaid-container" style="display:none">' + 
+                               text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") + 
+                               '</div><div class="mermaid-target"></div>';
+                    }
+                    
+                    try {
+                        const validLang = (language && hljs.getLanguage(language)) ? language : 'plaintext';
+                        const highlighted = hljs.highlight(text, { language: validLang }).value;
+                        return '<pre><code class="hljs language-' + validLang + '">' + highlighted + '</code></pre>';
+                    } catch (e) {
+                        return '<pre><code>' + text + '</code></pre>';
+                    }
+                };
+
+                document.getElementById('content').innerHTML = marked.parse(rawMarkdown, { renderer: renderer });
+
+                // 3. Render Mermaid
+                const containers = document.querySelectorAll('.mermaid-container');
+                const targets = document.querySelectorAll('.mermaid-target');
+                
+                for (let i = 0; i < containers.length; i++) {
+                    const source = containers[i].textContent.trim();
+                    const target = targets[i];
+                    if (source) {
+                        try {
+                            const { svg } = await mermaid.render('mermaid-svg-' + i, source);
+                            target.innerHTML = svg;
+                            target.className = 'mermaid';
+                        } catch (err) {
+                            console.error('Mermaid error:', err);
+                            target.innerHTML = '<pre style="color:#f85149">Mermaid Error</pre>';
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Initialization error:', err);
+                document.getElementById('content').innerHTML = '<div style="color:#f85149">Error loading documentation. Please check console for details.</div>';
+            } finally {
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 500);
+            }
+        });
+    </script>
+</body>
+</html>

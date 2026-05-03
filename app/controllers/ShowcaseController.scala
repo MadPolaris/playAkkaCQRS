@@ -79,8 +79,36 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
   }))
 
   // --- Actions ---
+  def sagaDocs(page: String) = Action { implicit request =>
+    val lang = messagesApi.preferred(request).lang.code
+    val suffix = if (lang == "zh") "_zh" else ""
+
+    val fileName = page.toLowerCase match {
+      case "overview" => s"index$suffix.md"
+      case "architecture" => s"architecture$suffix.md"
+      case "guide" => s"usage_guide$suffix.md"
+      case _ => s"index$suffix.md"
+    }
+
+    val filePath = s"knowledge_base/saga_framework/$fileName"
+    val content = try {
+      val source = scala.io.Source.fromFile(filePath)
+      val text = source.mkString
+      source.close()
+      text
+    } catch {
+      case _: Exception => s"# Error\n\nDocument '$page' not found at $filePath."
+    }
+
+    Ok(views.html.sagaDocs(page, content)).withHeaders(
+      "Content-Security-Policy" -> "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; connect-src 'self' ws: wss:;"
+    )
+  }
+
   def index() = Action { implicit request: Request[AnyContent] =>
-    Ok(views.html.showcase())
+    Ok(views.html.showcase()).withHeaders(
+      "Content-Security-Policy" -> "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; connect-src 'self' ws: wss:;"
+    )
   }
 
   def setLang(code: String) = Action { implicit request =>
