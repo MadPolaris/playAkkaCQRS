@@ -25,8 +25,9 @@ object SagaTransactionCoordinatorRecoveryHandler {
                          ): Unit = {
     context.log.info(s"[TraceID: ${state.traceId}] RecoveryCompleted for coordinator, state: $state")
     if ((state.status == InProgress || state.status == Compensating) && !state.isPaused) {
-      timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, globalTimeout)
-      context.log.info(s"[TraceID: ${state.traceId}] Resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase}")
+      val actualTimeout = state.timeout.getOrElse(globalTimeout)
+      timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, actualTimeout)
+      context.log.info(s"[TraceID: ${state.traceId}] Resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase} with timeout $actualTimeout")
       
       val plan = ExecutionPlan(state.steps)
       val stepsInCurrentGroup = plan.getSteps(state.currentPhase, state.currentStepGroup)

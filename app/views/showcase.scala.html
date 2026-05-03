@@ -88,6 +88,11 @@
 
         .replay-panel { margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; border-top: 4px solid #17a2b8; }
         .replay-panel input { width: 100%; padding: 10px; background: #111; color: #00d4ff; border: 1px solid #444; border-radius: 4px; margin-bottom: 10px; font-family: monospace; }
+        
+        .scenario-info { margin-top: 15px; padding: 12px; background: rgba(0, 212, 255, 0.1); border-radius: 4px; border-left: 4px solid #00d4ff; font-size: 0.85rem; }
+        .scenario-info h3 { margin: 0 0 5px 0; font-size: 0.9rem; color: #00d4ff; }
+        .scenario-info p { margin: 0; line-height: 1.4; color: #ccc; }
+        .scenario-info .expectation { margin-top: 8px; font-style: italic; color: #ffca28; }
     </style>
 </head>
 <body>
@@ -109,7 +114,13 @@
                     </select>
                 </div>
 
-                <div style="margin-bottom: 15px; padding: 10px; background: #333; border-radius: 4px;">
+                <div id="scenarioDescription" class="scenario-info">
+                    <h3>Scenario Details</h3>
+                    <p id="scenarioText">Select a scenario to see details.</p>
+                    <div id="scenarioExpectation" class="expectation"></div>
+                </div>
+
+                <div style="margin-top: 15px; margin-bottom: 15px; padding: 10px; background: #333; border-radius: 4px;">
                     <input type="checkbox" id="singleStepMode"> <label for="singleStepMode">Single Step Mode</label>
                 </div>
                 <button class="btn btn-primary" id="startBtn">🚀 Start Transaction</button>
@@ -166,38 +177,17 @@
             </div>
             
             <div class="visualization" id="dagContainer">
-                <div class="phase-column">
+                <div class="phase-column" id="col-prepare">
                     <div class="phase-header" style="background: #ffca28; color: #000;">PREPARE</div>
-                    <div class="group-row" data-group="1">
-                        <div class="node pending" id="node-Step-A-prepare" data-step="Step-A" data-phase="prepare"><span class="label">Step A</span><span class="info">Group 1</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                    </div>
-                    <div class="group-connector"></div>
-                    <div class="group-row" data-group="2">
-                        <div class="node pending" id="node-Step-B-prepare" data-step="Step-B" data-phase="prepare"><span class="label">Step B</span><span class="info">Group 2</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                        <div class="node pending" id="node-Step-C-prepare" data-step="Step-C" data-phase="prepare"><span class="label">Step C</span><span class="info">Group 2</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                    </div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">Ready.</div>
                 </div>
-                <div class="phase-column">
+                <div class="phase-column" id="col-commit">
                     <div class="phase-header" style="background: #4caf50; color: #fff;">COMMIT</div>
-                    <div class="group-row" data-group="1">
-                        <div class="node pending" id="node-Step-A-commit" data-step="Step-A" data-phase="commit"><span class="label">Step A</span><span class="info">Group 1</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                    </div>
-                    <div class="group-connector"></div>
-                    <div class="group-row" data-group="2">
-                        <div class="node pending" id="node-Step-B-commit" data-step="Step-B" data-phase="commit"><span class="label">Step B</span><span class="info">Group 2</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                        <div class="node pending" id="node-Step-C-commit" data-step="Step-C" data-phase="commit"><span class="label">Step C</span><span class="info">Group 2</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                    </div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">Ready.</div>
                 </div>
-                <div class="phase-column">
+                <div class="phase-column" id="col-compensate">
                     <div class="phase-header" style="background: #f44336; color: #fff;">COMPENSATE</div>
-                    <div class="group-row" data-group="2">
-                        <div class="node pending" id="node-Step-B-compensate" data-step="Step-B" data-phase="compensate"><span class="label">Step B</span><span class="info">Group 2</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                        <div class="node pending" id="node-Step-C-compensate" data-step="Step-C" data-phase="compensate"><span class="label">Step C</span><span class="info">Group 2</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                    </div>
-                    <div class="group-connector"></div>
-                    <div class="group-row" data-group="1">
-                        <div class="node pending" id="node-Step-A-compensate" data-step="Step-A" data-phase="compensate"><span class="label">Step A</span><span class="info">Group 1</span><button class="btn btn-success btn-small fix-btn">🛠️ Fix</button></div>
-                    </div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">Ready.</div>
                 </div>
                 <div class="logs-container">
                     <div class="logs" id="logContainer">
@@ -216,6 +206,75 @@
         const replayBtn = document.getElementById('replayBtn');
         const replayTxIdInput = document.getElementById('replayTxId');
         let currentTransactionId = null;
+
+        const scenarioInfo = {
+            'happy': {
+                description: 'Tests the standard successful flow where all steps in all phases complete without error.',
+                expectation: 'Expected: PREPARE phase (Step A & B) succeeds -> COMMIT phase (Step A & B) succeeds -> Transaction COMPLETED.'
+            },
+            'retry': {
+                description: 'Tests automatic retry logic. Step B is configured to fail twice with a retryable error before succeeding.',
+                expectation: 'Expected: Step B will show "retrying" twice, then eventually succeed. Transaction COMPLETED.'
+            },
+            'compensation': {
+                description: 'Tests backward recovery (Saga Compensation). Step B fails with a non-retryable error during Prepare phase.',
+                expectation: 'Expected: Step B fails -> Engine initiates COMPENSATE phase -> Step A & B compensated -> Transaction FAILED (Consistent).'
+            },
+            'suspended': {
+                description: 'Tests manual intervention. A failure occurs during the Compensation phase, leaving the system in an inconsistent state.',
+                expectation: 'Expected: Prepare fails -> Compensate starts -> Compensate fails -> Transaction SUSPENDED. Requires manual fix.'
+            },
+            'timeout': {
+                description: 'Tests global transaction timeout. Step B is configured to hang, exceeding the allocated time for the step.',
+                expectation: 'Expected: Step B times out -> Engine detects timeout -> Compensation initiated -> Transaction FAILED.'
+            },
+            'custom': {
+                description: 'Manual fault injection mode. Configure individual step behaviors using the panels below.',
+                expectation: 'Expected: Dependent on your configuration.'
+            }
+        };
+
+        function updateScenarioDetails() {
+            const sid = document.getElementById('scenarioId').value;
+            const info = scenarioInfo[sid];
+            if (info) {
+                document.getElementById('scenarioText').innerText = info.description;
+                document.getElementById('scenarioExpectation').innerText = info.expectation;
+            }
+        }
+        document.getElementById('scenarioId').onchange = updateScenarioDetails;
+        updateScenarioDetails();
+
+        function renderDAG(steps) {
+            const groups = {};
+            steps.forEach(s => {
+                if (!groups[s.stepGroup]) groups[s.stepGroup] = [];
+                if (!groups[s.stepGroup].includes(s.stepId)) groups[s.stepGroup].push(s.stepId);
+            });
+            const sortedGroups = Object.keys(groups).sort((a, b) => parseInt(a) - parseInt(b));
+
+            function buildCol(phase, title, bg, color, reverseGroups) {
+                let html = '<div class="phase-header" style="background: ' + bg + '; color: ' + color + ';">' + title + '</div>';
+                let groupsToRender = reverseGroups ? [...sortedGroups].reverse() : sortedGroups;
+                groupsToRender.forEach((g, idx) => {
+                    html += '<div class="group-row" data-group="' + g + '" data-phase="' + phase.toLowerCase() + '">';
+                    groups[g].forEach(sid => {
+                        html += '<div class="node pending" id="node-' + sid + '-' + phase.toLowerCase() + '" data-step="' + sid + '" data-phase="' + phase.toLowerCase() + '">';
+                        html += '<span class="label">' + sid.replace('-', ' ') + '</span>';
+                        html += '<span class="info">Group ' + g + '</span>';
+                        html += '<button class="btn btn-success btn-small fix-btn">🛠️ Fix</button>';
+                        html += '</div>';
+                    });
+                    html += '</div>';
+                    if (idx < groupsToRender.length - 1) html += '<div class="group-connector"></div>';
+                });
+                return html;
+            }
+
+            document.getElementById('col-prepare').innerHTML = buildCol('PREPARE', 'PREPARE', '#ffca28', '#000', false);
+            document.getElementById('col-commit').innerHTML = buildCol('COMMIT', 'COMMIT', '#4caf50', '#fff', false);
+            document.getElementById('col-compensate').innerHTML = buildCol('COMPENSATE', 'COMPENSATE', '#f44336', '#fff', true);
+        }
 
         function addLog(type, msg) {
             const entry = document.createElement('div');
@@ -238,8 +297,8 @@
             const statusInfo = document.getElementById('statusInfo');
             
             if (event.type === 'TransactionStarted') {
-                document.querySelectorAll('.node').forEach(n => { n.className = 'node pending'; n.classList.remove('suspended'); });
-                addLog(event.type, 'Transaction started.');
+                renderDAG(data.steps);
+                addLog(event.type, 'Transaction started. TraceID: ' + data.traceId);
                 currentTransactionId = data.transactionId;
                 statusInfo.innerText = 'IN PROGRESS';
                 statusInfo.style.color = '#ffca28';
@@ -249,15 +308,43 @@
                 manualFixPanel.style.display = 'none';
             } else if (event.type === 'StepOngoing') {
                 updateNode(data.stepId, data.phase, 'ongoing');
+                addLog(event.type, 'Step ' + data.stepId + ' (' + data.phase + ') is ongoing.');
             } else if (event.type === 'StepCompleted') {
                 updateNode(data.stepId, data.phase, 'success');
+                addLog(event.type, 'Step ' + data.stepId + ' (' + data.phase + ') COMPLETED' + (data.isManual ? ' (via Manual Fix)' : ''));
             } else if (event.type === 'StepFailed') {
                 const isRetryable = data.error && data.error.indexOf('Max retries') === -1 && (data.error.indexOf('Retryable') !== -1 || data.error.indexOf('attempt') !== -1 || data.error.indexOf('timed out') !== -1 || data.error.indexOf('Retry #') !== -1);
                 updateNode(data.stepId, data.phase, isRetryable ? 'retrying' : 'failed');
                 if (!isRetryable) {
-                    addLog(event.type, 'Step ' + data.stepId + ' FAILED.');
+                    addLog(event.type, 'Step ' + data.stepId + ' (' + data.phase + ') FAILED: ' + data.error);
                     retryBtn.style.display = 'block';
+                } else {
+                    addLog(event.type, 'Step ' + data.stepId + ' (' + data.phase + ') RETRYING: ' + data.error);
                 }
+            } else if (event.type === 'PhaseCompleted') {
+                const phaseKey = (data.phase || '').toLowerCase().replace('phase', '');
+                document.querySelectorAll('.node[data-phase="' + phaseKey + '"]').forEach(n => {
+                    if (n.classList.contains('ongoing') || n.classList.contains('retrying')) {
+                        n.className = 'node failed';
+                    }
+                });
+                addLog(event.type, 'Phase ' + data.phase + ' finished.');
+            } else if (event.type === 'StepGroupStarted') {
+                const phaseKey = (data.phase || '').toLowerCase().replace('phase', '');
+                // De-highlight other groups in THIS phase
+                document.querySelectorAll('.group-row[data-group][data-phase="' + phaseKey + '"]').forEach(g => {
+                   g.style.opacity = '0.5';
+                   g.style.border = 'none';
+                });
+                // Highlight CURRENT group
+                const groupEl = document.querySelector('.phase-column[id="col-' + phaseKey + '"] .group-row[data-group="' + data.group + '"]');
+                if (groupEl) {
+                    groupEl.style.opacity = '1';
+                    groupEl.style.border = '1px dashed #00d4ff';
+                    groupEl.style.borderRadius = '8px';
+                    groupEl.style.padding = '5px';
+                }
+                addLog(event.type, 'Starting Group ' + data.group + ' in ' + data.phase);
             } else if (event.type === 'TransactionCompleted') {
                 addLog(event.type, 'SUCCESS: ALL STEPS COMPLETED');
                 statusInfo.innerText = 'COMPLETED (SUCCESS)';

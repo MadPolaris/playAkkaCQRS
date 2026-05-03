@@ -30,11 +30,12 @@ object SagaTransactionCoordinatorCommandHandler {
                       globalTimeout: FiniteDuration
                     )(implicit ec: ExecutionContext): (State, Command) => Effect[Event, State] = { (state, command) =>
     command match {
-      case StartTransaction(transactionId, steps, replyTo, reqTraceId, singleStep) if state.status == Created =>
+      case StartTransaction(transactionId, steps, replyTo, reqTraceId, singleStep, timeoutOpt) if state.status == Created =>
         val traceId = if (reqTraceId.isEmpty) transactionId else reqTraceId
-        timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, globalTimeout)
+        val actualTimeout = timeoutOpt.getOrElse(globalTimeout)
+        timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, actualTimeout)
         
-        Effect.persist[Event, State](TransactionStarted(transactionId, steps, traceId, singleStep))
+        Effect.persist[Event, State](TransactionStarted(transactionId, steps, traceId, singleStep, Some(actualTimeout)))
           .thenRun { (stateNew: State) =>
             context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionStarted(transactionId, steps, traceId))
             if (singleStep) {
@@ -269,6 +270,15 @@ object SagaTransactionCoordinatorCommandHandler {
     if (phase != CompensatePhase) {
       state.transactionId match {
         case Some(tid) =>
+          // Stop all current executors in the failed phase
+          state.pendingSteps.foreach { sid =>
+            val name = s"$tid-$sid-$phase"
+            context.child(name).foreach { child =>
+              context.log.info(s"[TraceID: ${state.traceId}] Stopping executor $name due to phase $phase failure")
+              child.asInstanceOf[ActorRef[StepExecutor.Command]] ! StepExecutor.Stop
+            }
+          }
+
           val persistEffect = Effect.persist[Event, State](PhaseFailed(tid, phase))
           if (state.singleStep) {
             persistEffect.thenRun { (stateNew: State) =>

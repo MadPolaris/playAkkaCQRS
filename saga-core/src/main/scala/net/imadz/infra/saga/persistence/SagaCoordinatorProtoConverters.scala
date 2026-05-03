@@ -65,18 +65,21 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
   // --- Event Converters ---
 
   object TransactionStartedConv extends ProtoConverter[TransactionStarted, TransactionStartedPO] {
+    import scala.concurrent.duration._
     override def toProto(e: TransactionStarted): TransactionStartedPO = TransactionStartedPO(
       transactionId = e.transactionId,
       steps = e.steps.map(SagaStepConv.toProto),
       traceId = e.traceId,
-      singleStep = e.singleStep
+      singleStep = e.singleStep,
+      timeoutMillis = e.timeout.map(_.toMillis).getOrElse(0L)
     )
 
     override def fromProto(p: TransactionStartedPO): TransactionStarted = TransactionStarted(
       transactionId = p.transactionId,
       steps = p.steps.map(SagaStepConv.fromProto).toList,
       traceId = p.traceId,
-      singleStep = p.singleStep
+      singleStep = p.singleStep,
+      timeout = if (p.timeoutMillis > 0) Some(p.timeoutMillis.milliseconds) else None
     )
   }
 
@@ -248,28 +251,33 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
       isPaused = s.isPaused,
       currentStepGroup = s.currentStepGroup,
       pendingSteps = s.pendingSteps.toList,
-      phaseResults = s.phaseResults.map(PhaseResultConv.toProto)
+      phaseResults = s.phaseResults.map(PhaseResultConv.toProto),
+      timeoutMillis = s.timeout.map(_.toMillis).getOrElse(0L)
     )
 
-    override def fromProto(p: CoordinatorStatePO): State = State(
-      transactionId = Some(p.transactionId).filter(_.nonEmpty),
-      steps = p.steps.map(SagaStepConv.fromProto).toList,
-      currentPhase = PhaseConv.fromProto(p.currentPhase),
-      status = p.status match {
-        case CoordinatorStatusPO.TRANSACTION_CREATED => Created
-        case CoordinatorStatusPO.TRANSACTION_IN_PROGRESS => InProgress
-        case CoordinatorStatusPO.TRANSACTION_COMPLETED => Completed
-        case CoordinatorStatusPO.TRANSACTION_FAILED => Failed
-        case CoordinatorStatusPO.TRANSACTION_COMPENSATING => Compensating
-        case CoordinatorStatusPO.TRANSACTION_SUSPENDED => Suspended
-        case _ => Created
-      },
-      traceId = p.traceId,
-      singleStep = p.singleStep,
-      isPaused = p.isPaused,
-      currentStepGroup = if (p.currentStepGroup == 0) 1 else p.currentStepGroup,
-      pendingSteps = p.pendingSteps.toSet,
-      phaseResults = p.phaseResults.map(PhaseResultConv.fromProto).toList
-    )
+    override def fromProto(p: CoordinatorStatePO): State = {
+      import scala.concurrent.duration._
+      State(
+        transactionId = Some(p.transactionId).filter(_.nonEmpty),
+        steps = p.steps.map(SagaStepConv.fromProto).toList,
+        currentPhase = PhaseConv.fromProto(p.currentPhase),
+        status = p.status match {
+          case CoordinatorStatusPO.TRANSACTION_CREATED => Created
+          case CoordinatorStatusPO.TRANSACTION_IN_PROGRESS => InProgress
+          case CoordinatorStatusPO.TRANSACTION_COMPLETED => Completed
+          case CoordinatorStatusPO.TRANSACTION_FAILED => Failed
+          case CoordinatorStatusPO.TRANSACTION_COMPENSATING => Compensating
+          case CoordinatorStatusPO.TRANSACTION_SUSPENDED => Suspended
+          case _ => Created
+        },
+        traceId = p.traceId,
+        singleStep = p.singleStep,
+        isPaused = p.isPaused,
+        currentStepGroup = if (p.currentStepGroup == 0) 1 else p.currentStepGroup,
+        pendingSteps = p.pendingSteps.toSet,
+        phaseResults = p.phaseResults.map(PhaseResultConv.fromProto).toList,
+        timeout = if (p.timeoutMillis > 0) Some(p.timeoutMillis.milliseconds) else None
+      )
+    }
   }
 }

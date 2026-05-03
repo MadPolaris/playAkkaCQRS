@@ -27,11 +27,15 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
   implicit val typedSystem: ActorSystem[Nothing] = system.toTyped
 
   // --- JSON Serialization ---
+  implicit val stepInfoWrites: Writes[SagaProgressEvent.StepInfo] = Json.writes[SagaProgressEvent.StepInfo]
   implicit val sagaProgressEventWrites: Writes[SagaProgressEvent] = Writes {
     case e: SagaProgressEvent.TransactionStarted => Json.obj("type" -> "TransactionStarted", "data" -> Json.obj("transactionId" -> e.transactionId, "steps" -> e.steps, "traceId" -> e.traceId))
     case e: SagaProgressEvent.StepOngoing => Json.obj("type" -> "StepOngoing", "data" -> Json.obj("transactionId" -> e.transactionId, "stepId" -> e.stepId, "phase" -> e.phase, "traceId" -> e.traceId))
     case e: SagaProgressEvent.StepCompleted => Json.obj("type" -> "StepCompleted", "data" -> Json.obj("transactionId" -> e.transactionId, "stepId" -> e.stepId, "phase" -> e.phase, "traceId" -> e.traceId, "isManual" -> e.isManual))
     case e: SagaProgressEvent.StepFailed => Json.obj("type" -> "StepFailed", "data" -> Json.obj("transactionId" -> e.transactionId, "stepId" -> e.stepId, "phase" -> e.phase, "error" -> e.error, "traceId" -> e.traceId))
+    case e: SagaProgressEvent.PhaseStarted => Json.obj("type" -> "PhaseStarted", "data" -> Json.obj("transactionId" -> e.transactionId, "phase" -> e.phase, "traceId" -> e.traceId))
+    case e: SagaProgressEvent.PhaseCompleted => Json.obj("type" -> "PhaseCompleted", "data" -> Json.obj("transactionId" -> e.transactionId, "phase" -> e.phase, "traceId" -> e.traceId))
+    case e: SagaProgressEvent.StepGroupStarted => Json.obj("type" -> "StepGroupStarted", "data" -> Json.obj("transactionId" -> e.transactionId, "phase" -> e.phase, "group" -> e.group, "traceId" -> e.traceId))
     case e: SagaProgressEvent.TransactionCompleted => Json.obj("type" -> "TransactionCompleted", "data" -> Json.obj("transactionId" -> e.transactionId, "traceId" -> e.traceId))
     case e: SagaProgressEvent.TransactionFailed => Json.obj("type" -> "TransactionFailed", "data" -> Json.obj("transactionId" -> e.transactionId, "reason" -> e.reason, "traceId" -> e.traceId))
     case e: SagaProgressEvent.TransactionSuspended => Json.obj("type" -> "TransactionSuspended", "data" -> Json.obj("transactionId" -> e.transactionId, "reason" -> e.reason, "traceId" -> e.traceId))
@@ -47,7 +51,12 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     def receive: Receive = {
       case e: SagaTransactionCoordinator.Event =>
         val pEvt = e match {
-          case ex: SagaTransactionCoordinator.TransactionStarted => SagaProgressEvent.TransactionStarted(ex.transactionId, ex.steps.map(_.stepId), ex.traceId)
+          case ex: SagaTransactionCoordinator.TransactionStarted =>
+            val stepsInfo = ex.steps.map(s => SagaProgressEvent.StepInfo(s.stepId, s.stepGroup)).distinct
+            SagaProgressEvent.TransactionStarted(ex.transactionId, stepsInfo, ex.traceId)
+          case ex: SagaTransactionCoordinator.PhaseSucceeded => SagaProgressEvent.PhaseCompleted(ex.transactionId, ex.phase.toString, "")
+          case ex: SagaTransactionCoordinator.PhaseFailed => SagaProgressEvent.PhaseCompleted(ex.transactionId, ex.phase.toString, "")
+          case ex: SagaTransactionCoordinator.StepGroupStarted => SagaProgressEvent.StepGroupStarted(ex.transactionId, ex.phase.toString, ex.group, "")
           case ex: SagaTransactionCoordinator.TransactionCompleted => SagaProgressEvent.TransactionCompleted(ex.transactionId, "")
           case ex: SagaTransactionCoordinator.TransactionFailed => SagaProgressEvent.TransactionFailed(ex.transactionId, ex.reason, "")
           case ex: SagaTransactionCoordinator.TransactionSuspended => SagaProgressEvent.TransactionSuspended(ex.transactionId, ex.reason, "")
@@ -153,7 +162,9 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     }
 
     import net.imadz.application.services.MoneyTransferService
-    sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! SagaTransactionCoordinator.StartTransaction(transactionId, steps, None, traceId, singleStep)
+    import scala.concurrent.duration._
+    val timeout = if (scenarioId == "timeout") Some(15.seconds) else None
+    sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! SagaTransactionCoordinator.StartTransaction(transactionId, steps, None, traceId, singleStep, timeout)
     Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId, "traceId" -> traceId, "scenario" -> scenario.name))
   }
 
@@ -240,7 +251,9 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
 
     val coordEnvelopes = coordWithTs.map { case (ts, evt) =>
       val pEvt = evt match {
-        case e: TransactionStarted => SagaProgressEvent.TransactionStarted(e.transactionId, e.steps.map(_.stepId), e.traceId)
+        case e: TransactionStarted =>
+          val stepsInfo = e.steps.map(s => SagaProgressEvent.StepInfo(s.stepId, s.stepGroup)).distinct
+          SagaProgressEvent.TransactionStarted(e.transactionId, stepsInfo, e.traceId)
         case e: TransactionCompleted => SagaProgressEvent.TransactionCompleted(e.transactionId, "")
         case e: TransactionFailed => SagaProgressEvent.TransactionFailed(e.transactionId, e.reason, "")
         case e: TransactionSuspended => SagaProgressEvent.TransactionSuspended(e.transactionId, e.reason, "")

@@ -166,6 +166,10 @@ object StepExecutorCommandHandler {
           })
           .thenStop()
 
+      case Stop =>
+        timers.cancelAll()
+        Effect.stop()
+
       case msg =>
         actorContext.log.warn(s"msg: $msg is not processed")
         Effect.none

@@ -29,7 +29,7 @@ object SagaTransactionCoordinator {
    * The commands that the SagaTransactionCoordinator can process.
    */
   sealed trait Command extends CborSerializable
-  case class StartTransaction[E, R, C](transactionId: String, steps: List[SagaTransactionStep[E, R, C]], replyTo: Option[ActorRef[TransactionResult]], traceId: String = "", singleStep: Boolean = false) extends Command
+  case class StartTransaction[E, R, C](transactionId: String, steps: List[SagaTransactionStep[E, R, C]], replyTo: Option[ActorRef[TransactionResult]], traceId: String = "", singleStep: Boolean = false, timeout: Option[FiniteDuration] = None) extends Command
   case object TransactionTimeout extends Command
   case class ProceedNext(replyTo: Option[ActorRef[TransactionResult]]) extends Command
   case class ResolveSuspended(replyTo: Option[ActorRef[TransactionResult]]) extends Command
@@ -120,7 +120,7 @@ object SagaTransactionCoordinator {
   sealed trait Event extends CborSerializable {
     def transactionId: String
   }
-  case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _, _]], traceId: String = "", singleStep: Boolean = false) extends Event
+  case class TransactionStarted(transactionId: String, steps: List[SagaTransactionStep[_, _, _]], traceId: String = "", singleStep: Boolean = false, timeout: Option[FiniteDuration] = None) extends Event
   case class PhaseSucceeded(transactionId: String, phase: TransactionPhase) extends Event
   case class StepGroupSucceeded(transactionId: String, phase: TransactionPhase, group: Int) extends Event
   case class PhaseFailed(transactionId: String, phase: TransactionPhase) extends Event
@@ -157,9 +157,9 @@ object SagaTransactionCoordinator {
                     currentStepGroup: Int = 1,
                     pendingSteps: Set[String] = Set.empty,
                     phaseResults: List[Either[RetryableOrNotException, Any]] = List.empty,
-                    successfulSteps: Set[String] = Set.empty
-                  )
-
+                    successfulSteps: Set[String] = Set.empty,
+                    timeout: Option[FiniteDuration] = None
+                    )
   /**
    * Overall status of the transaction.
    */

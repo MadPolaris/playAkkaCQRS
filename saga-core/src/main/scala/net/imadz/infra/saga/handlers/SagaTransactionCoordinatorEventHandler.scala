@@ -20,7 +20,7 @@ object SagaTransactionCoordinatorEventHandler {
     val plan = ExecutionPlan(state.steps)
     
     event match {
-      case TransactionStarted(transactionId, steps, traceId, singleStep) =>
+      case TransactionStarted(transactionId, steps, traceId, singleStep, timeout) =>
         val newPlan = ExecutionPlan(steps)
         state.copy(
           transactionId = Some(transactionId),
@@ -28,7 +28,8 @@ object SagaTransactionCoordinatorEventHandler {
           status = InProgress,
           traceId = traceId,
           singleStep = singleStep,
-          currentStepGroup = newPlan.firstGroupInPhase(PreparePhase)
+          currentStepGroup = newPlan.firstGroupInPhase(PreparePhase),
+          timeout = timeout
         )
 
       case TransactionPaused(_, _) =>
@@ -43,7 +44,9 @@ object SagaTransactionCoordinatorEventHandler {
             state.copy(
               currentPhase = CompensatePhase, 
               status = Compensating, 
-              currentStepGroup = plan.firstGroupInPhase(CompensatePhase)
+              currentStepGroup = plan.firstGroupInPhase(CompensatePhase),
+              successfulSteps = state.successfulSteps ++ state.pendingSteps,
+              pendingSteps = Set.empty
             )
           case CompensatePhase => state
         }

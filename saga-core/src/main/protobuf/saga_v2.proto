@@ -188,6 +188,7 @@ message TransactionStartedPO {
   repeated SagaTransactionStepPO steps = 2;
   string trace_id = 3;
   bool single_step = 4;
+  int64 timeout_millis = 5;
 }
 
 message TransactionPausedPO {
@@ -282,4 +283,5 @@ message CoordinatorStatePO {
   int32 current_step_group = 8;
   repeated string pending_steps = 9;
   repeated PhaseResultPO phase_results = 10;
+  int64 timeout_millis = 11;
 }

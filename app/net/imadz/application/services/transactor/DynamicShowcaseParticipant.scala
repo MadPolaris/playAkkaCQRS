@@ -18,7 +18,7 @@ object DynamicShowcaseParticipant {
 
   private val behaviors = new ConcurrentHashMap[String, Behavior]()
   // 核心计数器：Key 是 transactionId + stepId + phase
-  private val attemptCounters = new ConcurrentHashMap[String, Int]()
+  private val attemptCounters = new ConcurrentHashMap[String, Integer]()
 
   def setBehavior(stepId: String, behavior: Behavior): Unit = {
     behaviors.put(stepId, behavior)
@@ -83,7 +83,7 @@ class DynamicShowcaseParticipant(val participantId: String) extends SagaParticip
       case FailNonRetryable => 
         delay(randomDelay)(()).flatMap(_ => Future.failed(new Exception("NonRetryable: Manual non-retryable error")))
       case Timeout => 
-        delay(20.seconds)(Right(SagaResult("Timeout simulated")))
+        delay(1.minute)(Right(SagaResult("Timeout simulated")))
     }
   }
 

@@ -35,6 +35,7 @@ object StepExecutor {
   case class TimedOut[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
   case class QueryStatus[E, R, C](replyTo: ActorRef[State[E, R, C]]) extends Command
   case class ManualFix[E, R, C](replyTo: Option[ActorRef[StepResult[E, R, C]]]) extends Command
+  case object Stop extends Command
 
   /**
    * The results returned by the StepExecutor.
