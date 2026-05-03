@@ -14,7 +14,6 @@ target
 *.json
 *.db
 *.txt
-*.md
 .g8
 /.metals
 /project/project/.bloop

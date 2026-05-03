@@ -238,7 +238,6 @@ object SagaTransactionCoordinatorCommandHandler {
                 context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionCompleted(state.transactionId.get))
                 replyTo.foreach(_ ! TransactionResult(successful = true, stateNew))
               }
-              .thenStop()
         }
 
       case CompensatePhase =>
@@ -255,7 +254,6 @@ object SagaTransactionCoordinatorCommandHandler {
                 context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(TransactionFailed(state.transactionId.get, "transaction failed but compensated"))
                 replyTo.foreach(_ ! TransactionResult(successful = false, stateNew))
               }
-              .thenStop()
         }
     }
   }

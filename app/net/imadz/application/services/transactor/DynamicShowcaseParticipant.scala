@@ -83,7 +83,7 @@ class DynamicShowcaseParticipant(val participantId: String) extends SagaParticip
       case FailNonRetryable => 
         delay(randomDelay)(()).flatMap(_ => Future.failed(new Exception("NonRetryable: Manual non-retryable error")))
       case Timeout => 
-        delay(10.seconds)(Right(SagaResult("Timeout simulated")))
+        delay(20.seconds)(Right(SagaResult("Timeout simulated")))
     }
   }
 

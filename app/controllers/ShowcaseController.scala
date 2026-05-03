@@ -104,7 +104,11 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
 
     "timeout" -> Scenario("timeout", "Global Timeout", List(
       SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
-      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2)
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
+      SagaTransactionStep[Any, String, Any]("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
+      SagaTransactionStep[Any, String, Any]("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2)
     ), Map("Step-A" -> DynamicShowcaseParticipant.Success, "Step-B" -> DynamicShowcaseParticipant.Timeout))
   )
 

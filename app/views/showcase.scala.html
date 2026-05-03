@@ -252,7 +252,7 @@
             } else if (event.type === 'StepCompleted') {
                 updateNode(data.stepId, data.phase, 'success');
             } else if (event.type === 'StepFailed') {
-                const isRetryable = data.error && (data.error.indexOf('Retryable') !== -1 || data.error.indexOf('attempt') !== -1);
+                const isRetryable = data.error && data.error.indexOf('Max retries') === -1 && (data.error.indexOf('Retryable') !== -1 || data.error.indexOf('attempt') !== -1 || data.error.indexOf('timed out') !== -1 || data.error.indexOf('Retry #') !== -1);
                 updateNode(data.stepId, data.phase, isRetryable ? 'retrying' : 'failed');
                 if (!isRetryable) {
                     addLog(event.type, 'Step ' + data.stepId + ' FAILED.');

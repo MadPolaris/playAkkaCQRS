@@ -5,7 +5,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.testkit.scaladsl.EventSourcedBehaviorTestKit
 import akka.persistence.typed.PersistenceId
 import com.typesafe.config.ConfigFactory
-import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, SagaResult}
+import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, SagaResult}
 import net.imadz.infra.saga.SagaPhase.PreparePhase
 import net.imadz.infra.saga.StepExecutor._
 import org.scalatest.BeforeAndAfterEach
@@ -166,32 +166,30 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
       eventSourcedTestKit.getState().traceId shouldBe Some("test-trace-id")
     }
 
-    "recovery: retry when recovered in Failed state with RetryableFailure" in {
+    "recovery: do not retry when recovered in Failed state with RetryableFailure (max retries reached)" in {
       val persistenceId = "test-step-executor-recovery-failed"
-      val eventSourcedTestKit = EventSourcedBehaviorTestKit[Command, Event, State[String, String, Any]](
-        system,
-        stepExecutorBehavior(persistenceId)
-      )
+      val ref = spawn(stepExecutorBehavior(persistenceId))
       
       val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, AlwaysFailingParticipant, 5)
       val probe = createTestProbe[StepResult[String, String, Any]]()
       
       // 1. Execute and fail
-      eventSourcedTestKit.runCommand(Start("trx-failed", step, Some(probe.ref), "test-trace-id"))
+      ref ! Start("trx-failed", step, Some(probe.ref), "test-trace-id")
       
-      eventually(timeout(10.seconds)) {
-        eventSourcedTestKit.getState().status shouldBe Failed
-      }
-      val initialRetries = eventSourcedTestKit.getState().retries
+      // wait for it to fail (and stop)
+      probe.expectMessage(20.seconds, StepFailed[String, String, Any]("trx-failed", "step1", RetryableFailure("Always fails")))
       
-      // 2. Restart
-      eventSourcedTestKit.restart()
+      // 2. Restart a new incarnation
+      val ref2 = spawn(stepExecutorBehavior(persistenceId))
       
-      // 3. Upon recovery, it should trigger RetryOperation
-      // We check that retries eventually incremented (meaning it retried)
-      eventually(timeout(20.seconds)) {
-         eventSourcedTestKit.getState().retries should be > initialRetries
-      }
+      val queryProbe = createTestProbe[State[String, String, Any]]()
+      ref2 ! QueryStatus(queryProbe.ref)
+      val recoveredState = queryProbe.receiveMessage(10.seconds)
+      
+      // 3. Upon recovery, it should NOT trigger RetryOperation because max retries reached
+      // We check that retries did not increment
+      recoveredState.retries shouldBe 5
+      recoveredState.status shouldBe Failed
     }
 
 
