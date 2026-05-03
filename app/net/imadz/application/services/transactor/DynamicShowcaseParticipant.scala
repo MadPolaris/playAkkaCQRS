@@ -13,6 +13,7 @@ object DynamicShowcaseParticipant {
   case object Success extends Behavior
   case object FailRetryable extends Behavior
   case object FailNonRetryable extends Behavior
+  case object FailInCommit extends Behavior
   case object Timeout extends Behavior
   case object FailTwiceThenSucceed extends Behavior
 
@@ -82,6 +83,12 @@ class DynamicShowcaseParticipant(val participantId: String) extends SagaParticip
 
       case FailNonRetryable => 
         delay(randomDelay)(()).flatMap(_ => Future.failed(new Exception("NonRetryable: Manual non-retryable error")))
+      case FailInCommit =>
+        if (phase == "commit") {
+          delay(randomDelay)(()).flatMap(_ => Future.failed(new Exception("NonRetryable: Simulated fatal error during Commit phase")))
+        } else {
+          delay(randomDelay)(Right(SagaResult(s"$participantId-$phase-success")))
+        }
       case Timeout => 
         delay(1.minute)(Right(SagaResult("Timeout simulated")))
     }

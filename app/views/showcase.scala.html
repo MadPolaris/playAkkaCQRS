@@ -108,6 +108,8 @@
                         <option value="happy">Happy Path (Success)</option>
                         <option value="retry">Retryable Failure</option>
                         <option value="compensation">Compensation (Prepare Failure)</option>
+                        <option value="commit-failure">Commit Phase Failure</option>
+                        <option value="partial-group">Partial Group Failure (Parallel)</option>
                         <option value="suspended">Suspended (Compensation Failure)</option>
                         <option value="timeout">Global Timeout</option>
                         <option value="custom">-- Custom Fault Injection --</option>
@@ -219,6 +221,14 @@
             'compensation': {
                 description: 'Tests backward recovery (Saga Compensation). Step B fails with a non-retryable error during Prepare phase.',
                 expectation: 'Expected: Step B fails -> Engine initiates COMPENSATE phase -> Step A & B compensated -> Transaction FAILED (Consistent).'
+            },
+            'commit-failure': {
+                description: 'Tests failure during the Commit phase. Step B fails after successfully preparing.',
+                expectation: 'Expected: Prepare phase succeeds -> Commit starts -> Step B fails -> Compensation initiated (if backward recovery) -> Transaction FAILED (or Suspended based on strategy).'
+            },
+            'partial-group': {
+                description: 'Tests partial failure within a parallel step group. Step B and C execute concurrently; C fails while B succeeds.',
+                expectation: 'Expected: Step A succeeds -> Group 2 runs (B & C) -> C fails -> Compensation initiated for A and B.'
             },
             'suspended': {
                 description: 'Tests manual intervention. A failure occurs during the Compensation phase, leaving the system in an inconsistent state.',
@@ -378,6 +388,9 @@
         };
 
         document.getElementById('startBtn').onclick = () => {
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.innerText = "⏳ Starting...";
             const scenarioId = document.getElementById('scenarioId').value;
             const singleStep = document.getElementById('singleStepMode').checked;
 
@@ -386,36 +399,49 @@
                     fetch('/api/saga/inject-fault/' + sid + '/' + document.getElementById('config-' + sid).value, { method: 'POST' });
                 });
                 fetch('/api/saga/trigger-showcase/' + singleStep, { method: 'POST' })
-                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; });
+                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; btn.disabled = false; btn.innerText = "🚀 Start Transaction"; })
+                    .catch(e => { btn.disabled = false; btn.innerText = "🚀 Start Transaction"; });
             } else {
                 fetch('/api/saga/trigger-scenario/' + scenarioId + '/' + singleStep, { method: 'POST' })
-                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; });
+                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; btn.disabled = false; btn.innerText = "🚀 Start Transaction"; })
+                    .catch(e => { btn.disabled = false; btn.innerText = "🚀 Start Transaction"; });
             }
         };
 
-        proceedBtn.onclick = () => { if (currentTransactionId) fetch('/api/saga/proceed/' + currentTransactionId, { method: 'POST' }); };
-        resumeBtn.onclick = () => { if (currentTransactionId) fetch('/api/saga/resume/' + currentTransactionId, { method: 'POST' }); };
-        retryBtn.onclick = () => { if (currentTransactionId) fetch('/api/saga/retry-phase/' + currentTransactionId, { method: 'POST' }); };
+        proceedBtn.onclick = () => { if (currentTransactionId) { proceedBtn.disabled = true; proceedBtn.innerText = "⏳..."; fetch('/api/saga/proceed/' + currentTransactionId, { method: 'POST' }).finally(() => { proceedBtn.disabled = false; proceedBtn.innerText = "⏩ Proceed"; }); } };
+        resumeBtn.onclick = () => { if (currentTransactionId) { resumeBtn.disabled = true; resumeBtn.innerText = "⏳..."; fetch('/api/saga/resume/' + currentTransactionId, { method: 'POST' }).finally(() => { resumeBtn.disabled = false; resumeBtn.innerText = "🛠️ Resume (After Fix)"; }); } };
+        retryBtn.onclick = () => { if (currentTransactionId) { retryBtn.disabled = true; retryBtn.innerText = "⏳..."; fetch('/api/saga/retry-phase/' + currentTransactionId, { method: 'POST' }).finally(() => { retryBtn.disabled = false; retryBtn.innerText = "🔄 Retry Phase"; }); } };
 
-        function doFix(stepId, phase, node) {
+        function doFix(stepId, phase, node, btnElement) {
             if (currentTransactionId) {
+                if (btnElement) {
+                    btnElement.disabled = true;
+                    btnElement.innerText = "⏳...";
+                }
                 fetch('/api/saga/fix-step/' + currentTransactionId + '/' + stepId + '/' + phase, { method: 'POST' })
                     .then(() => {
                         if (node) { node.classList.remove('failed', 'retrying'); node.classList.add('success'); }
                         addLog('System', 'Manually Fixed: ' + stepId);
+                    })
+                    .finally(() => {
+                        if (btnElement) {
+                            btnElement.disabled = false;
+                            btnElement.innerText = "🛠️ Fix";
+                        }
                     });
             }
         }
         document.getElementById('dagContainer').onclick = e => {
             if (e.target.classList.contains('fix-btn')) {
                 const node = e.target.closest('.node');
-                doFix(node.getAttribute('data-step'), node.getAttribute('data-phase'), node);
+                doFix(node.getAttribute('data-step'), node.getAttribute('data-phase'), node, e.target);
             }
         };
         document.getElementById('manualFixBtn').onclick = () => {
             const sid = document.getElementById('manualStepId').value;
             const ph = document.getElementById('manualPhase').value;
-            if (sid) doFix(sid, ph, null);
+            const btn = document.getElementById('manualFixBtn');
+            if (sid) doFix(sid, ph, null, btn);
         };
 
         // Time Machine Paced Replay Logic
