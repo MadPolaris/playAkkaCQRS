@@ -15,6 +15,7 @@ POST    /transfer/:fromUserId/:toUserId/:amount   controllers.HomeController.tra
 
 # Showcase
 GET     /showcase                   controllers.ShowcaseController.index()
+GET     /lang/:code                 controllers.ShowcaseController.setLang(code: String)
 GET     /ws/saga/events             controllers.ShowcaseController.socket
 POST    /api/saga/inject-fault/:stepId/:behavior  controllers.ShowcaseController.injectFault(stepId: String, behavior: String)
 POST    /api/saga/trigger-showcase/:singleStep    controllers.ShowcaseController.triggerShowcase(singleStep: Boolean)

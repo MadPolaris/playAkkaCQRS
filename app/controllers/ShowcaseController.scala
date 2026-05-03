@@ -11,6 +11,7 @@ import akka.contrib.persistence.mongodb.MongoReadJournal
 import net.imadz.application.services.transactor.DynamicShowcaseParticipant
 import net.imadz.application.events.SagaProgressEvent
 import net.imadz.infra.saga.{SagaPhase, SagaTransactionCoordinator, SagaTransactionStep, StepExecutor}
+import play.api.i18n.{I18nSupport, Lang, Messages}
 import play.api.libs.json.{JsValue, Json, Writes}
 import play.api.mvc._
 
@@ -21,7 +22,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class ShowcaseController @Inject()(val controllerComponents: ControllerComponents,
                                    implicit val system: akka.actor.ActorSystem,
                                    implicit val mat: Materializer,
-                                   implicit val ec: ExecutionContext) extends BaseController {
+                                   implicit val ec: ExecutionContext) extends BaseController with I18nSupport {
 
   private val readJournal = PersistenceQuery(system).readJournalFor[ReadJournal with CurrentEventsByPersistenceIdQuery](MongoReadJournal.Identifier)
   implicit val typedSystem: ActorSystem[Nothing] = system.toTyped
@@ -78,7 +79,14 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
   }))
 
   // --- Actions ---
-  def index() = Action { implicit request: Request[AnyContent] => Ok(views.html.showcase()) }
+  def index() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.showcase())
+  }
+
+  def setLang(code: String) = Action { implicit request =>
+    val redirectUrl = request.headers.get("Referer").getOrElse("/showcase")
+    Redirect(redirectUrl).withLang(Lang(code))
+  }
 
   case class Scenario(id: String, name: String, steps: List[SagaTransactionStep[Any, String, Any]], behaviors: Map[String, DynamicShowcaseParticipant.Behavior])
 

@@ -1,15 +1,21 @@
-@()
+@()(implicit messages: Messages)
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="@messages.lang.code">
 <head>
     <meta charset="UTF-8">
-    <title>Saga Core Industrial Showcase</title>
+    <title>@messages("showcase.title")</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
         .container { max-width: 1400px; margin: 0 auto; }
         h1 { color: #00d4ff; border-bottom: 2px solid #333; padding-bottom: 10px; text-align: center; }
         
+        .header-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; margin-bottom: 20px; }
+        .lang-switcher { font-size: 0.9rem; }
+        .lang-switcher a { color: #00d4ff; text-decoration: none; margin-left: 10px; padding: 2px 8px; border: 1px solid #444; border-radius: 4px; }
+        .lang-switcher a:hover { background: #333; }
+        .lang-switcher a.active { background: #00d4ff; color: #000; border-color: #00d4ff; }
+
         .dashboard { display: grid; grid-template-columns: 350px 1fr; gap: 30px; margin-top: 20px; }
         
         .control-panel { background: #252525; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); align-self: start; }
@@ -97,82 +103,88 @@
 </head>
 <body>
     <div class="container">
-        <h1>Saga Industrial Execution Engine</h1>
+        <div class="header-top">
+            <h1>@messages("showcase.header")</h1>
+            <div class="lang-switcher">
+                <a href="/lang/en" class="@if(messages.lang.code == "en"){active}">English</a>
+                <a href="/lang/zh" class="@if(messages.lang.code == "zh"){active}">中文</a>
+            </div>
+        </div>
         <div class="dashboard">
             <div class="control-panel">
-                <h2>Control Center</h2>
+                <h2>@messages("showcase.control_panel")</h2>
                 
                 <div class="step-config">
-                    <span class="step-name">Execution Scenario</span>
+                    <span class="step-name">@messages("showcase.scenario")</span>
                     <select id="scenarioId">
-                        <option value="happy">Happy Path (Success)</option>
-                        <option value="retry">Retryable Failure</option>
-                        <option value="compensation">Compensation (Prepare Failure)</option>
-                        <option value="commit-failure">Commit Phase Failure</option>
-                        <option value="partial-group">Partial Group Failure (Parallel)</option>
-                        <option value="suspended">Suspended (Compensation Failure)</option>
-                        <option value="timeout">Global Timeout</option>
-                        <option value="custom">-- Custom Fault Injection --</option>
+                        <option value="happy">@messages("showcase.scenario.happy")</option>
+                        <option value="retry">@messages("showcase.scenario.retry")</option>
+                        <option value="compensation">@messages("showcase.scenario.compensation")</option>
+                        <option value="commit-failure">@messages("showcase.scenario.commit_failure")</option>
+                        <option value="partial-group">@messages("showcase.scenario.partial_group")</option>
+                        <option value="suspended">@messages("showcase.scenario.suspended")</option>
+                        <option value="timeout">@messages("showcase.scenario.timeout")</option>
+                        <option value="custom">@messages("showcase.scenario.custom")</option>
                     </select>
                 </div>
 
                 <div id="scenarioDescription" class="scenario-info">
-                    <h3>Scenario Details</h3>
-                    <p id="scenarioText">Select a scenario to see details.</p>
+                    <h3>@messages("showcase.scenario_details")</h3>
+                    <p id="scenarioText">@messages("showcase.select_scenario")</p>
                     <div id="scenarioExpectation" class="expectation"></div>
                 </div>
 
                 <div style="margin-top: 15px; margin-bottom: 15px; padding: 10px; background: #333; border-radius: 4px;">
-                    <input type="checkbox" id="singleStepMode"> <label for="singleStepMode">Single Step Mode</label>
+                    <input type="checkbox" id="singleStepMode"> <label for="singleStepMode">@messages("showcase.single_step")</label>
                 </div>
-                <button class="btn btn-primary" id="startBtn">🚀 Start Transaction</button>
-                <button class="btn btn-warning" id="proceedBtn" style="display:none;">⏩ Proceed</button>
-                <button class="btn btn-danger" id="retryBtn" style="display:none;">🔄 Retry Phase</button>
-                <button class="btn btn-success" id="resumeBtn" style="display:none;">🛠️ Resume (After Fix)</button>
+                <button class="btn btn-primary" id="startBtn">@messages("showcase.start_transaction")</button>
+                <button class="btn btn-warning" id="proceedBtn" style="display:none;">@messages("showcase.proceed")</button>
+                <button class="btn btn-danger" id="retryBtn" style="display:none;">@messages("showcase.retry_phase")</button>
+                <button class="btn btn-success" id="resumeBtn" style="display:none;">@messages("showcase.resume")</button>
                 
-                <div id="statusInfo" style="margin: 10px 0; font-weight: bold; text-align: center; color: #ffca28;">Ready.</div>
+                <div id="statusInfo" style="margin: 10px 0; font-weight: bold; text-align: center; color: #ffca28;">@messages("showcase.ready")</div>
                 
                 <div class="replay-panel">
-                    <h3 style="font-size: 0.9rem; color: #17a2b8; margin-top: 0;">Time Machine (Replay)</h3>
-                    <input type="text" id="replayTxId" placeholder="Enter Transaction ID">
-                    <button class="btn btn-info" id="replayBtn">🎞️ Replay History</button>
+                    <h3 style="font-size: 0.9rem; color: #17a2b8; margin-top: 0;">@messages("showcase.time_machine")</h3>
+                    <input type="text" id="replayTxId" placeholder="@messages("showcase.tx_id_placeholder")">
+                    <button class="btn btn-info" id="replayBtn">@messages("showcase.replay_history")</button>
                 </div>
 
                 <div class="admin-fix-panel" id="manualFixPanel" style="display:none;">
-                    <h3 style="font-size: 0.9rem; color: #f44336; margin-top: 0;">Emergency Fix</h3>
-                    <input type="text" id="manualStepId" placeholder="Step ID (e.g. Step-A)">
+                    <h3 style="font-size: 0.9rem; color: #f44336; margin-top: 0;">@messages("showcase.emergency_fix")</h3>
+                    <input type="text" id="manualStepId" placeholder="@messages("showcase.step_id_placeholder")">
                     <select id="manualPhase" style="margin-bottom: 10px;">
-                        <option value="prepare">Prepare</option>
-                        <option value="commit">Commit</option>
-                        <option value="compensate" selected>Compensate</option>
+                        <option value="prepare">@messages("showcase.phase.prepare")</option>
+                        <option value="commit">@messages("showcase.phase.commit")</option>
+                        <option value="compensate" selected>@messages("showcase.phase.compensate")</option>
                     </select>
-                    <button class="btn btn-success btn-small" id="manualFixBtn">Apply Manual Fix</button>
+                    <button class="btn btn-success btn-small" id="manualFixBtn">@messages("showcase.apply_fix")</button>
                 </div>
 
                 <div class="fault-injection">
-                    <h2>Fault Injection</h2>
+                    <h2>@messages("showcase.fault_injection")</h2>
                     <div class="step-config">
-                        <span class="step-name">Step-A Behavior</span>
+                        <span class="step-name">@messages("showcase.step_behavior", "Step-A")</span>
                         <select id="config-Step-A">
-                            <option value="success">Success</option>
-                            <option value="failretryable">Retryable Fail</option>
-                            <option value="failnonretryable">Non-Retryable Fail</option>
+                            <option value="success">@messages("showcase.behavior.success")</option>
+                            <option value="failretryable">@messages("showcase.behavior.fail_retryable")</option>
+                            <option value="failnonretryable">@messages("showcase.behavior.fail_non_retryable")</option>
                         </select>
                     </div>
                     <div class="step-config">
-                        <span class="step-name">Step-B Behavior</span>
+                        <span class="step-name">@messages("showcase.step_behavior", "Step-B")</span>
                         <select id="config-Step-B">
-                            <option value="success">Success</option>
-                            <option value="failretryable">Retryable Fail</option>
-                            <option value="failnonretryable">Non-Retryable Fail</option>
+                            <option value="success">@messages("showcase.behavior.success")</option>
+                            <option value="failretryable">@messages("showcase.behavior.fail_retryable")</option>
+                            <option value="failnonretryable">@messages("showcase.behavior.fail_non_retryable")</option>
                         </select>
                     </div>
                     <div class="step-config">
-                        <span class="step-name">Step-C Behavior</span>
+                        <span class="step-name">@messages("showcase.step_behavior", "Step-C")</span>
                         <select id="config-Step-C">
-                            <option value="success">Success</option>
-                            <option value="failretryable">Retryable Fail</option>
-                            <option value="failnonretryable">Non-Retryable Fail</option>
+                            <option value="success">@messages("showcase.behavior.success")</option>
+                            <option value="failretryable">@messages("showcase.behavior.fail_retryable")</option>
+                            <option value="failnonretryable">@messages("showcase.behavior.fail_non_retryable")</option>
                         </select>
                     </div>
                 </div>
@@ -180,26 +192,66 @@
             
             <div class="visualization" id="dagContainer">
                 <div class="phase-column" id="col-prepare">
-                    <div class="phase-header" style="background: #ffca28; color: #000;">PREPARE</div>
-                    <div style="color: #666; font-style: italic; margin-top: 20px;">Ready.</div>
+                    <div class="phase-header" style="background: #ffca28; color: #000;">@messages("showcase.phase.PREPARE_H")</div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
                 </div>
                 <div class="phase-column" id="col-commit">
-                    <div class="phase-header" style="background: #4caf50; color: #fff;">COMMIT</div>
-                    <div style="color: #666; font-style: italic; margin-top: 20px;">Ready.</div>
+                    <div class="phase-header" style="background: #4caf50; color: #fff;">@messages("showcase.phase.COMMIT_H")</div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
                 </div>
                 <div class="phase-column" id="col-compensate">
-                    <div class="phase-header" style="background: #f44336; color: #fff;">COMPENSATE</div>
-                    <div style="color: #666; font-style: italic; margin-top: 20px;">Ready.</div>
+                    <div class="phase-header" style="background: #f44336; color: #fff;">@messages("showcase.phase.COMPENSATE_H")</div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
                 </div>
                 <div class="logs-container">
                     <div class="logs" id="logContainer">
-                        <div class="log-entry"><span class="log-time">--:--:--</span> <span class="log-type">System</span> Ready for Mixed Orchestration.</div>
+                        <div class="log-entry"><span class="log-time">--:--:--</span> <span class="log-type">@messages("showcase.log.System")</span> @messages("showcase.system_ready")</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     <script>
+        const i18n = {
+            log: {
+                TransactionStarted: '@Html(messages("showcase.log.TransactionStarted"))',
+                StepOngoing: '@Html(messages("showcase.log.StepOngoing"))',
+                StepCompleted: '@Html(messages("showcase.log.StepCompleted"))',
+                is_manual: '@Html(messages("showcase.log.is_manual"))',
+                StepFailed: '@Html(messages("showcase.log.StepFailed"))',
+                StepRetrying: '@Html(messages("showcase.log.StepRetrying"))',
+                PhaseCompleted: '@Html(messages("showcase.log.PhaseCompleted"))',
+                StepGroupStarted: '@Html(messages("showcase.log.StepGroupStarted"))',
+                TransactionCompleted: '@Html(messages("showcase.log.TransactionCompleted"))',
+                TransactionFailed: '@Html(messages("showcase.log.TransactionFailed"))',
+                TransactionSuspended: '@Html(messages("showcase.log.TransactionSuspended"))',
+                Paused: '@Html(messages("showcase.log.Paused"))',
+                TimeMachineLoading: '@Html(messages("showcase.log.TimeMachineLoading"))',
+                TimeMachineNoHistory: '@Html(messages("showcase.log.TimeMachineNoHistory"))',
+                TimeMachineStarting: '@Html(messages("showcase.log.TimeMachineStarting"))',
+                TimeMachineFinished: '@Html(messages("showcase.log.TimeMachineFinished"))',
+                ManuallyFixed: '@Html(messages("showcase.log.ManuallyFixed"))',
+                System: '@Html(messages("showcase.log.System"))'
+            },
+            status: {
+                InProgress: '@Html(messages("showcase.status.InProgress"))',
+                Completed: '@Html(messages("showcase.status.Completed"))',
+                Failed: '@Html(messages("showcase.status.Failed"))',
+                Suspended: '@Html(messages("showcase.status.Suspended"))'
+            },
+            ui: {
+                fix_btn: '@Html(messages("showcase.fix_btn"))',
+                enter_txid: '@Html(messages("showcase.ui.enter_txid"))'
+            }
+        };
+
+        function t(msg, ...args) {
+            args.forEach((arg, i) => {
+                msg = msg.replace('{' + i + '}', arg);
+            });
+            return msg;
+        }
+
         const logContainer = document.getElementById('logContainer');
         const proceedBtn = document.getElementById('proceedBtn');
         const retryBtn = document.getElementById('retryBtn');
@@ -211,36 +263,36 @@
 
         const scenarioInfo = {
             'happy': {
-                description: 'Tests the standard successful flow where all steps in all phases complete without error.',
-                expectation: 'Expected: PREPARE phase (Step A & B) succeeds -> COMMIT phase (Step A & B) succeeds -> Transaction COMPLETED.'
+                description: '@Html(messages("showcase.scenario.happy.desc"))',
+                expectation: '@Html(messages("showcase.scenario.happy.expect"))'
             },
             'retry': {
-                description: 'Tests automatic retry logic. Step B is configured to fail twice with a retryable error before succeeding.',
-                expectation: 'Expected: Step B will show "retrying" twice, then eventually succeed. Transaction COMPLETED.'
+                description: '@Html(messages("showcase.scenario.retry.desc"))',
+                expectation: '@Html(messages("showcase.scenario.retry.expect"))'
             },
             'compensation': {
-                description: 'Tests backward recovery (Saga Compensation). Step B fails with a non-retryable error during Prepare phase.',
-                expectation: 'Expected: Step B fails -> Engine initiates COMPENSATE phase -> Step A & B compensated -> Transaction FAILED (Consistent).'
+                description: '@Html(messages("showcase.scenario.compensation.desc"))',
+                expectation: '@Html(messages("showcase.scenario.compensation.expect"))'
             },
             'commit-failure': {
-                description: 'Tests failure during the Commit phase. Step B fails after successfully preparing.',
-                expectation: 'Expected: Prepare phase succeeds -> Commit starts -> Step B fails -> Compensation initiated (if backward recovery) -> Transaction FAILED (or Suspended based on strategy).'
+                description: '@Html(messages("showcase.scenario.commit_failure.desc"))',
+                expectation: '@Html(messages("showcase.scenario.commit_failure.expect"))'
             },
             'partial-group': {
-                description: 'Tests partial failure within a parallel step group. Step B and C execute concurrently; C fails while B succeeds.',
-                expectation: 'Expected: Step A succeeds -> Group 2 runs (B & C) -> C fails -> Compensation initiated for A and B.'
+                description: '@Html(messages("showcase.scenario.partial_group.desc"))',
+                expectation: '@Html(messages("showcase.scenario.partial_group.expect"))'
             },
             'suspended': {
-                description: 'Tests manual intervention. A failure occurs during the Compensation phase, leaving the system in an inconsistent state.',
-                expectation: 'Expected: Prepare fails -> Compensate starts -> Compensate fails -> Transaction SUSPENDED. Requires manual fix.'
+                description: '@Html(messages("showcase.scenario.suspended.desc"))',
+                expectation: '@Html(messages("showcase.scenario.suspended.expect"))'
             },
             'timeout': {
-                description: 'Tests global transaction timeout. Step B is configured to hang, exceeding the allocated time for the step.',
-                expectation: 'Expected: Step B times out -> Engine detects timeout -> Compensation initiated -> Transaction FAILED.'
+                description: '@Html(messages("showcase.scenario.timeout.desc"))',
+                expectation: '@Html(messages("showcase.scenario.timeout.expect"))'
             },
             'custom': {
-                description: 'Manual fault injection mode. Configure individual step behaviors using the panels below.',
-                expectation: 'Expected: Dependent on your configuration.'
+                description: '@Html(messages("showcase.scenario.custom.desc"))',
+                expectation: '@Html(messages("showcase.scenario.custom.expect"))'
             }
         };
 
@@ -272,7 +324,7 @@
                         html += '<div class="node pending" id="node-' + sid + '-' + phase.toLowerCase() + '" data-step="' + sid + '" data-phase="' + phase.toLowerCase() + '">';
                         html += '<span class="label">' + sid.replace('-', ' ') + '</span>';
                         html += '<span class="info">Group ' + g + '</span>';
-                        html += '<button class="btn btn-success btn-small fix-btn">🛠️ Fix</button>';
+                        html += '<button class="btn btn-success btn-small fix-btn">' + i18n.ui.fix_btn + '</button>';
                         html += '</div>';
                     });
                     html += '</div>';
@@ -281,9 +333,9 @@
                 return html;
             }
 
-            document.getElementById('col-prepare').innerHTML = buildCol('PREPARE', 'PREPARE', '#ffca28', '#000', false);
-            document.getElementById('col-commit').innerHTML = buildCol('COMMIT', 'COMMIT', '#4caf50', '#fff', false);
-            document.getElementById('col-compensate').innerHTML = buildCol('COMPENSATE', 'COMPENSATE', '#f44336', '#fff', true);
+            document.getElementById('col-prepare').innerHTML = buildCol('PREPARE', '@messages("showcase.phase.PREPARE_H")', '#ffca28', '#000', false);
+            document.getElementById('col-commit').innerHTML = buildCol('COMMIT', '@messages("showcase.phase.COMMIT_H")', '#4caf50', '#fff', false);
+            document.getElementById('col-compensate').innerHTML = buildCol('COMPENSATE', '@messages("showcase.phase.COMPENSATE_H")', '#f44336', '#fff', true);
         }
 
         function addLog(type, msg) {
@@ -308,9 +360,9 @@
             
             if (event.type === 'TransactionStarted') {
                 renderDAG(data.steps);
-                addLog(event.type, 'Transaction started. TraceID: ' + data.traceId);
+                addLog(event.type, t(i18n.log.TransactionStarted, data.traceId));
                 currentTransactionId = data.transactionId;
-                statusInfo.innerText = 'IN PROGRESS';
+                statusInfo.innerText = i18n.status.InProgress;
                 statusInfo.style.color = '#ffca28';
                 proceedBtn.style.display = 'none';
                 retryBtn.style.display = 'none';
@@ -318,18 +370,18 @@
                 manualFixPanel.style.display = 'none';
             } else if (event.type === 'StepOngoing') {
                 updateNode(data.stepId, data.phase, 'ongoing');
-                addLog(event.type, 'Step ' + data.stepId + ' (' + data.phase + ') is ongoing.');
+                addLog(event.type, t(i18n.log.StepOngoing, data.stepId, data.phase));
             } else if (event.type === 'StepCompleted') {
                 updateNode(data.stepId, data.phase, 'success');
-                addLog(event.type, 'Step ' + data.stepId + ' (' + data.phase + ') COMPLETED' + (data.isManual ? ' (via Manual Fix)' : ''));
+                addLog(event.type, t(i18n.log.StepCompleted, data.stepId, data.phase, data.isManual ? i18n.log.is_manual : ''));
             } else if (event.type === 'StepFailed') {
                 const isRetryable = data.error && data.error.indexOf('Max retries') === -1 && (data.error.indexOf('Retryable') !== -1 || data.error.indexOf('attempt') !== -1 || data.error.indexOf('timed out') !== -1 || data.error.indexOf('Retry #') !== -1);
                 updateNode(data.stepId, data.phase, isRetryable ? 'retrying' : 'failed');
                 if (!isRetryable) {
-                    addLog(event.type, 'Step ' + data.stepId + ' (' + data.phase + ') FAILED: ' + data.error);
+                    addLog(event.type, t(i18n.log.StepFailed, data.stepId, data.phase, data.error));
                     retryBtn.style.display = 'block';
                 } else {
-                    addLog(event.type, 'Step ' + data.stepId + ' (' + data.phase + ') RETRYING: ' + data.error);
+                    addLog(event.type, t(i18n.log.StepRetrying, data.stepId, data.phase, data.error));
                 }
             } else if (event.type === 'PhaseCompleted') {
                 const phaseKey = (data.phase || '').toLowerCase().replace('phase', '');
@@ -338,7 +390,7 @@
                         n.className = 'node failed';
                     }
                 });
-                addLog(event.type, 'Phase ' + data.phase + ' finished.');
+                addLog(event.type, t(i18n.log.PhaseCompleted, data.phase));
             } else if (event.type === 'StepGroupStarted') {
                 const phaseKey = (data.phase || '').toLowerCase().replace('phase', '');
                 // De-highlight other groups in THIS phase
@@ -354,26 +406,26 @@
                     groupEl.style.borderRadius = '8px';
                     groupEl.style.padding = '5px';
                 }
-                addLog(event.type, 'Starting Group ' + data.group + ' in ' + data.phase);
+                addLog(event.type, t(i18n.log.StepGroupStarted, data.group, data.phase));
             } else if (event.type === 'TransactionCompleted') {
-                addLog(event.type, 'SUCCESS: ALL STEPS COMPLETED');
-                statusInfo.innerText = 'COMPLETED (SUCCESS)';
+                addLog(event.type, i18n.log.TransactionCompleted);
+                statusInfo.innerText = i18n.status.Completed;
                 statusInfo.style.color = '#4caf50';
                 proceedBtn.style.display = 'none';
                 retryBtn.style.display = 'none';
             } else if (event.type === 'TransactionFailed') {
-                addLog(event.type, 'FAILED: BUSINESS TRANSACTION ABORTED');
-                statusInfo.innerText = 'FAILED (ROLLED BACK / CONSISTENT)';
+                addLog(event.type, i18n.log.TransactionFailed);
+                statusInfo.innerText = i18n.status.Failed;
                 statusInfo.style.color = '#ffca28';
                 proceedBtn.style.display = 'none';
                 retryBtn.style.display = 'none';
             } else if (event.type === 'TransactionSuspended') {
                 if (data.reason === 'MANUAL_PAUSE') {
-                   statusInfo.innerText = 'PAUSED';
+                   statusInfo.innerText = i18n.log.Paused;
                    proceedBtn.style.display = 'block';
                 } else {
-                   addLog(event.type, 'SUSPENDED: MANUAL ACTION REQUIRED');
-                   statusInfo.innerText = 'FAILED (INCONSISTENT)';
+                   addLog(event.type, i18n.log.TransactionSuspended);
+                   statusInfo.innerText = i18n.status.Suspended;
                    statusInfo.style.color = '#f44336';
                    resumeBtn.style.display = 'block';
                    manualFixPanel.style.display = 'block';
@@ -389,8 +441,9 @@
 
         document.getElementById('startBtn').onclick = () => {
             const btn = document.getElementById('startBtn');
+            const originalText = btn.innerText;
             btn.disabled = true;
-            btn.innerText = "⏳ Starting...";
+            btn.innerText = "⏳...";
             const scenarioId = document.getElementById('scenarioId').value;
             const singleStep = document.getElementById('singleStepMode').checked;
 
@@ -399,21 +452,22 @@
                     fetch('/api/saga/inject-fault/' + sid + '/' + document.getElementById('config-' + sid).value, { method: 'POST' });
                 });
                 fetch('/api/saga/trigger-showcase/' + singleStep, { method: 'POST' })
-                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; btn.disabled = false; btn.innerText = "🚀 Start Transaction"; })
-                    .catch(e => { btn.disabled = false; btn.innerText = "🚀 Start Transaction"; });
+                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; btn.disabled = false; btn.innerText = originalText; })
+                    .catch(e => { btn.disabled = false; btn.innerText = originalText; });
             } else {
                 fetch('/api/saga/trigger-scenario/' + scenarioId + '/' + singleStep, { method: 'POST' })
-                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; btn.disabled = false; btn.innerText = "🚀 Start Transaction"; })
-                    .catch(e => { btn.disabled = false; btn.innerText = "🚀 Start Transaction"; });
+                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; btn.disabled = false; btn.innerText = originalText; })
+                    .catch(e => { btn.disabled = false; btn.innerText = originalText; });
             }
         };
 
-        proceedBtn.onclick = () => { if (currentTransactionId) { proceedBtn.disabled = true; proceedBtn.innerText = "⏳..."; fetch('/api/saga/proceed/' + currentTransactionId, { method: 'POST' }).finally(() => { proceedBtn.disabled = false; proceedBtn.innerText = "⏩ Proceed"; }); } };
-        resumeBtn.onclick = () => { if (currentTransactionId) { resumeBtn.disabled = true; resumeBtn.innerText = "⏳..."; fetch('/api/saga/resume/' + currentTransactionId, { method: 'POST' }).finally(() => { resumeBtn.disabled = false; resumeBtn.innerText = "🛠️ Resume (After Fix)"; }); } };
-        retryBtn.onclick = () => { if (currentTransactionId) { retryBtn.disabled = true; retryBtn.innerText = "⏳..."; fetch('/api/saga/retry-phase/' + currentTransactionId, { method: 'POST' }).finally(() => { retryBtn.disabled = false; retryBtn.innerText = "🔄 Retry Phase"; }); } };
+        proceedBtn.onclick = () => { if (currentTransactionId) { const originalText = proceedBtn.innerText; proceedBtn.disabled = true; proceedBtn.innerText = "⏳..."; fetch('/api/saga/proceed/' + currentTransactionId, { method: 'POST' }).finally(() => { proceedBtn.disabled = false; proceedBtn.innerText = originalText; }); } };
+        resumeBtn.onclick = () => { if (currentTransactionId) { const originalText = resumeBtn.innerText; resumeBtn.disabled = true; resumeBtn.innerText = "⏳..."; fetch('/api/saga/resume/' + currentTransactionId, { method: 'POST' }).finally(() => { resumeBtn.disabled = false; resumeBtn.innerText = originalText; }); } };
+        retryBtn.onclick = () => { if (currentTransactionId) { const originalText = retryBtn.innerText; retryBtn.disabled = true; retryBtn.innerText = "⏳..."; fetch('/api/saga/retry-phase/' + currentTransactionId, { method: 'POST' }).finally(() => { retryBtn.disabled = false; retryBtn.innerText = originalText; }); } };
 
         function doFix(stepId, phase, node, btnElement) {
             if (currentTransactionId) {
+                const originalText = btnElement ? btnElement.innerText : "";
                 if (btnElement) {
                     btnElement.disabled = true;
                     btnElement.innerText = "⏳...";
@@ -421,12 +475,12 @@
                 fetch('/api/saga/fix-step/' + currentTransactionId + '/' + stepId + '/' + phase, { method: 'POST' })
                     .then(() => {
                         if (node) { node.classList.remove('failed', 'retrying'); node.classList.add('success'); }
-                        addLog('System', 'Manually Fixed: ' + stepId);
+                        addLog(i18n.log.System, t(i18n.log.ManuallyFixed, stepId));
                     })
                     .finally(() => {
                         if (btnElement) {
                             btnElement.disabled = false;
-                            btnElement.innerText = "🛠️ Fix";
+                            btnElement.innerText = originalText;
                         }
                     });
             }
@@ -447,26 +501,26 @@
         // Time Machine Paced Replay Logic
         replayBtn.onclick = () => {
             let txId = replayTxIdInput.value.trim();
-            if (!txId) return alert("Please enter a Transaction ID");
+            if (!txId) return alert(i18n.ui.enter_txid);
             
             const uuidMatch = txId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
             if (uuidMatch) txId = uuidMatch[0];
             
-            addLog('System', 'Time Machine: Loading historical timeline...');
+            addLog(i18n.log.System, i18n.log.TimeMachineLoading);
             fetch('/api/saga/history/' + txId)
                 .then(r => r.json())
                 .then(dataList => {
-                    if (dataList.length === 0) return alert("No history found.");
+                    if (dataList.length === 0) return alert(i18n.log.TimeMachineNoHistory);
                     
                     // Reset UI
                     document.querySelectorAll('.node').forEach(n => { n.className = 'node pending'; n.classList.remove('suspended'); });
-                    addLog('System', 'Paced replay of ' + dataList.length + ' events starting...');
+                    addLog(i18n.log.System, t(i18n.log.TimeMachineStarting, dataList.length));
                     
                     let cursor = 0;
                     
                     function playNext() {
                         if (cursor >= dataList.length) {
-                            addLog('System', 'Replay finished.');
+                            addLog(i18n.log.System, i18n.log.TimeMachineFinished);
                             return;
                         }
                         
