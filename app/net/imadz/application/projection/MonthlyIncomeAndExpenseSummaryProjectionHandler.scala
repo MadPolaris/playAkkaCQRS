@@ -21,7 +21,7 @@ case class MonthlyIncomeAndExpenseSummaryProjectionHandler(sharding: ClusterShar
   override def process(session: ScalikeJdbcSession, envelope: EventEnvelope[CreditEventPO.Event]): Unit = {
     adapter.fromJournal(envelope.event, "").events.foreach { event =>
       val (year, month, day) = getDateFromTimestamp(envelope.timestamp)
-      val userId = envelope.persistenceId
+      val userId = envelope.persistenceId.split("\\|").last
 
       event match {
         case BalanceChanged(update, _) =>

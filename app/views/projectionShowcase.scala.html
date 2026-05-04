@@ -257,6 +257,13 @@
         let pendingUserAction = null; 
         let dataBuffer = {}; 
 
+        // --- Configuration ---
+        const ANIMATION_CONFIG = {
+            travelTimeMs: 600,
+            processTimeMs: 600
+        };
+
+        // --- Utilities ---
         function findConfig(fullName) { return knownProjections.find(p => fullName.toLowerCase().includes(p.key.toLowerCase())); }
         function genUuid(id) { document.getElementById(id).value = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (Math.random()*16|0).toString(16)); }
         
@@ -268,14 +275,171 @@
             log.prepend(entry);
         }
 
+        // --- Graph Animation Engine ---
+        class GraphEngine {
+            constructor(svgId, vizId) {
+                this.svg = document.getElementById(svgId);
+                this.viz = document.getElementById(vizId);
+                this.staticPaths = []; // Keep track of static topology lines
+            }
+
+            // Find center coordinates relative to the visualization container
+            _getCoords(el, align = 'center') {
+                const box = el.getBoundingClientRect();
+                const vizBox = this.viz.getBoundingClientRect();
+                let x = box.left - vizBox.left;
+                const y = box.top + box.height / 2 - vizBox.top;
+                
+                if (align === 'center') x += box.width / 2;
+                else if (align === 'right') x += box.width;
+                // else left is default
+
+                return { x, y };
+            }
+
+            // Draws an SVG bezier curve
+            _createPath(fromEl, toEl, isStatic = false) {
+                const fromBox = fromEl.getBoundingClientRect();
+                const toBox = toEl.getBoundingClientRect();
+                
+                // Determine connection points based on relative horizontal positions
+                const fromAlign = (fromBox.left < toBox.left) ? 'right' : 'left';
+                const toAlign = (fromBox.left < toBox.left) ? 'left' : 'right';
+
+                const p1 = this._getCoords(fromEl, fromAlign);
+                const p2 = this._getCoords(toEl, toAlign);
+                
+                const curve = Math.max(Math.abs(p2.x - p1.x) * 0.4, 60);
+
+                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                path.setAttribute("d", `M ${p1.x} ${p1.y} C ${p1.x + (fromAlign==='right'?curve:-curve)} ${p1.y}, ${p2.x - (toAlign==='left'?curve:-curve)} ${p2.y}, ${p2.x} ${p2.y}`);
+                
+                if (isStatic) {
+                    path.setAttribute("class", "conn-path");
+                    this.staticPaths.push(path);
+                } else {
+                    path.setAttribute("class", "conn-path active");
+                }
+                
+                this.svg.appendChild(path);
+                return path;
+            }
+
+            // Redraws the background topology graph
+            drawTopology() {
+                this.staticPaths.forEach(p => p.remove());
+                this.staticPaths = [];
+                
+                if (!this.svg) return;
+                
+                const journal = document.getElementById('mainJournal');
+                ['agg-sender', 'agg-receiver'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if(el && journal) this._createPath(el, journal, true);
+                });
+
+                document.querySelectorAll('.proj-node').forEach(proj => {
+                    if (proj.style.display === 'none') return;
+                    if(journal) this._createPath(journal, proj, true);
+                    
+                    document.querySelectorAll(`.record-for-${proj.id}`).forEach(record => {
+                        this._createPath(proj, record, true);
+                    });
+                });
+            }
+
+            // Dispatches an event card across the graph
+            dispatch(options) {
+                // options: { eventName, amount, fromId, toId, onArrive }
+                const fromEl = document.getElementById(options.fromId);
+                let toEl = document.getElementById(options.toId);
+                
+                // If toId is a generic projection, we might need to find the specific user record card later
+                if (!toEl) {
+                    // Try to find record node if targeting a specific user record
+                    toEl = Array.from(document.querySelectorAll('.record-node')).find(n => n.dataset.userId && n.dataset.userId.includes(options.toId));
+                }
+
+                if (!fromEl || !toEl) {
+                    if(options.onArrive) options.onArrive(); // Fail safe
+                    return; 
+                }
+
+                // 1. Create dynamic path
+                const pathElem = this._createPath(fromEl, toEl, false);
+                
+                // 2. Create Event Card Particle
+                const particle = document.createElement('div');
+                particle.className = 'event-particle';
+                const icon = (options.eventName.includes('Funds') || options.eventName.includes('Incoming')) ? '🚚' : '⚡';
+                const displayAmt = options.amount ? `¥${options.amount}` : "";
+                
+                particle.innerHTML = `
+                    <div class="event-icon">${icon}</div>
+                    <div style="display:flex; flex-direction:column;">
+                        <div style="font-weight:800; color:#fff;">${options.eventName}</div>
+                        ${displayAmt ? `<div class="event-data-label">${displayAmt}</div>` : ''}
+                        <div class="stage-indicator">Traveling...</div>
+                    </div>
+                `;
+                this.viz.appendChild(particle);
+
+                // 3. Animate Travel
+                const len = pathElem.getTotalLength();
+                let start = null;
+                
+                const step = (ts) => {
+                    if (!start) start = ts;
+                    const progress = (ts - start) / ANIMATION_CONFIG.travelTimeMs;
+                    
+                    if (progress < 1) {
+                        const pt = pathElem.getPointAtLength(progress * len);
+                        particle.style.left = pt.x + 'px'; 
+                        particle.style.top = pt.y + 'px'; 
+                        particle.style.display = 'flex';
+                        requestAnimationFrame(step);
+                    } else {
+                        // 4. Arrived: Process Phase
+                        particle.style.display = 'none'; // Hide travel card
+                        pathElem.remove(); // Remove dynamic path
+                        
+                        toEl.classList.add('highlight-proj'); // Generic highlight
+                        
+                        // Execute data update immediately when arrived
+                        if (options.onArrive) options.onArrive();
+
+                        setTimeout(() => {
+                            toEl.classList.remove('highlight-proj');
+                            particle.remove();
+                        }, ANIMATION_CONFIG.processTimeMs);
+                    }
+                };
+                requestAnimationFrame(step);
+            }
+        }
+
+        const engine = new GraphEngine('svgCanvas', 'archViz');
+
+        // --- Business Logic ---
+        
         async function handleTx(type) {
-            const uid = document.getElementById('userId').value, amt = document.getElementById('amount').value;
+            const uid = document.getElementById('userId').value;
+            let amt = document.getElementById('amount').value;
+            if (type === 'withdraw') amt = -Math.abs(amt);
+            
             const eventName = (type === 'deposit' || type === 'withdraw') ? 'BalanceChanged' : 'DomainEvent';
             pendingUserAction = { type: eventName, amount: amt, senderId: uid, consumed: false };
             const originId = (uid === document.getElementById('targetId').value) ? 'agg-receiver' : 'agg-sender';
-            animateEventProduction(eventName, amt, originId);
+            
+            engine.dispatch({
+                fromId: originId,
+                toId: 'mainJournal',
+                eventName: eventName,
+                amount: amt
+            });
+
             try {
-                const res = await fetch(`/${type}/${uid}/${amt}`, { method: 'POST' });
+                const res = await fetch(`/${type}/${uid}/${Math.abs(amt)}`, { method: 'POST' });
                 const data = await res.json();
                 if (data.error) { addLog(`Rejected: ${data.error.message}`, '#ef4444'); pendingUserAction = null; }
             } catch (e) { addLog(`Error: ${e.message}`, '#ef4444'); pendingUserAction = null; }
@@ -283,122 +447,7 @@
 
         async function handleTransfer() {
             const from = document.getElementById('userId').value, to = document.getElementById('targetId').value, amt = document.getElementById('amount').value;
-            pendingUserAction = { type: 'FundsDeducted', amount: amt, senderId: from, consumed: false };
-            animateEventProduction('FundsReserved', amt, 'agg-sender');
-            try { await fetch(`/transfer/${from}/${to}/${amt}`, { method: 'POST' }); } catch(e) { pendingUserAction = null; }
-        }
-
-        function drawConnections() {
-            const svg = document.getElementById('svgCanvas');
-            if (!svg) return;
-            requestAnimationFrame(() => {
-                svg.innerHTML = '';
-                const viz = document.getElementById('archViz').getBoundingClientRect();
-                const journalBox = document.getElementById('mainJournal').getBoundingClientRect();
-                const jL = journalBox.left - viz.left, jR = journalBox.right - viz.left, jY = journalBox.top + journalBox.height/2 - viz.top;
-
-                ['agg-sender', 'agg-receiver'].forEach((id, idx) => {
-                    const box = document.getElementById(id).getBoundingClientRect();
-                    createPath(box.right - viz.left, box.top + box.height/2 - viz.top, jL, jY, `path-aj-${idx}`, svg);
-                });
-
-                document.querySelectorAll('.proj-node').forEach(proj => {
-                    if (proj.style.display === 'none') return;
-                    const pBox = proj.getBoundingClientRect();
-                    const pL = pBox.left - viz.left, pR = pBox.right - viz.left, pY = pBox.top + pBox.height/2 - viz.top;
-                    createPath(jR, jY, pL, pY, `path-jp-${proj.id}`, svg);
-                    document.querySelectorAll(`.record-for-${proj.id}`).forEach(record => {
-                        const rBox = record.getBoundingClientRect();
-                        const safeId = record.dataset.userId.replace(/[^a-zA-Z0-9]/g, '');
-                        createPath(pR, pY, rBox.left - viz.left, rBox.top + rBox.height/2 - viz.top, `path-pr-${proj.id}-${safeId}`, svg, 100);
-                    });
-                });
-            });
-        }
-
-        function createPath(x1, y1, x2, y2, id, svg, curve = 60) {
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("d", `M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`);
-            path.setAttribute("class", "conn-path");
-            path.setAttribute("id", id);
-            svg.appendChild(path);
-        }
-
-        function animateEventProduction(eventName, amount, originId) {
-            const viz = document.getElementById('archViz');
-            const particle = document.createElement('div');
-            particle.className = 'event-particle';
-            particle.innerHTML = `<div class="event-icon">⚡</div><div style="display:flex; flex-direction:column;"><div style="font-weight:800; color:#fff;">${eventName}</div><div class="event-data-label">¥${amount}</div><div class="stage-indicator">Persisting...</div></div>`;
-            viz.appendChild(particle);
-            const originIdx = originId === 'agg-receiver' ? 1 : 0;
-            const path = document.getElementById(`path-aj-${originIdx}`);
-            runStage(path, particle, 1000, "Persisting...", () => {
-                const journal = document.getElementById('mainJournal');
-                journal.classList.add('highlight-journal');
-                const unsub = document.createElement('div');
-                unsub.className = 'unsubscribed-label';
-                unsub.textContent = 'Persisted in Journal';
-                journal.appendChild(unsub);
-                setTimeout(() => { journal.classList.remove('highlight-journal'); particle.remove(); setTimeout(() => unsub.remove(), 1000); }, 800);
-            });
-        }
-
-        function animatePath(projId, eventName, amount, targetUserId) {
-            const viz = document.getElementById('archViz');
-            const particle = document.createElement('div');
-            particle.className = 'event-particle';
-            const icon = (eventName.includes('Funds') || eventName.includes('Incoming')) ? '🚚' : '💰';
-            const displayAmt = amount ? `¥${amount}` : "";
-            particle.innerHTML = `<div class="event-icon">${icon}</div><div style="display:flex; flex-direction:column;"><div style="font-weight:800; color:#fff;">${eventName}</div>${displayAmt ? `<div class="event-data-label">${displayAmt}</div>` : ''}<div class="stage-indicator" id="particle-stage">Streaming...</div></div>`;
-            viz.appendChild(particle);
-
-            const jpPath = document.getElementById(`path-jp-${projId}`);
-            
-            // Resolve the actual persistence ID (e.g. "CreditBalance|uuid") by finding the matching record node
-            let prPath = null;
-            let resolvedUserId = null;
-            if (targetUserId) {
-                const recNode = Array.from(document.querySelectorAll('.record-node')).find(n => n.dataset.userId.includes(targetUserId));
-                if (recNode) {
-                    resolvedUserId = recNode.dataset.userId;
-                    const safeTargetId = resolvedUserId.replace(/[^a-zA-Z0-9]/g, '');
-                    prPath = document.getElementById(`path-pr-${projId}-${safeTargetId}`);
-                }
-            }
-
-            runStage(jpPath, particle, 1500, "Streaming...", () => {
-                document.getElementById(projId).classList.add('highlight-proj');
-                setTimeout(() => {
-                    document.getElementById(projId).classList.remove('highlight-proj');
-                    // Phase 2: Projection to Record (Fan-out)
-                    if (prPath) {
-                        runStage(prPath, particle, 1500, "Finalizing...", () => {
-                            particle.remove();
-                            refreshRecordUI(resolvedUserId);
-                        });
-                    } else {
-                        particle.remove();
-                    }
-                }, 500);
-            });
-        }
-
-        function runStage(pathElem, particle, duration, stageText, onComplete) {
-            if (!pathElem) return onComplete();
-            const si = particle.querySelector('.stage-indicator'); if (si) si.textContent = stageText;
-            pathElem.classList.add('active');
-            const len = pathElem.getTotalLength();
-            let start = null;
-            function step(ts) {
-                if (!start) start = ts;
-                const progress = (ts - start) / duration;
-                if (progress < 1) {
-                    const pt = pathElem.getPointAtLength(progress * len);
-                    particle.style.left = pt.x + 'px'; particle.style.top = pt.y + 'px'; particle.style.display = 'flex';
-                    requestAnimationFrame(step);
-                } else { pathElem.classList.remove('active'); onComplete(); }
-            }
-            requestAnimationFrame(step);
+            try { await fetch(`/transfer/${from}/${to}/${amt}`, { method: 'POST' }); } catch(e) { }
         }
 
         function refreshRecordUI(userId) {
@@ -407,7 +456,7 @@
             const s = dataBuffer[userId];
             node.classList.add('highlight-read');
             node.querySelector('.record-data-inner').innerHTML = `<span class="record-period">${s.year}-${s.month}</span><div style="display:flex; gap:15px;"><span style="color:var(--color-read)">+${s.income}</span><span style="color:#ef4444">-${s.expense}</span></div>`;
-            setTimeout(() => node.classList.remove('highlight-read'), 2000);
+            setTimeout(() => node.classList.remove('highlight-read'), ANIMATION_CONFIG.processTimeMs);
         }
 
         async function update() {
@@ -425,6 +474,9 @@
             const data = await res.json();
             const isLive = document.getElementById('liveToggle').checked, showSystem = document.getElementById('systemToggle').checked;
             
+            // Buffer data for records
+            data.summaries.forEach(s => { dataBuffer[s.userId] = s; });
+
             data.offsets.forEach(o => {
                 const config = findConfig(o.name), isSystem = !config;
                 const id = `proj-${config ? config.idSuffix : o.name.replace(/[^a-zA-Z0-9]/g, '')}`;
@@ -434,32 +486,62 @@
                     node.className = 'node proj-node'; node.id = id;
                     node.innerHTML = `<h4>${config ? config.label : o.name}</h4><div class="val offset-val" style="font-family:monospace; font-weight:800; font-size:1.1rem; color:var(--color-projection); margin-top:5px;">0</div>`;
                     document.getElementById('projectionList').appendChild(node);
-                    setTimeout(drawConnections, 200);
+                    setTimeout(() => engine.drawTopology(), 50);
                 }
-                if (node) node.style.display = (isSystem && !showSystem) ? 'none' : 'block';
+                
+                if (node) {
+                    const targetDisplay = (isSystem && !showSystem) ? 'none' : 'block';
+                    if (node.style.display !== targetDisplay) {
+                        node.style.display = targetDisplay;
+                        setTimeout(() => engine.drawTopology(), 50);
+                    }
+                }
+                
                 if (node && node.style.display !== 'none') {
                     const hasChanged = lastOffsets[o.name] !== undefined && lastOffsets[o.name] !== o.offset;
                     if (hasChanged || (!isLive && !isSystem && Math.random() < 0.02)) {
-                        node.querySelector('.offset-val').textContent = o.offset;
                         let eventName = "Sync Event", amount = null, target = null;
+                        
                         if (hasChanged && pendingUserAction && !pendingUserAction.consumed) {
                             eventName = pendingUserAction.type; amount = pendingUserAction.amount;
                             target = (eventName.includes('Recorded') || eventName.includes('Incoming')) ? receiverId : senderId;
                             pendingUserAction.consumed = true; 
-                        } else if (!isLive) { eventName = "Demo Event"; target = senderId; }
+                        } else if (!isLive) { 
+                            eventName = "Demo Event"; target = senderId; 
+                        }
+                        
                         if (hasChanged || !isLive) {
                             if (eventName !== "Sync Event" || showSystem) {
                                 addLog(`Projection [${o.name}] advanced: <b>${eventName}</b>`, 'var(--color-projection)');
-                                animatePath(id, eventName, amount, target);
+                                // Dispatch Journal -> Projection -> Record
+                                engine.dispatch({
+                                    fromId: 'mainJournal',
+                                    toId: id,
+                                    eventName: eventName,
+                                    amount: amount,
+                                    onArrive: () => {
+                                        node.querySelector('.offset-val').textContent = o.offset;
+                                        if (target) {
+                                            engine.dispatch({
+                                                fromId: id,
+                                                toId: target, // Will resolve to record card via dataset
+                                                eventName: "Update View",
+                                                onArrive: () => refreshRecordUI(target)
+                                            });
+                                        }
+                                    }
+                                });
                             }
                         }
-                    } else node.querySelector('.offset-val').textContent = o.offset;
+                    } else {
+                         node.querySelector('.offset-val').textContent = o.offset;
+                    }
                     lastOffsets[o.name] = o.offset;
                 }
             });
 
+            // Ensure record nodes exist
             data.summaries.forEach(s => {
-                dataBuffer[s.userId] = s;
                 let recNode = document.querySelector(`[data-user-id="${s.userId}"]`);
                 if (!recNode) {
                     recNode = document.createElement('div');
@@ -467,8 +549,10 @@
                     recNode.dataset.userId = s.userId;
                     recNode.innerHTML = `<div class="record-id">${s.userId}</div><div class="record-data record-data-inner">...</div>`;
                     document.getElementById('readModelList').appendChild(recNode);
-                    setTimeout(drawConnections, 200);
+                    setTimeout(() => engine.drawTopology(), 50);
                     refreshRecordUI(s.userId);
+                } else if(!pendingUserAction) {
+                    refreshRecordUI(s.userId); // Background refresh if no active animation
                 }
             });
 
@@ -479,9 +563,69 @@
             });
         }
 
-        window.addEventListener('resize', drawConnections);
-        document.getElementById('systemToggle').addEventListener('change', () => setTimeout(drawConnections, 50));
-        setTimeout(drawConnections, 500);
+        window.addEventListener('resize', () => engine.drawTopology());
+        document.getElementById('systemToggle').addEventListener('change', () => {
+            const showSystem = document.getElementById('systemToggle').checked;
+            document.querySelectorAll('.proj-node').forEach(node => {
+                const isSystem = !knownProjections.some(p => node.id.includes(p.idSuffix));
+                if (isSystem) node.style.display = showSystem ? 'block' : 'none';
+            });
+            setTimeout(() => engine.drawTopology(), 50);
+        });
+
+        // --- Saga WebSocket Integration ---
+        const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
+        ws.onmessage = function(msg) {
+            const event = JSON.parse(msg.data);
+            const data = event.data;
+            const senderId = document.getElementById('userId').value;
+            const receiverId = document.getElementById('targetId').value;
+            const amt = document.getElementById('amount').value;
+            const projId = 'proj-MonthlySummary';
+
+            if (event.type === 'StepOngoing') {
+                const step = data.stepId, phase = data.phase;
+                let origin = "", eventName = "";
+                if (step === 'Step-A' && phase.includes('Prepare')) { eventName = 'FundsReserved'; origin = 'agg-sender'; }
+                else if (step === 'Step-B' && phase.includes('Prepare')) { eventName = 'IncomingCreditsRecorded'; origin = 'agg-receiver'; }
+                else if (step === 'Step-A' && phase.includes('Commit')) { eventName = 'FundsDeducted'; origin = 'agg-sender'; }
+                else if (step === 'Step-B' && phase.includes('Commit')) { eventName = 'IncomingCreditsCommited'; origin = 'agg-receiver'; }
+                
+                if (origin) {
+                    engine.dispatch({ fromId: origin, toId: 'mainJournal', eventName: eventName, amount: amt });
+                }
+            } else if (event.type === 'StepCompleted') {
+                const step = data.stepId, phase = data.phase;
+                let eventName = "", target = "";
+                if (step === 'Step-A' && phase.includes('Prepare')) { eventName = 'FundsReserved'; target = senderId; }
+                else if (step === 'Step-B' && phase.includes('Prepare')) { eventName = 'IncomingCreditsRecorded'; target = receiverId; }
+                else if (step === 'Step-A' && phase.includes('Commit')) { eventName = 'FundsDeducted'; target = senderId; }
+                else if (step === 'Step-B' && phase.includes('Commit')) { eventName = 'IncomingCreditsCommited'; target = receiverId; }
+                
+                if (eventName) {
+                    addLog(`Saga Step Completed: <b>${eventName}</b>`, 'var(--color-projection)');
+                    
+                    // Dispatch Journal -> Projection
+                    engine.dispatch({
+                        fromId: 'mainJournal',
+                        toId: projId,
+                        eventName: eventName,
+                        amount: amt,
+                        onArrive: () => {
+                            // Dispatch Projection -> Record
+                            engine.dispatch({
+                                fromId: projId,
+                                toId: target, // Resolves to record card
+                                eventName: "Update View",
+                                onArrive: () => refreshRecordUI(target)
+                            });
+                        }
+                    });
+                }
+            }
+        };
+
+        setTimeout(() => engine.drawTopology(), 500);
         setInterval(update, 2000);
         update();
     </script>
