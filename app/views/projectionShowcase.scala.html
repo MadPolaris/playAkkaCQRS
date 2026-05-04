@@ -1,0 +1,489 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="@messages.lang.code">
+<head>
+    <meta charset="UTF-8">
+    <title>Parallel Projection Flow - PlayAkkaCQRS</title>
+    <style>
+        :root {
+            --color-journal: #f97316;
+            --color-projection: #3b82f6;
+            --color-read: #22c55e;
+            --color-aggregate: #fbbf24;
+            --bg-dark: #0f172a;
+            --panel-dark: #1e293b;
+        }
+
+        body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-dark); color: #f8fafc; margin: 0; padding: 20px; }
+        .container { max-width: 1800px; margin: 0 auto; }
+        
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 20px; margin-bottom: 30px; }
+        h1 { margin: 0; font-size: 1.5rem; color: #38bdf8; }
+        .nav-links a { color: #38bdf8; text-decoration: none; font-weight: 600; margin-left: 20px; font-size: 0.9rem; }
+
+        /* Controls */
+        .controls { background: var(--panel-dark); padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 30px; display: grid; grid-template-columns: 1fr 1fr auto; gap: 20px; }
+        .control-group { display: flex; flex-direction: column; gap: 10px; }
+        .control-group h3 { margin: 0; font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; }
+        input { background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; font-size: 0.85rem; }
+        .btn { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        .btn-primary { background: var(--color-read); color: #000; }
+        .btn-secondary { background: var(--color-projection); color: white; }
+        
+        .layout-main { display: flex; flex-direction: column; gap: 30px; }
+        
+        /* Optimized Architecture Visualization */
+        .arch-viz { 
+            display: grid; 
+            grid-template-columns: 280px 140px 180px 140px 280px 140px 420px; 
+            align-items: center; 
+            background: var(--panel-dark); 
+            padding: 50px; 
+            border-radius: 24px; 
+            border: 1px solid #334155; 
+            min-height: 600px;
+            position: relative;
+            gap: 0;
+        }
+
+        .node { 
+            background: #1e293b; 
+            border: 2px solid #334155; 
+            border-radius: 12px; 
+            padding: 18px; 
+            text-align: center; 
+            position: relative; 
+            z-index: 2;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        }
+        .node h4 { margin: 0; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .agg-node { border-color: var(--color-aggregate); background: rgba(251, 191, 36, 0.03); }
+        .agg-balance { color: var(--color-aggregate); font-weight: 800; font-size: 1.3rem; margin: 6px 0; font-family: 'Fira Code', monospace; }
+        .agg-status { font-size: 0.55rem; color: #64748b; word-break: break-all; font-family: monospace; line-height: 1.2; }
+
+        .journal-node { border-color: var(--color-journal); background: rgba(249, 115, 22, 0.03); width: 160px; }
+        .proj-node { border-color: var(--color-projection); background: rgba(59, 130, 246, 0.03); }
+        
+        .record-node { border-color: var(--color-read); width: 400px; text-align: left; margin-bottom: 12px; background: rgba(34, 197, 94, 0.02); padding: 15px 20px; transition: all 0.5s; }
+        .record-id { font-family: 'Fira Code', monospace; font-size: 0.6rem; color: #475569; word-break: break-all; margin-bottom: 6px; }
+        .record-data { color: var(--color-read); font-weight: 800; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
+        .record-period { font-size: 0.7rem; color: #94a3b8; background: #0f172a; padding: 2px 8px; border-radius: 4px; border: 1px solid #1e293b; }
+
+        /* Technical Decoder Styles */
+        .decoder-panel { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 25px; margin-top: 30px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; }
+        .decoder-item h5 { margin: 0 0 10px 0; color: #38bdf8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
+        .decoder-item p { margin: 0; font-size: 0.75rem; color: #94a3b8; line-height: 1.6; }
+        .highlight-text { color: #f8fafc; font-weight: 600; }
+        
+        .unsubscribed-label { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 0.5rem; color: #ef4444; font-weight: bold; animation: fadeUp 1.5s forwards; white-space: nowrap; pointer-events: none; }
+        @@keyframes fadeUp { 0% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -30px); } }
+
+        .tooltip { position: relative; cursor: help; }
+        .tooltip:hover::after { content: attr(data-tip); position: absolute; bottom: 120%; left: 50%; transform: translateX(-50%); background: #1e293b; color: #fff; padding: 8px 12px; border-radius: 6px; font-size: 0.65rem; width: 220px; z-index: 1000; box-shadow: 0 10px 15px rgba(0,0,0,0.5); border: 1px solid #334155; line-height: 1.4; text-align: left; }
+
+        /* Toggles */
+        .toggle-container { background: #0f172a; padding: 10px 20px; border-radius: 30px; border: 1px solid #334155; display: flex; align-items: center; gap: 10px; font-size: 0.8rem; }
+        .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #334155; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--color-read); }
+        input:checked + .slider:before { transform: translateX(20px); }
+        
+        /* Connections */
+        .connector-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+        .conn-path { fill: none; stroke: rgba(255, 255, 255, 0.15); stroke-width: 1.5; transition: stroke 0.4s, stroke-width 0.4s; }
+        .conn-path.active { stroke: var(--color-projection); stroke-width: 4; filter: drop-shadow(0 0 12px var(--color-projection)); }
+
+        .event-particle { 
+            position: absolute; 
+            padding: 10px 18px;
+            background: rgba(15, 23, 42, 0.95); 
+            backdrop-filter: blur(12px);
+            color: white;
+            border-radius: 14px; 
+            font-size: 0.75rem;
+            font-weight: 600;
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 0 30px var(--color-journal), inset 0 0 0 1px rgba(255,255,255,0.15);
+            white-space: nowrap;
+            display: none;
+            align-items: center;
+            gap: 12px;
+            transform: translate(-50%, -50%);
+            border-left: 4px solid var(--color-journal);
+        }
+        .event-icon { font-size: 1.2rem; }
+        .event-data-label { color: #fbbf24; font-weight: 900; font-family: 'Fira Code', monospace; font-size: 0.85rem; }
+        .stage-indicator { font-size: 0.55rem; color: #94a3b8; text-transform: uppercase; margin-top: 3px; letter-spacing: 1px; }
+
+        /* Highlights */
+        .highlight-proj { border-color: var(--color-projection) !important; box-shadow: 0 0 25px var(--color-projection); background: rgba(59, 130, 246, 0.1); transform: scale(1.05); }
+        .highlight-read { border-color: var(--color-read) !important; box-shadow: 0 0 25px var(--color-read); background: rgba(34, 197, 94, 0.1) !important; transform: scale(1.05); }
+        .highlight-journal { border-color: var(--color-journal) !important; box-shadow: 0 0 25px var(--color-journal); background: rgba(249, 115, 22, 0.1); }
+
+        /* Tables */
+        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .panel { background: var(--panel-dark); border-radius: 16px; padding: 24px; border: 1px solid #334155; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+        th { text-align: left; padding: 12px; color: #64748b; border-bottom: 1px solid #334155; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 1px; }
+        td { padding: 12px; border-bottom: 1px solid #0f172a; color: #cbd5e1; }
+        .log-window { height: 300px; overflow-y: auto; background: #0f172a; padding: 15px; border-radius: 8px; font-family: 'Fira Code', monospace; font-size: 0.7rem; border: 1px solid #334155; line-height: 1.5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Parallel Projection Flow</h1>
+            <nav class="nav-links">
+                <a href="/showcase">Saga Showcase</a>
+                <a href="/ddd-guide">DDD Radar</a>
+            </nav>
+        </header>
+
+        <div class="controls">
+            <div class="control-group">
+                <h3>Deposit / Withdraw</h3>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="userId" placeholder="User UUID" value="550e8400-e29b-41d4-a716-446655440000" style="flex: 1;">
+                    <button class="btn" onclick="genUuid('userId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">GEN</button>
+                    <input type="number" id="amount" value="100" style="width: 80px;">
+                    <button class="btn btn-primary" onclick="handleTx('deposit')">DEPOSIT</button>
+                    <button class="btn btn-primary" style="background:#ef4444; color:white;" onclick="handleTx('withdraw')">WITHDRAW</button>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>Money Transfer Saga</h3>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="targetId" value="6ba7b810-9dad-11d1-80b4-00c04fd430c8" style="flex: 1;">
+                    <button class="btn" onclick="genUuid('targetId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">GEN</button>
+                    <button class="btn btn-secondary" onclick="handleTransfer()">START TRANSFER SAGA</button>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="toggle-container">
+                    <span>Demo</span>
+                    <label class="switch"><input type="checkbox" id="liveToggle" checked><span class="slider"></span></label>
+                    <span>Live</span>
+                </div>
+                <div class="toggle-container">
+                    <span>System</span>
+                    <label class="switch"><input type="checkbox" id="systemToggle"><span class="slider"></span></label>
+                </div>
+            </div>
+        </div>
+
+        <div class="layout-main">
+            <div style="position: relative;">
+                <svg class="connector-svg" id="svgCanvas"></svg>
+                <div class="arch-viz" id="archViz">
+                    <!-- Stage 1: Aggregates -->
+                    <div style="display: flex; flex-direction: column; gap: 30px;" id="aggregateList">
+                        <div class="node agg-node tooltip" id="agg-sender" data-tip="Aggregate Root: The consistency boundary. It processes commands, validates invariants, and emits events.">
+                            <h4>Aggregate: Sender</h4>
+                            <div class="agg-balance" id="sender-balance">¥0.00</div>
+                            <div class="agg-status" id="sender-id-label">...</div>
+                        </div>
+                        <div class="node agg-node tooltip" id="agg-receiver" data-tip="Domain Entity: An independently addressable unit of state. Each account is its own actor instance.">
+                            <h4>Aggregate: Receiver</h4>
+                            <div class="agg-balance" id="receiver-balance">¥0.00</div>
+                            <div class="agg-status" id="receiver-id-label">...</div>
+                        </div>
+                    </div>
+                    
+                    <div></div>
+
+                    <!-- Stage 2: Central Journal -->
+                    <div class="node journal-node tooltip" id="mainJournal" data-tip="Event Journal (MongoDB): The immutable source of truth. Events are appended here first. Projections later PULL from this store.">
+                        <h4>Event Journal</h4>
+                        <div class="val" style="font-weight: 800; color:var(--color-journal);">MongoDB</div>
+                        <div style="font-size: 0.5rem; color: #64748b; margin-top: 5px;">Append-Only Store</div>
+                    </div>
+
+                    <div></div>
+
+                    <!-- Stage 3: Projections -->
+                    <div class="projection-list" id="projectionList"></div>
+
+                    <div></div>
+
+                    <!-- Stage 4: Fan-out Records -->
+                    <div class="readmodel-list" id="readModelList" style="display: flex; flex-direction: column; gap: 10px;">
+                    </div>
+                </div>
+
+                <!-- Technical Decoder Section -->
+                <div class="decoder-panel">
+                    <div class="decoder-item">
+                        <h5>📡 How events move</h5>
+                        <p>Unlike Kafka or RabbitMQ, this project uses a <span class="highlight-text">Pull-based mechanism</span>. The Projection service polls the MongoDB journal for new events using Akka Persistence Query.</p>
+                    </div>
+                    <div class="decoder-item">
+                        <h5>🆔 Instance Identifier</h5>
+                        <p>The ID next to 'Monthly Summary' is the <span class="highlight-text">Projection Instance ID</span>. It tracks the physical Offset in the DB, ensuring events are processed exactly once.</p>
+                    </div>
+                    <div class="decoder-item">
+                        <h5>🛡️ Domain Invariants</h5>
+                        <p>All business rules (like 'Min Balance') are checked on the <span class="highlight-text">Write Side (Aggregates)</span>. The Read Side only reflects results after a successful state transition.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="data-grid">
+                <div class="panel">
+                    <h4>Read Model: Monthly Summary (MySQL)</h4>
+                    <table id="summaryTable">
+                        <thead><tr><th>User ID</th><th>Period</th><th>Income</th><th>Expense</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="panel">
+                    <h4>Pipeline Execution Logs</h4>
+                    <div class="log-window" id="logWindow"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const knownProjections = [{ key: 'MonthlyIncomeAndExpenseSummary', label: 'Monthly Summary', idSuffix: 'MonthlySummary' }];
+        let lastOffsets = {};
+        let pendingUserAction = null; 
+        let dataBuffer = {}; 
+
+        function findConfig(fullName) { return knownProjections.find(p => fullName.toLowerCase().includes(p.key.toLowerCase())); }
+        function genUuid(id) { document.getElementById(id).value = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (Math.random()*16|0).toString(16)); }
+        
+        function addLog(msg, color = '#94a3b8') {
+            const log = document.getElementById('logWindow');
+            const entry = document.createElement('div');
+            entry.style.color = color;
+            entry.innerHTML = `<span style="color:#334155">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
+            log.prepend(entry);
+        }
+
+        async function handleTx(type) {
+            const uid = document.getElementById('userId').value, amt = document.getElementById('amount').value;
+            const eventName = (type === 'deposit' || type === 'withdraw') ? 'BalanceChanged' : 'DomainEvent';
+            pendingUserAction = { type: eventName, amount: amt, senderId: uid, consumed: false };
+            const originId = (uid === document.getElementById('targetId').value) ? 'agg-receiver' : 'agg-sender';
+            animateEventProduction(eventName, amt, originId);
+            try {
+                const res = await fetch(`/${type}/${uid}/${amt}`, { method: 'POST' });
+                const data = await res.json();
+                if (data.error) { addLog(`Rejected: ${data.error.message}`, '#ef4444'); pendingUserAction = null; }
+            } catch (e) { addLog(`Error: ${e.message}`, '#ef4444'); pendingUserAction = null; }
+        }
+
+        async function handleTransfer() {
+            const from = document.getElementById('userId').value, to = document.getElementById('targetId').value, amt = document.getElementById('amount').value;
+            pendingUserAction = { type: 'FundsDeducted', amount: amt, senderId: from, consumed: false };
+            animateEventProduction('FundsReserved', amt, 'agg-sender');
+            try { await fetch(`/transfer/${from}/${to}/${amt}`, { method: 'POST' }); } catch(e) { pendingUserAction = null; }
+        }
+
+        function drawConnections() {
+            const svg = document.getElementById('svgCanvas');
+            if (!svg) return;
+            requestAnimationFrame(() => {
+                svg.innerHTML = '';
+                const viz = document.getElementById('archViz').getBoundingClientRect();
+                const journalBox = document.getElementById('mainJournal').getBoundingClientRect();
+                const jL = journalBox.left - viz.left, jR = journalBox.right - viz.left, jY = journalBox.top + journalBox.height/2 - viz.top;
+
+                ['agg-sender', 'agg-receiver'].forEach((id, idx) => {
+                    const box = document.getElementById(id).getBoundingClientRect();
+                    createPath(box.right - viz.left, box.top + box.height/2 - viz.top, jL, jY, `path-aj-${idx}`, svg);
+                });
+
+                document.querySelectorAll('.proj-node').forEach(proj => {
+                    if (proj.style.display === 'none') return;
+                    const pBox = proj.getBoundingClientRect();
+                    const pL = pBox.left - viz.left, pR = pBox.right - viz.left, pY = pBox.top + pBox.height/2 - viz.top;
+                    createPath(jR, jY, pL, pY, `path-jp-${proj.id}`, svg);
+                    document.querySelectorAll(`.record-for-${proj.id}`).forEach(record => {
+                        const rBox = record.getBoundingClientRect();
+                        const safeId = record.dataset.userId.replace(/[^a-zA-Z0-9]/g, '');
+                        createPath(pR, pY, rBox.left - viz.left, rBox.top + rBox.height/2 - viz.top, `path-pr-${proj.id}-${safeId}`, svg, 100);
+                    });
+                });
+            });
+        }
+
+        function createPath(x1, y1, x2, y2, id, svg, curve = 60) {
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute("d", `M ${x1} ${y1} C ${x1 + curve} ${y1}, ${x2 - curve} ${y2}, ${x2} ${y2}`);
+            path.setAttribute("class", "conn-path");
+            path.setAttribute("id", id);
+            svg.appendChild(path);
+        }
+
+        function animateEventProduction(eventName, amount, originId) {
+            const viz = document.getElementById('archViz');
+            const particle = document.createElement('div');
+            particle.className = 'event-particle';
+            particle.innerHTML = `<div class="event-icon">⚡</div><div style="display:flex; flex-direction:column;"><div style="font-weight:800; color:#fff;">${eventName}</div><div class="event-data-label">¥${amount}</div><div class="stage-indicator">Persisting...</div></div>`;
+            viz.appendChild(particle);
+            const originIdx = originId === 'agg-receiver' ? 1 : 0;
+            const path = document.getElementById(`path-aj-${originIdx}`);
+            runStage(path, particle, 1000, "Persisting...", () => {
+                const journal = document.getElementById('mainJournal');
+                journal.classList.add('highlight-journal');
+                const unsub = document.createElement('div');
+                unsub.className = 'unsubscribed-label';
+                unsub.textContent = 'Persisted in Journal';
+                journal.appendChild(unsub);
+                setTimeout(() => { journal.classList.remove('highlight-journal'); particle.remove(); setTimeout(() => unsub.remove(), 1000); }, 800);
+            });
+        }
+
+        function animatePath(projId, eventName, amount, targetUserId) {
+            const viz = document.getElementById('archViz');
+            const particle = document.createElement('div');
+            particle.className = 'event-particle';
+            const icon = (eventName.includes('Funds') || eventName.includes('Incoming')) ? '🚚' : '💰';
+            const displayAmt = amount ? `¥${amount}` : "";
+            particle.innerHTML = `<div class="event-icon">${icon}</div><div style="display:flex; flex-direction:column;"><div style="font-weight:800; color:#fff;">${eventName}</div>${displayAmt ? `<div class="event-data-label">${displayAmt}</div>` : ''}<div class="stage-indicator" id="particle-stage">Streaming...</div></div>`;
+            viz.appendChild(particle);
+
+            const jpPath = document.getElementById(`path-jp-${projId}`);
+            
+            // Resolve the actual persistence ID (e.g. "CreditBalance|uuid") by finding the matching record node
+            let prPath = null;
+            let resolvedUserId = null;
+            if (targetUserId) {
+                const recNode = Array.from(document.querySelectorAll('.record-node')).find(n => n.dataset.userId.includes(targetUserId));
+                if (recNode) {
+                    resolvedUserId = recNode.dataset.userId;
+                    const safeTargetId = resolvedUserId.replace(/[^a-zA-Z0-9]/g, '');
+                    prPath = document.getElementById(`path-pr-${projId}-${safeTargetId}`);
+                }
+            }
+
+            runStage(jpPath, particle, 1500, "Streaming...", () => {
+                document.getElementById(projId).classList.add('highlight-proj');
+                setTimeout(() => {
+                    document.getElementById(projId).classList.remove('highlight-proj');
+                    // Phase 2: Projection to Record (Fan-out)
+                    if (prPath) {
+                        runStage(prPath, particle, 1500, "Finalizing...", () => {
+                            particle.remove();
+                            refreshRecordUI(resolvedUserId);
+                        });
+                    } else {
+                        particle.remove();
+                    }
+                }, 500);
+            });
+        }
+
+        function runStage(pathElem, particle, duration, stageText, onComplete) {
+            if (!pathElem) return onComplete();
+            const si = particle.querySelector('.stage-indicator'); if (si) si.textContent = stageText;
+            pathElem.classList.add('active');
+            const len = pathElem.getTotalLength();
+            let start = null;
+            function step(ts) {
+                if (!start) start = ts;
+                const progress = (ts - start) / duration;
+                if (progress < 1) {
+                    const pt = pathElem.getPointAtLength(progress * len);
+                    particle.style.left = pt.x + 'px'; particle.style.top = pt.y + 'px'; particle.style.display = 'flex';
+                    requestAnimationFrame(step);
+                } else { pathElem.classList.remove('active'); onComplete(); }
+            }
+            requestAnimationFrame(step);
+        }
+
+        function refreshRecordUI(userId) {
+            const node = document.querySelector(`[data-user-id="${userId}"]`);
+            if (!node || !dataBuffer[userId]) return;
+            const s = dataBuffer[userId];
+            node.classList.add('highlight-read');
+            node.querySelector('.record-data-inner').innerHTML = `<span class="record-period">${s.year}-${s.month}</span><div style="display:flex; gap:15px;"><span style="color:var(--color-read)">+${s.income}</span><span style="color:#ef4444">-${s.expense}</span></div>`;
+            setTimeout(() => node.classList.remove('highlight-read'), 2000);
+        }
+
+        async function update() {
+            const senderId = document.getElementById('userId').value, receiverId = document.getElementById('targetId').value;
+            document.getElementById('sender-id-label').textContent = senderId;
+            document.getElementById('receiver-id-label').textContent = receiverId;
+            try {
+                const balRes = await fetch(`/api/aggregate/balances/${senderId},${receiverId}`);
+                const b = await balRes.json();
+                if (b[senderId]) document.getElementById('sender-balance').textContent = `¥${b[senderId].balance}`;
+                if (b[receiverId]) document.getElementById('receiver-balance').textContent = `¥${b[receiverId].balance}`;
+            } catch (e) {}
+
+            const res = await fetch('/api/projection/status');
+            const data = await res.json();
+            const isLive = document.getElementById('liveToggle').checked, showSystem = document.getElementById('systemToggle').checked;
+            
+            data.offsets.forEach(o => {
+                const config = findConfig(o.name), isSystem = !config;
+                const id = `proj-${config ? config.idSuffix : o.name.replace(/[^a-zA-Z0-9]/g, '')}`;
+                let node = document.getElementById(id);
+                if (!node && (!isSystem || showSystem)) {
+                    node = document.createElement('div');
+                    node.className = 'node proj-node'; node.id = id;
+                    node.innerHTML = `<h4>${config ? config.label : o.name}</h4><div class="val offset-val" style="font-family:monospace; font-weight:800; font-size:1.1rem; color:var(--color-projection); margin-top:5px;">0</div>`;
+                    document.getElementById('projectionList').appendChild(node);
+                    setTimeout(drawConnections, 200);
+                }
+                if (node) node.style.display = (isSystem && !showSystem) ? 'none' : 'block';
+                if (node && node.style.display !== 'none') {
+                    const hasChanged = lastOffsets[o.name] !== undefined && lastOffsets[o.name] !== o.offset;
+                    if (hasChanged || (!isLive && !isSystem && Math.random() < 0.02)) {
+                        node.querySelector('.offset-val').textContent = o.offset;
+                        let eventName = "Sync Event", amount = null, target = null;
+                        if (hasChanged && pendingUserAction && !pendingUserAction.consumed) {
+                            eventName = pendingUserAction.type; amount = pendingUserAction.amount;
+                            target = (eventName.includes('Recorded') || eventName.includes('Incoming')) ? receiverId : senderId;
+                            pendingUserAction.consumed = true; 
+                        } else if (!isLive) { eventName = "Demo Event"; target = senderId; }
+                        if (hasChanged || !isLive) {
+                            if (eventName !== "Sync Event" || showSystem) {
+                                addLog(`Projection [${o.name}] advanced: <b>${eventName}</b>`, 'var(--color-projection)');
+                                animatePath(id, eventName, amount, target);
+                            }
+                        }
+                    } else node.querySelector('.offset-val').textContent = o.offset;
+                    lastOffsets[o.name] = o.offset;
+                }
+            });
+
+            data.summaries.forEach(s => {
+                dataBuffer[s.userId] = s;
+                let recNode = document.querySelector(`[data-user-id="${s.userId}"]`);
+                if (!recNode) {
+                    recNode = document.createElement('div');
+                    recNode.className = `node record-node record-for-proj-MonthlySummary`;
+                    recNode.dataset.userId = s.userId;
+                    recNode.innerHTML = `<div class="record-id">${s.userId}</div><div class="record-data record-data-inner">...</div>`;
+                    document.getElementById('readModelList').appendChild(recNode);
+                    setTimeout(drawConnections, 200);
+                    refreshRecordUI(s.userId);
+                }
+            });
+
+            const body = document.querySelector('#summaryTable tbody');
+            body.innerHTML = '';
+            data.summaries.forEach(s => {
+                body.innerHTML += `<tr><td style="font-family:monospace; font-size:0.7rem;">${s.userId}</td><td>${s.year}-${s.month}</td><td style="color:var(--color-read); font-weight:bold;">+${s.income}</td><td style="color:#ef4444; font-weight:bold;">-${s.expense}</td></tr>`;
+            });
+        }
+
+        window.addEventListener('resize', drawConnections);
+        document.getElementById('systemToggle').addEventListener('change', () => setTimeout(drawConnections, 50));
+        setTimeout(drawConnections, 500);
+        setInterval(update, 2000);
+        update();
+    </script>
+</body>
+</html>

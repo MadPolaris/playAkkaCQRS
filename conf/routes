@@ -26,3 +26,10 @@ POST    /api/saga/fix-step/:transactionId/:stepId/:phase controllers.ShowcaseCon
 POST    /api/saga/resume/:transactionId           controllers.ShowcaseController.resume(transactionId: String)
 POST    /api/saga/retry-phase/:transactionId      controllers.ShowcaseController.retryPhase(transactionId: String)
 GET     /api/saga/history/:transactionId          controllers.ShowcaseController.getHistory(transactionId: String)
+
+# DDD & Projections
+GET     /ddd-guide                  controllers.DddGuideController.index()
+GET     /projection-showcase        controllers.DddGuideController.projectionShowcase()
+GET     /api/projection/status      controllers.DddGuideController.getProjectionStatus()
+GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(ids: String)
+
