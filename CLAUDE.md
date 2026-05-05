@@ -18,15 +18,6 @@ infrastructure/  ← 适配层：Persistence adapter, Bootstrap, DI binding
 
 **依赖规则（铁律）：内层绝不 import 外层包。违反时必须指出并拒绝。**
 
-## Methodology Docs
-
-架构决策背后的"为什么"和团队协作方法论，详见 `knowledge_base/methodology/README.md`：
-
-- [Harness Engineering](knowledge_base/methodology/harness-engineering.md) — 文档为什么这样组织？三层知识体系（规则→参考→指令）的理念
-- [架构最佳实践](knowledge_base/methodology/architecture-best-practices.md) — 为什么用洋葱？为什么到处是接口？为什么文件拆这么小？FP 和 DSL 模式的动机
-- [任务雷达](knowledge_base/methodology/task-radar.md) — 10+ 人如何通过 Miro 实时看板并行协作，无需加锁
-- [Agent 并行开发](knowledge_base/methodology/agent-parallel-dev.md) — 未来愿景：任务雷达 + AI Agent 的人机混合开发模式
-
 ## Coding Conventions
 
 ### Functional Programming First

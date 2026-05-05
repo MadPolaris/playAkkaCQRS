@@ -12,11 +12,20 @@ import net.imadz.infrastructure.proto.credits.{CreditBalanceEventPO => CreditEve
 import org.slf4j.LoggerFactory
 
 import java.time.{Instant, LocalDateTime, ZoneId}
+import java.util.concurrent.ConcurrentHashMap
 
 case class MonthlyIncomeAndExpenseSummaryProjectionHandler(sharding: ClusterSharding,
                                                            repository: MonthlyIncomeAndExpenseSummaryRepository) extends JdbcHandler[eventsourced.EventEnvelope[CreditEventPO.Event], ScalikeJdbcSession] {
   private val logger = LoggerFactory.getLogger(getClass)
   val adapter = new CreditBalanceEventAdapter
+
+  // Track pending incoming credits: transferId -> (userId, amount, year, month, day)
+  // Recorded stores the amount; Commited confirms it as actual income; Canceled discards it
+  private val pendingIncomingCredits = new ConcurrentHashMap[String, (String, BigDecimal, Int, Int, Int)]()
+
+  // Track which transfers have been deducted (Commit phase), so ReservationReleased
+  // can distinguish Commit compensation (must reverse expense) from Prepare compensation (no-op)
+  private val deductedTransfers = ConcurrentHashMap.newKeySet[String]()
 
   override def process(session: ScalikeJdbcSession, envelope: EventEnvelope[CreditEventPO.Event]): Unit = {
     adapter.fromJournal(envelope.event, "").events.foreach { event =>
@@ -33,34 +42,46 @@ case class MonthlyIncomeAndExpenseSummaryProjectionHandler(sharding: ClusterShar
           }
 
         case FundsReserved(transferId, amount) =>
-          logger.info(s"Processing FundsReserved for $userId: ${amount.amount} (Transfer: $transferId)")
-          repository.updateExpense(userId, amount.amount, year, month, day)
+          logger.info(s"Ignoring FundsReserved for $userId (Transfer: $transferId) - expense only recognized at Deduct time")
+          ()
 
         case FundsDeducted(transferId, amount) =>
-          logger.info(s"Ignoring FundsDeducted for $userId (Transfer: $transferId) - already accounted in FundsReserved")
-          ()
+          logger.info(s"Processing FundsDeducted for $userId: ${amount.amount} (Transfer: $transferId)")
+          deductedTransfers.add(transferId.toString)
+          repository.updateExpense(userId, amount.amount, year, month, day)
 
         case ReservationReleased(transferId, amount) =>
-          logger.info(s"Processing ReservationReleased for $userId: ${amount.amount} (Transfer: $transferId)")
-          repository.updateExpense(userId, -amount.amount, year, month, day)
+          val key = transferId.toString
+          if (deductedTransfers.remove(key)) {
+            logger.info(s"Reversing expense for $userId: ${amount.amount} (Commit compensation, Transfer: $transferId)")
+            repository.updateExpense(userId, -amount.amount, year, month, day)
+          } else {
+            logger.info(s"Ignoring ReservationReleased for $userId (Transfer: $transferId) - FundsDeducted was not processed (Prepare-phase compensation)")
+          }
 
         case IncomingCreditsRecorded(transferId, amount) =>
-          logger.info(s"Processing IncomingCreditsRecorded for $userId: ${amount.amount} (Transfer: $transferId)")
-          // IncomingCreditsRecorded represents expected income
-          repository.updateIncome(userId, amount.amount, year, month, day)
+          logger.info(s"Caching pending incoming credit for $userId: ${amount.amount} (Transfer: $transferId)")
+          pendingIncomingCredits.put(transferId.toString, (userId, amount.amount, year, month, day))
 
         case IncomingCreditsCommited(transferId) =>
-          logger.info(s"Processing IncomingCreditsCommited for $userId (Transfer: $transferId)")
-          ()
+          val key = transferId.toString
+          val pending = pendingIncomingCredits.remove(key)
+          if (pending != null) {
+            val (uid, amt, y, m, d) = pending
+            logger.info(s"Processing IncomingCreditsCommited for $uid: $amt (Transfer: $transferId)")
+            repository.updateIncome(uid, amt, y, m, d)
+          } else {
+            logger.warn(s"IncomingCreditsCommited for transferId=$key but no pending amount found (possible restart between Recorded and Commited)")
+          }
 
         case IncomingCreditsCanceled(transferId) =>
-          logger.info(s"Processing IncomingCreditsCanceled for $userId (Transfer: $transferId)")
-          // We need the amount to undo the income. Since IncomingCreditsCanceled doesn't have amount, 
-          // this is a design limitation. But for now we just log it.
-          // Wait, the event definition in CreditBalanceEntity:
-          // case class IncomingCreditsCanceled(transferId: Id) extends CreditBalanceEvent
-          // It doesn't have amount.
-          ()
+          val key = transferId.toString
+          val removed = pendingIncomingCredits.remove(key)
+          if (removed != null) {
+            logger.info(s"Cancelled pending incoming credit for transferId=$key")
+          } else {
+            logger.warn(s"IncomingCreditsCanceled for transferId=$key but no pending amount found")
+          }
 
         case e =>
           logger.debug(s"Ignoring event for projection: ${e.getClass.getSimpleName}")

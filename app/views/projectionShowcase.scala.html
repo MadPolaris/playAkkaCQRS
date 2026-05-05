@@ -4,7 +4,7 @@
 <html lang="@messages.lang.code">
 <head>
     <meta charset="UTF-8">
-    <title>Parallel Projection Flow (DSL Engine) - PlayAkkaCQRS</title>
+    <title>@messages("proj.title")</title>
     <style>
         :root {
             --color-journal: #f97316;
@@ -131,48 +131,43 @@
 <body>
 <div class="container">
     <header>
-        <h1>Parallel Projection Flow — DSL Engine</h1>
+        <h1>@messages("proj.header")</h1>
         <nav class="nav-links">
-            <a href="/showcase">Saga Showcase</a>
-            <a href="/ddd-guide">DDD Radar</a>
+            <a href="/showcase">@messages("proj.nav_saga")</a>
+            <a href="/ddd-guide">@messages("proj.nav_ddd")</a>
+            <a href="/zh">中文</a>
         </nav>
     </header>
 
     <div class="controls">
         <div class="controls-row">
             <div class="control-group">
-                <h3>Deposit / Withdraw</h3>
+                <h3>@messages("proj.deposit_withdraw")</h3>
                 <div style="display: flex; gap: 10px;">
-                    <input type="text" id="userId" placeholder="User UUID" value="550e8400-e29b-41d4-a716-446655440000" style="flex: 1;">
-                    <button class="btn" onclick="genUuid('userId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">GEN</button>
+                    <input type="text" id="userId" placeholder="@messages("proj.placeholder_user")" value="550e8400-e29b-41d4-a716-446655440000" style="flex: 1;">
+                    <button class="btn" onclick="genUuid('userId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">@messages("proj.btn_gen")</button>
                     <input type="number" id="amount" value="100" style="width: 80px;">
-                    <button class="btn btn-primary" onclick="handleTx('deposit')">DEPOSIT</button>
-                    <button class="btn btn-primary" style="background:#ef4444; color:white;" onclick="handleTx('withdraw')">WITHDRAW</button>
+                    <button class="btn btn-primary" onclick="handleTx('deposit')">@messages("proj.btn_deposit")</button>
+                    <button class="btn btn-primary" style="background:#ef4444; color:white;" onclick="handleTx('withdraw')">@messages("proj.btn_withdraw")</button>
                 </div>
             </div>
             <div class="control-group">
-                <h3>Money Transfer Saga</h3>
+                <h3>@messages("proj.transfer_saga")</h3>
                 <div style="display: flex; gap: 10px;">
                     <input type="text" id="targetId" value="6ba7b810-9dad-11d1-80b4-00c04fd430c8" style="flex: 1;">
-                    <button class="btn" onclick="genUuid('targetId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">GEN</button>
-                    <button class="btn btn-secondary" onclick="handleTransfer()">START TRANSFER SAGA</button>
+                    <button class="btn" onclick="genUuid('targetId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">@messages("proj.btn_gen")</button>
+                    <button class="btn btn-secondary" onclick="handleTransfer()">@messages("proj.btn_transfer")</button>
                 </div>
             </div>
         </div>
         <div class="controls-row settings">
             <div class="toggle-container">
-                <span>Demo</span><label class="switch"><input type="checkbox" id="liveToggle" checked><span class="slider"></span></label><span>Live</span>
-            </div>
-            <div class="toggle-container">
-                <span>System</span><label class="switch"><input type="checkbox" id="systemToggle"><span class="slider"></span></label><span>System</span>
-            </div>
-            <div class="toggle-container">
-                <span>Speed:</span>
+                <span>@messages("proj.speed")</span>
                 <input type="range" id="speedSlider" min="0.5" max="4" step="0.1" value="1.0" style="width: 80px; accent-color: var(--color-read);" oninput="document.getElementById('speedVal').textContent = parseFloat(this.value).toFixed(1) + 'x'">
                 <span id="speedVal" style="font-family: monospace; width: 35px;">1.0x</span>
             </div>
             <div class="toggle-container">
-                <span>Pacing:</span>
+                <span>@messages("proj.pacing")</span>
                 <input type="range" id="pacingSlider" min="200" max="2000" step="100" value="800" style="width: 80px; accent-color: var(--color-journal);" oninput="document.getElementById('pacingVal').textContent = this.value + 'ms'">
                 <span id="pacingVal" style="font-family: monospace; width: 55px;">800ms</span>
             </div>
@@ -183,71 +178,61 @@
         <div style="position: relative;">
             <svg class="connector-svg" id="svgCanvas"></svg>
 
-            <!-- 原始 Grid 骨架，添加占位列和显式 grid-column -->
             <div class="arch-viz" id="archViz">
-                <!-- Saga Engine (Coordinator) -->
-                <div style="grid-column: 1 / span 7; display: flex; justify-content: center; margin-bottom: 40px;">
-                    <div class="node saga-node tooltip" id="saga-engine" style="width: 400px; border-color: #f43f5e; background: rgba(244,63,94,0.05);" data-tip="Saga Coordinator: Manages the distributed transaction lifecycle.">
-                        <h4 style="color: #fb7185;">Saga Execution Engine (Coordinator)</h4>
-                        <div id="saga-engine-status" style="font-size: 0.7rem; color: #94a3b8; margin-top: 8px; font-family: 'Fira Code', monospace;">READY</div>
-                        <div id="saga-engine-phase" style="display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 0.6rem; font-weight: bold; margin-top: 5px; background: #334155; color: #fff;">IDLE</div>
-                    </div>
-                </div>
-
-                <!-- Aggregates Container (第1列) -->
+                <!-- Aggregates Container (column 1) -->
                 <div style="display: flex; flex-direction: column; gap: 30px; grid-column: 1;" id="aggregateList">
-                    <div class="node agg-node tooltip" id="agg-sender" data-tip="Aggregate Root: Sender Account">
-                        <h4>Aggregate: Sender</h4>
+                    <div class="node agg-node tooltip" id="agg-sender" data-tip="@messages("proj.tooltip_sender")">
+                        <h4>@messages("proj.agg_sender")</h4>
                         <div class="agg-balance" id="sender-balance">¥0.00</div>
                         <div class="agg-status" id="sender-id-label">...</div>
                     </div>
-                    <div class="node agg-node tooltip" id="agg-receiver" data-tip="Aggregate Root: Receiver Account">
-                        <h4>Aggregate: Receiver</h4>
+                    <div class="node agg-node tooltip" id="agg-receiver" data-tip="@messages("proj.tooltip_receiver")">
+                        <h4>@messages("proj.agg_receiver")</h4>
                         <div class="agg-balance" id="receiver-balance">¥0.00</div>
                         <div class="agg-status" id="receiver-id-label">...</div>
                     </div>
                 </div>
 
-                <!-- 占位列 2 -->
+                <!-- Spacer column 2 -->
                 <div></div>
 
-                <!-- Journal Node (第3列) -->
-                <div class="node journal-node tooltip" id="journal" style="grid-column: 3;" data-tip="Event Journal (MongoDB): Append-only store.">
-                    <h4>Event Journal</h4>
-                    <div style="font-weight:800; color:var(--color-journal);">MongoDB</div>
-                    <div style="font-size: 0.5rem; color: #64748b; margin-top: 5px;">Append-Only Store</div>
+                <!-- Journal Node (column 3) -->
+                <div class="node journal-node tooltip" id="journal" style="grid-column: 3;" data-tip="@messages("proj.tooltip_journal")">
+                    <h4>@messages("proj.journal")</h4>
+                    <div style="font-weight:800; color:var(--color-journal);">@messages("proj.journal_db")</div>
+                    <div style="font-size: 0.5rem; color: #64748b; margin-top: 5px;">@messages("proj.journal_desc")</div>
                 </div>
 
-                <!-- 占位列 4 -->
+                <!-- Spacer column 4 -->
                 <div></div>
 
-                <!-- Projection List (第5列) -->
+                <!-- Projection List (column 5) -->
                 <div class="projection-list" id="projectionList" style="grid-column: 5;"></div>
 
-                <!-- 占位列 6 -->
+                <!-- Spacer column 6 -->
                 <div></div>
 
-                <!-- Read Model Cards (第7列) -->
+                <!-- Read Model Cards (column 7) -->
                 <div class="readmodel-list" id="readModelList" style="display: flex; flex-direction: column; gap: 10px; grid-column: 7;"></div>
             </div>
 
             <div class="decoder-panel">
-                <div class="decoder-item"><h5>📡 How events move</h5><p>Pull-based. Projection polls MongoDB journal via Akka Persistence Query.</p></div>
-                <div class="decoder-item"><h5>🆔 Instance Identifier</h5><p>The ID next to 'Monthly Summary' tracks the physical offset.</p></div>
-                <div class="decoder-item"><h5>🛡️ Domain Invariants</h5><p>Checked on Write Side. Read Side only reflects successful transitions.</p></div>
+                <div class="decoder-item"><h5>@messages("proj.decoder_events")</h5><p>@messages("proj.decoder_events_desc")</p></div>
+                <div class="decoder-item"><h5>@messages("proj.decoder_instance")</h5><p>@messages("proj.decoder_instance_desc")</p></div>
+                <div class="decoder-item"><h5>@messages("proj.decoder_invariants")</h5><p>@messages("proj.decoder_invariants_desc")</p></div>
             </div>
         </div>
 
         <div class="data-grid">
             <div class="panel">
-                <h4>Read Model: Monthly Summary (MySQL)</h4>
+                <h4>@messages("proj.table_title")</h4>
                 <table id="summaryTable">
-                    <thead><tr><th>User ID</th><th>Period</th><th>Income</th><th>Expense</th></tr></thead>
+                    <thead><tr><th>@messages("proj.table_user")</th><th>@messages("proj.table_period")</th><th>@messages("proj.table_income")</th><th>@messages("proj.table_expense")</th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
             <div class="panel">
-                <h4>Pipeline Execution Logs</h4>
+                <h4>@messages("proj.log_title")</h4>
                 <div class="log-window" id="logWindow"></div>
             </div>
         </div>
@@ -255,363 +240,19 @@
 </div>
 
 <script>
-    // ======================== DSL Graph Engine ========================
-    class GraphEngine {
-        constructor(svgId, vizId, config) {
-            this.svg = document.getElementById(svgId);
-            this.viz = document.getElementById(vizId);
-            this.config = config;
-            this.nodeMap = new Map();
-            this.staticPaths = [];
-
-            // 注册已存在的静态节点
-            this.config.nodes.forEach(nodeDef => {
-                if (!nodeDef.dynamic) {
-                    const el = document.getElementById(nodeDef.id);
-                    if (el) this.nodeMap.set(nodeDef.id, el);
-                }
-            });
-            // 确保 Projection 节点存在
-            this._ensureProjectionNode();
-            this._initEdges();
-        }
-
-        _ensureProjectionNode() {
-            if (!document.getElementById('proj-monthly')) {
-                const container = document.getElementById('projectionList');
-                if (container) {
-                    const div = document.createElement('div');
-                    div.id = 'proj-monthly';
-                    div.className = 'node proj-node tooltip';
-                    div.setAttribute('data-tip', 'Projection: Monthly Income & Expense Summary');
-                    div.innerHTML = `<h4>Monthly Summary</h4>
-                                     <div class="offset-val" style="font-family:monospace;font-weight:800;font-size:1.1rem;color:var(--color-projection);margin-top:5px;">0</div>`;
-                    container.appendChild(div);
-                    this.nodeMap.set('proj-monthly', div);
-                }
-            }
-        }
-
-        createDynamicCard(userId) {
-            const cardId = `card-${userId}`;
-            if (this.nodeMap.has(cardId)) return;
-            const dynamicDef = this.config.nodes.find(n => n.id === 'card-{userId}');
-            if (!dynamicDef) return;
-            const el = dynamicDef.ui(userId);
-            const container = document.getElementById('readModelList');
-            if (container) container.appendChild(el);
-            this.nodeMap.set(cardId, el);
-            this._initEdges();
-        }
-
-        getNode(id) {
-            if (this.nodeMap.has(id)) return this.nodeMap.get(id);
-            if (id.startsWith('card-')) {
-                const userId = id.replace('card-', '');
-                const card = document.querySelector(`[data-user-id="${userId}"]`);
-                if (card) {
-                    this.nodeMap.set(id, card);
-                    return card;
-                }
-            }
-            return null;
-        }
-
-        _initEdges() {
-            this.staticPaths.forEach(p => p.remove());
-            this.staticPaths = [];
-            if (!this.svg) return;
-
-            this.config.edges.forEach(edge => {
-                let fromEl = this.getNode(edge.from);
-                let toEl = this.getNode(edge.to);
-                if (!toEl && edge.to.startsWith('card-')) {
-                    const userId = edge.to.replace('card-', '');
-                    toEl = document.querySelector(`[data-user-id="${userId}"]`);
-                }
-                if (fromEl && toEl) {
-                    const path = this._createStaticPath(fromEl, toEl);
-                    this.staticPaths.push(path);
-                }
-            });
-        }
-
-        _createStaticPath(fromEl, toEl) {
-            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            path.setAttribute("class", "conn-path");
-            this._updatePathCoords(path, fromEl, toEl);
-            this.svg.appendChild(path);
-            return path;
-        }
-
-        _updatePathCoords(path, fromEl, toEl) {
-            const fromBox = fromEl.getBoundingClientRect();
-            const toBox = toEl.getBoundingClientRect();
-            const vizBox = this.viz.getBoundingClientRect();
-            const fromAlign = (fromBox.left < toBox.left) ? 'right' : 'left';
-            const toAlign = (fromBox.left < toBox.left) ? 'left' : 'right';
-            const p1 = this._getPoint(fromEl, fromAlign, vizBox);
-            const p2 = this._getPoint(toEl, toAlign, vizBox);
-            const curve = Math.max(Math.abs(p2.x - p1.x) * 0.4, 60);
-            const d = `M ${p1.x} ${p1.y} C ${p1.x + (fromAlign==='right'?curve:-curve)} ${p1.y}, ${p2.x - (toAlign==='left'?curve:-curve)} ${p2.y}, ${p2.x} ${p2.y}`;
-            path.setAttribute("d", d);
-        }
-
-        _getPoint(el, align, vizBox) {
-            const box = el.getBoundingClientRect();
-            let x = align === 'right' ? box.right - vizBox.left :
-                    (align === 'left' ? box.left - vizBox.left : box.left + box.width/2 - vizBox.left);
-            const y = box.top + box.height/2 - vizBox.top;
-            return { x, y };
-        }
-
-        async dispatchEvent(event) {
-            const routes = this.config.eventRouting[event.type];
-            if (!routes) return;
-            for (const route of routes) {
-                await this._animateRoute(route, event);
-            }
-        }
-
-        _animateRoute(route, event) {
-            return new Promise(resolve => {
-                const fromId = route.from;
-                let toId = route.to;
-                if (toId.includes('{userId}')) {
-                    toId = toId.replace('{userId}', event.userId || '');
-                }
-                const fromEl = this.getNode(fromId);
-                let toEl = this.getNode(toId);
-                if (!fromEl || !toEl) { resolve(); return; }
-
-                const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                path.setAttribute("class", "conn-path active");
-                this._updatePathCoords(path, fromEl, toEl);
-                this.svg.appendChild(path);
-
-                const particle = document.createElement('div');
-                particle.className = 'event-particle';
-                const displayAmt = event.amount ? `¥${event.amount}` : '';
-                particle.innerHTML = `<div class="event-icon">⚡</div>
-                    <div style="display:flex; flex-direction:column;">
-                        <div style="font-weight:800; color:#fff;">${event.type}</div>
-                        ${displayAmt ? `<div class="event-data-label">${displayAmt}</div>` : ''}
-                        <div class="stage-indicator">Traveling...</div>
-                    </div>`;
-                this.viz.appendChild(particle);
-
-                const len = path.getTotalLength();
-                let start = null;
-                const travelTime = 1200 / (parseFloat(document.getElementById('speedSlider')?.value) || 1);
-
-                const step = (ts) => {
-                    if (!start) start = ts;
-                    const progress = (ts - start) / travelTime;
-                    if (progress < 1) {
-                        const pt = path.getPointAtLength(progress * len);
-                        particle.style.left = pt.x + 'px';
-                        particle.style.top = pt.y + 'px';
-                        particle.style.display = 'flex';
-                        requestAnimationFrame(step);
-                    } else {
-                        particle.remove();
-                        path.remove();
-                        toEl.classList.add('highlight-proj');
-                        setTimeout(() => toEl.classList.remove('highlight-proj'), 800);
-
-                        if (route.updateCard && toId.startsWith('card-')) {
-                            const updater = this.config.cardStateUpdaters['default'];
-                            if (updater) updater(event);
-                        }
-                        resolve();
-                    }
-                };
-                requestAnimationFrame(step);
-            });
-        }
-
-        redraw() { this._initEdges(); }
-    }
-
-    // ======================== DSL Configuration ========================
-    const graphConfig = {
-        nodes: [
-            { id: 'saga-engine',  dynamic: false },
-            { id: 'agg-sender',   dynamic: false },
-            { id: 'agg-receiver', dynamic: false },
-            { id: 'journal',      dynamic: false },
-            { id: 'proj-monthly', dynamic: false },
-            { id: 'card-{userId}', dynamic: true,
-                ui: (userId) => {
-                    const div = document.createElement('div');
-                    div.className = 'node record-node';
-                    div.dataset.userId = userId;
-                    div.innerHTML = `<div class="record-id">${userId}</div>
-                                     <div class="record-data record-data-inner">...</div>`;
-                    return div;
-                }
-            }
-        ],
-        edges: [
-            { from: 'saga-engine', to: 'agg-sender' },
-            { from: 'saga-engine', to: 'agg-receiver' },
-            { from: 'agg-sender',   to: 'journal' },
-            { from: 'agg-receiver', to: 'journal' },
-            { from: 'journal',      to: 'proj-monthly' },
-            { from: 'proj-monthly', to: 'card-{userId}' }
-        ],
-        eventRouting: {
-            'BalanceChanged': [
-                { from: 'agg-sender', to: 'journal' },
-                { from: 'journal',    to: 'proj-monthly' },
-                { from: 'proj-monthly', to: 'card-{userId}', updateCard: true }
-            ],
-            'FundsReserved': [
-                { from: 'agg-sender', to: 'journal' },
-                { from: 'journal',    to: 'proj-monthly' },
-                { from: 'proj-monthly', to: 'card-{userId}', updateCard: true }
-            ],
-            'FundsDeducted': [
-                { from: 'agg-sender', to: 'journal' }
-            ],
-            'ReservationReleased': [
-                { from: 'agg-sender', to: 'journal' },
-                { from: 'journal',    to: 'proj-monthly' },
-                { from: 'proj-monthly', to: 'card-{userId}', updateCard: true }
-            ],
-            'IncomingCreditsRecorded': [
-                { from: 'agg-receiver', to: 'journal' },
-                { from: 'journal',      to: 'proj-monthly' },
-                { from: 'proj-monthly', to: 'card-{userId}', updateCard: true }
-            ],
-            'IncomingCreditsCommited': [
-                { from: 'agg-receiver', to: 'journal' }
-            ],
-            'IncomingCreditsCanceled': [
-                { from: 'agg-receiver', to: 'journal' }
-            ]
-        },
-        cardStateUpdaters: {
-            'default': async (event) => {
-                const userId = event.userId;
-                try {
-                    const res = await fetch('/api/projection/status');
-                    const data = await res.json();
-                    const summary = data.summaries?.find(s => s.userId === userId);
-                    if (summary) {
-                        const node = document.querySelector(`[data-user-id="${userId}"]`);
-                        if (node) {
-                            node.querySelector('.record-data-inner').innerHTML =
-                                `<span class="record-period">${summary.year}-${summary.month}</span>
-                                 <div style="display:flex; gap:15px;">
-                                    <span style="color:var(--color-read)">+${summary.income}</span>
-                                    <span style="color:#ef4444">-${summary.expense}</span>
-                                 </div>`;
-                            node.classList.add('highlight-read');
-                            setTimeout(() => node.classList.remove('highlight-read'), 1000);
-                        }
-                    }
-                } catch (e) { console.error('Card update failed', e); }
-            }
-        }
+    window.__i18n = {
+        monthlyTitle: "@messages("proj.monthly_title")",
+        projectionTooltip: "@messages("proj.tooltip_projection")",
+        logConnected: "@messages("proj.log_connected")",
+        logError: "@messages("proj.log_error")",
+        logDisconnected: "@messages("proj.log_disconnected")",
+        logTransferTriggered: "@messages("proj.log_transfer_triggered")",
+        logTransferFailed: "@messages("proj.log_transfer_failed")",
+        logRejected: "@messages("proj.log_rejected")",
+        traveling: "Traveling..."
     };
-
-    // ======================== Engine Instantiation ========================
-    const engine = new GraphEngine('svgCanvas', 'archViz', graphConfig);
-    window.addEventListener('resize', () => engine.redraw());
-
-    // ======================== Utilities ========================
-    function genUuid(id) {
-        document.getElementById(id).value = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => (Math.random()*16|0).toString(16));
-    }
-    function addLog(msg, color = '#94a3b8') {
-        const log = document.getElementById('logWindow');
-        const entry = document.createElement('div');
-        entry.style.color = color;
-        entry.innerHTML = `<span style="color:#334155">[${new Date().toLocaleTimeString()}]</span> ${msg}`;
-        log.prepend(entry);
-    }
-
-    // ======================== Business Actions ========================
-    async function handleTx(type) {
-        const uid = document.getElementById('userId').value;
-        let amt = parseInt(document.getElementById('amount').value);
-        if (type === 'withdraw') amt = -Math.abs(amt);
-        engine.dispatchEvent({ type: 'BalanceChanged', userId: uid, amount: amt });
-        try {
-            const res = await fetch(`/${type}/${uid}/${Math.abs(amt)}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.error) addLog(`Rejected: ${data.error.message}`, '#ef4444');
-        } catch (e) { addLog(`Error: ${e.message}`, '#ef4444'); }
-    }
-
-    async function handleTransfer() {
-        const from = document.getElementById('userId').value;
-        const to = document.getElementById('targetId').value;
-        const amt = document.getElementById('amount').value;
-        try {
-            const res = await fetch(`/transfer/${from}/${to}/${Math.abs(amt)}`, { method: 'POST' });
-            const data = await res.json();
-            if (data.error) addLog(`Transfer Failed: ${data.error}`, '#ef4444');
-            else addLog(`Transfer Saga Triggered`, '#22c55e');
-        } catch(e) { addLog(`Transfer Error: ${e.message}`, '#ef4444'); }
-    }
-
-    // ======================== WebSocket (Real Events) ========================
-    const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
-    ws.onopen = () => addLog('Saga Event Stream Connected', '#22c55e');
-    ws.onerror = (e) => addLog('Saga Event Stream Error', '#ef4444');
-    ws.onclose = () => addLog('Saga Event Stream Disconnected', '#94a3b8');
-
-    ws.onmessage = function(msg) {
-        const event = JSON.parse(msg.data);
-        const userId = document.getElementById('userId').value;
-        const amount = document.getElementById('amount').value;
-        engine.dispatchEvent({ type: event.type, userId: userId, amount: amount, payload: event.data });
-    };
-
-    // ======================== Periodic Data Refresh ========================
-    async function updateBalancesAndTable() {
-        const senderId = document.getElementById('userId').value;
-        const receiverId = document.getElementById('targetId').value;
-        document.getElementById('sender-id-label').textContent = senderId;
-        document.getElementById('receiver-id-label').textContent = receiverId;
-        try {
-            const balRes = await fetch(`/api/aggregate/balances/${senderId},${receiverId}`);
-            const b = await balRes.json();
-            if (b[senderId]) document.getElementById('sender-balance').textContent = `¥${b[senderId].balance}`;
-            if (b[receiverId]) document.getElementById('receiver-balance').textContent = `¥${b[receiverId].balance}`;
-        } catch (e) {}
-
-        try {
-            const res = await fetch('/api/projection/status');
-            const data = await res.json();
-            const body = document.querySelector('#summaryTable tbody');
-            body.innerHTML = '';
-            (data.summaries || []).forEach(s => {
-                body.innerHTML += `<tr>
-                    <td style="font-family:monospace; font-size:0.7rem;">${s.userId}</td>
-                    <td>${s.year}-${s.month}</td>
-                    <td style="color:var(--color-read); font-weight:bold;">+${s.income}</td>
-                    <td style="color:#ef4444; font-weight:bold;">-${s.expense}</td>
-                </tr>`;
-                engine.createDynamicCard(s.userId);
-                const node = document.querySelector(`[data-user-id="${s.userId}"]`);
-                if (node) {
-                    node.querySelector('.record-data-inner').innerHTML =
-                        `<span class="record-period">${s.year}-${s.month}</span>
-                         <div style="display:flex; gap:15px;">
-                            <span style="color:var(--color-read)">+${s.income}</span>
-                            <span style="color:#ef4444">-${s.expense}</span>
-                         </div>`;
-                }
-            });
-        } catch (e) {}
-    }
-
-    setTimeout(() => engine.redraw(), 500);
-    updateBalancesAndTable();
-    setInterval(updateBalancesAndTable, 2000);
 </script>
+<script src="@routes.Assets.versioned("javascripts/graph_engine.js")" type="text/javascript"></script>
+<script src="@routes.Assets.versioned("javascripts/projection_showcase.js")" type="text/javascript"></script>
 </body>
 </html>

@@ -4,199 +4,186 @@
 <html lang="@messages.lang.code">
 <head>
     <meta charset="UTF-8">
-    <title>DDD Architectural Task Radar - PlayAkkaCQRS</title>
+    <title>@messages("ddd.title")</title>
     <style>
         :root {
-            --color-event: #f97316;    /* Orange */
-            --color-command: #3b82f6;  /* Blue */
-            --color-aggregate: #fbbf24; /* Yellow/Gold */
-            --color-policy: #a855f7;   /* Purple */
-            --color-readmodel: #22c55e; /* Green */
-            --color-infra: #94a3b8;    /* Slate */
+            --color-event: #f97316;
+            --color-command: #3b82f6;
+            --color-aggregate: #fbbf24;
+            --color-policy: #a855f7;
+            --color-readmodel: #22c55e;
+            --color-infra: #94a3b8;
             --bg-dark: #0f172a;
             --panel-dark: #1e293b;
         }
 
         body { font-family: 'Inter', system-ui, sans-serif; background-color: var(--bg-dark); color: #f8fafc; margin: 0; padding: 20px; line-height: 1.6; }
         .container { max-width: 1300px; margin: 0 auto; }
-        
+
         header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; padding-bottom: 20px; margin-bottom: 40px; }
         h1 { margin: 0; font-size: 1.5rem; color: #38bdf8; }
         .nav-links a { color: #38bdf8; text-decoration: none; font-weight: 600; margin-left: 20px; font-size: 0.9rem; }
         .nav-links a:hover { text-decoration: underline; }
 
         .layout { display: grid; grid-template-columns: 1fr 400px; gap: 40px; }
-        
-        /* Radar Visualization */
+
         .radar-box { background: var(--panel-dark); border-radius: 16px; padding: 40px; display: flex; align-items: center; justify-content: center; border: 1px solid #334155; position: relative; }
         .radar-container { position: relative; width: 650px; height: 650px; }
-        
+
         .radar-layer { position: absolute; border: 1px dashed #334155; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); transition: all 0.3s; pointer-events: none; }
         .layer-domain { width: 220px; height: 220px; background: rgba(251, 191, 36, 0.05); border-color: var(--color-aggregate); }
         .layer-application { width: 440px; height: 440px; background: rgba(59, 130, 246, 0.03); border-color: var(--color-command); }
         .layer-infrastructure { width: 660px; height: 660px; background: rgba(148, 163, 184, 0.01); border-color: var(--color-infra); }
-        
+
         .layer-tag { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); font-size: 0.65rem; font-weight: 800; text-transform: uppercase; letter-spacing: 2px; padding: 2px 10px; border-radius: 10px; }
         .layer-domain .layer-tag { color: var(--color-aggregate); background: rgba(251, 191, 36, 0.1); }
         .layer-application .layer-tag { color: var(--color-command); background: rgba(59, 130, 246, 0.1); }
         .layer-infrastructure .layer-tag { color: var(--color-infra); background: rgba(148, 163, 184, 0.1); }
 
-        /* Component Dots */
-        .radar-dot { 
-            position: absolute; 
-            width: 14px; 
-            height: 14px; 
-            border-radius: 50%; 
-            cursor: pointer; 
-            z-index: 10; 
-            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+        .radar-dot {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 10;
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
         }
         .radar-dot:hover { transform: scale(1.6); box-shadow: 0 0 20px currentColor; }
-        
-        .dot-label { 
-            position: absolute; 
-            top: 20px; 
-            left: 50%; 
-            transform: translateX(-50%); 
-            white-space: nowrap; 
-            font-size: 0.65rem; 
-            font-weight: 600; 
-            opacity: 0.7; 
+
+        .dot-label {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 0.6rem;
+            font-weight: 600;
+            opacity: 0.7;
             pointer-events: none;
             background: rgba(15, 23, 42, 0.8);
             padding: 1px 4px;
             border-radius: 3px;
         }
-        
-        /* Event Storming Legend */
+
         .legend { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; }
         .legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 600; }
         .color-box { width: 12px; height: 12px; border-radius: 2px; }
 
-        /* Details Panel */
         .info-panel { background: var(--panel-dark); border-radius: 16px; padding: 30px; border: 1px solid #334155; position: sticky; top: 20px; height: fit-content; }
         .info-panel h2 { margin: 0 0 15px 0; font-size: 1.1rem; display: flex; align-items: center; gap: 10px; }
         .info-panel p { color: #94a3b8; font-size: 0.9rem; }
-        
+
         .comp-card { border-top: 1px solid #334155; padding-top: 20px; margin-top: 20px; }
         .artifact-meta { margin-bottom: 15px; }
         .artifact-name { font-family: 'Fira Code', monospace; color: #f8fafc; font-size: 1rem; font-weight: bold; margin-bottom: 5px; display: block; }
         .artifact-type-tag { font-size: 0.65rem; text-transform: uppercase; font-weight: 900; padding: 2px 8px; border-radius: 4px; margin-bottom: 10px; display: inline-block; }
-        
+        .artifact-layer-tag { font-size: 0.6rem; text-transform: uppercase; font-weight: 700; padding: 2px 8px; border-radius: 4px; margin-left: 6px; display: inline-block; background: #334155; color: #94a3b8; }
+
         .code-path { background: #0f172a; padding: 10px; border-radius: 6px; font-family: monospace; font-size: 0.75rem; color: #38bdf8; overflow-x: auto; margin-top: 15px; }
 
-        /* Animations */
         @@keyframes pulse {
             0% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
             70% { box-shadow: 0 0 0 10px rgba(56, 189, 248, 0); }
             100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0); }
         }
+
+        .filter-bar { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .filter-chip { padding: 4px 12px; border-radius: 20px; font-size: 0.7rem; cursor: pointer; border: 1px solid #334155; background: #0f172a; color: #94a3b8; transition: all 0.2s; }
+        .filter-chip.active { background: #38bdf8; color: #000; border-color: #38bdf8; }
+        .filter-chip:hover { border-color: #38bdf8; }
+        .filter-chip.dep-active { background: #a855f7; color: #fff; border-color: #a855f7; }
+
+        .radar-svg {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; z-index: 5;
+        }
+        .dep-edge {
+            fill: none; stroke: #475569; stroke-width: 1.5;
+            opacity: 0.4; transition: opacity 0.3s, stroke 0.3s;
+        }
+        .dep-edge.visible { opacity: 0.55; }
+        .dep-edge.highlight { stroke: #38bdf8; stroke-width: 2.5; opacity: 1; }
+        .dep-edge.dimmed { opacity: 0.08; }
+
+        .dep-relation-tag {
+            font-size: 0.55rem; fill: #64748b; font-family: monospace;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .dep-edge.highlight .dep-relation-tag,
+        .dep-edge:hover .dep-relation-tag { opacity: 1; }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>DDD Architectural Task Radar</h1>
+            <h1>@messages("ddd.header")</h1>
             <nav class="nav-links">
-                <a href="/showcase">Main Showcase</a>
-                <a href="/projection-showcase">Projection Flow</a>
+                <a href="/showcase">@messages("ddd.nav_showcase")</a>
+                <a href="/projection-showcase">@messages("ddd.nav_projection")</a>
+                <a href="/zh">中文</a>
             </nav>
         </header>
 
         <div class="legend">
-            <div class="legend-item"><div class="color-box" style="background: var(--color-command)"></div> Command</div>
-            <div class="legend-item"><div class="color-box" style="background: var(--color-aggregate)"></div> Aggregate</div>
-            <div class="legend-item"><div class="color-box" style="background: var(--color-event)"></div> Event</div>
-            <div class="legend-item"><div class="color-box" style="background: var(--color-policy)"></div> Policy/Rule</div>
-            <div class="legend-item"><div class="color-box" style="background: var(--color-readmodel)"></div> Read Model</div>
+            <div class="legend-item"><div class="color-box" style="background: var(--color-command)"></div> @messages("ddd.legend_command")</div>
+            <div class="legend-item"><div class="color-box" style="background: var(--color-aggregate)"></div> @messages("ddd.legend_aggregate")</div>
+            <div class="legend-item"><div class="color-box" style="background: var(--color-event)"></div> @messages("ddd.legend_event")</div>
+            <div class="legend-item"><div class="color-box" style="background: var(--color-policy)"></div> @messages("ddd.legend_policy")</div>
+            <div class="legend-item"><div class="color-box" style="background: var(--color-readmodel)"></div> @messages("ddd.legend_read")</div>
+            <div class="legend-item"><div class="color-box" style="background: var(--color-infra)"></div> @messages("ddd.legend_infra")</div>
+        </div>
+
+        <div class="filter-bar" id="filterBar">
+            <span class="filter-chip active" data-layer="all">@messages("ddd.filter_all")</span>
+            <span class="filter-chip" data-layer="domain">@messages("ddd.filter_domain")</span>
+            <span class="filter-chip" data-layer="application">@messages("ddd.filter_application")</span>
+            <span class="filter-chip" data-layer="infrastructure">@messages("ddd.filter_infrastructure")</span>
+            <span class="filter-chip dep-active" id="depToggle" data-action="toggle-deps">@messages("ddd.filter_deps")</span>
         </div>
 
         <div class="layout">
             <div class="radar-box">
                 <div class="radar-container" id="radar">
-                    <!-- Layer Visualization -->
-                    <div class="radar-layer layer-infrastructure"><span class="layer-tag">Infrastructure</span></div>
-                    <div class="radar-layer layer-application"><span class="layer-tag">Application</span></div>
-                    <div class="radar-layer layer-domain"><span class="layer-tag">Domain</span></div>
-
-                    <!-- Domain Layer Artifacts (Yellow/Gold & Purple) -->
-                    <!-- Banking Domain Group -->
-                    <div class="radar-dot" style="top: 45%; left: 45%; background: var(--color-aggregate); color: var(--color-aggregate);" 
-                         data-name="CreditBalanceAggregate" data-type="Aggregate" data-path="app/net/imadz/application/aggregates/CreditBalanceAggregate.scala"
-                         data-desc="The heart of the banking domain. Handles credit balance state and serializes commands into events.">
-                        <span class="dot-label">CreditBalance</span>
-                    </div>
-                    <div class="radar-dot" style="top: 52%; left: 48%; background: var(--color-policy); color: var(--color-policy);" 
-                         data-name="DeductFundsRule" data-type="Policy" data-path="app/net/imadz/domain/invariants/DeductFundsRule.scala"
-                         data-desc="Invariant rule ensuring funds can only be deducted if the balance is sufficient.">
-                        <span class="dot-label">DeductFundsRule</span>
-                    </div>
-                    <div class="radar-dot" style="top: 38%; left: 52%; background: var(--color-event); color: var(--color-event);" 
-                         data-name="BalanceChangedPO" data-type="Event" data-path="app/protobuf/credits.proto"
-                         data-desc="Domain event emitted whenever the balance is updated (Deposit/Withdraw).">
-                        <span class="dot-label">BalanceChanged</span>
-                    </div>
-                    <div class="radar-dot" style="top: 55%; left: 42%; background: var(--color-policy); color: var(--color-policy);" 
-                         data-name="ReserveFundsRule" data-type="Policy" data-path="app/net/imadz/domain/invariants/ReserveFundsRule.scala"
-                         data-desc="Policy managing the reservation of funds during a multi-step Saga transfer.">
-                        <span class="dot-label">ReserveFunds</span>
-                    </div>
-
-                    <!-- Application Layer (Blue & Green) -->
-                    <div class="radar-dot" style="top: 25%; left: 35%; background: var(--color-command); color: var(--color-command);" 
-                         data-name="MoneyTransferSagaTransactor" data-type="Saga" data-path="app/net/imadz/application/services/transactor/MoneyTransferSagaTransactor.scala"
-                         data-desc="Orchestrates the Money Transfer Saga across multiple accounts.">
-                        <span class="dot-label">TransferSaga</span>
-                    </div>
-                    <div class="radar-dot" style="top: 70%; left: 65%; background: var(--color-readmodel); color: var(--color-readmodel);" 
-                         data-name="MonthlyIncomeAndExpenseSummaryProjection" data-type="ReadModel" data-path="app/net/imadz/application/projection/MonthlyIncomeAndExpenseSummaryProjection.scala"
-                         data-desc="Builds the monthly summary by consuming BalanceChanged, FundsReserved (Expense), and IncomingCreditsRecorded (Income) events.">
-                        <span class="dot-label">IncomeSummary</span>
-                    </div>
-                    <div class="radar-dot" style="top: 30%; left: 60%; background: var(--color-command); color: var(--color-command);" 
-                         data-name="DepositService" data-type="Service" data-path="app/net/imadz/application/services/DepositService.scala"
-                         data-desc="Application service layer for handling deposit requests.">
-                        <span class="dot-label">DepositService</span>
-                    </div>
-
-                    <!-- Infrastructure Layer (Slate) -->
-                    <div class="radar-dot" style="top: 10%; left: 50%; background: var(--color-infra); color: var(--color-infra);" 
-                         data-name="MongoReadJournal" data-type="Journal" data-path="akka-persistence-mongo"
-                         data-desc="The write-side journal implementation for event persistence.">
-                        <span class="dot-label">MongoDB Journal</span>
-                    </div>
-                    <div class="radar-dot" style="top: 85%; left: 20%; background: var(--color-infra); color: var(--color-infra);" 
-                         data-name="AkkaProjectionOffsetStore" data-type="Infrastructure" data-path="conf/sql/1.sql"
-                         data-desc="Stores the offset of each projection to ensure exactly-once or at-least-once delivery.">
-                        <span class="dot-label">OffsetStore</span>
-                    </div>
+                    <svg class="radar-svg" id="depSvg">
+                        <defs>
+                            <marker id="arrowHollow" viewBox="0 0 10 7" refX="9" refY="3.5" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
+                                <polygon points="0 0, 10 3.5, 0 7" fill="#0f172a" stroke="#64748b" stroke-width="1.2" />
+                            </marker>
+                        </defs>
+                    </svg>
+                    <div class="radar-layer layer-infrastructure"><span class="layer-tag">@messages("ddd.layer_infrastructure")</span></div>
+                    <div class="radar-layer layer-application"><span class="layer-tag">@messages("ddd.layer_application")</span></div>
+                    <div class="radar-layer layer-domain"><span class="layer-tag">@messages("ddd.layer_domain")</span></div>
                 </div>
             </div>
 
             <div class="info-panel" id="infoPanel">
                 <div id="panelEmpty">
-                    <h2>Architectural Details</h2>
-                    <p>Select a dot on the radar to inspect the specific DDD artifact, its role, and its location in the source code.</p>
+                    <h2>@messages("ddd.panel_empty_title")</h2>
+                    <p>@messages("ddd.panel_empty_desc")</p>
                 </div>
-                
+
                 <div id="panelContent" style="display: none;">
                     <div class="artifact-meta">
                         <span id="tagName" class="artifact-type-tag">AGGREGATE</span>
-                        <span id="compName" class="artifact-name">CreditBalanceAggregate</span>
+                        <span id="layerName" class="artifact-layer-tag">Domain</span>
+                        <span id="compName" class="artifact-name"></span>
                     </div>
-                    
                     <div class="comp-card">
-                        <p id="compDesc">The aggregate root for user accounts.</p>
-                        
+                        <p id="compDesc"></p>
                         <div style="margin-top: 20px;">
-                            <strong style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">Source Artifact:</strong>
-                            <div id="codePath" class="code-path">app/net/...</div>
+                            <strong style="font-size: 0.75rem; color: #94a3b8; text-transform: uppercase;">@messages("ddd.panel_source")</strong>
+                            <div id="codePath" class="code-path"></div>
                         </div>
-
                         <div style="margin-top: 20px; border-left: 3px solid #38bdf8; padding-left: 15px;">
-                            <strong style="font-size: 0.8rem;">Design Constraint:</strong>
-                            <p id="compConstraint" style="font-size: 0.85rem; margin-top: 5px; font-style: italic;">Must maintain state consistency via event application.</p>
+                            <strong style="font-size: 0.8rem;">@messages("ddd.panel_constraint")</strong>
+                            <p id="compConstraint" style="font-size: 0.85rem; margin-top: 5px; font-style: italic;"></p>
+                        </div>
+                        <div style="margin-top: 20px; border-left: 3px solid #a855f7; padding-left: 15px;" id="depInfoBox" >
+                            <strong style="font-size: 0.8rem;">@messages("ddd.panel_deps")</strong>
+                            <div id="depInfo" style="font-size: 0.8rem; margin-top: 5px; color: #94a3b8;"></div>
                         </div>
                     </div>
                 </div>
@@ -205,59 +192,706 @@
     </div>
 
     <script>
-        const dots = document.querySelectorAll('.radar-dot');
-        const empty = document.getElementById('panelEmpty');
-        const content = document.getElementById('panelContent');
-        const compName = document.getElementById('compName');
-        const compDesc = document.getElementById('compDesc');
-        const codePath = document.getElementById('codePath');
-        const tagName = document.getElementById('tagName');
-        const compConstraint = document.getElementById('compConstraint');
+        window.__i18n = {
+            layerDomain: "@messages("ddd.layer_domain")",
+            layerApplication: "@messages("ddd.layer_application")",
+            layerInfrastructure: "@messages("ddd.layer_infrastructure")",
+            dependsOn: "@messages("ddd.depends_on")",
+            dependedBy: "@messages("ddd.depended_by")",
+            noDeps: "@messages("ddd.no_deps")"
+        };
+        var radarArtifacts = [
+            // ==================== DOMAIN LAYER ====================
+            { name: "CreditBalanceEntity", type: "Entity", layer: "domain",
+              path: "app/net/imadz/domain/entities/CreditBalanceEntity.scala",
+              desc: "@messages("radar.CreditBalanceEntity.desc")",
+              constraint: "@messages("radar.CreditBalanceEntity.constraint")" },
+            { name: "Money", type: "ValueObject", layer: "domain",
+              path: "app/net/imadz/domain/values/Money.scala",
+              desc: "@messages("radar.Money.desc")",
+              constraint: "@messages("radar.Money.constraint")" },
+            { name: "CreditBalanceEventHandler", type: "DomainBehavior", layer: "domain",
+              path: "app/net/imadz/domain/entities/behaviors/CreditBalanceEventHandler.scala",
+              desc: "@messages("radar.CreditBalanceEventHandler.desc")",
+              constraint: "@messages("radar.CreditBalanceEventHandler.constraint")" },
+            { name: "DepositRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/DepositRule.scala",
+              desc: "@messages("radar.DepositRule.desc")",
+              constraint: "@messages("radar.DepositRule.constraint")" },
+            { name: "WithdrawRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/WithdrawRule.scala",
+              desc: "@messages("radar.WithdrawRule.desc")",
+              constraint: "@messages("radar.WithdrawRule.constraint")" },
+            { name: "DeductFundsRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/DeductFundsRule.scala",
+              desc: "@messages("radar.DeductFundsRule.desc")",
+              constraint: "@messages("radar.DeductFundsRule.constraint")" },
+            { name: "ReserveFundsRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/ReserveFundsRule.scala",
+              desc: "@messages("radar.ReserveFundsRule.desc")",
+              constraint: "@messages("radar.ReserveFundsRule.constraint")" },
+            { name: "AddInitialOnlyOnceRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/AddInitialOnlyOnceRule.scala",
+              desc: "@messages("radar.AddInitialOnlyOnceRule.desc")",
+              constraint: "@messages("radar.AddInitialOnlyOnceRule.constraint")" },
+            { name: "TransferDomainService", type: "DomainService", layer: "domain",
+              path: "app/net/imadz/domain/services/TransferDomainService.scala",
+              desc: "@messages("radar.TransferDomainService.desc")",
+              constraint: "@messages("radar.TransferDomainService.constraint")" },
 
-        const constraints = {
-            "CreditBalanceAggregate": "Must only change state by applying events. Commands must be validated against invariants before emitting events.",
-            "DeductFundsRule": "Stateless policy. Must return a clear reason if the deduction is denied.",
-            "BalanceChangedPO": "Protobuf message. Must not remove fields to maintain backward compatibility.",
-            "MoneyTransferSagaTransactor": "Must handle distributed timeouts and execute compensation steps for partial failures.",
-            "MonthlyIncomeAndExpenseSummaryProjection": "Eventual consistency. Must be idempotent when processing redelivered events.",
-            "MongoReadJournal": "Primary source of truth. All writes are immutable.",
-            "AkkaProjectionOffsetStore": "Ensures that projections resume from the last processed event after a restart."
+            // ==================== APPLICATION LAYER ====================
+            { name: "CreditBalanceAggregate", type: "Aggregate", layer: "application",
+              path: "app/net/imadz/application/aggregates/CreditBalanceAggregate.scala",
+              desc: "Cluster-sharded aggregate root wrapping CreditBalanceEntity. Serializes commands into events via Akka EventSourcedBehavior.",
+              constraint: "Must only change state by applying events. Commands validated against invariants before emitting events. Uses Akka sharding for distribution." },
+            { name: "CreditBalanceBehaviors", type: "CommandHandler", layer: "application",
+              path: "app/net/imadz/application/aggregates/behaviors/CreditBalanceBehaviors.scala",
+              desc: "Command handler functions using the runReplyingPolicy DSL pattern. Handles Deposit, Withdraw, ReserveFunds, DeductFunds, ReleaseReservation commands.",
+              constraint: "Must use Either for error handling. Follows (Command, State) => Effect[Event, State] signature. Uses replyWithAndPublish pattern." },
+            { name: "CreditBalanceAggregateFactory", type: "AggregateFactory", layer: "application",
+              path: "app/net/imadz/application/aggregates/factories/CreditBalanceAggregateFactory.scala",
+              desc: "Factory for creating CreditBalanceAggregate instances with proper initialization.",
+              constraint: "Must ensure aggregate is properly initialized with EventSourcedBehavior before use." },
+            { name: "CreditBalanceRepository", type: "Repository(trait)", layer: "application",
+              path: "app/net/imadz/application/aggregates/repository/CreditBalanceRepository.scala",
+              desc: "Repository interface for accessing credit balance aggregates. Defines findCreditBalanceByUserId.",
+              constraint: "Interface only — no implementation details. Must return EntityRef for cluster-sharded access." },
+            { name: "CreditBalanceRepositoryImpl", type: "Repository(impl)", layer: "application",
+              path: "app/net/imadz/infrastructure/repositories/aggregate/CreditBalanceRepositoryImpl.scala",
+              desc: "Implementation using Akka Cluster Sharding to locate aggregate entities.",
+              constraint: "Must delegate to Akka sharding entityRef. No direct database access — all state changes go through EventSourcedBehavior." },
+            { name: "credits.proto", type: "Protobuf", layer: "application",
+              path: "app/protobuf/credits.proto",
+              desc: "Protobuf schema for CreditBalanceState and all domain event types. Used for Akka Persistence serialization.",
+              constraint: "Must stay in sync with Scala case classes (three-piece rule). Never remove fields — only add to maintain backward compatibility." },
+            { name: "DepositService", type: "ApplicationService", layer: "application",
+              path: "app/net/imadz/application/services/DepositService.scala",
+              desc: "Handles deposit use case: validates input, loads aggregate, sends Deposit command.",
+              constraint: "Must not contain domain logic — delegates to aggregate. Orchestrates the use case flow." },
+            { name: "WithdrawService", type: "ApplicationService", layer: "application",
+              path: "app/net/imadz/application/services/WithdrawService.scala",
+              desc: "Handles withdrawal use case with balance validation.",
+              constraint: "Must not contain domain logic — delegates to aggregate invariants." },
+            { name: "MoneyTransferService", type: "ApplicationService", layer: "application",
+              path: "app/net/imadz/application/services/MoneyTransferService.scala",
+              desc: "Initiates money transfer Saga by creating a SagaTransactionCoordinator entity.",
+              constraint: "Must create coordinator with correct step definitions. Defines the sharded entity key 'Saga-MoneyTransfer'." },
+            { name: "GetBalanceQuery", type: "QueryService", layer: "application",
+              path: "app/net/imadz/application/queries/GetBalanceQuery.scala",
+              desc: "Queries current balance from the aggregate via cluster sharding.",
+              constraint: "Reads from write-side aggregate (not read model). Use only when up-to-date balance is required." },
+            { name: "IncomeExpenseReport", type: "QueryService", layer: "application",
+              path: "app/net/imadz/application/queries/GetRecent12MonthsIncomeAndExpenseReport.scala",
+              desc: "Queries the read-side MySQL database for the last 12 months of income and expense summaries.",
+              constraint: "Must query read model only (MySQL/ScalikeJDBC). Never access event journal directly." },
+            { name: "MonthlySummaryProjection", type: "Projection", layer: "application",
+              path: "app/net/imadz/application/projection/MonthlyIncomeAndExpenseSummaryProjection.scala",
+              desc: "Akka Projection definition for building the monthly summary read model from domain events.",
+              constraint: "Must be idempotent — handle redelivered events gracefully. Uses at-least-once delivery semantics." },
+            { name: "MonthlySummaryHandler", type: "ProjectionHandler", layer: "application",
+              path: "app/net/imadz/application/projection/MonthlyIncomeAndExpenseSummaryProjectionHandler.scala",
+              desc: "Event handler that transforms domain events into MySQL read model rows via ETL logic.",
+              constraint: "Must handle all relevant event types. Updates to read model must be idempotent." },
+            { name: "MonthlySummaryRepo(trait)", type: "ProjectionRepo(trait)", layer: "application",
+              path: "app/net/imadz/application/projection/repository/MonthlyIncomeAndExpendsSummaryRepository.scala",
+              desc: "Repository interface for the monthly summary projection read model.",
+              constraint: "Interface only. Defines CRUD operations on the read model without implementation details." },
+            { name: "MonthlySummaryRepo(impl)", type: "ProjectionRepo(impl)", layer: "application",
+              path: "app/net/imadz/infrastructure/repositories/projection/MonthlyIncomeAndExpenseSummaryRepositoryImpl.scala",
+              desc: "ScalikeJDBC implementation of the monthly summary repository.",
+              constraint: "Must use ScalikeJDBC for MySQL access. Only executes read-side queries." },
+            { name: "MonthlyProjectionBootstrap", type: "ProjectionBootstrap", layer: "application",
+              path: "app/net/imadz/infrastructure/bootstrap/MonthlyIncomeAndExpenseBootstrap.scala",
+              desc: "Bootstraps the Akka Projection: registers projection with the event journal and starts processing.",
+              constraint: "Must register with Akka Projection system. Defines source provider and handler binding." },
+            { name: "MoneyTransferSagaTransactor", type: "SagaTransactor", layer: "application",
+              path: "app/net/imadz/application/services/transactor/MoneyTransferSagaTransactor.scala",
+              desc: "Saga transaction coordinator for money transfers. Orchestrates Prepare → Commit → Compensate phases across multiple participants.",
+              constraint: "Must handle distributed timeouts. Compensate only successfully-prepared steps. Suspended state requires manual intervention." },
+            { name: "SagaTransactorBehaviors", type: "SagaBehavior", layer: "application",
+              path: "app/net/imadz/application/services/transactor/MoneyTransferSagaTransactorBehaviors.scala",
+              desc: "Command handler for the Saga transactor. Processes transaction lifecycle commands.",
+              constraint: "Must follow backward recovery pattern. Phase transitions must be atomic and persistent." },
+            { name: "SagaParticipant", type: "SagaParticipant", layer: "application",
+              path: "app/net/imadz/infra/saga/SagaParticipant.scala",
+              desc: "Trait defining the Saga participant interface: doPrepare, doCommit, doCompensate.",
+              constraint: "Each operation must be idempotent. Participants must not have side effects outside their domain boundary." },
+            { name: "saga_participant.proto", type: "SagaProtobuf", layer: "application",
+              path: "app/protobuf/saga_participant.proto",
+              desc: "Protobuf schema for serializing saga participant state.",
+              constraint: "Must follow the three-piece rule with Scala case class and Proto Converter." },
+            { name: "saga_v2.proto", type: "SagaProtobuf", layer: "application",
+              path: "app/protobuf/saga_v2.proto",
+              desc: "Protobuf schema for SagaTransactionCoordinator state and events.",
+              constraint: "Must maintain backward compatibility. New fields are append-only." },
+            { name: "TxCoordinatorRepo(trait)", type: "SagaRepo(trait)", layer: "application",
+              path: "app/net/imadz/infra/saga/repository/TransactionCoordinatorRepository.scala",
+              desc: "Repository interface for saga transaction coordinators.",
+              constraint: "Interface only — defines find/load operations for coordinator persistence IDs." },
+            { name: "TxCoordinatorRepo(impl)", type: "SagaRepo(impl)", layer: "application",
+              path: "app/net/imadz/infra/saga/repository/SagaTransactionCoordinatorRepositoryImpl.scala",
+              desc: "Implementation of the transaction coordinator repository using Akka Persistence.",
+              constraint: "Must use Akka Persistence Query for reading events. Writes go through the coordinator entity." },
+            { name: "SagaSerializer", type: "SagaSerializer", layer: "application",
+              path: "app/net/imadz/infra/saga/serialization/SagaSerializer.scala",
+              desc: "Serializes and deserializes Saga domain objects to/from Protobuf for persistence.",
+              constraint: "Must handle all saga event types. Serialization errors must fail fast with clear messages." },
+
+            // ==================== INFRASTRUCTURE LAYER ====================
+            { name: "CreditBalanceBootstrap", type: "AggregateBootstrap", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/bootstrap/CreditBalanceBootstrap.scala",
+              desc: "Bootstraps the CreditBalanceAggregate: initializes Akka Cluster Sharding for the aggregate entity.",
+              constraint: "Must register entity type key with ClusterSharding. Configures number of shards and passivation." },
+            { name: "SagaTxCoordinatorBootstrap", type: "SagaBootstrap", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala",
+              desc: "Bootstraps the Saga coordinator entity with Cluster Sharding.",
+              constraint: "Must register the 'Saga-MoneyTransfer' entity type key. Passivation strategy must not drop in-progress transactions." },
+            { name: "CreditBalanceEventAdapter", type: "PersistenceAdapter", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala",
+              desc: "Converts domain events to/from Protobuf for MongoDB journal storage.",
+              constraint: "Must handle all event types with explicit pattern matching. Adapter is the integration point between domain and persistence." },
+            { name: "SagaEventAdapter", type: "PersistenceAdapter", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/SagaTransactionCoordinatorEventAdapter.scala",
+              desc: "Converts Saga transaction events to/from Protobuf. Renames old event types for backward compatibility.",
+              constraint: "Must handle event type renaming for schema evolution. Part of the three-piece rule compliance." },
+            { name: "StepExecutorEventAdapter", type: "PersistenceAdapter", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/StepExecutorEventAdapter.scala",
+              desc: "Converts step executor events (per-step saga progress) to/from Protobuf.",
+              constraint: "Must serialize step state including retry count, phase, and error details." },
+            { name: "CreditBalanceSnapshotAdapter", type: "SnapshotAdapter", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala",
+              desc: "Converts CreditBalanceState snapshots to/from Protobuf for faster aggregate recovery.",
+              constraint: "Snapshots must be backwards-compatible. Older snapshot versions must still be readable." },
+            { name: "HomeController", type: "Controller", layer: "infrastructure",
+              path: "app/controllers/HomeController.scala",
+              desc: "Play Framework controller for index page, deposit, withdraw, and transfer REST endpoints.",
+              constraint: "Must delegate to ApplicationServices — no domain logic in controller. Validates HTTP input, returns proper status codes." },
+            { name: "ShowcaseController", type: "Controller", layer: "infrastructure",
+              path: "app/controllers/ShowcaseController.scala",
+              desc: "Serves the Saga Showcase SPA, Saga WebSocket event stream, and all /api/saga/* endpoints.",
+              constraint: "WebSocket must use BroadcastHub for fan-out. Event bridge subscribes to Akka event stream." },
+            { name: "DddGuideController", type: "Controller", layer: "infrastructure",
+              path: "app/controllers/DddGuideController.scala",
+              desc: "Serves DDD Guide and Projection Showcase pages plus /api/projection/status and /api/aggregate/balances.",
+              constraint: "API endpoints must query read model only. Balance query goes through aggregate (write side)." },
+
+            // ==================== NEW: Additional Domain Artifacts ====================
+            { name: "MoneyTransferTransactionEntity", type: "Entity", layer: "domain",
+              path: "app/net/imadz/domain/entities/MoneyTransferTransactionEntity.scala",
+              desc: "@messages("radar.MoneyTransferTransactionEntity.desc")",
+              constraint: "@messages("radar.MoneyTransferTransactionEntity.constraint")" },
+            { name: "CancelIncomingCreditRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/CancelIncomingCreditRule.scala",
+              desc: "@messages("radar.CancelIncomingCreditRule.desc")",
+              constraint: "@messages("radar.CancelIncomingCreditRule.constraint")" },
+            { name: "CommitIncomingCreditsRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/CommitIncomingCreditsRule.scala",
+              desc: "@messages("radar.CommitIncomingCreditsRule.desc")",
+              constraint: "@messages("radar.CommitIncomingCreditsRule.constraint")" },
+            { name: "InitiateTransactionRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/InitiateTransactionRule.scala",
+              desc: "@messages("radar.InitiateTransactionRule.desc")",
+              constraint: "@messages("radar.InitiateTransactionRule.constraint")" },
+            { name: "RecordIncomingCreditsRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/RecordIncomingCreditsRule.scala",
+              desc: "@messages("radar.RecordIncomingCreditsRule.desc")",
+              constraint: "@messages("radar.RecordIncomingCreditsRule.constraint")" },
+            { name: "ReleaseReservedFundsRule", type: "InvariantRule", layer: "domain",
+              path: "app/net/imadz/domain/invariants/ReleaseReservedFundsRule.scala",
+              desc: "@messages("radar.ReleaseReservedFundsRule.desc")",
+              constraint: "@messages("radar.ReleaseReservedFundsRule.constraint")" },
+
+            // ==================== NEW: Additional Application Artifacts ====================
+            { name: "CreditBalanceProtocol", type: "Protocol", layer: "application",
+              path: "app/net/imadz/application/aggregates/CreditBalanceProtocol.scala",
+              desc: "@messages("radar.CreditBalanceProtocol.desc")",
+              constraint: "@messages("radar.CreditBalanceProtocol.constraint")" },
+            { name: "CreditBalanceCommandHelpers", type: "CommandHelper", layer: "application",
+              path: "app/net/imadz/application/aggregates/behaviors/CreditBalanceCommandHelpers.scala",
+              desc: "@messages("radar.CreditBalanceCommandHelpers.desc")",
+              constraint: "@messages("radar.CreditBalanceCommandHelpers.constraint")" },
+            { name: "SagaProgressEvent", type: "DomainEvent", layer: "application",
+              path: "app/net/imadz/application/events/SagaProgressEvent.scala",
+              desc: "@messages("radar.SagaProgressEvent.desc")",
+              constraint: "@messages("radar.SagaProgressEvent.constraint")" },
+            { name: "CreateCreditBalanceService", type: "ApplicationService", layer: "application",
+              path: "app/net/imadz/application/services/CreateCreditBalanceService.scala",
+              desc: "@messages("radar.CreateCreditBalanceService.desc")",
+              constraint: "@messages("radar.CreateCreditBalanceService.constraint")" },
+            { name: "DynamicShowcaseParticipant", type: "SagaParticipant", layer: "application",
+              path: "app/net/imadz/application/services/transactor/DynamicShowcaseParticipant.scala",
+              desc: "@messages("radar.DynamicShowcaseParticipant.desc")",
+              constraint: "@messages("radar.DynamicShowcaseParticipant.constraint")" },
+            { name: "FromAccountParticipant", type: "SagaParticipant", layer: "application",
+              path: "app/net/imadz/application/services/transactor/FromAccountParticipant.scala",
+              desc: "@messages("radar.FromAccountParticipant.desc")",
+              constraint: "@messages("radar.FromAccountParticipant.constraint")" },
+            { name: "ToAccountParticipant", type: "SagaParticipant", layer: "application",
+              path: "app/net/imadz/application/services/transactor/ToAccountParticipant.scala",
+              desc: "@messages("radar.ToAccountParticipant.desc")",
+              constraint: "@messages("radar.ToAccountParticipant.constraint")" },
+            { name: "MoneyTransferContext", type: "Context", layer: "application",
+              path: "app/net/imadz/application/services/transactor/MoneyTransferContext.scala",
+              desc: "@messages("radar.MoneyTransferContext.desc")",
+              constraint: "@messages("radar.MoneyTransferContext.constraint")" },
+            { name: "MoneyTransferProtocol", type: "Protocol", layer: "application",
+              path: "app/net/imadz/application/services/transactor/MoneyTransferProtocol.scala",
+              desc: "@messages("radar.MoneyTransferProtocol.desc")",
+              constraint: "@messages("radar.MoneyTransferProtocol.constraint")" },
+            { name: "MoneyTransferTransactionRepository", type: "Repository(trait)", layer: "application",
+              path: "app/net/imadz/application/services/transactor/MoneyTransferTransactionRepository.scala",
+              desc: "@messages("radar.MoneyTransferTransactionRepository.desc")",
+              constraint: "@messages("radar.MoneyTransferTransactionRepository.constraint")" },
+
+            // ==================== NEW: Additional Infrastructure Artifacts ====================
+            { name: "ApplicationBootstrap", type: "Bootstrap", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/bootstrap/ApplicationBootstrap.scala",
+              desc: "@messages("radar.ApplicationBootstrap.desc")",
+              constraint: "@messages("radar.ApplicationBootstrap.constraint")" },
+            { name: "TransactionBootstrap", type: "Bootstrap", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala",
+              desc: "@messages("radar.TransactionBootstrap.desc")",
+              constraint: "@messages("radar.TransactionBootstrap.constraint")" },
+            { name: "CreditBalanceProtoConverters", type: "ProtoConverter", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala",
+              desc: "@messages("radar.CreditBalanceProtoConverters.desc")",
+              constraint: "@messages("radar.CreditBalanceProtoConverters.constraint")" },
+            { name: "SagaProtoConverters", type: "ProtoConverter", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala",
+              desc: "@messages("radar.SagaProtoConverters.desc")",
+              constraint: "@messages("radar.SagaProtoConverters.constraint")" },
+            { name: "TransactionEventAdapter", type: "PersistenceAdapter", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/TransactionEventAdapter.scala",
+              desc: "@messages("radar.TransactionEventAdapter.desc")",
+              constraint: "@messages("radar.TransactionEventAdapter.constraint")" },
+            { name: "TransactionSnapshotAdapter", type: "SnapshotAdapter", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/TransactionSnapshotAdapter.scala",
+              desc: "@messages("radar.TransactionSnapshotAdapter.desc")",
+              constraint: "@messages("radar.TransactionSnapshotAdapter.constraint")" },
+            { name: "TransactionSerializationStrategies", type: "SerializationStrategy", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala",
+              desc: "@messages("radar.TransactionSerializationStrategies.desc")",
+              constraint: "@messages("radar.TransactionSerializationStrategies.constraint")" },
+            { name: "MoneyTransferTransactionRepositoryImpl", type: "Repository(impl)", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/repositories/service/MoneyTransferTransactionRepositoryImpl.scala",
+              desc: "@messages("radar.MoneyTransferTransactionRepositoryImpl.desc")",
+              constraint: "@messages("radar.MoneyTransferTransactionRepositoryImpl.constraint")" },
+            { name: "SuffixCollectionNames", type: "Utility", layer: "infrastructure",
+              path: "app/net/imadz/infrastructure/SuffixCollectionNames.scala",
+              desc: "@messages("radar.SuffixCollectionNames.desc")",
+              constraint: "@messages("radar.SuffixCollectionNames.constraint")" },
+            { name: "BootstrapModule", type: "DI Module", layer: "infrastructure",
+              path: "app/net/imadz/modules/BootstrapModule.scala",
+              desc: "@messages("radar.BootstrapModule.desc")",
+              constraint: "@messages("radar.BootstrapModule.constraint")" }
+        ];
+
+        // ---- Color mapping ----
+        var colors = {
+            "Entity":                "var(--color-aggregate)",
+            "ValueObject":           "var(--color-aggregate)",
+            "DomainBehavior":        "var(--color-policy)",
+            "InvariantRule":         "var(--color-policy)",
+            "DomainService":         "var(--color-policy)",
+            "Aggregate":             "var(--color-aggregate)",
+            "CommandHandler":        "var(--color-command)",
+            "AggregateFactory":      "var(--color-command)",
+            "Repository(trait)":     "var(--color-readmodel)",
+            "Repository(impl)":      "var(--color-readmodel)",
+            "Protobuf":              "var(--color-event)",
+            "ApplicationService":    "var(--color-command)",
+            "QueryService":          "var(--color-readmodel)",
+            "Projection":            "var(--color-readmodel)",
+            "ProjectionHandler":     "var(--color-readmodel)",
+            "ProjectionRepo(trait)": "var(--color-readmodel)",
+            "ProjectionRepo(impl)":  "var(--color-readmodel)",
+            "ProjectionBootstrap":   "var(--color-infra)",
+            "SagaTransactor":        "var(--color-command)",
+            "SagaBehavior":          "var(--color-command)",
+            "SagaParticipant":       "var(--color-command)",
+            "SagaProtobuf":          "var(--color-event)",
+            "SagaRepo(trait)":       "var(--color-readmodel)",
+            "SagaRepo(impl)":        "var(--color-readmodel)",
+            "SagaSerializer":        "var(--color-infra)",
+            "AggregateBootstrap":    "var(--color-infra)",
+            "SagaBootstrap":         "var(--color-infra)",
+            "PersistenceAdapter":    "var(--color-infra)",
+            "SnapshotAdapter":       "var(--color-infra)",
+            "Controller":            "var(--color-infra)",
+            "Protocol":              "var(--color-command)",
+            "CommandHelper":         "var(--color-command)",
+            "Context":               "var(--color-policy)",
+            "ProtoConverter":        "var(--color-infra)",
+            "DomainEvent":           "var(--color-event)",
+            "SerializationStrategy": "var(--color-infra)",
+            "Bootstrap":             "var(--color-infra)",
+            "DI Module":             "var(--color-infra)",
+            "Utility":               "var(--color-infra)"
         };
 
-        const colors = {
-            "Aggregate": "var(--color-aggregate)",
-            "Policy": "var(--color-policy)",
-            "Event": "var(--color-event)",
-            "Saga": "var(--color-command)",
-            "Service": "var(--color-command)",
-            "ReadModel": "var(--color-readmodel)",
-            "Journal": "var(--color-infra)",
-            "Infrastructure": "var(--color-infra)"
-        };
+        // ---- Generate dots ----
+        var radar = document.getElementById('radar');
+        var dotElements = [];
 
-        dots.forEach(dot => {
-            dot.addEventListener('click', () => {
-                const name = dot.getAttribute('data-name');
-                const desc = dot.getAttribute('data-desc');
-                const path = dot.getAttribute('data-path');
-                const type = dot.getAttribute('data-type');
-                
-                compName.textContent = name;
-                compDesc.textContent = desc;
-                codePath.textContent = path;
-                tagName.textContent = type;
-                tagName.style.background = colors[type].replace(')', ', 0.2)');
-                tagName.style.color = colors[type];
-                compConstraint.textContent = constraints[name] || "N/A";
-                
-                empty.style.display = 'none';
-                content.style.display = 'block';
-                
-                // Active state
-                dots.forEach(d => d.style.boxShadow = '');
-                dot.style.boxShadow = `0 0 25px ${colors[type]}`;
+        radarArtifacts.forEach(function (art, idx) {
+            var layerRadius;
+            if (art.layer === 'domain')         layerRadius = 110;
+            else if (art.layer === 'application') layerRadius = 220;
+            else                                 layerRadius = 330;
+
+            // Distribute dots within each layer
+            var layerItems = radarArtifacts.filter(function (a) { return a.layer === art.layer; });
+            var layerIdx = layerItems.indexOf(art);
+            // Offset by π/8 so dots don't overlap the layer tag at 12 o'clock
+            var angle = (layerIdx / layerItems.length) * 2 * Math.PI - Math.PI / 2 + Math.PI / 8;
+
+            var cx = 325; // center of 650px container
+            var cy = 325;
+            var x = cx + layerRadius * Math.cos(angle) - 7; // half dot width
+            var y = cy + layerRadius * Math.sin(angle) - 7;
+
+            var dot = document.createElement('div');
+            dot.className = 'radar-dot';
+            dot.style.left = x + 'px';
+            dot.style.top = y + 'px';
+            dot.style.background = colors[art.type] || 'var(--color-infra)';
+            dot.style.color = colors[art.type] || 'var(--color-infra)';
+            dot.dataset.name = art.name;
+            dot.dataset.type = art.type;
+            dot.dataset.path = art.path;
+            dot.dataset.desc = art.desc;
+            dot.dataset.constraint = art.constraint;
+            dot.dataset.layer = art.layer;
+
+            var label = document.createElement('span');
+            label.className = 'dot-label';
+            label.textContent = art.name.length > 18 ? art.name.substring(0, 16) + '..' : art.name;
+            dot.appendChild(label);
+
+            dot.addEventListener('click', function () {
+                document.getElementById('compName').textContent = this.dataset.name;
+                document.getElementById('compDesc').textContent = this.dataset.desc;
+                document.getElementById('codePath').textContent = this.dataset.path;
+                document.getElementById('tagName').textContent = this.dataset.type;
+                var layerKey = 'layer' + this.dataset.layer.charAt(0).toUpperCase() + this.dataset.layer.slice(1);
+                document.getElementById('layerName').textContent = (window.__i18n && window.__i18n[layerKey]) || this.dataset.layer;
+                document.getElementById('compConstraint').textContent = this.dataset.constraint || 'N/A';
+
+                var c = colors[this.dataset.type] || 'var(--color-infra)';
+                document.getElementById('tagName').style.background = c.replace(')', ', 0.2)');
+                document.getElementById('tagName').style.color = c;
+
+                document.getElementById('panelEmpty').style.display = 'none';
+                document.getElementById('panelContent').style.display = 'block';
+
+                dotElements.forEach(function (d) { d.style.boxShadow = ''; });
+                this.style.boxShadow = '0 0 25px ' + c;
+
+                // Highlight dependencies
+                if (typeof highlightDeps === 'function') highlightDeps(this.dataset.name);
+                if (typeof updateDepInfo === 'function') updateDepInfo(this.dataset.name);
+            }.bind(dot));
+
+            radar.appendChild(dot);
+            dotElements.push(dot);
+        });
+
+        // ---- Shared state for dependency graph ----
+        var depData = null;
+        var externalModule = new Set([
+            'SagaParticipant', 'saga_participant.proto', 'saga_v2.proto',
+            'TxCoordinatorRepo(trait)', 'TxCoordinatorRepo(impl)',
+            'SagaSerializer', 'SagaEventAdapter', 'StepExecutorEventAdapter'
+        ]);
+
+        function getDotByName(name) {
+            for (var i = 0; i < dotElements.length; i++) {
+                if (dotElements[i].dataset.name === name) return dotElements[i];
+            }
+            return null;
+        }
+
+        // ---- Layer filter ----
+        var activeLayer = 'all';
+        var layerOrder = { 'domain': 0, 'application': 1, 'infrastructure': 2 };
+
+        document.querySelectorAll('.filter-chip[data-layer]').forEach(function (chip) {
+            chip.addEventListener('click', function () {
+                document.querySelectorAll('.filter-chip[data-layer]').forEach(function (c) { c.classList.remove('active'); });
+                this.classList.add('active');
+                activeLayer = this.dataset.layer;
+
+                dotElements.forEach(function (dot) {
+                    if (activeLayer === 'all' || dot.dataset.layer === activeLayer) {
+                        dot.style.display = '';
+                    } else {
+                        dot.style.display = 'none';
+                    }
+                });
+
+                // When showing a specific outer layer with deps on,
+                // also reveal inner-layer dots that are connected via dependencies
+                if (activeLayer !== 'all' && typeof depData !== 'undefined' && depData) {
+                    var selectedOrder = layerOrder[activeLayer];
+                    var innerTargets = new Set();
+                    depData.edges.forEach(function (edge) {
+                        if (externalModule.has(edge.from) || externalModule.has(edge.to)) return;
+                        var fromDot = getDotByName(edge.from);
+                        var toDot = getDotByName(edge.to);
+                        if (!fromDot || !toDot) return;
+                        // from is in selected layer, to is in a lower (inner) layer
+                        if (fromDot.dataset.layer === activeLayer && layerOrder[toDot.dataset.layer] < selectedOrder) {
+                            innerTargets.add(edge.to);
+                        }
+                        // to is in selected layer, from is in a lower (inner) layer
+                        if (toDot.dataset.layer === activeLayer && layerOrder[fromDot.dataset.layer] < selectedOrder) {
+                            innerTargets.add(edge.from);
+                        }
+                    });
+                    dotElements.forEach(function (dot) {
+                        if (innerTargets.has(dot.dataset.name)) {
+                            dot.style.display = '';
+                        }
+                    });
+                }
+
+                if (typeof updateDepEdges === 'function') updateDepEdges();
             });
         });
+
+        // ---- Dependency toggle ----
+        var depToggle = document.getElementById('depToggle');
+        if (depToggle) {
+            depToggle.addEventListener('click', function () {
+                this.classList.toggle('dep-active');
+                var depsOn = this.classList.contains('dep-active');
+
+                // If toggling off while viewing a specific layer, re-hide inner-layer dots
+                if (!depsOn && activeLayer !== 'all') {
+                    dotElements.forEach(function (dot) {
+                        if (dot.dataset.layer !== activeLayer) {
+                            dot.style.display = 'none';
+                        }
+                    });
+                }
+                // If toggling on while viewing a specific layer, reveal inner-layer connected dots
+                if (depsOn && activeLayer !== 'all' && depData) {
+                    var selectedOrder = layerOrder[activeLayer];
+                    var innerTargets = new Set();
+                    depData.edges.forEach(function (edge) {
+                        if (externalModule.has(edge.from) || externalModule.has(edge.to)) return;
+                        var fromDot = getDotByName(edge.from);
+                        var toDot = getDotByName(edge.to);
+                        if (!fromDot || !toDot) return;
+                        if (fromDot.dataset.layer === activeLayer && layerOrder[toDot.dataset.layer] < selectedOrder) {
+                            innerTargets.add(edge.to);
+                        }
+                        if (toDot.dataset.layer === activeLayer && layerOrder[fromDot.dataset.layer] < selectedOrder) {
+                            innerTargets.add(edge.from);
+                        }
+                    });
+                    dotElements.forEach(function (dot) {
+                        if (innerTargets.has(dot.dataset.name)) {
+                            dot.style.display = '';
+                        }
+                    });
+                }
+
+                if (typeof updateDepEdges === 'function') updateDepEdges();
+            });
+        }
+
+        // ==================== Dependency Graph Engine ====================
+        (function () {
+            var depPaths = [];
+            var depSvg = document.getElementById('depSvg');
+
+            if (!depSvg) return;
+
+            function getDotCenter(dot) {
+                var radarRect = document.getElementById('radar').getBoundingClientRect();
+                var dotRect = dot.getBoundingClientRect();
+                return {
+                    x: dotRect.left + dotRect.width / 2 - radarRect.left,
+                    y: dotRect.top + dotRect.height / 2 - radarRect.top
+                };
+            }
+
+            function isDotVisible(dot) {
+                return dot.style.display !== 'none';
+            }
+
+            function drawCurvedPath(x1, y1, x2, y2) {
+                var dx = x2 - x1;
+                var dy = y2 - y1;
+                var dist = Math.sqrt(dx * dx + dy * dy);
+                var curve = Math.max(dist * 0.35, 30);
+                var sign = dx >= 0 ? -1 : 1;
+                var cx = (x1 + x2) / 2;
+                var cy = (y1 + y2) / 2 + sign * curve;
+                return 'M ' + x1 + ' ' + y1 + ' Q ' + cx + ' ' + cy + ' ' + x2 + ' ' + y2;
+            }
+
+            function renderDepEdges() {
+                depPaths.forEach(function (p) { p.remove(); });
+                depPaths = [];
+
+                var depsEnabled = depToggle ? depToggle.classList.contains('dep-active') : true;
+                if (!depData || !depsEnabled) return;
+
+                var visibleDots = {};
+                dotElements.forEach(function (d) {
+                    if (isDotVisible(d)) visibleDots[d.dataset.name] = d;
+                });
+
+                depData.edges.forEach(function (edge) {
+                    if (externalModule.has(edge.from) || externalModule.has(edge.to)) return;
+
+                    var fromDot = visibleDots[edge.from];
+                    var toDot = visibleDots[edge.to];
+                    if (!fromDot || !toDot) return;
+
+                    // When viewing a specific layer, hide edges between two inner-layer nodes
+                    if (activeLayer !== 'all') {
+                        if (fromDot.dataset.layer !== activeLayer && toDot.dataset.layer !== activeLayer) return;
+                    }
+
+                    var fromCenter = getDotCenter(fromDot);
+                    var toCenter = getDotCenter(toDot);
+
+                    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    g.setAttribute('class', 'dep-edge visible');
+                    g.dataset.from = edge.from;
+                    g.dataset.to = edge.to;
+                    g.dataset.relation = edge.relation;
+
+                    var path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', drawCurvedPath(fromCenter.x, fromCenter.y, toCenter.x, toCenter.y));
+                    path.setAttribute('marker-end', 'url(#arrowHollow)');
+                    g.appendChild(path);
+
+                    // Relation label at midpoint
+                    var mid = path.getPointAtLength(path.getTotalLength() * 0.45);
+                    var label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    label.setAttribute('x', mid.x + 6);
+                    label.setAttribute('y', mid.y - 4);
+                    label.setAttribute('class', 'dep-relation-tag');
+                    label.textContent = edge.relation;
+                    g.appendChild(label);
+
+                    depSvg.appendChild(g);
+                    depPaths.push(g);
+                });
+            }
+
+            window.updateDepEdges = function () {
+                renderDepEdges();
+            };
+
+            window.highlightDeps = function (name) {
+                depPaths.forEach(function (g) {
+                    if (g.dataset.from === name || g.dataset.to === name) {
+                        g.classList.add('highlight');
+                        g.classList.remove('dimmed');
+                    } else {
+                        g.classList.remove('highlight');
+                        g.classList.add('dimmed');
+                    }
+                });
+
+                var relatedNames = new Set();
+                depData.edges.forEach(function (e) {
+                    if (externalModule.has(e.from) || externalModule.has(e.to)) return;
+                    if (e.from === name) relatedNames.add(e.to);
+                    if (e.to === name) relatedNames.add(e.from);
+                });
+                dotElements.forEach(function (d) {
+                    if (d.dataset.name === name) return;
+                    if (relatedNames.has(d.dataset.name)) {
+                        d.style.animation = 'pulse 0.6s ease-in-out 2';
+                        setTimeout(function () { d.style.animation = ''; }, 1200);
+                    }
+                });
+            };
+
+            window.updateDepInfo = function (name) {
+                var depInfoBox = document.getElementById('depInfoBox');
+                var depInfo = document.getElementById('depInfo');
+                if (!depData) { depInfo.textContent = 'Loading...'; return; }
+
+                var depsOn = [];
+                var depsBy = [];
+                depData.edges.forEach(function (e) {
+                    if (externalModule.has(e.from) || externalModule.has(e.to)) return;
+                    if (e.from === name) depsOn.push({name: e.to, rel: e.relation});
+                    if (e.to === name) depsBy.push({name: e.from, rel: e.relation});
+                });
+
+                var i18n = window.__i18n || {};
+                var html = '';
+                if (depsOn.length > 0) {
+                    html += '<div style="margin-bottom:4px;">' + (i18n.dependsOn || 'Depends on:') + ' ';
+                    html += depsOn.map(function (d) {
+                        return '<span style="color:#f97316;">' + d.name + '</span> <span style="font-size:0.6rem;opacity:0.6;">(' + d.rel + ')</span>';
+                    }).join(', ');
+                    html += '</div>';
+                }
+                if (depsBy.length > 0) {
+                    html += '<div>' + (i18n.dependedBy || 'Depended by:') + ' ';
+                    html += depsBy.map(function (d) {
+                        return '<span style="color:#22c55e;">' + d.name + '</span> <span style="font-size:0.6rem;opacity:0.6;">(' + d.rel + ')</span>';
+                    }).join(', ');
+                    html += '</div>';
+                }
+                if (!depsOn.length && !depsBy.length) {
+                    html = '<span style="opacity:0.5;">' + (i18n.noDeps || 'No direct dependencies with other radar artifacts.') + '</span>';
+                }
+                depInfo.innerHTML = html;
+                depInfoBox.style.display = 'block';
+            };
+
+            // Handle window resize to redraw edges
+            var resizeTimer;
+            window.addEventListener('resize', function () {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function () { renderDepEdges(); }, 200);
+            });
+
+            // Load dependency data
+            fetch('/assets/data/ddd_dependencies.json')
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    depData = data;
+                    console.log('[ddd-guide] Loaded ' + data.edges.length + ' dependency edges');
+                    renderDepEdges();
+                    // Re-apply current layer filter to reveal inner-layer connected dots
+                    if (activeLayer !== 'all' && depToggle && depToggle.classList.contains('dep-active')) {
+                        var selectedOrder = layerOrder[activeLayer];
+                        var innerTargets = new Set();
+                        depData.edges.forEach(function (edge) {
+                            if (externalModule.has(edge.from) || externalModule.has(edge.to)) return;
+                            var fromDot = getDotByName(edge.from);
+                            var toDot = getDotByName(edge.to);
+                            if (!fromDot || !toDot) return;
+                            if (fromDot.dataset.layer === activeLayer && layerOrder[toDot.dataset.layer] < selectedOrder) {
+                                innerTargets.add(edge.to);
+                            }
+                            if (toDot.dataset.layer === activeLayer && layerOrder[fromDot.dataset.layer] < selectedOrder) {
+                                innerTargets.add(edge.from);
+                            }
+                        });
+                        dotElements.forEach(function (dot) {
+                            if (innerTargets.has(dot.dataset.name)) {
+                                dot.style.display = '';
+                            }
+                        });
+                        renderDepEdges();
+                    }
+                })
+                .catch(function (err) {
+                    console.warn('[ddd-guide] Failed to load dependency data:', err);
+                });
+        })();
     </script>
 </body>
 </html>

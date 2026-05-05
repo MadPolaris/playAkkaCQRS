@@ -9,7 +9,7 @@
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
         .container { max-width: 1400px; margin: 0 auto; }
         h1 { color: #00d4ff; border-bottom: 2px solid #333; padding-bottom: 10px; text-align: center; }
-        
+
         .header-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; margin-bottom: 20px; }
         .lang-switcher { font-size: 0.9rem; }
         .lang-switcher a { color: #00d4ff; text-decoration: none; margin-left: 10px; padding: 2px 8px; border: 1px solid #444; border-radius: 4px; }
@@ -17,7 +17,7 @@
         .lang-switcher a.active { background: #00d4ff; color: #000; border-color: #00d4ff; }
 
         .dashboard { display: grid; grid-template-columns: 350px 1fr; gap: 30px; margin-top: 20px; }
-        
+
         .control-panel { background: #252525; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); align-self: start; }
         .control-panel h2 { font-size: 1.2rem; margin-top: 0; color: #ffca28; border-left: 4px solid #ffca28; padding-left: 10px; }
         .btn { display: block; width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center; transition: all 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
@@ -34,56 +34,56 @@
         .btn-info { background: #17a2b8; color: white; }
         .btn-info:hover { background: #138496; }
         .btn-small { padding: 4px 8px; font-size: 0.7rem; width: auto; display: inline-block; margin: 0; }
-        
+
         .fault-injection { margin-top: 20px; border-top: 1px solid #444; padding-top: 20px; }
         .step-config { margin-bottom: 15px; }
         .step-name { font-weight: bold; margin-bottom: 5px; display: block; color: #aaa; font-size: 0.8rem; }
         select { width: 100%; padding: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
-        
+
         .visualization { background: #252525; padding: 30px; border-radius: 8px; min-height: 800px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
         .phase-column { display: flex; flex-direction: column; align-items: center; border: 1px solid #333; border-radius: 8px; padding: 15px; background: rgba(0,0,0,0.2); }
         .phase-header { font-weight: bold; margin-bottom: 20px; padding: 5px 15px; border-radius: 20px; font-size: 0.9rem; }
-        
+
         .group-row { display: flex; justify-content: center; gap: 20px; width: 100%; margin-bottom: 30px; position: relative; padding: 10px; border: 1px dashed #444; border-radius: 6px; }
         .group-row::before { content: "Group " attr(data-group); position: absolute; top: -10px; left: 10px; background: #252525; padding: 0 5px; font-size: 0.6rem; color: #888; }
-        
+
         .group-connector { height: 20px; width: 2px; background: #444; margin-top: -30px; margin-bottom: 10px; }
 
         .node { width: 130px; height: 65px; background: #444; border: 2px solid #666; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: all 0.5s; font-size: 0.8rem; }
         .node .label { font-weight: bold; }
         .node .info { font-size: 0.6rem; color: #aaa; }
-        
-        .node .fix-btn { 
-            display: none; 
-            position: absolute; 
-            bottom: -25px; 
-            left: 50%; 
+
+        .node .fix-btn {
+            display: none;
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
             transform: translateX(-50%);
             z-index: 100;
             white-space: nowrap;
         }
-        
+
         .node.failed .fix-btn, .node.retrying .fix-btn, .node.suspended .fix-btn { display: block !important; }
-        
+
         .node.pending { background: #3a3a3a; color: #888; }
         .node.ongoing { background: #0056b3; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; animation: pulse 1.5s infinite; color: white; }
         .node.success { background: #1b5e20; border-color: #4caf50; color: white; }
         .node.failed { background: #b71c1c; border-color: #f44336; color: white; }
         .node.retrying { background: #e65100; border-color: #ffca28; border-style: dashed; color: white; }
         .node.suspended { border: 3px solid #ff9800 !important; }
-        
+
         @@keyframes pulse {
             0% { transform: scale(1); }
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-        
+
         .logs-container { grid-column: span 3; margin-top: 20px; }
         .logs { background: #000; padding: 15px; border-radius: 8px; height: 180px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; border: 1px solid #333; }
         .log-entry { margin-bottom: 4px; border-left: 3px solid #555; padding-left: 8px; }
         .log-time { color: #888; margin-right: 10px; }
         .log-type { font-weight: bold; margin-right: 10px; }
-        
+
         .type-TransactionStarted { color: #ffca28; }
         .type-StepOngoing { color: #00d4ff; }
         .type-StepCompleted { color: #4caf50; }
@@ -91,17 +91,19 @@
         .type-DomainEventPublished { color: #9c27b0; font-weight: bold; }
         .type-TransactionCompleted { color: #4caf50; background: rgba(76, 175, 80, 0.1); }
         .type-TransactionSuspended { color: #ff9800; background: rgba(255, 152, 0, 0.1); }
-        
+
         .admin-fix-panel { margin-top: 20px; padding: 10px; background: #333; border-radius: 4px; border-left: 4px solid #c62828; }
         .admin-fix-panel input { width: 100%; padding: 8px; margin-bottom: 10px; background: #222; color: #fff; border: 1px solid #555; box-sizing: border-box; }
 
         .replay-panel { margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; border-top: 4px solid #17a2b8; }
         .replay-panel input { width: 100%; padding: 10px; background: #111; color: #00d4ff; border: 1px solid #444; border-radius: 4px; margin-bottom: 10px; font-family: monospace; }
-        
+
         .scenario-info { margin-top: 15px; padding: 12px; background: rgba(0, 212, 255, 0.1); border-radius: 4px; border-left: 4px solid #00d4ff; font-size: 0.85rem; }
         .scenario-info h3 { margin: 0 0 5px 0; font-size: 0.9rem; color: #00d4ff; }
         .scenario-info p { margin: 0; line-height: 1.4; color: #ccc; }
         .scenario-info .expectation { margin-top: 8px; font-style: italic; color: #ffca28; }
+
+        .event-dot { pointer-events: none; }
     </style>
 </head>
 <body>
@@ -119,7 +121,7 @@
         <div class="dashboard">
             <div class="control-panel">
                 <h2>@messages("showcase.control_panel")</h2>
-                
+
                 <div class="step-config">
                     <span class="step-name">@messages("showcase.scenario")</span>
                     <select id="scenarioId">
@@ -147,9 +149,9 @@
                 <button class="btn btn-warning" id="proceedBtn" style="display:none;">@messages("showcase.proceed")</button>
                 <button class="btn btn-danger" id="retryBtn" style="display:none;">@messages("showcase.retry_phase")</button>
                 <button class="btn btn-success" id="resumeBtn" style="display:none;">@messages("showcase.resume")</button>
-                
+
                 <div id="statusInfo" style="margin: 10px 0; font-weight: bold; text-align: center; color: #ffca28;">@messages("showcase.ready")</div>
-                
+
                 <div class="replay-panel">
                     <h3 style="font-size: 0.9rem; color: #17a2b8; margin-top: 0;">@messages("showcase.time_machine")</h3>
                     <input type="text" id="replayTxId" placeholder="@messages("showcase.tx_id_placeholder")">
@@ -195,7 +197,7 @@
                     </div>
                 </div>
             </div>
-            
+
             <div class="visualization" id="dagContainer">
                 <div id="coordinator-node" style="grid-column: span 3; display: flex; justify-content: center; margin-bottom: 10px;">
                     <div class="node coordinator success" id="coordinator" style="width: 200px; background: #0056b3; border-color: #00d4ff; color: white;">
@@ -216,28 +218,6 @@
                     <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
                 </div>
 
-                <!-- Infrastructure & CQRS Layer -->
-                <div id="infra-layer" style="grid-column: span 3; display: flex; justify-content: space-around; margin-top: 40px; padding: 20px; border-top: 1px dashed #444; background: rgba(0,0,0,0.1); border-radius: 8px;">
-                    <div class="node" id="node-aggregate" style="background: #673ab7; border-color: #9575cd; width: 160px;">
-                        <span class="label">Credit Balance</span>
-                        <span class="info">Aggregate</span>
-                    </div>
-                    <div class="node" id="node-journal" style="background: #333; border: 2px solid #9c27b0; width: 140px;">
-                        <span class="label">Event Journal</span>
-                        <span class="info">MongoDB</span>
-                    </div>
-                    <div class="node" id="node-projection" style="background: #e65100; border-color: #ff9800; width: 160px;">
-                        <span class="label">Summary Projector</span>
-                        <span class="info">Akka Projection</span>
-                    </div>
-                    <div class="node" id="node-read-model" style="background: #1b5e20; border-color: #4caf50; width: 180px; height: 80px;">
-                        <span class="label">Monthly Report</span>
-                        <div id="report-preview" style="font-size: 0.65rem; color: #a5d6a7; margin-top: 5px; text-align: left; padding-left: 10px;">
-                            Income: ¥0<br/>Expense: ¥0
-                        </div>
-                    </div>
-                </div>
-
                 <div class="logs-container">
                     <div class="logs" id="logContainer">
                         <div class="log-entry"><span class="log-time">--:--:--</span> <span class="log-type">@messages("showcase.log.System")</span> @messages("showcase.system_ready")</div>
@@ -246,9 +226,9 @@
             </div>
         </div>
     </div>
-    <script src="@routes.Assets.versioned("javascripts/showcase_engine.js")" type="text/javascript"></script>
+
     <script>
-        const i18n = {
+        window.__sagaI18n = {
             log: {
                 TransactionStarted: '@Html(messages("showcase.log.TransactionStarted"))',
                 StepOngoing: '@Html(messages("showcase.log.StepOngoing"))',
@@ -281,24 +261,12 @@
                 enter_txid: '@Html(messages("showcase.ui.enter_txid"))'
             }
         };
-
-        function t(msg, ...args) {
-            args.forEach((arg, i) => {
-                msg = msg.replace('{' + i + '}', arg);
-            });
-            return msg;
-        }
-
-        const logContainer = document.getElementById('logContainer');
-        const proceedBtn = document.getElementById('proceedBtn');
-        const retryBtn = document.getElementById('retryBtn');
-        const resumeBtn = document.getElementById('resumeBtn');
-        const manualFixPanel = document.getElementById('manualFixPanel');
-        const replayBtn = document.getElementById('replayBtn');
-        const replayTxIdInput = document.getElementById('replayTxId');
-        let currentTransactionId = null;
-
-        const scenarioInfo = {
+        window.__sagaPhaseLabels = {
+            PREPARE: '@Html(messages("showcase.phase.PREPARE_H"))',
+            COMMIT: '@Html(messages("showcase.phase.COMMIT_H"))',
+            COMPENSATE: '@Html(messages("showcase.phase.COMPENSATE_H"))'
+        };
+        window.__sagaScenarioInfo = {
             'happy': {
                 description: '@Html(messages("showcase.scenario.happy.desc"))',
                 expectation: '@Html(messages("showcase.scenario.happy.expect"))'
@@ -332,476 +300,8 @@
                 expectation: '@Html(messages("showcase.scenario.custom.expect"))'
             }
         };
-
-        function updateScenarioDetails() {
-            const sid = document.getElementById('scenarioId').value;
-            const info = scenarioInfo[sid];
-            if (info) {
-                document.getElementById('scenarioText').innerText = info.description;
-                document.getElementById('scenarioExpectation').innerText = info.expectation;
-            }
-        }
-        document.getElementById('scenarioId').onchange = updateScenarioDetails;
-        updateScenarioDetails();
-
-        const demoConfig = {
-            settings: { animationSpeed: 1.0, eventTravelTime: 600 },
-            nodes: [
-                {
-                    id: 'coordinator', domId: 'coordinator',
-                    initialState: { status: 'idle', label: 'Saga Coordinator' },
-                    reducer: (state, event) => {
-                        if (event.type === 'TransactionStarted') return { ...state, status: 'ongoing' };
-                        if (event.type === 'TransactionCompleted') return { ...state, status: 'success' };
-                        if (event.type === 'TransactionFailed' || event.type === 'TransactionSuspended') return { ...state, status: 'failed' };
-                        return state;
-                    },
-                    render: (state) => `<span class="label">${state.label}</span><span class="info" id="coord-status">${state.status}</span>`,
-                    onRendered: (wrapper, state) => { wrapper.className = `node coordinator ${state.status}`; }
-                },
-                {
-                    id: 'node-aggregate',
-                    initialState: { balance: 0, reserved: {}, incoming: {}, lastEvent: 'None' },
-                    reducer: (state, ev) => {
-                        if (ev.data && ev.data.isDomainEvent) {
-                            const txId = ev.data.transactionId;
-                            const amountStr = (ev.data.detail || "").match(/Amount: ([\d.]+)/);
-                            const amount = amountStr ? parseFloat(amountStr[1]) : 0;
-                            const updateStr = (ev.data.detail || "").match(/Update: ([\d.-]+)/);
-                            const update = updateStr ? parseFloat(updateStr[1]) : 0;
-
-                            let next = { ...state, lastEvent: ev.type, reserved: {...state.reserved}, incoming: {...state.incoming} };
-                            
-                            if (ev.type === 'BalanceChanged') {
-                                next.balance += update;
-                            } else if (ev.type === 'FundsReserved') {
-                                next.balance -= amount;
-                                next.reserved[txId] = amount;
-                            } else if (ev.type === 'FundsDeducted') {
-                                delete next.reserved[txId];
-                            } else if (ev.type === 'ReservationReleased') {
-                                next.balance += (state.reserved[txId] || 0);
-                                delete next.reserved[txId];
-                            } else if (ev.type === 'IncomingCreditsRecorded') {
-                                next.incoming[txId] = amount;
-                            } else if (ev.type === 'IncomingCreditsCommited') {
-                                next.balance += (state.incoming[txId] || 0);
-                                delete next.incoming[txId];
-                            } else if (ev.type === 'IncomingCreditsCanceled') {
-                                delete next.incoming[txId];
-                            }
-                            return next;
-                        }
-                        return state;
-                    },
-                    render: (state) => {
-                        const resCount = Object.keys(state.reserved).length;
-                        const incCount = Object.keys(state.incoming).length;
-                        return `<span class="label">Credit Balance</span>
-                                <span class="info">Event: ${state.lastEvent}</span>
-                                <div style="font-size:0.7rem; color:#00d4ff; font-weight:bold; margin-top:2px;">Bal: ¥${state.balance.toFixed(2)}</div>
-                                <div style="font-size:0.6rem; color:#aaa;">[P: +${incCount} / -${resCount}]</div>`;
-                    },
-                    onRendered: (wrapper, state) => { if (state.lastEvent !== 'None') { wrapper.style.boxShadow = '0 0 15px #9c27b0'; setTimeout(() => wrapper.style.boxShadow = 'none', 500); } }
-                },
-                {
-                    id: 'node-journal',
-                    initialState: { count: 0 },
-                    reducer: (state, ev) => {
-                        if (ev.data && ev.data.isDomainEvent) return { ...state, count: state.count + 1 };
-                        return state;
-                    },
-                    render: (state) => `<span class="label">Event Journal</span><span class="info">Journaled: ${state.count}</span>`
-                },
-                {
-                    id: 'node-projection',
-                    initialState: { status: 'idle' },
-                    reducer: (state, ev) => {
-                        if (ev.data && ev.data.isDomainEvent) return { ...state, status: 'projecting' };
-                        return state;
-                    },
-                    render: (state) => `<span class="label">Summary Projector</span><span class="info">Status: ${state.status}</span>`,
-                    onRendered: (wrapper, state) => { if (state.status === 'projecting') { wrapper.style.borderColor = '#4caf50'; setTimeout(() => { state.status = 'idle'; wrapper.style.borderColor = '#ff9800'; }, 600); } }
-                },
-                {
-                    id: 'node-read-model',
-                    initialState: { income: 0, expense: 0 },
-                    reducer: (state, ev) => {
-                        if (ev.data && ev.data.isDomainEvent) {
-                            const amountStr = (ev.data.detail || "").match(/Amount: ([\d.]+)/) || (ev.data.detail || "").match(/Update: ([\d.-]+)/);
-                            const amount = amountStr ? parseFloat(amountStr[1]) : 0;
-                            
-                            switch(ev.type) {
-                                case 'BalanceChanged':
-                                    if (amount > 0) return { ...state, income: state.income + amount };
-                                    else return { ...state, expense: state.expense + Math.abs(amount) };
-                                
-                                case 'FundsReserved':
-                                    return { ...state, expense: state.expense + amount };
-                                
-                                case 'ReservationReleased':
-                                    return { ...state, expense: state.expense - amount };
-                                
-                                case 'IncomingCreditsRecorded':
-                                    return { ...state, income: state.income + amount };
-                                
-                                case 'FundsDeducted':
-                                case 'IncomingCreditsCommited':
-                                case 'IncomingCreditsCanceled':
-                                    // As per Scala handler: Ignored or handled elsewhere
-                                    return state;
-                            }
-                        }
-                        return state;
-                    },
-                    render: (state) => `
-                        <span class="label">Monthly Report</span>
-                        <div id="report-preview" style="font-size: 0.65rem; color: #a5d6a7; margin-top: 5px; text-align: left; padding-left: 10px;">
-                            Income: ¥${state.income.toFixed(2)}<br/>Expense: ¥${state.expense.toFixed(2)}
-                        </div>
-                    `
-                }
-            ],
-            eventRoutes: [
-                // Control Flow
-                { type: 'StepOngoing', source: 'coordinator', target: (e) => `node-${e.data.stepId}-${(e.data.phase||'').toLowerCase().replace('phase','')}`, color: '#00d4ff' },
-                { type: 'StepCompleted', source: (e) => `node-${e.data.stepId}-${(e.data.phase||'').toLowerCase().replace('phase','')}`, target: 'coordinator', color: '#4caf50' },
-                { type: 'StepFailed', source: (e) => `node-${e.data.stepId}-${(e.data.phase||'').toLowerCase().replace('phase','')}`, target: 'coordinator', color: '#f44336' },
-                
-                // Domain Event Flow - Ubiquitous Language (Matching Scala Class Names)
-                { 
-                    isDomain: true, 
-                    source: (e) => {
-                        const txId = e.data.transactionId;
-                        // Business heuristic: 
-                        // FundsReserved/Deducted/ReservationReleased -> Step-B (Withdrawal)
-                        // IncomingCreditsRecorded/Commited/Canceled -> Step-C (Deposit)
-                        if (['FundsReserved', 'FundsDeducted', 'ReservationReleased'].includes(e.type)) return `node-Step-B-prepare`;
-                        if (['IncomingCreditsRecorded', 'IncomingCreditsCommited', 'IncomingCreditsCanceled'].includes(e.type)) return `node-Step-C-prepare`;
-                        // Default to Step-A or find from transactionId if available
-                        return `node-Step-A-prepare`;
-                    }, 
-                    target: 'node-aggregate', 
-                    color: '#9c27b0' 
-                },
-                { isDomain: true, source: 'node-aggregate', target: 'node-journal', color: '#e91e63' },
-                { isDomain: true, source: 'node-journal', target: 'node-projection', color: '#ffca28' },
-                { isDomain: true, source: 'node-projection', target: 'node-read-model', color: '#4caf50' }
-            ],
-            eventDispatch: (ev) => {
-                if (ev.data && ev.data.isDomainEvent) return ['node-aggregate', 'node-journal', 'node-projection', 'node-read-model'];
-                if (ev.type === 'TransactionStarted' || ev.type === 'TransactionCompleted' || ev.type === 'TransactionFailed' || ev.type === 'TransactionSuspended') return ['coordinator'];
-                // Steps are updated automatically via their specific reducers
-                return Array.from(engine.nodes.keys());
-            }
-        };
-
-        // Custom route matching for domain events in the engine
-        const originalPushEvent = AnimationEngine.prototype.pushEvent;
-        AnimationEngine.prototype.pushEvent = function(event) {
-            if (event.data && event.data.isDomainEvent) {
-                // Find routes with isDomain: true
-                const domainRoutes = this.config.eventRoutes.filter(r => r.isDomain);
-                const sequence = async () => {
-                    this.isAnimating = true;
-                    for (const route of domainRoutes) {
-                        const sourceId = typeof route.source === 'function' ? route.source(event) : route.source;
-                        const targetId = typeof route.target === 'function' ? route.target(event) : route.target;
-                        if (sourceId && targetId && this.domNodes.has(sourceId) && this.domNodes.has(targetId)) {
-                            await this._animateTravel(sourceId, targetId, event, route);
-                            // Update target state immediately after travel
-                            this.updateNodeState(targetId, event);
-                        }
-                    }
-                    this.eventListeners.forEach(cb => cb(event));
-                    this.isAnimating = false;
-                    this._processNext();
-                };
-                this.eventQueue.push(sequence);
-                if (!this.isAnimating) this._processNext();
-            } else {
-                originalPushEvent.call(this, event);
-            }
-        };
-
-        // Fix _processNext to handle sequences
-        AnimationEngine.prototype._processNext = async function() {
-            if (this.isAnimating || this.eventQueue.length === 0) return;
-            const item = this.eventQueue.shift();
-            if (typeof item === 'function') {
-                await item();
-            } else {
-                // ... original logic (simplified here as I'm replacing it)
-                this.isAnimating = true;
-                const event = item;
-                let route = this.config.eventRoutes.find(r => r.type === event.type);
-                if (route) {
-                    const sourceId = typeof route.source === 'function' ? route.source(event) : route.source;
-                    const targetId = typeof route.target === 'function' ? route.target(event) : route.target;
-                    if (sourceId && targetId && this.domNodes.has(sourceId) && this.domNodes.has(targetId)) {
-                        await this._animateTravel(sourceId, targetId, event, route);
-                    }
-                }
-                const targetIds = this.config.eventDispatch ? this.config.eventDispatch(event) : Array.from(this.nodes.keys());
-                targetIds.forEach(id => this.updateNodeState(id, event));
-                this.eventListeners.forEach(cb => cb(event));
-                this.isAnimating = false;
-                this._processNext();
-            }
-        };
-
-        const engine = new AnimationEngine('dagContainer', demoConfig);
-
-        function renderDAG(steps) {
-            const groups = {};
-            steps.forEach(s => {
-                if (!groups[s.stepGroup]) groups[s.stepGroup] = [];
-                if (!groups[s.stepGroup].includes(s.stepId)) groups[s.stepGroup].push(s.stepId);
-            });
-            const sortedGroups = Object.keys(groups).sort((a, b) => parseInt(a) - parseInt(b));
-
-            function buildCol(phase, title, bg, color, reverseGroups) {
-                let html = '<div class="phase-header" style="background: ' + bg + '; color: ' + color + ';">' + title + '</div>';
-                let groupsToRender = reverseGroups ? [...sortedGroups].reverse() : sortedGroups;
-                groupsToRender.forEach((g, idx) => {
-                    html += '<div class="group-row" data-group="' + g + '" data-phase="' + phase.toLowerCase() + '">';
-                    groups[g].forEach(sid => {
-                        const nodeId = 'node-' + sid + '-' + phase.toLowerCase();
-                        html += '<div class="node pending" id="' + nodeId + '" data-step="' + sid + '" data-phase="' + phase.toLowerCase() + '"></div>';
-                    });
-                    html += '</div>';
-                    if (idx < groupsToRender.length - 1) html += '<div class="group-connector"></div>';
-                });
-                return html;
-            }
-
-            document.getElementById('col-prepare').innerHTML = buildCol('PREPARE', '@messages("showcase.phase.PREPARE_H")', '#ffca28', '#000', false);
-            document.getElementById('col-commit').innerHTML = buildCol('COMMIT', '@messages("showcase.phase.COMMIT_H")', '#4caf50', '#fff', false);
-            document.getElementById('col-compensate').innerHTML = buildCol('COMPENSATE', '@messages("showcase.phase.COMPENSATE_H")', '#f44336', '#fff', true);
-
-            // Register newly created nodes into engine
-            steps.forEach(s => {
-                ['prepare', 'commit', 'compensate'].forEach(phase => {
-                    const id = 'node-' + s.stepId + '-' + phase;
-                    engine.registerNode({
-                        id: id, domId: id,
-                        initialState: { status: 'pending', label: s.stepId.replace('-', ' '), group: s.stepGroup },
-                        reducer: (state, ev) => {
-                            if (ev.type === 'StepOngoing' && ev.data.stepId === s.stepId && ev.data.phase === phase) return { ...state, status: 'ongoing' };
-                            if (ev.type === 'StepCompleted' && ev.data.stepId === s.stepId && ev.data.phase === phase) return { ...state, status: 'success' };
-                            if (ev.type === 'StepFailed' && ev.data.stepId === s.stepId && ev.data.phase === phase) {
-                                const isRetryable = ev.data.error && ev.data.error.indexOf('Max retries') === -1 && (ev.data.error.indexOf('Retryable') !== -1 || ev.data.error.indexOf('attempt') !== -1 || ev.data.error.indexOf('timed out') !== -1 || ev.data.error.indexOf('Retry #') !== -1);
-                                return { ...state, status: isRetryable ? 'retrying' : 'failed' };
-                            }
-                            if (ev.type === 'TransactionSuspended' && (state.status === 'failed' || state.status === 'retrying')) return { ...state, status: 'suspended' };
-                            if (ev.type === 'PhaseCompleted' && (ev.data.phase||'').toLowerCase().replace('phase','') === phase && (state.status === 'ongoing' || state.status === 'retrying')) return { ...state, status: 'failed' };
-                            return state;
-                        },
-                        render: (state) => {
-                            let h = `<span class="label">${state.label}</span><span class="info">Group ${state.group}</span>`;
-                            h += `<button class="btn btn-success btn-small fix-btn" onclick="doFix('${s.stepId}', '${phase}', null, this)">${i18n.ui.fix_btn}</button>`;
-                            return h;
-                        },
-                        onRendered: (wrapper, state) => {
-                            if(state.status === 'ongoing') wrapper.classList.remove('suspended');
-                            wrapper.className = `node ${state.status}`;
-                            if (state.status === 'suspended') wrapper.classList.add('suspended');
-                        }
-                    });
-                });
-            });
-        }
-
-        function addLog(type, msg) {
-            const entry = document.createElement('div');
-            entry.className = 'log-entry type-' + type;
-            const now = new Date();
-            const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0') + ':' + now.getSeconds().toString().padStart(2, '0');
-            entry.innerHTML = '<span class="log-time">' + timeStr + '</span> <span class="log-type">' + type + '</span> ' + msg;
-            logContainer.prepend(entry);
-        }
-
-        engine.onEventProcessed(event => {
-            const data = event.data;
-            const statusInfo = document.getElementById('statusInfo');
-            
-            if (event.type === 'TransactionStarted') {
-                engine.clearDynamicNodes('node-');
-                renderDAG(data.steps);
-                addLog(event.type, t(i18n.log.TransactionStarted, data.traceId));
-                currentTransactionId = data.transactionId;
-                statusInfo.innerText = i18n.status.InProgress;
-                statusInfo.style.color = '#ffca28';
-                proceedBtn.style.display = 'none';
-                retryBtn.style.display = 'none';
-                resumeBtn.style.display = 'none';
-                manualFixPanel.style.display = 'none';
-            } else if (event.type === 'StepOngoing') {
-                addLog(event.type, t(i18n.log.StepOngoing, data.stepId, data.phase));
-            } else if (event.type === 'StepCompleted') {
-                addLog(event.type, t(i18n.log.StepCompleted, data.stepId, data.phase, data.isManual ? i18n.log.is_manual : ''));
-            } else if (event.type === 'StepFailed') {
-                const isRetryable = data.error && data.error.indexOf('Max retries') === -1 && (data.error.indexOf('Retryable') !== -1 || data.error.indexOf('attempt') !== -1 || data.error.indexOf('timed out') !== -1 || data.error.indexOf('Retry #') !== -1);
-                if (!isRetryable) {
-                    addLog(event.type, t(i18n.log.StepFailed, data.stepId, data.phase, data.error));
-                    retryBtn.style.display = 'block';
-                } else {
-                    addLog(event.type, t(i18n.log.StepRetrying, data.stepId, data.phase, data.error));
-                }
-            } else if (event.type === 'PhaseCompleted') {
-                addLog(event.type, t(i18n.log.PhaseCompleted, data.phase));
-            } else if (event.type === 'StepGroupStarted') {
-                const phaseKey = (data.phase || '').toLowerCase().replace('phase', '');
-                document.querySelectorAll('.group-row[data-group][data-phase="' + phaseKey + '"]').forEach(g => {
-                   g.style.opacity = '0.5';
-                   g.style.border = 'none';
-                });
-                const groupEl = document.querySelector('.phase-column[id="col-' + phaseKey + '"] .group-row[data-group="' + data.group + '"]');
-                if (groupEl) {
-                    groupEl.style.opacity = '1';
-                    groupEl.style.border = '1px dashed #00d4ff';
-                    groupEl.style.borderRadius = '8px';
-                    groupEl.style.padding = '5px';
-                }
-                addLog(event.type, t(i18n.log.StepGroupStarted, data.group, data.phase));
-            } else if (event.type === 'TransactionCompleted') {
-                addLog(event.type, i18n.log.TransactionCompleted);
-                statusInfo.innerText = i18n.status.Completed;
-                statusInfo.style.color = '#4caf50';
-                proceedBtn.style.display = 'none';
-                retryBtn.style.display = 'none';
-            } else if (event.type === 'TransactionFailed') {
-                addLog(event.type, i18n.log.TransactionFailed);
-                statusInfo.innerText = i18n.status.Failed;
-                statusInfo.style.color = '#ffca28';
-                proceedBtn.style.display = 'none';
-                retryBtn.style.display = 'none';
-            } else if (event.type === 'TransactionSuspended') {
-                if (data.reason === 'MANUAL_PAUSE') {
-                   statusInfo.innerText = i18n.log.Paused;
-                   proceedBtn.style.display = 'block';
-                } else {
-                   addLog(event.type, i18n.log.TransactionSuspended);
-                   statusInfo.innerText = i18n.status.Suspended;
-                   statusInfo.style.color = '#f44336';
-                   resumeBtn.style.display = 'block';
-                   manualFixPanel.style.display = 'block';
-                }
-            } else if (event.type === 'DomainEventPublished') {
-                addLog(event.type, t(i18n.log.DomainEventPublished, data.eventType, data.detail));
-            }
-        });
-
-        const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
-        ws.onmessage = function(msg) {
-            engine.pushEvent(JSON.parse(msg.data));
-        };
-
-        document.getElementById('startBtn').onclick = () => {
-            const btn = document.getElementById('startBtn');
-            const originalText = btn.innerText;
-            btn.disabled = true;
-            btn.innerText = "⏳...";
-            const scenarioId = document.getElementById('scenarioId').value;
-            const singleStep = document.getElementById('singleStepMode').checked;
-
-            if (scenarioId === 'custom') {
-                ['Step-A', 'Step-B', 'Step-C'].forEach(sid => {
-                    fetch('/api/saga/inject-fault/' + sid + '/' + document.getElementById('config-' + sid).value, { method: 'POST' });
-                });
-                fetch('/api/saga/trigger-showcase/' + singleStep, { method: 'POST' })
-                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; btn.disabled = false; btn.innerText = originalText; })
-                    .catch(e => { btn.disabled = false; btn.innerText = originalText; });
-            } else {
-                fetch('/api/saga/trigger-scenario/' + scenarioId + '/' + singleStep, { method: 'POST' })
-                    .then(r => r.json()).then(d => { currentTransactionId = d.transactionId; replayTxIdInput.value = d.transactionId; btn.disabled = false; btn.innerText = originalText; })
-                    .catch(e => { btn.disabled = false; btn.innerText = originalText; });
-            }
-        };
-
-        proceedBtn.onclick = () => { if (currentTransactionId) { const originalText = proceedBtn.innerText; proceedBtn.disabled = true; proceedBtn.innerText = "⏳..."; fetch('/api/saga/proceed/' + currentTransactionId, { method: 'POST' }).finally(() => { proceedBtn.disabled = false; proceedBtn.innerText = originalText; }); } };
-        resumeBtn.onclick = () => { if (currentTransactionId) { const originalText = resumeBtn.innerText; resumeBtn.disabled = true; resumeBtn.innerText = "⏳..."; fetch('/api/saga/resume/' + currentTransactionId, { method: 'POST' }).finally(() => { resumeBtn.disabled = false; resumeBtn.innerText = originalText; }); } };
-        retryBtn.onclick = () => { if (currentTransactionId) { const originalText = retryBtn.innerText; retryBtn.disabled = true; retryBtn.innerText = "⏳..."; fetch('/api/saga/retry-phase/' + currentTransactionId, { method: 'POST' }).finally(() => { retryBtn.disabled = false; retryBtn.innerText = originalText; }); } };
-
-        function doFix(stepId, phase, node, btnElement) {
-            if (currentTransactionId) {
-                const originalText = btnElement ? btnElement.innerText : "";
-                if (btnElement) {
-                    btnElement.disabled = true;
-                    btnElement.innerText = "⏳...";
-                }
-                fetch('/api/saga/fix-step/' + currentTransactionId + '/' + stepId + '/' + phase, { method: 'POST' })
-                    .then(() => {
-                        if (node) { node.classList.remove('failed', 'retrying'); node.classList.add('success'); }
-                        addLog(i18n.log.System, t(i18n.log.ManuallyFixed, stepId));
-                    })
-                    .finally(() => {
-                        if (btnElement) {
-                            btnElement.disabled = false;
-                            btnElement.innerText = originalText;
-                        }
-                    });
-            }
-        }
-        document.getElementById('dagContainer').onclick = e => {
-            if (e.target.classList.contains('fix-btn')) {
-                const node = e.target.closest('.node');
-                doFix(node.getAttribute('data-step'), node.getAttribute('data-phase'), node, e.target);
-            }
-        };
-        document.getElementById('manualFixBtn').onclick = () => {
-            const sid = document.getElementById('manualStepId').value;
-            const ph = document.getElementById('manualPhase').value;
-            const btn = document.getElementById('manualFixBtn');
-            if (sid) doFix(sid, ph, null, btn);
-        };
-
-        // Time Machine Paced Replay Logic
-        replayBtn.onclick = () => {
-            let txId = replayTxIdInput.value.trim();
-            if (!txId) return alert(i18n.ui.enter_txid);
-            
-            const uuidMatch = txId.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-            if (uuidMatch) txId = uuidMatch[0];
-            
-            addLog(i18n.log.System, i18n.log.TimeMachineLoading);
-            fetch('/api/saga/history/' + txId)
-                .then(r => r.json())
-                .then(dataList => {
-                    if (dataList.length === 0) return alert(i18n.log.TimeMachineNoHistory);
-                    
-                    // Reset UI
-                    document.querySelectorAll('.node').forEach(n => { n.className = 'node pending'; n.classList.remove('suspended'); });
-                    addLog(i18n.log.System, t(i18n.log.TimeMachineStarting, dataList.length));
-                    
-                    let cursor = 0;
-                    
-                    function playNext() {
-                        if (cursor >= dataList.length) {
-                            addLog(i18n.log.System, i18n.log.TimeMachineFinished);
-                            return;
-                        }
-                        
-                        const currentItem = dataList[cursor];
-                        handleEvent(currentItem.event);
-                        
-                        cursor++;
-                        if (cursor < dataList.length) {
-                            const nextItem = dataList[cursor];
-                            // 计算原始间隔
-                            const realGap = nextItem.timestamp - currentItem.timestamp;
-                            // 归一化间隔：最小 400ms 保证看清动画，最大 2000ms 避免枯燥
-                            const pacedGap = Math.min(2000, Math.max(400, realGap));
-                            
-                            setTimeout(playNext, pacedGap);
-                        } else {
-                            setTimeout(playNext, 500);
-                        }
-                    }
-                    
-                    playNext();
-                });
-        };
     </script>
+    <script src="@routes.Assets.versioned("javascripts/graph_engine.js")" type="text/javascript"></script>
+    <script src="@routes.Assets.versioned("javascripts/saga_showcase.js")" type="text/javascript"></script>
 </body>
 </html>

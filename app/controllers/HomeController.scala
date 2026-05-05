@@ -59,6 +59,10 @@ class HomeController @Inject()(
     Ok(views.html.index())
   }
 
+  def indexZh() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.indexZh())
+  }
+
   implicit val iMadzErrorFormat: OFormat[iMadzError] = Json.format[iMadzError]
   implicit val moneyFormat: Format[Money] = new Format[Money] {
     def writes(o: Money): JsValue = Json.obj(

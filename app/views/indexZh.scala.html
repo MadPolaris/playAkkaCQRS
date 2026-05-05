@@ -1,10 +1,10 @@
 @()
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>PlayAkkaCQRS — Reactive CQRS/ES Showcase</title>
+    <title>PlayAkkaCQRS — 反应式 CQRS/ES 演示项目</title>
     <style>
         :root {
             --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
@@ -17,12 +17,11 @@
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
             background: var(--bg); color: var(--fg); line-height: 1.6;
             -webkit-font-smoothing: antialiased;
         }
 
-        /* ---- Header ---- */
         .header {
             position: sticky; top: 0; z-index: 100;
             background: rgba(13, 17, 23, 0.88); backdrop-filter: blur(12px);
@@ -40,8 +39,8 @@
             padding: 6px 14px; border-radius: 6px; transition: all 0.15s;
         }
         .nav-link:hover { color: var(--fg); background: var(--bg-alt); }
+        .nav-link.lang { border: 1px solid var(--border); }
 
-        /* ---- Hero ---- */
         .hero {
             max-width: 1200px; margin: 0 auto; padding: 80px 24px 60px;
             text-align: center;
@@ -53,7 +52,7 @@
         }
         .hero h1 { font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 16px; }
         .hero h1 span.grad { background: linear-gradient(135deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .hero p.lead { font-size: 1.15rem; color: var(--fg-muted); max-width: 640px; margin: 0 auto 32px; }
+        .hero p.lead { font-size: 1.15rem; color: var(--fg-muted); max-width: 680px; margin: 0 auto 32px; }
         .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
         .btn {
             display: inline-flex; align-items: center; gap: 6px;
@@ -65,16 +64,14 @@
         .btn-outline { border-color: var(--border); color: var(--fg); }
         .btn-outline:hover { background: var(--bg-alt); border-color: var(--fg-muted); }
 
-        /* ---- Section ---- */
         .section { max-width: 1200px; margin: 0 auto; padding: 0 24px 80px; }
         .section-title {
             font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em;
             display: flex; align-items: center; gap: 10px;
         }
         .section-title .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-        .section-desc { color: var(--fg-muted); margin-bottom: 32px; font-size: 0.95rem; max-width: 680px; }
+        .section-desc { color: var(--fg-muted); margin-bottom: 32px; font-size: 0.95rem; max-width: 720px; }
 
-        /* ---- Cards ---- */
         .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
         .card {
             background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
@@ -89,13 +86,11 @@
         .card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
         .tag { font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(88, 166, 255, 0.12); color: var(--accent); }
 
-        /* ---- Feature list ---- */
         .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
         .feature-item { padding: 20px; border-left: 2px solid var(--border); }
         .feature-item h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 6px; }
         .feature-item p { color: var(--fg-muted); font-size: 0.84rem; }
 
-        /* ---- Manifesto pillars ---- */
         .pillar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
         .pillar {
             background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
@@ -106,7 +101,6 @@
         .pillar p { color: var(--fg-muted); font-size: 0.82rem; }
         .pillar .akka-note { margin-top: 12px; font-size: 0.75rem; color: var(--accent); font-weight: 600; }
 
-        /* ---- Comparison table ---- */
         .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
         th, td { padding: 12px 18px; text-align: left; border-bottom: 1px solid var(--border); }
@@ -115,7 +109,6 @@
         td.muted { color: var(--fg-muted); }
         tr:last-child td { border-bottom: none; }
 
-        /* ---- Hosting grid ---- */
         .host-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
         .host-card {
             background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
@@ -125,7 +118,6 @@
         .host-card .tier { font-size: 0.72rem; color: var(--success); font-weight: 600; margin-bottom: 8px; }
         .host-card p { color: var(--fg-muted); font-size: 0.8rem; }
 
-        /* ---- Architecture diagram ---- */
         .arch-diagram {
             display: flex; flex-direction: column; gap: 4px;
             background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
@@ -142,7 +134,6 @@
         .arch-side { display: flex; gap: 12px; margin-top: 16px; font-size: 0.72rem; color: var(--fg-muted); justify-content: center; flex-wrap: wrap; }
         .arch-side span { background: var(--bg); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); }
 
-        /* ---- Footer ---- */
         .footer {
             border-top: 1px solid var(--border); padding: 32px 24px;
             text-align: center; color: var(--fg-muted); font-size: 0.8rem;
@@ -150,7 +141,6 @@
         .footer a { color: var(--accent); text-decoration: none; }
         .footer a:hover { text-decoration: underline; }
 
-        /* ---- Responsive ---- */
         @@media (max-width: 768px) {
             .hero h1 { font-size: 1.8rem; }
             .header-inner { flex-wrap: wrap; height: auto; padding: 10px 0; }
@@ -162,256 +152,249 @@
 </head>
 <body>
 
-<!-- ==================== HEADER ==================== -->
 <header class="header">
     <div class="header-inner">
-        <a href="/" class="logo">
+        <a href="/zh" class="logo">
             <span class="logo-icon">⚡</span> PlayAkkaCQRS
         </a>
         <nav class="nav-links">
-            <a href="#architecture" class="nav-link">Architecture</a>
-            <a href="#reactive" class="nav-link">Reactive</a>
-            <a href="#event-sourcing" class="nav-link">EventSourcing</a>
-            <a href="#showcases" class="nav-link">Demos</a>
-            <a href="#hosting" class="nav-link">Free Hosting</a>
+            <a href="#architecture" class="nav-link">架构</a>
+            <a href="#reactive" class="nav-link">反应式</a>
+            <a href="#event-sourcing" class="nav-link">事件溯源</a>
+            <a href="#showcases" class="nav-link">演示</a>
+            <a href="#hosting" class="nav-link">免费资源</a>
             <a href="/showcase" class="nav-link">Saga ↗</a>
             <a href="/projection-showcase" class="nav-link">Projection ↗</a>
-            <a href="/ddd-guide" class="nav-link">DDD Radar ↗</a>
-            <a href="/zh" class="nav-link" style="border:1px solid var(--border);">中文</a>
+            <a href="/ddd-guide" class="nav-link">DDD雷达 ↗</a>
+            <a href="/" class="nav-link lang">EN</a>
         </nav>
     </div>
 </header>
 
-<!-- ==================== HERO ==================== -->
 <section class="hero">
-    <div class="hero-badge">Reference Implementation</div>
+    <div class="hero-badge">参考实现</div>
     <h1>
-        <span class="grad">Reactive CQRS/ES</span><br>
-        on the JVM
+        <span class="grad">反应式 CQRS/ES</span><br>
+        JVM 平台实践
     </h1>
     <p class="lead">
-        A production-grade showcase of Domain-Driven Design, Command Query Responsibility Segregation,
-        Event Sourcing, and the Saga pattern — built with Scala, Akka, and Play Framework.
-        Explore the architecture, watch live events flow through the system, and understand why
-        reactive systems win at scale.
+        一个面向生产环境的领域驱动设计 + 命令查询职责分离 + 事件溯源 + Saga 模式的完整演示项目。
+        基于 Scala、Akka 和 Play Framework 构建。
+        探索架构设计、观察事件如何在系统中实时流转，理解为什么反应式系统能应对大规模挑战。
     </p>
     <div class="hero-actions">
-        <a href="/projection-showcase" class="btn btn-primary">▶ Live Demo</a>
-        <a href="/ddd-guide" class="btn btn-outline">DDD Task Radar</a>
+        <a href="/projection-showcase" class="btn btn-primary">▶ 在线演示</a>
+        <a href="/ddd-guide" class="btn btn-outline">DDD 任务雷达</a>
         <a href="https://github.com" class="btn btn-outline">GitHub ↗</a>
     </div>
 </section>
 
-<!-- ==================== ARCHITECTURE ==================== -->
+<!-- ==================== 架构一览 ==================== -->
 <section class="section" id="architecture">
-    <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> Architecture at a Glance</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> 架构一览</h2>
     <p class="section-desc">
-        The system follows <strong>Onion Architecture</strong> with strict dependency rules.
-        The domain core is pure Scala — no framework, no I/O. Application services orchestrate
-        domain logic. Infrastructure adapts external systems. This is the same pattern used
-        in high-throughput financial systems.
+        系统遵循<strong>洋葱架构</strong>，具有严格的依赖方向规则。
+        领域核心是纯 Scala 代码——不依赖任何框架，不执行 I/O。应用层编排领域逻辑。基础设施层对接外部系统。
+        这是高吞吐量金融系统中常见的架构模式。
     </p>
 
     <div class="arch-diagram">
         <div class="arch-layer infra">
-            Infrastructure — Play Controllers, MongoDB Journal, MySQL Read-Side, Protobuf Serialization
+            基础设施层 — Play 控制器、MongoDB 事件日志、MySQL 读库、Protobuf 序列化
         </div>
-        <div class="arch-arrow">▲ depends on (via DI)</div>
+        <div class="arch-arrow">▲ 依赖注入</div>
         <div class="arch-layer app">
-            Application — Aggregates (EventSourcedBehavior), Saga Transactor, Projection Handlers, Services
+            应用层 — 聚合根 (EventSourcedBehavior)、Saga 事务协调器、投影处理器、应用服务
         </div>
-        <div class="arch-arrow">▲ depends on</div>
+        <div class="arch-arrow">▲ 依赖</div>
         <div class="arch-layer domain">
-            Domain — Entity, ValueObject, DomainEvent, InvariantRule (zero external dependencies)
+            领域层 — 实体、值对象、领域事件、不变量规则（零外部依赖）
         </div>
         <div class="arch-side">
-            <span>MongoDB — Event Journal (Write)</span>
-            <span>MySQL — Projections (Read)</span>
-            <span>Akka Cluster Sharding</span>
-            <span>Akka Persistence</span>
-            <span>Akka Projections</span>
+            <span>MongoDB — 事件日志（写）</span>
+            <span>MySQL — 投影存储（读）</span>
+            <span>Akka 集群分片</span>
+            <span>Akka 持久化</span>
+            <span>Akka 投影</span>
         </div>
     </div>
 </section>
 
-<!-- ==================== REACTIVE MANIFESTO ==================== -->
+<!-- ==================== 反应式宣言 ==================== -->
 <section class="section" id="reactive">
-    <h2 class="section-title"><span class="dot" style="background:var(--purple)"></span> The Reactive Manifesto</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--purple)"></span> 反应式宣言</h2>
     <p class="section-desc">
-        Published in 2014 by Jonas Bonér (creator of Akka), the
-        <a href="https://www.reactivemanifesto.org/" style="color:var(--accent)">Reactive Manifesto</a>
-        defines four pillars for building systems that are resilient, responsive, and elastic.
-        Akka was built from the ground up to embody these principles.
+        2014 年由 Akka 创始人 Jonas Bonér 发布，
+        <a href="https://www.reactivemanifesto.org/" style="color:var(--accent)">《反应式宣言》</a>
+        定义了构建弹性、灵敏、可伸缩系统的四大基石。
+        Akka 从设计之初就完全贯彻了这些理念。
     </p>
 
     <div class="pillar-grid">
         <div class="pillar">
             <div class="pillar-icon">📨</div>
-            <h3>Message-Driven</h3>
-            <p>Asynchronous message-passing forms the backbone. Loose coupling, location transparency, and non-blocking communication enable elasticity and resilience.</p>
-            <div class="akka-note">Akka: Actor model with asynchronous message passing</div>
+            <h3>消息驱动</h3>
+            <p>异步消息传递是系统的骨架。松耦合、位置透明、非阻塞通信支撑了弹性和伸缩性。</p>
+            <div class="akka-note">Akka：Actor 模型的异步消息传递</div>
         </div>
         <div class="pillar">
             <div class="pillar-icon">🛡️</div>
-            <h3>Resilient</h3>
-            <p>Failures are contained within individual actors. Supervision hierarchies isolate faults, allowing the system to self-heal without cascading failures.</p>
-            <div class="akka-note">Akka: Supervision strategies, circuit breakers, backoff</div>
+            <h3>韧性</h3>
+            <p>故障被隔离在单个 Actor 内部。监督层级树控制故障传播，系统自我修复，不会产生雪崩效应。</p>
+            <div class="akka-note">Akka：监督策略、断路器、退避重试</div>
         </div>
         <div class="pillar">
             <div class="pillar-icon">📈</div>
-            <h3>Elastic</h3>
-            <p>Scale up and down dynamically in response to load. Cluster Sharding distributes entities across nodes, rebalancing automatically.</p>
-            <div class="akka-note">Akka: Cluster Sharding, adaptive load balancing</div>
+            <h3>弹性</h3>
+            <p>根据负载动态伸缩。集群分片将实体分布到多个节点，自动重新平衡，无需手动干预。</p>
+            <div class="akka-note">Akka：集群分片、自适应负载均衡</div>
         </div>
         <div class="pillar">
             <div class="pillar-icon">⚡</div>
-            <h3>Responsive</h3>
-            <p>Rapid, consistent response times under all conditions. Non-blocking I/O and back-pressure ensure predictable latency even at peak load.</p>
-            <div class="akka-note">Akka: Non-blocking throughout, back-pressure via Reactive Streams</div>
+            <h3>灵敏性</h3>
+            <p>在任何条件下都提供快速、一致的响应时间。非阻塞 I/O 和背压机制确保高负载下延迟仍然可控。</p>
+            <div class="akka-note">Akka：全链路非阻塞、Reactive Streams 背压</div>
         </div>
     </div>
 </section>
 
-<!-- ==================== EVENT SOURCING + CQRS ==================== -->
+<!-- ==================== 事件溯源 + CQRS ==================== -->
 <section class="section" id="event-sourcing">
-    <h2 class="section-title"><span class="dot" style="background:var(--orange)"></span> Event Sourcing × CQRS</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--orange)"></span> 事件溯源 × CQRS</h2>
     <p class="section-desc">
-        Event Sourcing and CQRS are complementary patterns. Together with the Reactive principles
-        above, they form a powerful foundation for systems that need auditability, scalability,
-        and resilience. Akka provides first-class support for both.
+        事件溯源和 CQRS 是互补的模式。结合反应式原则，它们构成了一个强大的系统基础，
+        适用于需要可审计性、可伸缩性和高韧性的场景。Akka 为两者提供了开箱即用的一等支持。
     </p>
 
     <div class="feature-list">
         <div class="feature-item" style="border-left-color: var(--accent)">
-            <h4>Event Sourcing</h4>
-            <p>State is derived by replaying an immutable event journal. Every state change is captured as a domain event — giving you a full audit trail, temporal queries, and reliable debugging. Akka Persistence handles journaling and snapshots automatically.</p>
+            <h4>事件溯源</h4>
+            <p>系统状态通过重放不可变的事件日志来重建。每一次状态变更都被捕获为领域事件——提供完整的审计追踪、时间点查询和可靠的调试能力。Akka Persistence 自动处理事件日志和快照。</p>
         </div>
         <div class="feature-item" style="border-left-color: var(--success)">
-            <h4>CQRS — Command Query Responsibility Segregation</h4>
-            <p>Commands mutate state (write-side, event-sourced). Queries read from optimized projections (read-side, MySQL). This separation allows each side to scale independently and use the right data model for the job.</p>
+            <h4>CQRS — 命令查询职责分离</h4>
+            <p>命令修改状态（写端，事件溯源）。查询读取优化的投影（读端，MySQL）。这种分离让两端可以独立伸缩，各自使用最适合的数据模型。</p>
         </div>
         <div class="feature-item" style="border-left-color: var(--warning)">
-            <h4>Projections (ETL in real-time)</h4>
-            <p>Akka Projections transform the event stream into read-model tables. Each projection subscribes to tagged events, processes them transactionally, and updates MySQL — providing eventually-consistent query models with at-least-once semantics.</p>
+            <h4>实时投影（ETL 流处理）</h4>
+            <p>Akka Projections 将事件流转换为读模型表。每个投影订阅标签事件，事务性地处理它们并更新 MySQL——提供最终一致性的查询模型，保证至少一次投递。</p>
         </div>
         <div class="feature-item" style="border-left-color: var(--purple)">
-            <h4>Saga Pattern (TCC)</h4>
-            <p>Distributed transactions with the Try-Confirm/Cancel pattern. Each step has Prepare → Commit → Compensate phases. Failures trigger backward recovery. Suspended transactions support manual intervention. All coordinated by event-sourced saga actors.</p>
+            <h4>Saga 模式（TCC 分布式事务）</h4>
+            <p>基于 Try-Confirm/Cancel 模式的分布式事务。每个步骤都有 Prepare → Commit → Compensate 三个阶段。失败触发向后补偿。挂起的事务支持人工介入。全部由事件溯源的 Saga Actor 协调。</p>
         </div>
     </div>
 
     <div class="table-wrap" style="margin-top: 32px;">
         <table>
             <thead>
-                <tr><th>Capability</th><th>Traditional CRUD</th><th>Event Sourcing + CQRS</th></tr>
+                <tr><th>能力维度</th><th>传统 CRUD</th><th>事件溯源 + CQRS</th></tr>
             </thead>
             <tbody>
-                <tr><td>Audit Trail</td><td class="muted">Manual logging, incomplete</td><td>Every state change is an event — full history</td></tr>
-                <tr><td>Read Performance</td><td class="muted">Contended by writes</td><td>Dedicated read models, independently scaled</td></tr>
-                <tr><td>Debugging</td><td class="muted">"What was the state at 2:03pm?" — hard</td><td>Replay events to any point in time</td></tr>
-                <tr><td>Schema Evolution</td><td class="muted">Migrations are destructive</td><td>Events are append-only; upcasters handle evolution</td></tr>
-                <tr><td>Integration</td><td class="muted">Batch ETL, polling</td><td>Real-time event stream, push-based</td></tr>
-                <tr><td>Failure Recovery</td><td class="muted">Retry loops, dead-letter queues</td><td>Supervision hierarchies + Saga compensation</td></tr>
+                <tr><td>审计追踪</td><td class="muted">手动日志，不完整</td><td>每次状态变更都是事件——完整历史</td></tr>
+                <tr><td>读性能</td><td class="muted">被写操作竞争</td><td>专用读模型，独立伸缩</td></tr>
+                <tr><td>调试</td><td class="muted">"下午2点的状态是什么？"——很难回答</td><td>重放事件到任意时间点</td></tr>
+                <tr><td>模式演进</td><td class="muted">迁移是破坏性的</td><td>事件只追加；上抛器处理演进</td></tr>
+                <tr><td>系统集成</td><td class="muted">批量 ETL，轮询</td><td>实时事件流，推送式</td></tr>
+                <tr><td>故障恢复</td><td class="muted">重试循环、死信队列</td><td>监督层级 + Saga 补偿</td></tr>
             </tbody>
         </table>
     </div>
 </section>
 
-<!-- ==================== SHOWCASE DEMOS ==================== -->
+<!-- ==================== 在线演示 ==================== -->
 <section class="section" id="showcases">
-    <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> Live Demos</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> 在线演示</h2>
     <p class="section-desc">
-        Three interactive showcases demonstrate different layers of the architecture.
-        Each is connected to the same live system — actions in one are visible in the others.
+        三个交互式演示分别展示架构的不同层次。它们连接到同一个实时系统——在一个演示中的操作会反映到其他演示中。
     </p>
 
     <div class="card-grid">
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
-            <div class="card-tags"><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">Compensation</span></div>
-            <h3>Saga Transaction Showcase</h3>
-            <p>Watch a distributed money transfer flow through the Saga state machine. Inject faults, observe automatic retries, compensation, and manual fix workflows in real time.</p>
-            <a href="/showcase" class="card-link">Open Showcase →</a>
+            <div class="card-tags"><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">补偿</span></div>
+            <h3>Saga 事务演示</h3>
+            <p>观察分布式转账如何流经 Saga 状态机。注入故障，观察自动重试、补偿操作和人工修复流程的实时执行。</p>
+            <a href="/showcase" class="card-link">打开演示 →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(63,185,80,0.12);color:var(--success)">📊</div>
-            <div class="card-tags"><span class="tag">CQRS</span><span class="tag">Projection</span><span class="tag">Read Model</span></div>
-            <h3>Projection Flow Dashboard</h3>
-            <p>Deposit, withdraw, and transfer funds. Watch domain events travel from Aggregate → Journal → Projection → Read Model cards with animated SVG particles.</p>
-            <a href="/projection-showcase" class="card-link">Open Dashboard →</a>
+            <div class="card-tags"><span class="tag">CQRS</span><span class="tag">投影</span><span class="tag">读模型</span></div>
+            <h3>投影流程看板</h3>
+            <p>存款、取款、转账。观察领域事件如何从聚合根 → 事件日志 → 投影处理器 → 读模型卡片，以 SVG 粒子动画实时呈现。</p>
+            <a href="/projection-showcase" class="card-link">打开看板 →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(88,166,255,0.12);color:var(--accent)">🎯</div>
-            <div class="card-tags"><span class="tag">DDD</span><span class="tag">Onion</span><span class="tag">Dependencies</span></div>
-            <h3>DDD Architectural Task Radar</h3>
-            <p>Explore 36+ DDD artifacts across Domain, Application, and Infrastructure layers. See dependency edges, design constraints, and file paths for every component.</p>
-            <a href="/ddd-guide" class="card-link">Open Radar →</a>
+            <div class="card-tags"><span class="tag">DDD</span><span class="tag">洋葱架构</span><span class="tag">依赖关系</span></div>
+            <h3>DDD 架构任务雷达</h3>
+            <p>探索 36+ 个 DDD 构件，覆盖领域层、应用层和基础设施层。查看依赖关系边、设计约束和每个组件的源码路径。</p>
+            <a href="/ddd-guide" class="card-link">打开雷达 →</a>
         </div>
     </div>
 </section>
 
-<!-- ==================== FREE HOSTING RESOURCES ==================== -->
+<!-- ==================== 免费部署资源 ==================== -->
 <section class="section" id="hosting">
-    <h2 class="section-title"><span class="dot" style="background:var(--warning)"></span> Free Resources for Your Demo</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--warning)"></span> 免费部署资源指南</h2>
     <p class="section-desc">
-        This project needs <strong>MongoDB</strong> (event journal) + <strong>MySQL</strong> (read model) + <strong>a JVM app server</strong>.
-        Here are platforms with genuine free tiers that can run this stack.
+        本项目需要 <strong>MongoDB</strong>（事件日志）+ <strong>MySQL</strong>（读模型）+ <strong>JVM 应用服务器</strong>。
+        以下是真正提供免费套餐的平台，可以跑起来完整的技术栈。
     </p>
 
     <div class="host-grid">
         <div class="host-card">
             <h4>Fly.io</h4>
-            <div class="tier">Free — 3 shared VMs (256MB each)</div>
-            <p>Deploy the Play app as a Docker container. Includes a global edge network. Good for the app server.</p>
+            <div class="tier">免费 — 3 台共享 VM（每台 256MB）</div>
+            <p>将 Play 应用打包为 Docker 容器部署。全球边缘网络。适合跑应用服务器。</p>
         </div>
         <div class="host-card">
             <h4>MongoDB Atlas</h4>
-            <div class="tier">Free — M0 cluster, 512MB storage</div>
-            <p>Shared cluster for the event journal. Enough for demo workloads. Includes monitoring dashboard.</p>
+            <div class="tier">免费 — M0 集群，512MB 存储</div>
+            <p>共享集群用于事件日志。demo 级别完全够用。内置监控面板。</p>
         </div>
         <div class="host-card">
             <h4>PlanetScale</h4>
-            <div class="tier">Free — 1 database, 5GB storage</div>
-            <p>MySQL-compatible with a generous free tier. Great for the read model. Includes branching for schema changes.</p>
+            <div class="tier">免费 — 1 个数据库，5GB 存储</div>
+            <p>MySQL 兼容，免费额度很充裕。适合读模型。支持数据库分支，方便变更管理。</p>
         </div>
         <div class="host-card">
             <h4>Render</h4>
-            <div class="tier">Free — Web Service + PostgreSQL</div>
-            <p>Zero-config deploys from GitHub. The web service sleeps after inactivity (cold start), but good for demos.</p>
+            <div class="tier">免费 — Web 服务 + PostgreSQL</div>
+            <p>GitHub 一键部署。Web 服务闲置后会休眠（有冷启动延迟），但用作 demo 足够。</p>
         </div>
         <div class="host-card">
-            <h4>Oracle Cloud Always Free</h4>
-            <div class="tier">Free — 4 ARM cores, 24GB RAM VM</div>
-            <p>The most generous free compute tier. Run everything on a single VM with Docker Compose.</p>
+            <h4>Oracle Cloud 永久免费</h4>
+            <div class="tier">免费 — 4 核 ARM，24GB 内存 VM</div>
+            <p>最慷慨的免费计算资源。用 Docker Compose 在一台机器上跑全套。</p>
         </div>
         <div class="host-card">
             <h4>Railway</h4>
-            <div class="tier">$5 credit/month, no time limit</div>
-            <p>One-click deploys with built-in MySQL and MongoDB templates. Simpler UX than Fly.io.</p>
+            <div class="tier">每月 $5 额度，无时间限制</div>
+            <p>一键部署，内置 MySQL 和 MongoDB 模板。比 Fly.io 更简单的 UX。</p>
         </div>
     </div>
 
     <div style="margin-top:28px; background:var(--bg-alt); border:1px solid var(--border); border-radius:10px; padding:22px;">
-        <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:8px;">Recommended combo for this project</h4>
+        <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:8px;">推荐组合方案</h4>
         <p style="color:var(--fg-muted); font-size:0.84rem;">
-            <strong>Fly.io</strong> (app server) + <strong>MongoDB Atlas M0</strong> (event journal) + <strong>PlanetScale</strong> (read model).
-            All three have free tiers that don't expire. Total cost: $0/month.
-            A single <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">fly.toml</code> + environment variables for connection strings is all you need to deploy.
+            <strong>Fly.io</strong>（应用服务器）+ <strong>MongoDB Atlas M0</strong>（事件日志）+ <strong>PlanetScale</strong>（读模型）。
+            三个平台都有不会过期的免费套餐。总费用：$0/月。
+            只需要一份 <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">fly.toml</code> 加上几个环境变量配置连接字符串即可部署上线。
         </p>
     </div>
 </section>
 
-<!-- ==================== FOOTER ==================== -->
 <footer class="footer">
     <p>
-        Built with <a href="https://www.playframework.com/">Play Framework</a>,
-        <a href="https://akka.io/">Akka</a>,
+        技术栈：<a href="https://www.playframework.com/">Play Framework</a> ·
+        <a href="https://akka.io/">Akka</a> ·
         <a href="https://scala-lang.org/">Scala</a> &nbsp;|&nbsp;
-        Architecture: Onion + DDD + CQRS/ES + Saga &nbsp;|&nbsp;
-        <a href="https://www.reactivemanifesto.org/">The Reactive Manifesto</a>
+        架构：洋葱 + DDD + CQRS/ES + Saga &nbsp;|&nbsp;
+        <a href="https://www.reactivemanifesto.org/">反应式宣言</a>
     </p>
     <p style="margin-top:6px;">
-        Journal: MongoDB &nbsp;|&nbsp; Read Model: MySQL &nbsp;|&nbsp; Serialization: Protobuf (ScalaPB) &nbsp;|&nbsp; DI: Guice
+        事件日志：MongoDB &nbsp;|&nbsp; 读模型：MySQL &nbsp;|&nbsp; 序列化：Protobuf (ScalaPB) &nbsp;|&nbsp; 依赖注入：Guice
     </p>
 </footer>
 
