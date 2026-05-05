@@ -86,5 +86,6 @@ showcase.log.TimeMachineNoHistory=No history found.
 showcase.log.TimeMachineStarting=Paced replay of {0} events starting...
 showcase.log.TimeMachineFinished=Replay finished.
 showcase.log.ManuallyFixed=Manually Fixed: {0}
+showcase.log.DomainEventPublished=Domain Event [{0}]: {1}
 showcase.log.System=System
 showcase.ui.enter_txid=Please enter a Transaction ID

@@ -86,5 +86,6 @@ showcase.log.TimeMachineNoHistory=未找到相关事务的历史记录。
 showcase.log.TimeMachineStarting=正在对 {0} 个原始事件进行步进式仿真回放...
 showcase.log.TimeMachineFinished=历史轨迹回放结束。
 showcase.log.ManuallyFixed=人工修复指令已下达: {0}
+showcase.log.DomainEventPublished=领域事件 [{0}]: {1}
 showcase.log.System=系统控制台
 showcase.ui.enter_txid=请输入有效的事务 ID (Trace ID)

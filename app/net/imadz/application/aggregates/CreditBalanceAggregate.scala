@@ -1,5 +1,6 @@
 package net.imadz.application.aggregates
 
+import akka.actor.typed.scaladsl.ActorContext
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
 import net.imadz.application.aggregates.CreditBalanceProtocol.{CreditBalanceCommand, CreditBalanceCommandHandler}
 import net.imadz.application.aggregates.behaviors.CreditBalanceBehaviors
@@ -7,7 +8,7 @@ import net.imadz.application.aggregates.behaviors.CreditBalanceBehaviors
 object CreditBalanceAggregate {
 
   // Command Handler
-  def commandHandler: CreditBalanceCommandHandler = CreditBalanceBehaviors.apply
+  def commandHandler(context: ActorContext[CreditBalanceCommand]): CreditBalanceCommandHandler = CreditBalanceBehaviors.apply(context)
 
   // Akka Sharding Configuration
   val CreditBalanceEntityTypeKey: EntityTypeKey[CreditBalanceCommand] = EntityTypeKey("CreditBalance")

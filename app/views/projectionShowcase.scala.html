@@ -23,11 +23,15 @@
         .nav-links a { color: #38bdf8; text-decoration: none; font-weight: 600; margin-left: 20px; font-size: 0.9rem; }
 
         /* Controls */
-        .controls { background: var(--panel-dark); padding: 20px; border-radius: 12px; border: 1px solid #334155; margin-bottom: 30px; display: grid; grid-template-columns: 1fr 1fr auto; gap: 20px; }
+        .controls { background: var(--panel-dark); padding: 24px; border-radius: 16px; border: 1px solid #334155; margin-bottom: 30px; display: flex; flex-direction: column; gap: 20px; }
+        .controls-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .controls-row.settings { display: flex; align-items: center; gap: 15px; padding-top: 15px; border-top: 1px dashed #334155; }
         .control-group { display: flex; flex-direction: column; gap: 10px; }
         .control-group h3 { margin: 0; font-size: 0.8rem; color: #94a3b8; text-transform: uppercase; }
         input { background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 6px; font-size: 0.85rem; }
-        .btn { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s; }
+        .btn { padding: 10px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: all 0.2s ease; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06); }
+        .btn:hover { transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2); }
+        .btn:active { transform: translateY(1px) scale(0.96); filter: brightness(0.9); box-shadow: 0 2px 4px -1px rgba(0,0,0,0.2); }
         .btn-primary { background: var(--color-read); color: #000; }
         .btn-secondary { background: var(--color-projection); color: white; }
         
@@ -146,27 +150,29 @@
         </header>
 
         <div class="controls">
-            <div class="control-group">
-                <h3>Deposit / Withdraw</h3>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="userId" placeholder="User UUID" value="550e8400-e29b-41d4-a716-446655440000" style="flex: 1;">
-                    <button class="btn" onclick="genUuid('userId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">GEN</button>
-                    <input type="number" id="amount" value="100" style="width: 80px;">
-                    <button class="btn btn-primary" onclick="handleTx('deposit')">DEPOSIT</button>
-                    <button class="btn btn-primary" style="background:#ef4444; color:white;" onclick="handleTx('withdraw')">WITHDRAW</button>
+            <div class="controls-row">
+                <div class="control-group">
+                    <h3>Deposit / Withdraw</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="userId" placeholder="User UUID" value="550e8400-e29b-41d4-a716-446655440000" style="flex: 1;">
+                        <button class="btn" onclick="genUuid('userId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">GEN</button>
+                        <input type="number" id="amount" value="100" style="width: 80px;">
+                        <button class="btn btn-primary" onclick="handleTx('deposit')">DEPOSIT</button>
+                        <button class="btn btn-primary" style="background:#ef4444; color:white;" onclick="handleTx('withdraw')">WITHDRAW</button>
+                    </div>
                 </div>
-            </div>
-            
-            <div class="control-group">
-                <h3>Money Transfer Saga</h3>
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="targetId" value="6ba7b810-9dad-11d1-80b4-00c04fd430c8" style="flex: 1;">
-                    <button class="btn" onclick="genUuid('targetId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">GEN</button>
-                    <button class="btn btn-secondary" onclick="handleTransfer()">START TRANSFER SAGA</button>
+                
+                <div class="control-group">
+                    <h3>Money Transfer Saga</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="targetId" value="6ba7b810-9dad-11d1-80b4-00c04fd430c8" style="flex: 1;">
+                        <button class="btn" onclick="genUuid('targetId')" style="background: #334155; font-size: 0.7rem; padding: 0 10px;">GEN</button>
+                        <button class="btn btn-secondary" onclick="handleTransfer()">START TRANSFER SAGA</button>
+                    </div>
                 </div>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="controls-row settings">
                 <div class="toggle-container">
                     <span>Demo</span>
                     <label class="switch"><input type="checkbox" id="liveToggle" checked><span class="slider"></span></label>
@@ -176,6 +182,16 @@
                     <span>System</span>
                     <label class="switch"><input type="checkbox" id="systemToggle"><span class="slider"></span></label>
                 </div>
+                <div class="toggle-container">
+                    <span>Speed:</span>
+                    <input type="range" id="speedSlider" min="0.5" max="4" step="0.1" value="1.0" style="width: 80px; accent-color: var(--color-read); cursor: pointer;" oninput="document.getElementById('speedVal').textContent = parseFloat(this.value).toFixed(1) + 'x'">
+                    <span id="speedVal" style="font-family: monospace; width: 35px;">1.0x</span>
+                </div>
+                <div class="toggle-container">
+                    <span>Pacing:</span>
+                    <input type="range" id="pacingSlider" min="200" max="2000" step="100" value="800" style="width: 80px; accent-color: var(--color-journal); cursor: pointer;" oninput="document.getElementById('pacingVal').textContent = this.value + 'ms'">
+                    <span id="pacingVal" style="font-family: monospace; width: 55px;">800ms</span>
+                </div>
             </div>
         </div>
 
@@ -183,6 +199,15 @@
             <div style="position: relative;">
                 <svg class="connector-svg" id="svgCanvas"></svg>
                 <div class="arch-viz" id="archViz">
+                    <!-- Stage 0: Saga Engine (Coordinator) -->
+                    <div style="grid-column: 1 / span 7; display: flex; justify-content: center; margin-bottom: 40px;">
+                        <div class="node saga-node tooltip" id="sagaEngine" style="width: 400px; border-color: #f43f5e; background: rgba(244, 63, 94, 0.05);" data-tip="Saga Coordinator: Manages the distributed transaction lifecycle, state transitions, and recovery.">
+                            <h4 style="color: #fb7185;">Saga Execution Engine (Coordinator)</h4>
+                            <div id="saga-engine-status" style="font-size: 0.7rem; color: #94a3b8; margin-top: 8px; font-family: 'Fira Code', monospace;">READY</div>
+                            <div id="saga-engine-phase" style="display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 0.6rem; font-weight: bold; margin-top: 5px; background: #334155; color: #fff;">IDLE</div>
+                        </div>
+                    </div>
+
                     <!-- Stage 1: Aggregates -->
                     <div style="display: flex; flex-direction: column; gap: 30px;" id="aggregateList">
                         <div class="node agg-node tooltip" id="agg-sender" data-tip="Aggregate Root: The consistency boundary. It processes commands, validates invariants, and emits events.">
@@ -259,8 +284,10 @@
 
         // --- Configuration ---
         const ANIMATION_CONFIG = {
-            travelTimeMs: 600,
-            processTimeMs: 600
+            baseTravelTimeMs: 1200,
+            baseProcessTimeMs: 800,
+            get travelTimeMs() { return this.baseTravelTimeMs / (parseFloat(document.getElementById('speedSlider')?.value) || 1); },
+            get processTimeMs() { return this.baseProcessTimeMs / (parseFloat(document.getElementById('speedSlider')?.value) || 1); }
         };
 
         // --- Utilities ---
@@ -332,10 +359,14 @@
                 
                 if (!this.svg) return;
                 
+                const saga = document.getElementById('sagaEngine');
                 const journal = document.getElementById('mainJournal');
                 ['agg-sender', 'agg-receiver'].forEach(id => {
                     const el = document.getElementById(id);
-                    if(el && journal) this._createPath(el, journal, true);
+                    if(el) {
+                        if(saga) this._createPath(saga, el, true);
+                        if(journal) this._createPath(el, journal, true);
+                    }
                 });
 
                 document.querySelectorAll('.proj-node').forEach(proj => {
@@ -447,7 +478,14 @@
 
         async function handleTransfer() {
             const from = document.getElementById('userId').value, to = document.getElementById('targetId').value, amt = document.getElementById('amount').value;
-            try { await fetch(`/transfer/${from}/${to}/${amt}`, { method: 'POST' }); } catch(e) { }
+            try { 
+                const res = await fetch(`/transfer/${from}/${to}/${Math.abs(amt)}`, { method: 'POST' }); 
+                const data = await res.json();
+                if (data.error) addLog(`Transfer Failed: ${data.error}`, '#ef4444');
+                else addLog(`Transfer Saga Triggered`, '#22c55e');
+            } catch(e) { 
+                addLog(`Transfer Error: ${e.message}`, '#ef4444');
+            }
         }
 
         function refreshRecordUI(userId) {
@@ -575,55 +613,116 @@
 
         // --- Saga WebSocket Integration ---
         const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
+        
+        ws.onopen = () => addLog('Saga Event Stream Connected', '#22c55e');
+        ws.onerror = (e) => addLog('Saga Event Stream Error', '#ef4444');
+        ws.onclose = () => addLog('Saga Event Stream Disconnected', '#94a3b8');
+
+        // Pacing queue to avoid animation overlap
+        const eventQueue = [];
+        let isProcessing = false;
+
+        function processNextEvent() {
+            if (eventQueue.length === 0) {
+                isProcessing = false;
+                return;
+            }
+            isProcessing = true;
+            const event = eventQueue.shift();
+            handleEventSync(event);
+            
+            const pacing = parseInt(document.getElementById('pacingSlider')?.value || 800);
+            const speedMultiplier = parseFloat(document.getElementById('speedSlider')?.value || 1);
+            const gap = pacing / speedMultiplier; 
+            setTimeout(processNextEvent, gap); 
+        }
+
         ws.onmessage = function(msg) {
-            const event = JSON.parse(msg.data);
+            eventQueue.push(JSON.parse(msg.data));
+            if (!isProcessing) processNextEvent();
+        };
+
+        function handleEventSync(event) {
             const data = event.data;
             const senderId = document.getElementById('userId').value;
             const receiverId = document.getElementById('targetId').value;
             const amt = document.getElementById('amount').value;
             const projId = 'proj-MonthlySummary';
 
-            if (event.type === 'StepOngoing') {
+            if (event.type === 'TransactionStarted') {
+                document.getElementById('saga-engine-status').textContent = "TX: " + data.transactionId.substring(0,8);
+                document.getElementById('saga-engine-phase').textContent = "STARTED";
+                document.getElementById('sagaEngine').classList.add('highlight-proj');
+                setTimeout(() => document.getElementById('sagaEngine').classList.remove('highlight-proj'), 1000);
+            } else if (event.type === 'PhaseStarted' || event.type === 'StepGroupStarted') {
+                const phase = data.phase || "";
+                document.getElementById('saga-engine-phase').textContent = phase.toUpperCase();
+                document.getElementById('saga-engine-phase').style.background = phase.includes('Prepare') ? '#ffca28' : (phase.includes('Commit') ? '#22c55e' : '#ef4444');
+            } else if (event.type === 'StepOngoing') {
                 const step = data.stepId, phase = data.phase;
-                let origin = "", eventName = "";
-                if (step === 'Step-A' && phase.includes('Prepare')) { eventName = 'FundsReserved'; origin = 'agg-sender'; }
-                else if (step === 'Step-B' && phase.includes('Prepare')) { eventName = 'IncomingCreditsRecorded'; origin = 'agg-receiver'; }
-                else if (step === 'Step-A' && phase.includes('Commit')) { eventName = 'FundsDeducted'; origin = 'agg-sender'; }
-                else if (step === 'Step-B' && phase.includes('Commit')) { eventName = 'IncomingCreditsCommited'; origin = 'agg-receiver'; }
+                let target = "";
+                if (step === 'reserve-from' || step === 'commit-from') target = 'agg-sender';
+                else if (step === 'record-to' || step === 'commit-to') target = 'agg-receiver';
                 
-                if (origin) {
-                    engine.dispatch({ fromId: origin, toId: 'mainJournal', eventName: eventName, amount: amt });
+                if (target) {
+                    engine.dispatch({ fromId: 'sagaEngine', toId: target, eventName: "Command: " + step, amount: "" });
                 }
-            } else if (event.type === 'StepCompleted') {
-                const step = data.stepId, phase = data.phase;
-                let eventName = "", target = "";
-                if (step === 'Step-A' && phase.includes('Prepare')) { eventName = 'FundsReserved'; target = senderId; }
-                else if (step === 'Step-B' && phase.includes('Prepare')) { eventName = 'IncomingCreditsRecorded'; target = receiverId; }
-                else if (step === 'Step-A' && phase.includes('Commit')) { eventName = 'FundsDeducted'; target = senderId; }
-                else if (step === 'Step-B' && phase.includes('Commit')) { eventName = 'IncomingCreditsCommited'; target = receiverId; }
+            } else if (event.type === 'TransactionCompleted') {
+                document.getElementById('saga-engine-phase').textContent = "COMPLETED";
+                document.getElementById('saga-engine-phase').style.background = '#22c55e';
+            } else if (event.type === 'DomainEventPublished') {
+                const eventName = data.eventType;
+                const detail = data.detail || "";
+                let actualAmt = detail.split(': ')[1] || amt;
+                let origin = "";
+                let targetId = "";
+                let shouldPropagate = false;
                 
-                if (eventName) {
-                    addLog(`Saga Step Completed: <b>${eventName}</b>`, 'var(--color-projection)');
+                if (eventName === 'FundsReserved' || eventName === 'FundsDeducted' || eventName === 'ReservationReleased') {
+                    origin = 'agg-sender';
+                    targetId = senderId;
+                    if (eventName === 'FundsDeducted') shouldPropagate = true;
+                } else if (eventName === 'IncomingCreditsRecorded' || eventName === 'IncomingCreditsCommited' || eventName === 'IncomingCreditsCanceled') {
+                    origin = 'agg-receiver';
+                    targetId = receiverId;
+                    if (eventName === 'IncomingCreditsRecorded' || eventName === 'IncomingCreditsCommited') shouldPropagate = true;
+                }
+
+                if (origin) {
+                    addLog(`Domain Event: <b>${eventName}</b>`, 'var(--color-aggregate)');
                     
-                    // Dispatch Journal -> Projection
-                    engine.dispatch({
-                        fromId: 'mainJournal',
-                        toId: projId,
-                        eventName: eventName,
-                        amount: amt,
+                    // Dispatch: Aggregate -> Journal (Write Side)
+                    engine.dispatch({ 
+                        fromId: origin, 
+                        toId: 'mainJournal', 
+                        eventName: eventName, 
+                        amount: actualAmt,
                         onArrive: () => {
-                            // Dispatch Projection -> Record
-                            engine.dispatch({
-                                fromId: projId,
-                                toId: target, // Resolves to record card
-                                eventName: "Update View",
-                                onArrive: () => refreshRecordUI(target)
-                            });
+                            if (shouldPropagate) {
+                                // Dispatch: Journal -> Projection (Read Side Initiation)
+                                setTimeout(() => {
+                                    engine.dispatch({
+                                        fromId: 'mainJournal',
+                                        toId: projId,
+                                        eventName: "Projecting: " + eventName,
+                                        amount: actualAmt,
+                                        onArrive: () => {
+                                            // Dispatch: Projection -> Read Model Record
+                                            engine.dispatch({
+                                                fromId: projId,
+                                                toId: targetId,
+                                                eventName: "Update UI",
+                                                onArrive: () => refreshRecordUI(targetId)
+                                            });
+                                        }
+                                    });
+                                }, 400); // Simulated processing delay
+                            }
                         }
                     });
                 }
             }
-        };
+        }
 
         setTimeout(() => engine.drawTopology(), 500);
         setInterval(update, 2000);

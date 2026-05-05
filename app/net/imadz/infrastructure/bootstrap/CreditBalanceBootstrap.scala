@@ -38,7 +38,7 @@ trait CreditBalanceBootstrap {
           EventSourcedBehavior(
             persistenceId = PersistenceId(CreditBalanceEntityTypeKey.name, userId.toString),
             emptyState = CreditBalanceEntity.empty(userId),
-            commandHandler = CreditBalanceBehaviors.apply,
+            commandHandler = CreditBalanceBehaviors.apply(actorContext),
             eventHandler = CreditBalanceEventHandler.apply
           ).withTagger(_ => Set(tag))
             .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))

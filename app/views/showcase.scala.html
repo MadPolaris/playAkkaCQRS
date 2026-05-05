@@ -20,7 +20,9 @@
         
         .control-panel { background: #252525; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); align-self: start; }
         .control-panel h2 { font-size: 1.2rem; margin-top: 0; color: #ffca28; border-left: 4px solid #ffca28; padding-left: 10px; }
-        .btn { display: block; width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center; transition: all 0.3s; }
+        .btn { display: block; width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center; transition: all 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn:hover { transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 6px 10px rgba(0,0,0,0.2); }
+        .btn:active { transform: translateY(1px) scale(0.98); filter: brightness(0.9); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         .btn-primary { background: #007bff; color: white; }
         .btn-primary:hover { background: #0056b3; transform: translateY(-1px); }
         .btn-warning { background: #ffca28; color: #000; }
@@ -86,6 +88,7 @@
         .type-StepOngoing { color: #00d4ff; }
         .type-StepCompleted { color: #4caf50; }
         .type-StepFailed { color: #f44336; }
+        .type-DomainEventPublished { color: #9c27b0; font-weight: bold; }
         .type-TransactionCompleted { color: #4caf50; background: rgba(76, 175, 80, 0.1); }
         .type-TransactionSuspended { color: #ff9800; background: rgba(255, 152, 0, 0.1); }
         
@@ -234,6 +237,7 @@
                 TimeMachineStarting: '@Html(messages("showcase.log.TimeMachineStarting"))',
                 TimeMachineFinished: '@Html(messages("showcase.log.TimeMachineFinished"))',
                 ManuallyFixed: '@Html(messages("showcase.log.ManuallyFixed"))',
+                DomainEventPublished: '@Html(messages("showcase.log.DomainEventPublished"))',
                 System: '@Html(messages("showcase.log.System"))'
             },
             status: {
@@ -434,6 +438,8 @@
                    manualFixPanel.style.display = 'block';
                    document.querySelectorAll('.node.failed, .node.retrying').forEach(n => n.classList.add('suspended'));
                 }
+            } else if (event.type === 'DomainEventPublished') {
+                addLog(event.type, t(i18n.log.DomainEventPublished, data.eventType, data.detail));
             }
         }
         

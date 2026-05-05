@@ -18,4 +18,5 @@ object SagaProgressEvent {
   case class TransactionCompleted(transactionId: String, traceId: String) extends SagaProgressEvent
   case class TransactionFailed(transactionId: String, reason: String, traceId: String) extends SagaProgressEvent
   case class TransactionSuspended(transactionId: String, reason: String, traceId: String) extends SagaProgressEvent
+  case class DomainEventPublished(transactionId: String, eventType: String, detail: String, traceId: String) extends SagaProgressEvent
 }

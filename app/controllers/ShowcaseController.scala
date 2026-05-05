@@ -40,17 +40,29 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     case e: SagaProgressEvent.TransactionCompleted => Json.obj("type" -> "TransactionCompleted", "data" -> Json.obj("transactionId" -> e.transactionId, "traceId" -> e.traceId))
     case e: SagaProgressEvent.TransactionFailed => Json.obj("type" -> "TransactionFailed", "data" -> Json.obj("transactionId" -> e.transactionId, "reason" -> e.reason, "traceId" -> e.traceId))
     case e: SagaProgressEvent.TransactionSuspended => Json.obj("type" -> "TransactionSuspended", "data" -> Json.obj("transactionId" -> e.transactionId, "reason" -> e.reason, "traceId" -> e.traceId))
+    case e: SagaProgressEvent.DomainEventPublished => Json.obj("type" -> "DomainEventPublished", "data" -> Json.obj("transactionId" -> e.transactionId, "eventType" -> e.eventType, "detail" -> e.detail, "traceId" -> e.traceId))
   }
 
   // --- Real-time WebSocket ---
   private val (hubSink, hubSource) = MergeHub.source[SagaProgressEvent].toMat(BroadcastHub.sink[SagaProgressEvent])(Keep.both).run()
-  private val bridgeActor = system.actorOf(akka.actor.Props(new akka.actor.Actor {
-    override def preStart(): Unit = {
-      system.eventStream.subscribe(self, classOf[SagaTransactionCoordinator.Event])
-      system.eventStream.subscribe(self, classOf[StepExecutor.Event])
-    }
-    def receive: Receive = {
+
+  // Typed Bridge Actor
+  private val bridge = typedSystem.systemActorOf(akka.actor.typed.scaladsl.Behaviors.setup[Any] { context =>
+    import akka.actor.typed.scaladsl.adapter._
+    
+    // Use classic event stream for polymorphic sub-type subscription
+    context.system.toClassic.eventStream.subscribe(context.self.toClassic, classOf[SagaTransactionCoordinator.Event])
+    context.system.toClassic.eventStream.subscribe(context.self.toClassic, classOf[StepExecutor.Event])
+    context.system.toClassic.eventStream.subscribe(context.self.toClassic, classOf[net.imadz.domain.entities.CreditBalanceEntity.CreditBalanceEvent])
+
+    // Also subscribe to Typed EventStream as some components publish there
+    context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Subscribe[SagaTransactionCoordinator.Event](context.self)
+    context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Subscribe[StepExecutor.Event](context.self)
+    context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Subscribe[net.imadz.domain.entities.CreditBalanceEntity.CreditBalanceEvent](context.self)
+
+    akka.actor.typed.scaladsl.Behaviors.receiveMessage {
       case e: SagaTransactionCoordinator.Event =>
+        println(s"[Saga Bridge] Received Coordinator Event: ${e.getClass.getSimpleName}")
         val pEvt = e match {
           case ex: SagaTransactionCoordinator.TransactionStarted =>
             val stepsInfo = ex.steps.map(s => SagaProgressEvent.StepInfo(s.stepId, s.stepGroup)).distinct
@@ -64,19 +76,39 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
           case _ => null
         }
         if (pEvt != null) Source.single(pEvt).runWith(hubSink)
+        akka.actor.typed.scaladsl.Behaviors.same
 
       case e: StepExecutor.Event =>
+        println(s"[Saga Bridge] Received Executor Event: ${e.getClass.getSimpleName}")
         val pEvt = e match {
-          case ex: StepExecutor.ExecutionStarted[_, _, _] => SagaProgressEvent.StepOngoing(ex.transactionId, ex.stepId, ex.phase, ex.traceId)
-          case ex: StepExecutor.OperationSucceeded[_] => SagaProgressEvent.StepCompleted(ex.transactionId, ex.stepId, ex.phase, ex.traceId, isManual = false)
-          case ex: StepExecutor.ManualFixCompleted[_] => SagaProgressEvent.StepCompleted(ex.transactionId, ex.stepId, ex.phase, ex.traceId, isManual = true)
-          case StepExecutor.OperationFailed(txId, sid, ph, tid, err) => SagaProgressEvent.StepFailed(txId, sid, ph, err.message, tid)
-          case StepExecutor.RetryScheduled(txId, sid, ph, tid, c) => SagaProgressEvent.StepFailed(txId, sid, ph, s"Retry #$c", tid)
+          case ex: StepExecutor.ExecutionStarted[_, _, _] => SagaProgressEvent.StepOngoing(ex.transactionId, ex.stepId, ex.phase.toString, ex.traceId)
+          case ex: StepExecutor.OperationSucceeded[_] => SagaProgressEvent.StepCompleted(ex.transactionId, ex.stepId, ex.phase.toString, ex.traceId, isManual = false)
+          case ex: StepExecutor.ManualFixCompleted[_] => SagaProgressEvent.StepCompleted(ex.transactionId, ex.stepId, ex.phase.toString, ex.traceId, isManual = true)
+          case StepExecutor.OperationFailed(txId, sid, ph, tid, err) => SagaProgressEvent.StepFailed(txId, sid, ph.toString, err.message, tid)
+          case StepExecutor.RetryScheduled(txId, sid, ph, tid, c) => SagaProgressEvent.StepFailed(txId, sid, ph.toString, s"Retry #$c", tid)
           case _ => null
         }
         if (pEvt != null) Source.single(pEvt).runWith(hubSink)
+        akka.actor.typed.scaladsl.Behaviors.same
+
+      case e: net.imadz.domain.entities.CreditBalanceEntity.CreditBalanceEvent =>
+        import net.imadz.domain.entities.CreditBalanceEntity._
+        println(s"[Saga Bridge] Received CreditBalance Event: ${e.getClass.getSimpleName}")
+        val pEvt = e match {
+          case ex: BalanceChanged => SagaProgressEvent.DomainEventPublished("", "BalanceChanged", s"Update: ${ex.update.amount}", "")
+          case ex: FundsReserved => SagaProgressEvent.DomainEventPublished(ex.transferId.toString, "FundsReserved", s"Amount: ${ex.amount.amount}", "")
+          case ex: FundsDeducted => SagaProgressEvent.DomainEventPublished(ex.transferId.toString, "FundsDeducted", s"Amount: ${ex.amount.amount}", "")
+          case ex: ReservationReleased => SagaProgressEvent.DomainEventPublished(ex.transferId.toString, "ReservationReleased", s"Amount: ${ex.amount.amount}", "")
+          case ex: IncomingCreditsRecorded => SagaProgressEvent.DomainEventPublished(ex.transferId.toString, "IncomingCreditsRecorded", s"Amount: ${ex.amount.amount}", "")
+          case ex: IncomingCreditsCommited => SagaProgressEvent.DomainEventPublished(ex.transferId.toString, "IncomingCreditsCommited", "", "")
+          case ex: IncomingCreditsCanceled => SagaProgressEvent.DomainEventPublished(ex.transferId.toString, "IncomingCreditsCanceled", "", "")
+        }
+        if (pEvt != null) Source.single(pEvt).runWith(hubSink)
+        akka.actor.typed.scaladsl.Behaviors.same
+      
+      case _ => akka.actor.typed.scaladsl.Behaviors.same
     }
-  }))
+  }, "SagaEventBridge")
 
   // --- Actions ---
   def sagaDocs(page: String) = Action { implicit request =>
