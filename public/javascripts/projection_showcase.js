@@ -126,7 +126,6 @@
     var uid = document.getElementById('userId').value;
     var amt = parseInt(document.getElementById('amount').value);
     if (type === 'withdraw') amt = -Math.abs(amt);
-    engine.dispatchEvent({ type: 'BalanceChanged', userId: uid, amount: amt });
     try {
       var res = await fetch('/' + type + '/' + uid + '/' + Math.abs(amt), { method: 'POST' });
       var data = await res.json();
@@ -182,10 +181,11 @@
       userId = document.getElementById('userId').value;
     }
 
-    // Parse amount from event detail when available
+    // Parse amount from event detail when available (supports both "Update: " and "Amount: " prefixes)
     var amount = document.getElementById('amount').value;
-    if (event.data.detail && event.data.detail.indexOf('Amount: ') === 0) {
-      amount = event.data.detail.replace('Amount: ', '');
+    if (event.data.detail) {
+      var match = event.data.detail.match(/^.*:\s*(-?\d+(?:\.\d+)?)/);
+      if (match) amount = match[1];
     }
 
     engine.dispatchEvent({ type: eventType, userId: userId, amount: amount, payload: event.data });

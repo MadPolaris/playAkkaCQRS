@@ -336,6 +336,12 @@
           this.domNodes.set(id, card);
           return card;
         }
+        this.createDynamicSvgNode(userId);
+        card = document.querySelector('[data-user-id="' + userId + '"]');
+        if (card) {
+          this.domNodes.set(id, card);
+          return card;
+        }
       }
       var el = document.getElementById(id);
       if (el) this.domNodes.set(id, el);
