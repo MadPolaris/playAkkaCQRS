@@ -6,7 +6,7 @@ import akka.projection.eventsourced.EventEnvelope
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.common.application.projection.ScalikeJdbcSession
-import net.imadz.domain.entities.CreditBalanceEntity.{BalanceChanged, FundsDeducted, IncomingCreditsCommited, IncomingCreditsRecorded}
+import net.imadz.domain.entities.CreditBalanceEntity.{BalanceChanged, FundsDeducted, FundsReserved, IncomingCreditsCanceled, IncomingCreditsCommited, IncomingCreditsRecorded, ReservationReleased}
 import net.imadz.infrastructure.persistence.CreditBalanceEventAdapter
 import net.imadz.infrastructure.proto.credits.{CreditBalanceEventPO => CreditEventPO}
 import org.slf4j.LoggerFactory
@@ -32,9 +32,17 @@ case class MonthlyIncomeAndExpenseSummaryProjectionHandler(sharding: ClusterShar
             repository.updateExpense(userId, -update.amount, year, month, day)
           }
 
-        case FundsDeducted(transferId, amount) =>
-          logger.info(s"Processing FundsDeducted for $userId: ${amount.amount} (Transfer: $transferId)")
+        case FundsReserved(transferId, amount) =>
+          logger.info(s"Processing FundsReserved for $userId: ${amount.amount} (Transfer: $transferId)")
           repository.updateExpense(userId, amount.amount, year, month, day)
+
+        case FundsDeducted(transferId, amount) =>
+          logger.info(s"Ignoring FundsDeducted for $userId (Transfer: $transferId) - already accounted in FundsReserved")
+          ()
+
+        case ReservationReleased(transferId, amount) =>
+          logger.info(s"Processing ReservationReleased for $userId: ${amount.amount} (Transfer: $transferId)")
+          repository.updateExpense(userId, -amount.amount, year, month, day)
 
         case IncomingCreditsRecorded(transferId, amount) =>
           logger.info(s"Processing IncomingCreditsRecorded for $userId: ${amount.amount} (Transfer: $transferId)")
@@ -43,6 +51,15 @@ case class MonthlyIncomeAndExpenseSummaryProjectionHandler(sharding: ClusterShar
 
         case IncomingCreditsCommited(transferId) =>
           logger.info(s"Processing IncomingCreditsCommited for $userId (Transfer: $transferId)")
+          ()
+
+        case IncomingCreditsCanceled(transferId) =>
+          logger.info(s"Processing IncomingCreditsCanceled for $userId (Transfer: $transferId)")
+          // We need the amount to undo the income. Since IncomingCreditsCanceled doesn't have amount, 
+          // this is a design limitation. But for now we just log it.
+          // Wait, the event definition in CreditBalanceEntity:
+          // case class IncomingCreditsCanceled(transferId: Id) extends CreditBalanceEvent
+          // It doesn't have amount.
           ()
 
         case e =>

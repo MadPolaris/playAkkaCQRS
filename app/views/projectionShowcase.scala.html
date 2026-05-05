@@ -681,13 +681,13 @@
                 if (eventName === 'FundsReserved' || eventName === 'FundsDeducted' || eventName === 'ReservationReleased') {
                     origin = 'agg-sender';
                     targetId = senderId;
-                    if (eventName === 'FundsDeducted') shouldPropagate = true;
+                    if (eventName === 'FundsReserved' || eventName === 'ReservationReleased') shouldPropagate = true;
+                    if (eventName === 'FundsDeducted') shouldPropagate = false;
                 } else if (eventName === 'IncomingCreditsRecorded' || eventName === 'IncomingCreditsCommited' || eventName === 'IncomingCreditsCanceled') {
                     origin = 'agg-receiver';
                     targetId = receiverId;
-                    if (eventName === 'IncomingCreditsRecorded' || eventName === 'IncomingCreditsCommited') shouldPropagate = true;
+                    if (eventName === 'IncomingCreditsRecorded' || eventName === 'IncomingCreditsCommited' || eventName === 'IncomingCreditsCanceled') shouldPropagate = true;
                 }
-
                 if (origin) {
                     addLog(`Domain Event: <b>${eventName}</b>`, 'var(--color-aggregate)');
                     
