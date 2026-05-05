@@ -116,6 +116,16 @@ curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
 > Scala 编程语言以超强的表达能力著称，这意味着更少的代码量。同时也意味着在与类似Claude3.5或ChatGPT类似人工智能交互过程中，耗费更少的 token。
 > 除此之外，为了弥补人工智能在问题分解上的不足以及上下文窗口长度限制问题，脚手架中尽量将组件拆解的足够小，虽然增加了架构认知成本，但是获得了更好的模块化能力，例如更小的范围作本地推理、编码、调试、单元测试等。
 
+## 项目理念
+
+本项目不仅是一个代码脚手架，更是一套**方法论的原型验证**。每一项架构决策——洋葱分层、接口驱动设计、小文件分解、FP 模式、DSL 约定——都旨在实现**无需加锁的并行协作**，无论对人类团队还是 AI Agent。
+
+详见方法论文档 [`knowledge_base/methodology/README-zh.md`](knowledge_base/methodology/README-zh.md)：
+- [架构最佳实践](knowledge_base/methodology/architecture-best-practices-zh.md) — 每个设计模式背后的"为什么"
+- [任务雷达](knowledge_base/methodology/task-radar-zh.md) — 10+ 人如何通过 Miro 实时看板并行协作
+- [Agent 并行开发](knowledge_base/methodology/agent-parallel-dev-zh.md) — 通往人机混合团队的路线图
+- [Harness 工程](knowledge_base/methodology/harness-engineering-zh.md) — 文档为什么这样组织
+
 ## 洋葱架构内部组件与关系
 ### 原则
 洋葱架构分离了业务复杂性与技术复杂性，同时在业务复杂性中又分离了业务领域复杂性和业务用例复杂性。大致对应关系为：

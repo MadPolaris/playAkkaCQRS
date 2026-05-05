@@ -131,6 +131,16 @@ detailed code examples in order.
 > increases the cost of architectural cognition, it gains better modularity capabilities, such as smaller scope for local
 > reasoning, coding, debugging, and unit testing.
 
+## Project Philosophy
+
+This project is as much a **methodology prototype** as it is a code scaffold. Every architectural decision — Onion layers, interface-driven design, small file decomposition, FP patterns, DSL conventions — is designed to enable **parallel collaboration without locks**, both for human teams and AI agents.
+
+Read the methodology docs at [`knowledge_base/methodology/README.md`](knowledge_base/methodology/README.md):
+- [Architecture Best Practices](knowledge_base/methodology/architecture-best-practices.md) — The "why" behind every design pattern
+- [Task Radar](knowledge_base/methodology/task-radar.md) — How 10+ developers collaborated in parallel via Miro real-time board
+- [Agent Parallel Development](knowledge_base/methodology/agent-parallel-dev.md) — The roadmap to human-agent hybrid teams
+- [Harness Engineering](knowledge_base/methodology/harness-engineering.md) — Why the documentation is structured this way
+
 ## Onion Architecture Internal Components and Relationships
 
 ### Principles
