@@ -1,709 +1,411 @@
-diff --git a/app/net/imadz/common/serialization/PrimitiveConverter.scala b/app/net/imadz/common/serialization/PrimitiveConverter.scala
-index 09c9cff..c2587ad 100644
---- a/app/net/imadz/common/serialization/PrimitiveConverter.scala
-+++ b/app/net/imadz/common/serialization/PrimitiveConverter.scala
-@@ -1,6 +1,7 @@
--package net.imadz.infrastructure.persistence.converters
-+package net.imadz.common.serialization
+diff --git a/app/views/showcase.scala.html b/app/views/showcase.scala.html
+index 81aa007..4a7c0bc 100644
+--- a/app/views/showcase.scala.html
++++ b/app/views/showcase.scala.html
+@@ -197,6 +197,12 @@
+             </div>
+             
+             <div class="visualization" id="dagContainer">
++                <div id="coordinator-node" style="grid-column: span 3; display: flex; justify-content: center; margin-bottom: 10px;">
++                    <div class="node coordinator success" id="coordinator" style="width: 200px; background: #0056b3; border-color: #00d4ff; color: white;">
++                        <span class="label">Saga Coordinator</span>
++                        <span class="info" id="coord-status">Idle</span>
++                    </div>
++                </div>
+                 <div class="phase-column" id="col-prepare">
+                     <div class="phase-header" style="background: #ffca28; color: #000;">@messages("showcase.phase.PREPARE_H")</div>
+                     <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
+@@ -209,6 +215,29 @@
+                     <div class="phase-header" style="background: #f44336; color: #fff;">@messages("showcase.phase.COMPENSATE_H")</div>
+                     <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
+                 </div>
++
++                <!-- Infrastructure & CQRS Layer -->
++                <div id="infra-layer" style="grid-column: span 3; display: flex; justify-content: space-around; margin-top: 40px; padding: 20px; border-top: 1px dashed #444; background: rgba(0,0,0,0.1); border-radius: 8px;">
++                    <div class="node" id="node-aggregate" style="background: #673ab7; border-color: #9575cd; width: 160px;">
++                        <span class="label">Credit Balance</span>
++                        <span class="info">Aggregate</span>
++                    </div>
++                    <div class="node" id="node-journal" style="background: #333; border: 2px solid #9c27b0; width: 140px;">
++                        <span class="label">Event Journal</span>
++                        <span class="info">MongoDB</span>
++                    </div>
++                    <div class="node" id="node-projection" style="background: #e65100; border-color: #ff9800; width: 160px;">
++                        <span class="label">Summary Projector</span>
++                        <span class="info">Akka Projection</span>
++                    </div>
++                    <div class="node" id="node-read-model" style="background: #1b5e20; border-color: #4caf50; width: 180px; height: 80px;">
++                        <span class="label">Monthly Report</span>
++                        <div id="report-preview" style="font-size: 0.65rem; color: #a5d6a7; margin-top: 5px; text-align: left; padding-left: 10px;">
++                            Income: ¥0<br/>Expense: ¥0
++                        </div>
++                    </div>
++                </div>
++
+                 <div class="logs-container">
+                     <div class="logs" id="logContainer">
+                         <div class="log-entry"><span class="log-time">--:--:--</span> <span class="log-type">@messages("showcase.log.System")</span> @messages("showcase.system_ready")</div>
+@@ -217,6 +246,7 @@
+             </div>
+         </div>
+     </div>
++    <script src="@routes.Assets.versioned("javascripts/showcase_engine.js")" type="text/javascript"></script>
+     <script>
+         const i18n = {
+             log: {
+@@ -314,6 +344,222 @@
+         document.getElementById('scenarioId').onchange = updateScenarioDetails;
+         updateScenarioDetails();
  
- import net.imadz.common.CommonTypes.Id
++        const demoConfig = {
++            settings: { animationSpeed: 1.0, eventTravelTime: 600 },
++            nodes: [
++                {
++                    id: 'coordinator', domId: 'coordinator',
++                    initialState: { status: 'idle', label: 'Saga Coordinator' },
++                    reducer: (state, event) => {
++                        if (event.type === 'TransactionStarted') return { ...state, status: 'ongoing' };
++                        if (event.type === 'TransactionCompleted') return { ...state, status: 'success' };
++                        if (event.type === 'TransactionFailed' || event.type === 'TransactionSuspended') return { ...state, status: 'failed' };
++                        return state;
++                    },
++                    render: (state) => `<span class="label">${state.label}</span><span class="info" id="coord-status">${state.status}</span>`,
++                    onRendered: (wrapper, state) => { wrapper.className = `node coordinator ${state.status}`; }
++                },
++                {
++                    id: 'node-aggregate',
++                    initialState: { balance: 0, reserved: {}, incoming: {}, lastEvent: 'None' },
++                    reducer: (state, ev) => {
++                        if (ev.data && ev.data.isDomainEvent) {
++                            const txId = ev.data.transactionId;
++                            const amountStr = (ev.data.detail || "").match(/Amount: ([\d.]+)/);
++                            const amount = amountStr ? parseFloat(amountStr[1]) : 0;
++                            const updateStr = (ev.data.detail || "").match(/Update: ([\d.-]+)/);
++                            const update = updateStr ? parseFloat(updateStr[1]) : 0;
 +
- import java.util.{Currency, UUID}
++                            let next = { ...state, lastEvent: ev.type, reserved: {...state.reserved}, incoming: {...state.incoming} };
++                            
++                            switch(ev.type) {
++                                case 'BalanceChanged':
++                                    next.balance += update;
++                                    break;
++                                case 'FundsReserved':
++                                    next.balance -= amount;
++                                    next.reserved[txId] = amount;
++                                    break;
++                                case 'FundsDeducted':
++                                    delete next.reserved[txId];
++                                    break;
++                                case 'ReservationReleased':
++                                    next.balance += (state.reserved[txId] || 0);
++                                    delete next.reserved[txId];
++                                    break;
++                                case 'IncomingCreditsRecorded':
++                                    next.incoming[txId] = amount;
++                                    break;
++                                case 'IncomingCreditsCommited':
++                                    next.balance += (state.incoming[txId] || 0);
++                                    delete next.incoming[txId];
++                                    break;
++                                case 'IncomingCreditsCanceled':
++                                    delete next.incoming[txId];
++                                    break;
++                            }
++                            return next;
++                        }
++                        return state;
++                    },
++                    render: (state) => {
++                        const resCount = Object.keys(state.reserved).length;
++                        const incCount = Object.keys(state.incoming).length;
++                        return `<span class="label">Credit Balance</span>
++                                <span class="info">Event: ${state.lastEvent}</span>
++                                <div style="font-size:0.7rem; color:#00d4ff; font-weight:bold; margin-top:2px;">Bal: ¥${state.balance.toFixed(2)}</div>
++                                <div style="font-size:0.6rem; color:#aaa;">[P: +${incCount} / -${resCount}]</div>`;
++                    },
++                    onRendered: (wrapper, state) => { if (state.lastEvent !== 'None') { wrapper.style.boxShadow = '0 0 15px #9c27b0'; setTimeout(() => wrapper.style.boxShadow = 'none', 500); } }
++                },
++                {
++                    id: 'node-journal',
++                    initialState: { count: 0 },
++                    reducer: (state, ev) => {
++                        if (ev.data && ev.data.isDomainEvent) return { ...state, count: state.count + 1 };
++                        return state;
++                    },
++                    render: (state) => `<span class="label">Event Journal</span><span class="info">Journaled: ${state.count}</span>`
++                },
++                {
++                    id: 'node-projection',
++                    initialState: { status: 'idle' },
++                    reducer: (state, ev) => {
++                        if (ev.data && ev.data.isDomainEvent) return { ...state, status: 'projecting' };
++                        return state;
++                    },
++                    render: (state) => `<span class="label">Summary Projector</span><span class="info">Status: ${state.status}</span>`,
++                    onRendered: (wrapper, state) => { if (state.status === 'projecting') { wrapper.style.borderColor = '#4caf50'; setTimeout(() => { state.status = 'idle'; wrapper.style.borderColor = '#ff9800'; }, 600); } }
++                },
++                {
++                    id: 'node-read-model',
++                    initialState: { income: 0, expense: 0 },
++                    reducer: (state, ev) => {
++                        if (ev.data && ev.data.isDomainEvent) {
++                            const amountStr = (ev.data.detail || "").match(/Amount: ([\d.]+)/) || (ev.data.detail || "").match(/Update: ([\d.-]+)/);
++                            const amount = amountStr ? parseFloat(amountStr[1]) : 0;
++                            
++                            switch(ev.type) {
++                                case 'BalanceChanged':
++                                    if (amount > 0) return { ...state, income: state.income + amount };
++                                    else return { ...state, expense: state.expense + Math.abs(amount) };
++                                
++                                case 'FundsReserved':
++                                    return { ...state, expense: state.expense + amount };
++                                
++                                case 'ReservationReleased':
++                                    return { ...state, expense: state.expense - amount };
++                                
++                                case 'IncomingCreditsRecorded':
++                                    return { ...state, income: state.income + amount };
++                                
++                                case 'FundsDeducted':
++                                case 'IncomingCreditsCommited':
++                                case 'IncomingCreditsCanceled':
++                                    // As per Scala handler: Ignored or handled elsewhere
++                                    return state;
++                            }
++                        }
++                        return state;
++                    },
++                    render: (state) => `
++                        <span class="label">Monthly Report</span>
++                        <div id="report-preview" style="font-size: 0.65rem; color: #a5d6a7; margin-top: 5px; text-align: left; padding-left: 10px;">
++                            Income: ¥${state.income.toFixed(2)}<br/>Expense: ¥${state.expense.toFixed(2)}
++                        </div>
++                    `
++                }
++            ],
++            eventRoutes: [
++                // Control Flow
++                { type: 'StepOngoing', source: 'coordinator', target: (e) => `node-${e.data.stepId}-${(e.data.phase||'').toLowerCase().replace('phase','')}`, color: '#00d4ff' },
++                { type: 'StepCompleted', source: (e) => `node-${e.data.stepId}-${(e.data.phase||'').toLowerCase().replace('phase','')}`, target: 'coordinator', color: '#4caf50' },
++                { type: 'StepFailed', source: (e) => `node-${e.data.stepId}-${(e.data.phase||'').toLowerCase().replace('phase','')}`, target: 'coordinator', color: '#f44336' },
++                
++                // Domain Event Flow - Ubiquitous Language (Matching Scala Class Names)
++                { 
++                    isDomain: true, 
++                    source: (e) => {
++                        const txId = e.data.transactionId;
++                        // Business heuristic: 
++                        // FundsReserved/Deducted/ReservationReleased -> Step-B (Withdrawal)
++                        // IncomingCreditsRecorded/Commited/Canceled -> Step-C (Deposit)
++                        if (['FundsReserved', 'FundsDeducted', 'ReservationReleased'].includes(e.type)) return `node-Step-B-prepare`;
++                        if (['IncomingCreditsRecorded', 'IncomingCreditsCommited', 'IncomingCreditsCanceled'].includes(e.type)) return `node-Step-C-prepare`;
++                        // Default to Step-A or find from transactionId if available
++                        return `node-Step-A-prepare`;
++                    }, 
++                    target: 'node-aggregate', 
++                    color: '#9c27b0' 
++                },
++                { isDomain: true, source: 'node-aggregate', target: 'node-journal', color: '#e91e63' },
++                { isDomain: true, source: 'node-journal', target: 'node-projection', color: '#ffca28' },
++                { isDomain: true, source: 'node-projection', target: 'node-read-model', color: '#4caf50' }
++            ],
++            eventDispatch: (ev) => {
++                if (ev.data && ev.data.isDomainEvent) return ['node-aggregate', 'node-journal', 'node-projection', 'node-read-model'];
++                if (ev.type === 'TransactionStarted' || ev.type === 'TransactionCompleted' || ev.type === 'TransactionFailed' || ev.type === 'TransactionSuspended') return ['coordinator'];
++                // Steps are updated automatically via their specific reducers
++                return Array.from(engine.nodes.keys());
++            }
++        };
++
++        // Custom route matching for domain events in the engine
++        const originalPushEvent = AnimationEngine.prototype.pushEvent;
++        AnimationEngine.prototype.pushEvent = function(event) {
++            if (event.data && event.data.isDomainEvent) {
++                // Find routes with isDomain: true
++                const domainRoutes = this.config.eventRoutes.filter(r => r.isDomain);
++                const sequence = async () => {
++                    this.isAnimating = true;
++                    for (const route of domainRoutes) {
++                        const sourceId = typeof route.source === 'function' ? route.source(event) : route.source;
++                        const targetId = typeof route.target === 'function' ? route.target(event) : route.target;
++                        if (sourceId && targetId && this.domNodes.has(sourceId) && this.domNodes.has(targetId)) {
++                            await this._animateTravel(sourceId, targetId, event, route);
++                            // Update target state immediately after travel
++                            this.updateNodeState(targetId, event);
++                        }
++                    }
++                    this.eventListeners.forEach(cb => cb(event));
++                    this.isAnimating = false;
++                    this._processNext();
++                };
++                this.eventQueue.push(sequence);
++                if (!this.isAnimating) this._processNext();
++            } else {
++                originalPushEvent.call(this, event);
++            }
++        };
++
++        // Fix _processNext to handle sequences
++        AnimationEngine.prototype._processNext = async function() {
++            if (this.isAnimating || this.eventQueue.length === 0) return;
++            const item = this.eventQueue.shift();
++            if (typeof item === 'function') {
++                await item();
++            } else {
++                // ... original logic (simplified here as I'm replacing it)
++                this.isAnimating = true;
++                const event = item;
++                let route = this.config.eventRoutes.find(r => r.type === event.type);
++                if (route) {
++                    const sourceId = typeof route.source === 'function' ? route.source(event) : route.source;
++                    const targetId = typeof route.target === 'function' ? route.target(event) : route.target;
++                    if (sourceId && targetId && this.domNodes.has(sourceId) && this.domNodes.has(targetId)) {
++                        await this._animateTravel(sourceId, targetId, event, route);
++                    }
++                }
++                const targetIds = this.config.eventDispatch ? this.config.eventDispatch(event) : Array.from(this.nodes.keys());
++                targetIds.forEach(id => this.updateNodeState(id, event));
++                this.eventListeners.forEach(cb => cb(event));
++                this.isAnimating = false;
++                this._processNext();
++            }
++        };
++
++        const engine = new AnimationEngine('dagContainer', demoConfig);
++
+         function renderDAG(steps) {
+             const groups = {};
+             steps.forEach(s => {
+@@ -328,11 +574,8 @@
+                 groupsToRender.forEach((g, idx) => {
+                     html += '<div class="group-row" data-group="' + g + '" data-phase="' + phase.toLowerCase() + '">';
+                     groups[g].forEach(sid => {
+-                        html += '<div class="node pending" id="node-' + sid + '-' + phase.toLowerCase() + '" data-step="' + sid + '" data-phase="' + phase.toLowerCase() + '">';
+-                        html += '<span class="label">' + sid.replace('-', ' ') + '</span>';
+-                        html += '<span class="info">Group ' + g + '</span>';
+-                        html += '<button class="btn btn-success btn-small fix-btn">' + i18n.ui.fix_btn + '</button>';
+-                        html += '</div>';
++                        const nodeId = 'node-' + sid + '-' + phase.toLowerCase();
++                        html += '<div class="node pending" id="' + nodeId + '" data-step="' + sid + '" data-phase="' + phase.toLowerCase() + '"></div>';
+                     });
+                     html += '</div>';
+                     if (idx < groupsToRender.length - 1) html += '<div class="group-connector"></div>';
+@@ -343,6 +586,38 @@
+             document.getElementById('col-prepare').innerHTML = buildCol('PREPARE', '@messages("showcase.phase.PREPARE_H")', '#ffca28', '#000', false);
+             document.getElementById('col-commit').innerHTML = buildCol('COMMIT', '@messages("showcase.phase.COMMIT_H")', '#4caf50', '#fff', false);
+             document.getElementById('col-compensate').innerHTML = buildCol('COMPENSATE', '@messages("showcase.phase.COMPENSATE_H")', '#f44336', '#fff', true);
++
++            // Register newly created nodes into engine
++            steps.forEach(s => {
++                ['prepare', 'commit', 'compensate'].forEach(phase => {
++                    const id = 'node-' + s.stepId + '-' + phase;
++                    engine.registerNode({
++                        id: id, domId: id,
++                        initialState: { status: 'pending', label: s.stepId.replace('-', ' '), group: s.stepGroup },
++                        reducer: (state, ev) => {
++                            if (ev.type === 'StepOngoing' && ev.data.stepId === s.stepId && ev.data.phase === phase) return { ...state, status: 'ongoing' };
++                            if (ev.type === 'StepCompleted' && ev.data.stepId === s.stepId && ev.data.phase === phase) return { ...state, status: 'success' };
++                            if (ev.type === 'StepFailed' && ev.data.stepId === s.stepId && ev.data.phase === phase) {
++                                const isRetryable = ev.data.error && ev.data.error.indexOf('Max retries') === -1 && (ev.data.error.indexOf('Retryable') !== -1 || ev.data.error.indexOf('attempt') !== -1 || ev.data.error.indexOf('timed out') !== -1 || ev.data.error.indexOf('Retry #') !== -1);
++                                return { ...state, status: isRetryable ? 'retrying' : 'failed' };
++                            }
++                            if (ev.type === 'TransactionSuspended' && (state.status === 'failed' || state.status === 'retrying')) return { ...state, status: 'suspended' };
++                            if (ev.type === 'PhaseCompleted' && (ev.data.phase||'').toLowerCase().replace('phase','') === phase && (state.status === 'ongoing' || state.status === 'retrying')) return { ...state, status: 'failed' };
++                            return state;
++                        },
++                        render: (state) => {
++                            let h = `<span class="label">${state.label}</span><span class="info">Group ${state.group}</span>`;
++                            h += `<button class="btn btn-success btn-small fix-btn" onclick="doFix('${s.stepId}', '${phase}', null, this)">${i18n.ui.fix_btn}</button>`;
++                            return h;
++                        },
++                        onRendered: (wrapper, state) => {
++                            if(state.status === 'ongoing') wrapper.classList.remove('suspended');
++                            wrapper.className = `node ${state.status}`;
++                            if (state.status === 'suspended') wrapper.classList.add('suspended');
++                        }
++                    });
++                });
++            });
+         }
  
- trait PrimitiveConverter {
-diff --git a/app/net/imadz/common/serialization/SerializationExtension.scala b/app/net/imadz/common/serialization/SerializationExtension.scala
-index b4f516b..70c1de5 100644
---- a/app/net/imadz/common/serialization/SerializationExtension.scala
-+++ b/app/net/imadz/common/serialization/SerializationExtension.scala
-@@ -1,6 +1,7 @@
--package net.imadz.infra.saga.serialization
-+package net.imadz.common.serialization
+         function addLog(type, msg) {
+@@ -353,19 +628,13 @@
+             entry.innerHTML = '<span class="log-time">' + timeStr + '</span> <span class="log-type">' + type + '</span> ' + msg;
+             logContainer.prepend(entry);
+         }
+-        function updateNode(stepId, phase, status) {
+-            const phaseKey = (phase || '').toLowerCase().replace('phase', '');
+-            const node = document.getElementById('node-' + stepId + '-' + phaseKey);
+-            if (node) {
+-                if (status === 'ongoing') node.classList.remove('suspended');
+-                node.className = 'node ' + status;
+-            }
+-        }
+-        function handleEvent(event) {
++
++        engine.onEventProcessed(event => {
+             const data = event.data;
+             const statusInfo = document.getElementById('statusInfo');
+             
+             if (event.type === 'TransactionStarted') {
++                engine.clearDynamicNodes('node-');
+                 renderDAG(data.steps);
+                 addLog(event.type, t(i18n.log.TransactionStarted, data.traceId));
+                 currentTransactionId = data.transactionId;
+@@ -376,14 +645,11 @@
+                 resumeBtn.style.display = 'none';
+                 manualFixPanel.style.display = 'none';
+             } else if (event.type === 'StepOngoing') {
+-                updateNode(data.stepId, data.phase, 'ongoing');
+                 addLog(event.type, t(i18n.log.StepOngoing, data.stepId, data.phase));
+             } else if (event.type === 'StepCompleted') {
+-                updateNode(data.stepId, data.phase, 'success');
+                 addLog(event.type, t(i18n.log.StepCompleted, data.stepId, data.phase, data.isManual ? i18n.log.is_manual : ''));
+             } else if (event.type === 'StepFailed') {
+                 const isRetryable = data.error && data.error.indexOf('Max retries') === -1 && (data.error.indexOf('Retryable') !== -1 || data.error.indexOf('attempt') !== -1 || data.error.indexOf('timed out') !== -1 || data.error.indexOf('Retry #') !== -1);
+-                updateNode(data.stepId, data.phase, isRetryable ? 'retrying' : 'failed');
+                 if (!isRetryable) {
+                     addLog(event.type, t(i18n.log.StepFailed, data.stepId, data.phase, data.error));
+                     retryBtn.style.display = 'block';
+@@ -391,21 +657,13 @@
+                     addLog(event.type, t(i18n.log.StepRetrying, data.stepId, data.phase, data.error));
+                 }
+             } else if (event.type === 'PhaseCompleted') {
+-                const phaseKey = (data.phase || '').toLowerCase().replace('phase', '');
+-                document.querySelectorAll('.node[data-phase="' + phaseKey + '"]').forEach(n => {
+-                    if (n.classList.contains('ongoing') || n.classList.contains('retrying')) {
+-                        n.className = 'node failed';
+-                    }
+-                });
+                 addLog(event.type, t(i18n.log.PhaseCompleted, data.phase));
+             } else if (event.type === 'StepGroupStarted') {
+                 const phaseKey = (data.phase || '').toLowerCase().replace('phase', '');
+-                // De-highlight other groups in THIS phase
+                 document.querySelectorAll('.group-row[data-group][data-phase="' + phaseKey + '"]').forEach(g => {
+                    g.style.opacity = '0.5';
+                    g.style.border = 'none';
+                 });
+-                // Highlight CURRENT group
+                 const groupEl = document.querySelector('.phase-column[id="col-' + phaseKey + '"] .group-row[data-group="' + data.group + '"]');
+                 if (groupEl) {
+                     groupEl.style.opacity = '1';
+@@ -436,16 +694,15 @@
+                    statusInfo.style.color = '#f44336';
+                    resumeBtn.style.display = 'block';
+                    manualFixPanel.style.display = 'block';
+-                   document.querySelectorAll('.node.failed, .node.retrying').forEach(n => n.classList.add('suspended'));
+                 }
+             } else if (event.type === 'DomainEventPublished') {
+                 addLog(event.type, t(i18n.log.DomainEventPublished, data.eventType, data.detail));
+             }
+-        }
+-        
++        });
++
+         const ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
+         ws.onmessage = function(msg) {
+-            handleEvent(JSON.parse(msg.data));
++            engine.pushEvent(JSON.parse(msg.data));
+         };
  
- import akka.actor.{ActorSystem, ExtendedActorSystem, Extension, ExtensionId, ExtensionIdProvider}
-+import net.imadz.infra.saga.serialization.SagaParticipantSerializerStrategy
- 
- import java.util.concurrent.ConcurrentHashMap
- import scala.reflect.ClassTag
-@@ -8,7 +9,7 @@ import scala.reflect.ClassTag
- object SerializationExtension extends ExtensionId[SerializationExtensionImpl] with ExtensionIdProvider {
-   override def lookup: ExtensionId[SerializationExtensionImpl] = SerializationExtension
-   override def createExtension(system: ExtendedActorSystem): SerializationExtensionImpl = new SerializationExtensionImpl(system)
--  def apply(system: ActorSystem): SerializationExtensionImpl = system.extension(this)
-+  override def apply(system: ActorSystem): SerializationExtensionImpl = system.extension(this)
- }
- 
- class SerializationExtensionImpl(system: ExtendedActorSystem) extends Extension {
-diff --git a/app/net/imadz/infra/saga/StepExecutor.scala b/app/net/imadz/infra/saga/StepExecutor.scala
-index aaf10a9..98494f2 100644
---- a/app/net/imadz/infra/saga/StepExecutor.scala
-+++ b/app/net/imadz/infra/saga/StepExecutor.scala
-@@ -4,7 +4,7 @@ import akka.actor.typed.scaladsl.Behaviors
- import akka.actor.typed.{ActorRef, Behavior}
- import akka.pattern.CircuitBreaker
- import akka.persistence.typed.scaladsl.EventSourcedBehavior
--import akka.persistence.typed.{EventAdapter, PersistenceId, RecoveryCompleted}
-+import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
- import net.imadz.common.CborSerializable
- import net.imadz.infra.saga.SagaParticipant.{RetryableOrNotException, SagaResult}
- import net.imadz.infra.saga.SagaPhase.TransactionPhase
-@@ -99,7 +99,7 @@ object StepExecutor {
-   // @formatter:on
- 
- 
--  def apply[E, R](eventAdapter: EventAdapter[Event, _])(persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings): Behavior[Command] = {
-+  def apply[E, R](persistenceId: PersistenceId, defaultMaxRetries: Int, initialRetryDelay: FiniteDuration, circuitBreakerSettings: CircuitBreakerSettings): Behavior[Command] = {
-     Behaviors.setup { context =>
-       Behaviors.withTimers { timers =>
- 
-@@ -115,11 +115,10 @@ object StepExecutor {
-           emptyState = State[E, R](),
-           commandHandler = StepExecutorCommandHandler.commandHandler[E, R](context, timers, defaultMaxRetries, initialRetryDelay, circuitBreaker),
-           eventHandler = StepExecutorEventHandler.eventHandler[E, R]
--        ).eventAdapter(eventAdapter)
--          .receiveSignal {
--            case (state, RecoveryCompleted) =>
--              StepExecutorRecoveryHandler.onRecoveryCompleted[E, R](context, state)
--          }
-+        ).receiveSignal {
-+          case (state, RecoveryCompleted) =>
-+            StepExecutorRecoveryHandler.onRecoveryCompleted[E, R](context, state)
-+        }
-       }
-     }
-   }
-diff --git a/app/net/imadz/infra/saga/serialization/SagaParticipantSerializerStrategy.scala b/app/net/imadz/infra/saga/serialization/SagaParticipantSerializerStrategy.scala
-index 463e144..28b41d6 100644
---- a/app/net/imadz/infra/saga/serialization/SagaParticipantSerializerStrategy.scala
-+++ b/app/net/imadz/infra/saga/serialization/SagaParticipantSerializerStrategy.scala
-@@ -1,5 +1,18 @@
- package net.imadz.infra.saga.serialization
- 
-+import net.imadz.infra.saga.SagaParticipant
-+
- trait SagaParticipantSerializerStrategy {
-+  def manifest: String
-+  def participantClass: Class[_]
-+
-+  def toBinary(participant: SagaParticipant[_, _]): Array[Byte]
- 
--}
-+  /**
-+   * 反序列化
-+   * @param bytes 二进制数据
-+   * @param resolver 依赖解析器 (即 Extension)
-+   * @param ec 执行上下文 (通常由 System 提供)
-+   */
-+  def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _]
-+}
-\ No newline at end of file
-diff --git a/app/net/imadz/infra/saga/serialization/SagaTransactionStepSerializer.scala b/app/net/imadz/infra/saga/serialization/SagaTransactionStepSerializer.scala
-index 951a5e2..ee12f07 100644
---- a/app/net/imadz/infra/saga/serialization/SagaTransactionStepSerializer.scala
-+++ b/app/net/imadz/infra/saga/serialization/SagaTransactionStepSerializer.scala
-@@ -1,5 +1,38 @@
- package net.imadz.infra.saga.serialization
- 
--class SagaTransactionStepSerializer {
-+import akka.actor.ExtendedActorSystem
-+import com.google.protobuf.ByteString
-+import net.imadz.common.CommonTypes.iMadzError
-+import net.imadz.common.serialization.SerializationExtension
-+// 假设这些 Proto 也是框架的一部分
-+import net.imadz.infra.saga.proto.saga_v2.{SagaParticipantPO, SagaTransactionStepPO}
-+import net.imadz.infra.saga.{SagaParticipant, SagaTransactionStep}
- 
--}
-+import scala.concurrent.ExecutionContext
-+
-+class SagaTransactionStepSerializer(system: ExtendedActorSystem)
-+  extends AbsSagaTransactionStepSerializer {
-+
-+  private lazy val ext = SerializationExtension(system)
-+  implicit val executionContext: ExecutionContext = system.dispatcher
-+
-+  override def identifier: Int = 1234
-+
-+  override def serializeSagaTransactionStep(step: SagaTransactionStep[_, _]): SagaTransactionStepPO = {
-+    val participant = step.participant
-+    val strategy = ext.strategyFor(participant.getClass)
-+
-+    val payloadBytes = strategy.toBinary(participant)
-+    val typeName = strategy.manifest
-+
-+    writeSagaParticipantPO(step, SagaParticipantPO(typeName, ByteString.copyFrom(payloadBytes)))
-+  }
-+
-+  override def deserializeSagaTransactionStep(stepPO: SagaTransactionStepPO): SagaTransactionStep[iMadzError, String] = {
-+    val genericParticipant = stepPO.participant.getOrElse(throw new IllegalArgumentException("Missing participant"))
-+    val strategy = ext.strategyFor(genericParticipant.typeName)
-+
-+    val participant = strategy.fromBinary(genericParticipant.payload.toByteArray).asInstanceOf[SagaParticipant[iMadzError, String]]
-+    readSagaTransactionStep(stepPO, participant)
-+  }
-+}
-\ No newline at end of file
-diff --git a/app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala b/app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala
-index d3aa71c..aa9390a 100644
---- a/app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala
-+++ b/app/net/imadz/infrastructure/bootstrap/SagaTransactionCoordinatorBootstrap.scala
-@@ -10,7 +10,7 @@ import net.imadz.application.aggregates.repository.CreditBalanceRepository
- import net.imadz.common.CommonTypes.Id
- import net.imadz.common.Id
- import net.imadz.infra.saga.SagaTransactionCoordinator.entityTypeKey
--import net.imadz.infra.saga.serialization.{AkkaSerializationWrapper, SagaTransactionCoordinatorEventAdapter, StepExecutorEventAdapter}
-+import net.imadz.infra.saga.persistence.SagaTransactionCoordinatorEventAdapter
- import net.imadz.infra.saga.{ForSaga, SagaTransactionCoordinator, StepExecutor}
- import net.imadz.infrastructure.persistence.SagaTransactionStepSerializer
- import org.slf4j.LoggerFactory
-@@ -44,7 +44,7 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
-             persistenceId = PersistenceId(entityTypeKey.name, transactionId.toString),
-             emptyState = SagaTransactionCoordinator.State.apply(),
-             commandHandler = SagaTransactionCoordinator.commandHandler(actorContext, (key, step) =>
--              createStepExecutor(actorContext, key, stepSerializer)),
-+              createStepExecutor(actorContext, key)),
-             eventHandler = SagaTransactionCoordinator.eventHandler
-           ).withTagger(_ => Set(tag))
-             .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
-@@ -54,11 +54,8 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
-   }
- 
- 
--  private def createStepExecutor(context: ActorContext[SagaTransactionCoordinator.Command], key: String, stepSerializer: SagaTransactionStepSerializer) = {
--    val akkaSerialization = AkkaSerializationWrapper(context.system.classicSystem)
--    val global = scala.concurrent.ExecutionContext.global
--    val eventAdapter = StepExecutorEventAdapter(akkaSerialization, stepSerializer, global)
--    context.spawn(StepExecutor[Any, Any](eventAdapter)(
-+  private def createStepExecutor(context: ActorContext[SagaTransactionCoordinator.Command], key: String): Any = {
-+    context.spawn(StepExecutor[Any, Any](
-       PersistenceId.ofUniqueId(key),
-       defaultMaxRetries = 5,
-       initialRetryDelay = 100.millis,
-diff --git a/app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala b/app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala
-index d59eea2..2903402 100644
---- a/app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala
-+++ b/app/net/imadz/infrastructure/bootstrap/TransactionBootstrap.scala
-@@ -4,12 +4,23 @@ import akka.actor.typed.{ActorSystem, Behavior}
- import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityContext}
- import net.imadz.application.aggregates.repository.CreditBalanceRepository
- import net.imadz.application.services.transactor.MoneyTransferSagaTransactor
-+import net.imadz.common.serialization.SerializationExtension
- import net.imadz.infra.saga.SagaTransactionCoordinator
-+import net.imadz.infrastructure.persistence.strategies.TransactionSerializationStrategies
- 
--trait TransactionBootstrap {
-+import scala.concurrent.ExecutionContext.Implicits.global
- 
-+trait TransactionBootstrap {
-   // [修改] 增加了 system 参数
-   def initTransactionAggregate(system: ActorSystem[_], sharding: ClusterSharding, repository: CreditBalanceRepository): Unit = {
-+    // 1. 获取扩展容器
-+    val ext = SerializationExtension(system)
-+
-+    // 2. 注册您的业务策略 (这一步就是"挂号")
-+    ext.registerStrategy(TransactionSerializationStrategies.FromAccountStrategy(repository))
-+    ext.registerStrategy(TransactionSerializationStrategies.ToAccountStrategy(repository))
-+
-+
-     val behaviorFactory: EntityContext[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] => Behavior[MoneyTransferSagaTransactor.MoneyTransferTransactionCommand] = { context =>
-       val transactionId = context.entityId
-       val coordinator = sharding.entityRefFor(SagaTransactionCoordinator.entityTypeKey, transactionId)
-diff --git a/app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala b/app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala
-index 56fc37b..975078c 100644
---- a/app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala
-+++ b/app/net/imadz/infrastructure/persistence/CreditBalanceEventAdapter.scala
-@@ -1,99 +1,78 @@
- package net.imadz.infrastructure.persistence
- 
- import akka.persistence.typed.{EventAdapter, EventSeq}
--import net.imadz.common.Id
- import net.imadz.domain.entities.CreditBalanceEntity._
--import net.imadz.domain.values.Money
-+// 引入生成的 Converter Trait
-+import net.imadz.infrastructure.persistence.converters.CreditBalanceProtoConverters
-+// 引入 Protobuf 定义
- import net.imadz.infrastructure.proto.credits._
- 
--import java.util.Currency
--
--class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditBalanceEventPO.Event] {
--
--  override def toJournal(e: CreditBalanceEvent): CreditBalanceEventPO.Event =
--    e match {
--      case BalanceChanged(update, timestamp) =>
--        CreditBalanceEventPO.Event.BalanceChanged(
--          BalanceChangedPO(
--            Some(toMoneyPO(update)),
--            timestamp
--          )
--        )
--      case FundsReserved(transferId, amount) =>
--        CreditBalanceEventPO.Event.FundsReserved(
--          FundsReservedPO(
--            transferId.toString,
--            Some(toMoneyPO(amount))
--          )
--        )
--      case FundsDeducted(transferId, amount) =>
--        CreditBalanceEventPO.Event.FundsDeducted(
--          FundsDeductedPO(
--            transferId.toString,
--            Some(toMoneyPO(amount))
--          )
--        )
--      case ReservationReleased(transferId, amount) =>
--        CreditBalanceEventPO.Event.ReservationReleased(
--          ReservationReleasedPO(
--            transferId.toString,
--            Some(toMoneyPO(amount))
--          )
--        )
--      case IncomingCreditsRecorded(transferId, amount) =>
--        CreditBalanceEventPO.Event.IncomingCreditsRecorded(
--          IncomingCreditsRecordedPO(
--            transferId.toString,
--            Some(toMoneyPO(amount))
--          )
--        )
--      case IncomingCreditsCommited(transferId) =>
--        CreditBalanceEventPO.Event.IncomingCreditsCommited(
--          IncomingCreditsCommitedPO(
--            transferId.toString
--          )
--        )
--      case IncomingCreditsCanceled(transferId) =>
--        CreditBalanceEventPO.Event.IncomingCreditsCanceled(
--          IncomingCreditsCanceledPO(
--            transferId.toString
--          )
--        )
--    }
-+/**
-+ * CreditBalanceEventAdapter
-+ * * 职责：
-+ * 1. 混入 CreditBalanceProtoConverters 以获得所有转化能力
-+ * 2. 将领域事件映射到 Proto OneOf 包装类
-+ * 3. 将 Proto OneOf 包装类还原回领域事件
-+ */
-+class CreditBalanceEventAdapter extends EventAdapter[CreditBalanceEvent, CreditBalanceEventPO]
-+  with CreditBalanceProtoConverters {
- 
-   override def manifest(event: CreditBalanceEvent): String = event.getClass.getName
- 
--  override def fromJournal(p: CreditBalanceEventPO.Event, manifest: String): EventSeq[CreditBalanceEvent] =
--    p match {
-+  override def toJournal(e: CreditBalanceEvent): CreditBalanceEventPO = {
-+    // 显式调用 Converters 中定义的 Object，逻辑清晰，无隐式魔法
-+    val eventUnion = e match {
-+      case evt: BalanceChanged =>
-+        CreditBalanceEventPO.Event.BalanceChanged(BalanceChangedConv.toProto(evt))
-+
-+      case evt: FundsReserved =>
-+        CreditBalanceEventPO.Event.FundsReserved(FundsReservedConv.toProto(evt))
-+
-+      case evt: FundsDeducted =>
-+        CreditBalanceEventPO.Event.FundsDeducted(FundsDeductedConv.toProto(evt))
-+
-+      case evt: ReservationReleased =>
-+        CreditBalanceEventPO.Event.ReservationReleased(ReservationReleasedConv.toProto(evt))
-+
-+      case evt: IncomingCreditsRecorded =>
-+        CreditBalanceEventPO.Event.IncomingCreditsRecorded(IncomingCreditsRecordedConv.toProto(evt))
-+
-+      case evt: IncomingCreditsCommited =>
-+        CreditBalanceEventPO.Event.IncomingCreditsCommited(IncomingCreditsCommitedConv.toProto(evt))
-+
-+      case evt: IncomingCreditsCanceled =>
-+        CreditBalanceEventPO.Event.IncomingCreditsCanceled(IncomingCreditsCanceledConv.toProto(evt))
-+    }
-+
-+    // 包装进 Root PO
-+    CreditBalanceEventPO(eventUnion)
-+  }
-+
-+  override def fromJournal(p: CreditBalanceEventPO, manifest: String): EventSeq[CreditBalanceEvent] = {
-+    p.event match {
-       case CreditBalanceEventPO.Event.BalanceChanged(po) =>
--        EventSeq.single(BalanceChanged(fromMoneyPO(po.getUpdate), po.timestamp))
-+        EventSeq.single(BalanceChangedConv.fromProto(po))
- 
-       case CreditBalanceEventPO.Event.FundsReserved(po) =>
--        EventSeq.single(FundsReserved(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
-+        EventSeq.single(FundsReservedConv.fromProto(po))
- 
-       case CreditBalanceEventPO.Event.FundsDeducted(po) =>
--        EventSeq.single(FundsDeducted(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
-+        EventSeq.single(FundsDeductedConv.fromProto(po))
- 
-       case CreditBalanceEventPO.Event.ReservationReleased(po) =>
--        EventSeq.single(ReservationReleased(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
-+        EventSeq.single(ReservationReleasedConv.fromProto(po))
- 
-       case CreditBalanceEventPO.Event.IncomingCreditsRecorded(po) =>
--        EventSeq.single(IncomingCreditsRecorded(Id.of(po.transferId), fromMoneyPO(po.getAmount)))
-+        EventSeq.single(IncomingCreditsRecordedConv.fromProto(po))
- 
-       case CreditBalanceEventPO.Event.IncomingCreditsCommited(po) =>
--        EventSeq.single(IncomingCreditsCommited(Id.of(po.transferId)))
-+        EventSeq.single(IncomingCreditsCommitedConv.fromProto(po))
- 
-       case CreditBalanceEventPO.Event.IncomingCreditsCanceled(po) =>
--        EventSeq.single(IncomingCreditsCanceled(Id.of(po.transferId)))
-+        EventSeq.single(IncomingCreditsCanceledConv.fromProto(po))
- 
--      case _ =>
-+      case CreditBalanceEventPO.Event.Empty =>
-         EventSeq.empty
-     }
--
--  // Helper methods for Money conversion
--  private def toMoneyPO(money: Money): MoneyPO =
--    MoneyPO(money.amount.doubleValue, money.currency.getCurrencyCode)
--
--  private def fromMoneyPO(po: MoneyPO): Money =
--    Money(BigDecimal(po.amount), Currency.getInstance(po.currency))
-+  }
- }
-\ No newline at end of file
-diff --git a/app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala b/app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala
-index dfa09cf..a53940a 100644
---- a/app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala
-+++ b/app/net/imadz/infrastructure/persistence/CreditBalanceSnapshotAdapter.scala
-@@ -1,38 +1,20 @@
- package net.imadz.infrastructure.persistence
- 
- import akka.persistence.typed.SnapshotAdapter
--import net.imadz.common.Id
- import net.imadz.domain.entities.CreditBalanceEntity._
--import net.imadz.domain.values.Money
--import net.imadz.infrastructure.proto.credits.{CreditBalanceStatePO, MoneyPO}
-+import net.imadz.infrastructure.persistence.converters.CreditBalanceProtoConverters
-+import net.imadz.infrastructure.proto.credits.CreditBalanceStatePO
- 
--import java.util.{Currency, UUID}
--
--class CreditBalanceSnapshotAdapter extends SnapshotAdapter[CreditBalanceState] {
-+class CreditBalanceSnapshotAdapter extends SnapshotAdapter[CreditBalanceState] with CreditBalanceProtoConverters {
- 
-   override def toJournal(state: CreditBalanceState): Any = {
--    CreditBalanceStatePO(
--      userId = state.userId.toString,
--      accountBalance = state.accountBalance.map { case (k, v) => k -> toMoneyPO(v) },
--      reservedAmount = state.reservedAmount.map { case (k, v) => k.toString -> toMoneyPO(v) },
--      incomingCredits = state.incomingCredits.map { case (k, v) => k.toString -> toMoneyPO(v) }
--    )
-+    CreditBalanceStateConv.toProto(state)
-   }
- 
-   override def fromJournal(from: Any): CreditBalanceState = from match {
-     case po: CreditBalanceStatePO =>
--      CreditBalanceState(
--        userId = UUID.fromString(po.userId),
--        accountBalance = po.accountBalance.map { case (k, v) => k -> fromMoneyPO(v) }.toMap,
--        reservedAmount = po.reservedAmount.map { case (k, v) => Id.of(k) -> fromMoneyPO(v) }.toMap,
--        incomingCredits = po.incomingCredits.map { case (k, v) => Id.of(k) -> fromMoneyPO(v) }.toMap
--      )
-+      CreditBalanceStateConv.fromProto(po)
-     case unknown => throw new IllegalStateException(s"Unknown journal type: ${unknown.getClass.getName}")
-   }
- 
--  private def toMoneyPO(money: Money): MoneyPO =
--    MoneyPO(money.amount.doubleValue, money.currency.getCurrencyCode)
--
--  private def fromMoneyPO(po: MoneyPO): Money =
--    Money(BigDecimal(po.amount), Currency.getInstance(po.currency))
- }
-\ No newline at end of file
-diff --git a/app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala b/app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala
-index a362ca1..70bc7cc 100644
---- a/app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala
-+++ b/app/net/imadz/infrastructure/persistence/converters/CreditBalanceProtoConverters.scala
-@@ -1,5 +1,134 @@
- package net.imadz.infrastructure.persistence.converters
- 
--trait CreditBalanceProtoConverters {
-+import net.imadz.common.serialization.PrimitiveConverter
-+import net.imadz.domain.entities.CreditBalanceEntity._
-+import net.imadz.domain.values.Money
-+// 根据之前的约定，假设 ScalaPB 生成的代码位于 snake_case 的包下
-+// 如果您的实际生成包是 net.imadz.banking.infrastructure.proto，请调整此处 import
-+import net.imadz.infrastructure.proto.credits._
- 
--}
-+trait CreditBalanceProtoConverters extends PrimitiveConverter {
-+
-+  // --- Value Objects ---
-+
-+  object MoneyConv extends ProtoConverter[Money, MoneyPO] {
-+    override def toProto(m: Money): MoneyPO = MoneyPO(
-+      amount = m.amount.doubleValue,
-+      currency = CurrencyConv.toProto(m.currency)
-+    )
-+
-+    override def fromProto(p: MoneyPO): Money = Money(
-+      BigDecimal(p.amount),
-+      CurrencyConv.fromProto(p.currency)
-+    )
-+  }
-+
-+  // --- Events ---
-+
-+  object BalanceChangedConv extends ProtoConverter[BalanceChanged, BalanceChangedPO] {
-+    override def toProto(e: BalanceChanged): BalanceChangedPO = BalanceChangedPO(
-+      update = Some(MoneyConv.toProto(e.update)),
-+      timestamp = e.timestamp
-+    )
-+
-+    override def fromProto(p: BalanceChangedPO): BalanceChanged = BalanceChanged(
-+      update = MoneyConv.fromProto(p.update.getOrElse(throw new IllegalArgumentException("Missing update"))),
-+      timestamp = p.timestamp
-+    )
-+  }
-+
-+  object FundsReservedConv extends ProtoConverter[FundsReserved, FundsReservedPO] {
-+    override def toProto(e: FundsReserved): FundsReservedPO = FundsReservedPO(
-+      transferId = IdConv.toProto(e.transferId),
-+      amount = Some(MoneyConv.toProto(e.amount))
-+    )
-+
-+    override def fromProto(p: FundsReservedPO): FundsReserved = FundsReserved(
-+      transferId = IdConv.fromProto(p.transferId),
-+      amount = MoneyConv.fromProto(p.amount.getOrElse(throw new IllegalArgumentException("Missing amount")))
-+    )
-+  }
-+
-+  // [补全] FundsDeducted
-+  object FundsDeductedConv extends ProtoConverter[FundsDeducted, FundsDeductedPO] {
-+    override def toProto(e: FundsDeducted): FundsDeductedPO = FundsDeductedPO(
-+      transferId = IdConv.toProto(e.transferId),
-+      amount = Some(MoneyConv.toProto(e.amount))
-+    )
-+
-+    override def fromProto(p: FundsDeductedPO): FundsDeducted = FundsDeducted(
-+      transferId = IdConv.fromProto(p.transferId),
-+      amount = MoneyConv.fromProto(p.amount.getOrElse(throw new IllegalArgumentException("Missing amount")))
-+    )
-+  }
-+
-+  // [补全] ReservationReleased
-+  object ReservationReleasedConv extends ProtoConverter[ReservationReleased, ReservationReleasedPO] {
-+    override def toProto(e: ReservationReleased): ReservationReleasedPO = ReservationReleasedPO(
-+      transferId = IdConv.toProto(e.transferId),
-+      amount = Some(MoneyConv.toProto(e.amount))
-+    )
-+
-+    override def fromProto(p: ReservationReleasedPO): ReservationReleased = ReservationReleased(
-+      transferId = IdConv.fromProto(p.transferId),
-+      amount = MoneyConv.fromProto(p.amount.getOrElse(throw new IllegalArgumentException("Missing amount")))
-+    )
-+  }
-+
-+  // [补全] IncomingCreditsRecorded
-+  object IncomingCreditsRecordedConv extends ProtoConverter[IncomingCreditsRecorded, IncomingCreditsRecordedPO] {
-+    override def toProto(e: IncomingCreditsRecorded): IncomingCreditsRecordedPO = IncomingCreditsRecordedPO(
-+      transferId = IdConv.toProto(e.transferId),
-+      amount = Some(MoneyConv.toProto(e.amount))
-+    )
-+
-+    override def fromProto(p: IncomingCreditsRecordedPO): IncomingCreditsRecorded = IncomingCreditsRecorded(
-+      transferId = IdConv.fromProto(p.transferId),
-+      amount = MoneyConv.fromProto(p.amount.getOrElse(throw new IllegalArgumentException("Missing amount")))
-+    )
-+  }
-+
-+  // [补全] IncomingCreditsCommited (注意拼写与 Entity/Proto 保持一致: Commited)
-+  object IncomingCreditsCommitedConv extends ProtoConverter[IncomingCreditsCommited, IncomingCreditsCommitedPO] {
-+    override def toProto(e: IncomingCreditsCommited): IncomingCreditsCommitedPO = IncomingCreditsCommitedPO(
-+      transferId = IdConv.toProto(e.transferId)
-+    )
-+
-+    override def fromProto(p: IncomingCreditsCommitedPO): IncomingCreditsCommited = IncomingCreditsCommited(
-+      transferId = IdConv.fromProto(p.transferId)
-+    )
-+  }
-+
-+  // [补全] IncomingCreditsCanceled
-+  object IncomingCreditsCanceledConv extends ProtoConverter[IncomingCreditsCanceled, IncomingCreditsCanceledPO] {
-+    override def toProto(e: IncomingCreditsCanceled): IncomingCreditsCanceledPO = IncomingCreditsCanceledPO(
-+      transferId = IdConv.toProto(e.transferId)
-+    )
-+
-+    override def fromProto(p: IncomingCreditsCanceledPO): IncomingCreditsCanceled = IncomingCreditsCanceled(
-+      transferId = IdConv.fromProto(p.transferId)
-+    )
-+  }
-+
-+  // --- State Snapshot ---
-+
-+  object CreditBalanceStateConv extends ProtoConverter[CreditBalanceState, CreditBalanceStatePO] {
-+    override def toProto(s: CreditBalanceState): CreditBalanceStatePO = CreditBalanceStatePO(
-+      userId = IdConv.toProto(s.userId),
-+      // 1. Map[String, Money] -> 使用 StringConv + MoneyConv
-+      accountBalance = toProtoMap(s.accountBalance, StringConv, MoneyConv),
-+      // 2. Map[Id, Money] -> 使用 IdConv + MoneyConv
-+      reservedAmount = toProtoMap(s.reservedAmount, IdConv, MoneyConv),
-+      // 3. Map[Id, Money] -> 使用 IdConv + MoneyConv
-+      incomingCredits = toProtoMap(s.incomingCredits, IdConv, MoneyConv)
-+    )
-+
-+    override def fromProto(p: CreditBalanceStatePO): CreditBalanceState = CreditBalanceState(
-+      userId = IdConv.fromProto(p.userId),
-+      // 这里的逻辑是对称的
-+      accountBalance = fromProtoMap(p.accountBalance, StringConv, MoneyConv),
-+      reservedAmount = fromProtoMap(p.reservedAmount, IdConv, MoneyConv),
-+      incomingCredits = fromProtoMap(p.incomingCredits, IdConv, MoneyConv)
-+    )
-+  }
-+}
-\ No newline at end of file
-diff --git a/app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala b/app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala
-index f14b9e2..f803fb2 100644
---- a/app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala
-+++ b/app/net/imadz/infrastructure/persistence/converters/SagaProtoConverters.scala
-@@ -1,5 +1,40 @@
- package net.imadz.infrastructure.persistence.converters
- 
--trait SagaProtoConverters {
-+import net.imadz.application.aggregates.repository.CreditBalanceRepository
-+import net.imadz.application.services.transactor.{FromAccountParticipant, ToAccountParticipant}
-+import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO, ToAccountParticipantPO}
- 
--}
-+import scala.concurrent.ExecutionContext
-+
-+trait SagaProtoConverters extends CreditBalanceProtoConverters {
-+
-+  case class FromAccountParticipantConv(repository: CreditBalanceRepository)(implicit ec: ExecutionContext) extends ProtoConverter[FromAccountParticipant, FromAccountParticipantPO] {
-+    override def toProto(d: FromAccountParticipant): FromAccountParticipantPO = FromAccountParticipantPO(
-+      fromUserId = IdConv.toProto(d.fromUserId),
-+      amount = Some(MoneyConv.toProto(d.amount))
-+    )
-+
-+    override def fromProto(p: FromAccountParticipantPO): FromAccountParticipant = {
-+      p.amount.map(amount => {
-+        FromAccountParticipant(IdConv.fromProto(p.fromUserId), amount = MoneyConv.fromProto(amount), repository)
-+      }).getOrElse(throw new IllegalArgumentException(s"FromAccountParticipantPO should have amount property value, but is ${p.amount}"))
-+    }
-+
-+  }
-+
-+  case class ToAccountParticipantConv(repository: CreditBalanceRepository)(implicit ec: ExecutionContext) extends ProtoConverter[ToAccountParticipant, ToAccountParticipantPO] {
-+
-+    override def toProto(domain: ToAccountParticipant): ToAccountParticipantPO = ToAccountParticipantPO(
-+      toUserId = IdConv.toProto(domain.toUserId),
-+      amount = Some(MoneyConv.toProto(domain.amount))
-+    )
-+
-+    override def fromProto(proto: ToAccountParticipantPO): ToAccountParticipant = proto.amount.map(amount => {
-+      ToAccountParticipant(
-+        toUserId = IdConv.fromProto(proto.toUserId),
-+        amount = MoneyConv.fromProto(amount),
-+        repo = repository
-+      )
-+    }).getOrElse(throw new IllegalArgumentException(s"ToAccountParticipantPO should have amount property value, but is ${proto.amount}"))
-+  }
-+}
-\ No newline at end of file
-diff --git a/app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala b/app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala
-index aa7eeaf..5f10bd8 100644
---- a/app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala
-+++ b/app/net/imadz/infrastructure/persistence/strategies/TransactionSerializationStrategies.scala
-@@ -1,45 +1,56 @@
--package net.imadz.infra.saga.persistence.strategies
-+package net.imadz.infrastructure.persistence.strategies
- 
- import net.imadz.application.aggregates.repository.CreditBalanceRepository
- import net.imadz.application.services.transactor.{FromAccountParticipant, ToAccountParticipant}
- import net.imadz.infra.saga.SagaParticipant
- import net.imadz.infra.saga.serialization.SagaParticipantSerializerStrategy
--import net.imadz.infrastructure.persistence.converters.TransactionProtoConverters.{FromAccountParticipantConv, ToAccountParticipantConv}
-+import net.imadz.infrastructure.persistence.converters.SagaProtoConverters
- import net.imadz.infrastructure.proto.saga_participant.{FromAccountParticipantPO, ToAccountParticipantPO}
--import net.imadz.infrastructure.serialization.SerializationExtensionImpl
- 
- import scala.concurrent.ExecutionContext
- 
- object TransactionSerializationStrategies {
- 
--  object FromAccountStrategy extends SagaParticipantSerializerStrategy {
-+  case class FromAccountStrategy(repository: CreditBalanceRepository)(implicit executionContext: ExecutionContext) extends SagaParticipantSerializerStrategy with SagaProtoConverters {
-     override def manifest: String = "FromAccountParticipantPO"
-+
-     override def participantClass: Class[_] = classOf[FromAccountParticipant]
- 
-+    private val fromConv: FromAccountParticipantConv = FromAccountParticipantConv(repository)
-+
-     override def toBinary(participant: SagaParticipant[_, _]): Array[Byte] = {
-       val p = participant.asInstanceOf[FromAccountParticipant]
--      FromAccountParticipantConv.toProto(p).toByteArray
-+      fromConv.toProto(p).toByteArray
-     }
- 
-     // [关键] 按需获取 CreditBalanceRepository
--    override def fromBinary(bytes: Array[Byte], resolver: SerializationExtensionImpl)(implicit ec: ExecutionContext): SagaParticipant[_, _] = {
-+    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _] = {
-       val po = FromAccountParticipantPO.parseFrom(bytes)
-+      fromConv.fromProto(po)
-+    }
-+
-+  }
-+
-+
-+  case class ToAccountStrategy(repository: CreditBalanceRepository)(implicit executionContext: ExecutionContext) extends SagaParticipantSerializerStrategy with SagaProtoConverters {
-+    override def manifest: String = "ToAccountParticipantPO"
- 
--      // 这里的 getDependency 是类型安全的
--      val repo = resolver.getDependency[CreditBalanceRepository]
-+    override def participantClass: Class[_] = classOf[ToAccountParticipant]
- 
--      FromAccountParticipantConv.fromProto(po, repo)
-+    private val toConv: ToAccountParticipantConv = ToAccountParticipantConv(repository)
-+
-+    override def toBinary(participant: SagaParticipant[_, _]): Array[Byte] = {
-+      val p = participant.asInstanceOf[ToAccountParticipant]
-+      toConv.toProto(p).toByteArray
-     }
--  }
- 
--  // 假设有一个 OrderParticipant 需要 OrderRepository
--  /*
--  object CreateOrderStrategy extends SagaParticipantSerializerStrategy {
--    // ...
--    override def fromBinary(..., resolver: SerializationExtensionImpl)... {
--       val repo = resolver.getDependency[OrderRepository] // 拿另一个 Repo
--       OrderParticipantConv.fromProto(po, repo)
-+    // [关键] 按需获取 CreditBalanceRepository
-+    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _] = {
-+      val po = ToAccountParticipantPO.parseFrom(bytes)
-+      toConv.fromProto(po)
-     }
-+
-   }
--  */
-+
-+
- }
-\ No newline at end of file
-diff --git a/conf/serialization.conf b/conf/serialization.conf
-index e57b55c..6e73e24 100644
---- a/conf/serialization.conf
-+++ b/conf/serialization.conf
-@@ -6,14 +6,19 @@ akka {
-         object-id-offset = "net.imadz.common.serialization.ObjectIdOffsetSerializer"
-         proto = "akka.remote.serialization.ProtobufSerializer"
-         saga-serializer = "net.imadz.infra.saga.serialization.SagaSerializer"
-+        saga-step-serializer = "net.imadz.infra.saga.serialization.SagaTransactionStepSerializer"
-      }
-      serialization-bindings {
-        "akka.contrib.persistence.mongodb.ObjectIdOffset" = object-id-offset
-        "com.google.protobuf.Message" = proto
-        "scalapb.GeneratedMessage" = proto
-        "net.imadz.common.CborSerializable" = jackson-cbor
-+
-        "net.imadz.infra.saga.StepExecutor$OperationResponse" =  saga-serializer
-        "net.imadz.infra.saga.StepExecutor$OperationSucceeded" =  saga-serializer
-+
-+       "net.imadz.infra.saga.StepExecutor$Event" =  saga-serializer
-+       "net.imadz.infra.saga.SagaTransactionStep" = saga-step-serializer
-      }
-      allow-java-serialization = on
-      warn-about-java-serializer-usage = off
+         document.getElementById('startBtn').onclick = () => {

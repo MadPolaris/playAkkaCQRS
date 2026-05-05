@@ -40,7 +40,7 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     case e: SagaProgressEvent.TransactionCompleted => Json.obj("type" -> "TransactionCompleted", "data" -> Json.obj("transactionId" -> e.transactionId, "traceId" -> e.traceId))
     case e: SagaProgressEvent.TransactionFailed => Json.obj("type" -> "TransactionFailed", "data" -> Json.obj("transactionId" -> e.transactionId, "reason" -> e.reason, "traceId" -> e.traceId))
     case e: SagaProgressEvent.TransactionSuspended => Json.obj("type" -> "TransactionSuspended", "data" -> Json.obj("transactionId" -> e.transactionId, "reason" -> e.reason, "traceId" -> e.traceId))
-    case e: SagaProgressEvent.DomainEventPublished => Json.obj("type" -> "DomainEventPublished", "data" -> Json.obj("transactionId" -> e.transactionId, "eventType" -> e.eventType, "detail" -> e.detail, "traceId" -> e.traceId))
+    case e: SagaProgressEvent.DomainEventPublished => Json.obj("type" -> e.eventType, "data" -> Json.obj("transactionId" -> e.transactionId, "detail" -> e.detail, "traceId" -> e.traceId, "isDomainEvent" -> true))
   }
 
   // --- Real-time WebSocket ---

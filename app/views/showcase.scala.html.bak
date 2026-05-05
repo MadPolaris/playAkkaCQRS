@@ -372,23 +372,31 @@
 
                             let next = { ...state, lastEvent: ev.type, reserved: {...state.reserved}, incoming: {...state.incoming} };
                             
-                            if (ev.type === 'BalanceChanged') {
-                                next.balance += update;
-                            } else if (ev.type === 'FundsReserved') {
-                                next.balance -= amount;
-                                next.reserved[txId] = amount;
-                            } else if (ev.type === 'FundsDeducted') {
-                                delete next.reserved[txId];
-                            } else if (ev.type === 'ReservationReleased') {
-                                next.balance += (state.reserved[txId] || 0);
-                                delete next.reserved[txId];
-                            } else if (ev.type === 'IncomingCreditsRecorded') {
-                                next.incoming[txId] = amount;
-                            } else if (ev.type === 'IncomingCreditsCommited') {
-                                next.balance += (state.incoming[txId] || 0);
-                                delete next.incoming[txId];
-                            } else if (ev.type === 'IncomingCreditsCanceled') {
-                                delete next.incoming[txId];
+                            switch(ev.type) {
+                                case 'BalanceChanged':
+                                    next.balance += update;
+                                    break;
+                                case 'FundsReserved':
+                                    next.balance -= amount;
+                                    next.reserved[txId] = amount;
+                                    break;
+                                case 'FundsDeducted':
+                                    delete next.reserved[txId];
+                                    break;
+                                case 'ReservationReleased':
+                                    next.balance += (state.reserved[txId] || 0);
+                                    delete next.reserved[txId];
+                                    break;
+                                case 'IncomingCreditsRecorded':
+                                    next.incoming[txId] = amount;
+                                    break;
+                                case 'IncomingCreditsCommited':
+                                    next.balance += (state.incoming[txId] || 0);
+                                    delete next.incoming[txId];
+                                    break;
+                                case 'IncomingCreditsCanceled':
+                                    delete next.incoming[txId];
+                                    break;
                             }
                             return next;
                         }

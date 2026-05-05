@@ -361,46 +361,20 @@
                 },
                 {
                     id: 'node-aggregate',
-                    initialState: { balance: 0, reserved: {}, incoming: {}, lastEvent: 'None' },
+                    initialState: { balance: 0, lastEvent: 'None' },
                     reducer: (state, ev) => {
+                        if (ev.type === 'AggregateStateUpdated') {
+                            return { ...state, balance: ev.data.balance };
+                        }
                         if (ev.data && ev.data.isDomainEvent) {
-                            const txId = ev.data.transactionId;
-                            const amountStr = (ev.data.detail || "").match(/Amount: ([\d.]+)/);
-                            const amount = amountStr ? parseFloat(amountStr[1]) : 0;
-                            const updateStr = (ev.data.detail || "").match(/Update: ([\d.-]+)/);
-                            const update = updateStr ? parseFloat(updateStr[1]) : 0;
-
-                            let next = { ...state, lastEvent: ev.type, reserved: {...state.reserved}, incoming: {...state.incoming} };
-                            
-                            if (ev.type === 'BalanceChanged') {
-                                next.balance += update;
-                            } else if (ev.type === 'FundsReserved') {
-                                next.balance -= amount;
-                                next.reserved[txId] = amount;
-                            } else if (ev.type === 'FundsDeducted') {
-                                delete next.reserved[txId];
-                            } else if (ev.type === 'ReservationReleased') {
-                                next.balance += (state.reserved[txId] || 0);
-                                delete next.reserved[txId];
-                            } else if (ev.type === 'IncomingCreditsRecorded') {
-                                next.incoming[txId] = amount;
-                            } else if (ev.type === 'IncomingCreditsCommited') {
-                                next.balance += (state.incoming[txId] || 0);
-                                delete next.incoming[txId];
-                            } else if (ev.type === 'IncomingCreditsCanceled') {
-                                delete next.incoming[txId];
-                            }
-                            return next;
+                            return { ...state, lastEvent: ev.type };
                         }
                         return state;
                     },
                     render: (state) => {
-                        const resCount = Object.keys(state.reserved).length;
-                        const incCount = Object.keys(state.incoming).length;
                         return `<span class="label">Credit Balance</span>
                                 <span class="info">Event: ${state.lastEvent}</span>
-                                <div style="font-size:0.7rem; color:#00d4ff; font-weight:bold; margin-top:2px;">Bal: ¥${state.balance.toFixed(2)}</div>
-                                <div style="font-size:0.6rem; color:#aaa;">[P: +${incCount} / -${resCount}]</div>`;
+                                <div style="font-size:0.8rem; color:#00d4ff; font-weight:bold; margin-top:5px;">Bal: ¥${state.balance}</div>`;
                     },
                     onRendered: (wrapper, state) => { if (state.lastEvent !== 'None') { wrapper.style.boxShadow = '0 0 15px #9c27b0'; setTimeout(() => wrapper.style.boxShadow = 'none', 500); } }
                 },
@@ -427,37 +401,15 @@
                     id: 'node-read-model',
                     initialState: { income: 0, expense: 0 },
                     reducer: (state, ev) => {
-                        if (ev.data && ev.data.isDomainEvent) {
-                            const amountStr = (ev.data.detail || "").match(/Amount: ([\d.]+)/) || (ev.data.detail || "").match(/Update: ([\d.-]+)/);
-                            const amount = amountStr ? parseFloat(amountStr[1]) : 0;
-                            
-                            switch(ev.type) {
-                                case 'BalanceChanged':
-                                    if (amount > 0) return { ...state, income: state.income + amount };
-                                    else return { ...state, expense: state.expense + Math.abs(amount) };
-                                
-                                case 'FundsReserved':
-                                    return { ...state, expense: state.expense + amount };
-                                
-                                case 'ReservationReleased':
-                                    return { ...state, expense: state.expense - amount };
-                                
-                                case 'IncomingCreditsRecorded':
-                                    return { ...state, income: state.income + amount };
-                                
-                                case 'FundsDeducted':
-                                case 'IncomingCreditsCommited':
-                                case 'IncomingCreditsCanceled':
-                                    // As per Scala handler: Ignored or handled elsewhere
-                                    return state;
-                            }
+                        if (ev.type === 'ReadModelStateUpdated') {
+                            return { ...state, income: ev.data.income, expense: ev.data.expense };
                         }
                         return state;
                     },
                     render: (state) => `
                         <span class="label">Monthly Report</span>
                         <div id="report-preview" style="font-size: 0.65rem; color: #a5d6a7; margin-top: 5px; text-align: left; padding-left: 10px;">
-                            Income: ¥${state.income.toFixed(2)}<br/>Expense: ¥${state.expense.toFixed(2)}
+                            Income: ¥${state.income}<br/>Expense: ¥${state.expense}
                         </div>
                     `
                 }
@@ -489,6 +441,8 @@
                 { isDomain: true, source: 'node-projection', target: 'node-read-model', color: '#4caf50' }
             ],
             eventDispatch: (ev) => {
+                if (ev.type === 'AggregateStateUpdated') return ['node-aggregate'];
+                if (ev.type === 'ReadModelStateUpdated') return ['node-read-model'];
                 if (ev.data && ev.data.isDomainEvent) return ['node-aggregate', 'node-journal', 'node-projection', 'node-read-model'];
                 if (ev.type === 'TransactionStarted' || ev.type === 'TransactionCompleted' || ev.type === 'TransactionFailed' || ev.type === 'TransactionSuspended') return ['coordinator'];
                 // Steps are updated automatically via their specific reducers
@@ -687,8 +641,17 @@
                    resumeBtn.style.display = 'block';
                    manualFixPanel.style.display = 'block';
                 }
-            } else if (event.type === 'DomainEventPublished') {
-                addLog(event.type, t(i18n.log.DomainEventPublished, data.eventType, data.detail));
+            if (event.data && event.data.isDomainEvent) {
+                // Fetch real balance (assuming user-1 is the affected user for demo)
+                fetch('/balance/user-1').then(r => r.json()).then(data => {
+                    engine.pushEvent({ type: 'AggregateStateUpdated', data: { balance: data.balance } });
+                }).catch(e => console.error("Balance fetch failed", e));
+                
+                // Fetch real projection status
+                fetch('/api/projection/status').then(r => r.json()).then(data => {
+                    const userSummary = data.summaries.find(s => s.userId === 'user-1') || { income: 0, expense: 0 };
+                    engine.pushEvent({ type: 'ReadModelStateUpdated', data: { income: userSummary.income, expense: userSummary.expense } });
+                }).catch(e => console.error("Projection fetch failed", e));
             }
         });
 
