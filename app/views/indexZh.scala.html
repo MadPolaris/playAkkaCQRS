@@ -549,57 +549,6 @@
     </div>
 </section>
 
-<!-- ==================== 免费部署资源 ==================== -->
-<section class="section" id="hosting">
-    <h2 class="section-title"><span class="dot" style="background:var(--warning)"></span> 免费部署指南</h2>
-    <p class="section-desc">
-        本技术栈需要 <strong>MongoDB</strong>（事件日志）+ <strong>MySQL</strong>（读模型）+ <strong>JVM 应用服务器</strong>。
-        三者都可以在真正的免费套餐上运行。以下是可用的平台。
-    </p>
-
-    <div class="host-grid">
-        <div class="host-card">
-            <h4>Fly.io</h4>
-            <div class="tier">免费 — 3 台共享 VM（每台 256MB）</div>
-            <p>将 Play 应用打包为 Docker 容器部署。内置全球边缘网络。适合应用服务器。</p>
-        </div>
-        <div class="host-card">
-            <h4>MongoDB Atlas</h4>
-            <div class="tier">免费 — M0 集群，512MB 存储</div>
-            <p>共享集群用于事件日志。demo 和开发完全够用。内置监控面板。</p>
-        </div>
-        <div class="host-card">
-            <h4>PlanetScale</h4>
-            <div class="tier">免费 — 1 个数据库，5GB 存储</div>
-            <p>MySQL 兼容，免费额度充裕。适合读模型。数据库分支功能支持安全的表结构变更。</p>
-        </div>
-        <div class="host-card">
-            <h4>Render</h4>
-            <div class="tier">免费 — Web 服务 + PostgreSQL</div>
-            <p>GitHub 推送即部署。Web 服务闲置后休眠（冷启动），demo 足够。</p>
-        </div>
-        <div class="host-card">
-            <h4>Oracle Cloud 永久免费</h4>
-            <div class="tier">免费 — 4 核 ARM，24GB 内存 VM</div>
-            <p>最慷慨的免费计算资源。用 Docker Compose 在一台机器上跑全套。</p>
-        </div>
-        <div class="host-card">
-            <h4>Railway</h4>
-            <div class="tier">每月 $5 额度，无时间限制</div>
-            <p>一键部署，内置 MySQL 和 MongoDB 模板。比 Fly.io 更简单。</p>
-        </div>
-    </div>
-
-    <div style="margin-top:28px; background:var(--bg-alt); border:1px solid var(--border); border-radius:10px; padding:22px;">
-        <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:8px;">推荐组合方案</h4>
-        <p style="color:var(--fg-muted); font-size:0.84rem;">
-            <strong>Fly.io</strong>（应用服务器）+ <strong>MongoDB Atlas M0</strong>（事件日志）+ <strong>PlanetScale</strong>（读模型）。
-            三个平台都有永不过期的免费套餐。总费用：$0/月。
-            只需要一份 <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">fly.toml</code> 加上几个环境变量配置连接字符串即可部署上线。
-        </p>
-    </div>
-</section>
-
 <footer class="footer">
     <p>
         技术栈：<a href="https://www.playframework.com/">Play Framework</a> ·

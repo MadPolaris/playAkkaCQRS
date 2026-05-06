@@ -572,57 +572,6 @@
     </div>
 </section>
 
-<!-- ==================== FREE HOSTING RESOURCES ==================== -->
-<section class="section" id="hosting">
-    <h2 class="section-title"><span class="dot" style="background:var(--warning)"></span> Deploy Your Own — Free Tier Guide</h2>
-    <p class="section-desc">
-        This stack needs <strong>MongoDB</strong> (event journal) + <strong>MySQL</strong> (read model) + <strong>a JVM app server</strong>.
-        All three can run on genuine free tiers. Here are the platforms that work.
-    </p>
-
-    <div class="host-grid">
-        <div class="host-card">
-            <h4>Fly.io</h4>
-            <div class="tier">Free — 3 shared VMs (256MB each)</div>
-            <p>Deploy the Play app as a Docker container. Global edge network included. Ideal for the app server.</p>
-        </div>
-        <div class="host-card">
-            <h4>MongoDB Atlas</h4>
-            <div class="tier">Free — M0 cluster, 512MB storage</div>
-            <p>Shared cluster for the event journal. Ample for demo and development workloads. Monitoring dashboard included.</p>
-        </div>
-        <div class="host-card">
-            <h4>PlanetScale</h4>
-            <div class="tier">Free — 1 database, 5GB storage</div>
-            <p>MySQL-compatible with generous free tier. Great for the read model. Database branching for safe schema changes.</p>
-        </div>
-        <div class="host-card">
-            <h4>Render</h4>
-            <div class="tier">Free — Web Service + PostgreSQL</div>
-            <p>GitHub-push deploy. Web service sleeps after inactivity (cold start), but fine for demos.</p>
-        </div>
-        <div class="host-card">
-            <h4>Oracle Cloud Always Free</h4>
-            <div class="tier">Free — 4 ARM cores, 24GB RAM VM</div>
-            <p>The most generous free compute tier. Run the entire stack on one VM with Docker Compose.</p>
-        </div>
-        <div class="host-card">
-            <h4>Railway</h4>
-            <div class="tier">$5 credit/month, no time limit</div>
-            <p>One-click deploys with built-in MySQL and MongoDB templates. Easier UX than Fly.io.</p>
-        </div>
-    </div>
-
-    <div style="margin-top:28px; background:var(--bg-alt); border:1px solid var(--border); border-radius:10px; padding:22px;">
-        <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:8px;">Recommended combo</h4>
-        <p style="color:var(--fg-muted); font-size:0.84rem;">
-            <strong>Fly.io</strong> (app server) + <strong>MongoDB Atlas M0</strong> (event journal) + <strong>PlanetScale</strong> (read model).
-            All three have free tiers that don't expire. Total cost: $0/month.
-            A single <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">fly.toml</code> + environment variables for connection strings is all you need.
-        </p>
-    </div>
-</section>
-
 <!-- ==================== FOOTER ==================== -->
 <footer class="footer">
     <p>
