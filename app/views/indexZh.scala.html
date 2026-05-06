@@ -4,7 +4,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>PlayAkkaCQRS — 反应式 CQRS/ES 演示项目</title>
+    <title>反应式 MES 内核 — 面向 Fab 晶圆厂</title>
     <style>
         :root {
             --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
@@ -39,7 +39,6 @@
             padding: 6px 14px; border-radius: 6px; transition: all 0.15s;
         }
         .nav-link:hover { color: var(--fg); background: var(--bg-alt); }
-        .nav-link.lang { border: 1px solid var(--border); }
 
         .hero {
             max-width: 1200px; margin: 0 auto; padding: 80px 24px 60px;
@@ -52,7 +51,7 @@
         }
         .hero h1 { font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 16px; }
         .hero h1 span.grad { background: linear-gradient(135deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .hero p.lead { font-size: 1.15rem; color: var(--fg-muted); max-width: 680px; margin: 0 auto 32px; }
+        .hero p.lead { font-size: 1.15rem; color: var(--fg-muted); max-width: 720px; margin: 0 auto 32px; }
         .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
         .btn {
             display: inline-flex; align-items: center; gap: 6px;
@@ -72,6 +71,55 @@
         .section-title .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .section-desc { color: var(--fg-muted); margin-bottom: 32px; font-size: 0.95rem; max-width: 720px; }
 
+        .story-box {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
+            padding: 32px; margin-bottom: 32px;
+        }
+        .story-box .big-number {
+            font-size: 3rem; font-weight: 800; letter-spacing: -0.03em;
+            background: linear-gradient(135deg, var(--danger), var(--orange));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            line-height: 1.1; margin-bottom: 8px;
+        }
+        .story-box .source {
+            font-size: 0.75rem; color: var(--fg-subtle); margin-top: 16px;
+            border-top: 1px solid var(--border); padding-top: 16px;
+        }
+        .story-insight {
+            background: rgba(248, 81, 73, 0.06); border-left: 3px solid var(--danger);
+            padding: 16px 20px; border-radius: 0 8px 8px 0; margin-top: 20px;
+        }
+        .story-insight p { color: var(--fg-muted); font-size: 0.9rem; }
+
+        .pain-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 24px; }
+        .pain-item {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+            padding: 20px;
+        }
+        .pain-item h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; color: var(--danger); }
+        .pain-item p { color: var(--fg-muted); font-size: 0.84rem; }
+
+        .roadmap { display: flex; flex-direction: column; gap: 0; margin-top: 24px; }
+        .roadmap-item {
+            display: flex; gap: 20px; padding: 24px 0; border-bottom: 1px solid var(--border);
+            align-items: flex-start;
+        }
+        .roadmap-item:last-child { border-bottom: none; }
+        .roadmap-marker {
+            width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 0.85rem; font-weight: 800; flex-shrink: 0;
+        }
+        .roadmap-marker.done { background: rgba(63, 185, 80, 0.15); color: var(--success); border: 2px solid var(--success); }
+        .roadmap-marker.next { background: rgba(168, 85, 247, 0.12); color: var(--purple); border: 2px solid var(--purple); }
+        .roadmap-body h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+        .roadmap-body p { color: var(--fg-muted); font-size: 0.84rem; }
+        .roadmap-body .badge {
+            display: inline-block; font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .badge-done { background: rgba(63,185,80,0.12); color: var(--success); }
+        .badge-explore { background: rgba(168,85,247,0.12); color: var(--purple); }
+
         .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
         .card {
             background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
@@ -85,6 +133,7 @@
         .card-link:hover { text-decoration: underline; }
         .card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
         .tag { font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(88, 166, 255, 0.12); color: var(--accent); }
+        .fab-tag { font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(248, 129, 73, 0.12); color: var(--orange); }
 
         .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
         .feature-item { padding: 20px; border-left: 2px solid var(--border); }
@@ -99,7 +148,7 @@
         .pillar-icon { font-size: 2.2rem; margin-bottom: 12px; }
         .pillar h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
         .pillar p { color: var(--fg-muted); font-size: 0.82rem; }
-        .pillar .akka-note { margin-top: 12px; font-size: 0.75rem; color: var(--accent); font-weight: 600; }
+        .pillar .fab-note { margin-top: 12px; font-size: 0.75rem; color: var(--accent); font-weight: 600; }
 
         .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
         table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
@@ -108,6 +157,20 @@
         td { color: var(--fg); }
         td.muted { color: var(--fg-muted); }
         tr:last-child td { border-bottom: none; }
+
+        .map-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 24px; }
+        .map-table th, .map-table td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border); }
+        .map-table th { background: var(--bg-alt); font-weight: 700; color: var(--fg-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .map-table td.pain { color: var(--danger); font-weight: 600; }
+        .map-table td.fix { color: var(--success); }
+
+        .cta-section {
+            background: linear-gradient(135deg, rgba(31, 111, 235, 0.08), rgba(163, 113, 247, 0.08));
+            border: 1px solid var(--border); border-radius: 12px; padding: 40px; text-align: center;
+        }
+        .cta-section h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.02em; }
+        .cta-section p { color: var(--fg-muted); font-size: 0.95rem; margin-bottom: 24px; max-width: 640px; margin-left: auto; margin-right: auto; }
+        .cta-section .cta-links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 
         .host-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
         .host-card {
@@ -144,9 +207,11 @@
         @@media (max-width: 768px) {
             .hero h1 { font-size: 1.8rem; }
             .header-inner { flex-wrap: wrap; height: auto; padding: 10px 0; }
-            .card-grid, .pillar-grid, .feature-list, .host-grid { grid-template-columns: 1fr; }
+            .card-grid, .pillar-grid, .feature-list, .host-grid, .pain-grid { grid-template-columns: 1fr; }
             .arch-layer.app { margin: 0 8px; }
             .arch-layer.domain { margin: 0 18px; }
+            .story-box .big-number { font-size: 2rem; }
+            .roadmap-item { flex-direction: column; gap: 12px; }
         }
     </style>
 </head>
@@ -155,213 +220,328 @@
 <header class="header">
     <div class="header-inner">
         <a href="/zh" class="logo">
-            <span class="logo-icon">⚡</span> PlayAkkaCQRS
+            <span class="logo-icon">⚡</span> 反应式 MES 内核
         </a>
         <nav class="nav-links">
-            <a href="#architecture" class="nav-link">架构</a>
+            <a href="#problem" class="nav-link">问题</a>
+            <a href="#solution" class="nav-link">路线图</a>
+            <a href="#showcases" class="nav-link">在线演示</a>
             <a href="#reactive" class="nav-link">反应式</a>
-            <a href="#event-sourcing" class="nav-link">事件溯源</a>
-            <a href="#showcases" class="nav-link">演示</a>
-            <a href="#hosting" class="nav-link">免费资源</a>
+            <a href="#event-sourcing" class="nav-link">CQRS/ES</a>
             <a href="/showcase" class="nav-link">Saga ↗</a>
             <a href="/projection-showcase" class="nav-link">Projection ↗</a>
             <a href="/ddd-guide" class="nav-link">DDD雷达 ↗</a>
-            <a href="/" class="nav-link lang">EN</a>
+            <a href="/" class="nav-link" style="border:1px solid var(--border);">EN</a>
         </nav>
     </div>
 </header>
 
+<!-- ==================== HERO ==================== -->
 <section class="hero">
-    <div class="hero-badge">参考实现</div>
+    <div class="hero-badge">开源 · MES 内核</div>
     <h1>
-        <span class="grad">反应式 CQRS/ES</span><br>
-        JVM 平台实践
+        2000 片晶圆。<br>
+        <span class="grad">158 万行记录。</span><br>
+        一个事务。
     </h1>
     <p class="lead">
-        一个面向生产环境的领域驱动设计 + 命令查询职责分离 + 事件溯源 + Saga 模式的完整演示项目。
-        基于 Scala、Akka 和 Play Framework 构建。
-        探索架构设计、观察事件如何在系统中实时流转，理解为什么反应式系统能应对大规模挑战。
+        西门子/HPE 的一份技术报告中披露：一个 Fab MES 的批次（Lot）在一个数据库事务中
+        写入了 1,580,003 行记录。解决方案？存储过程——一项 30 年前的技术。
+        更关键的是：其中 150 万条记录根本不需要立刻使用，它们属于后置环节。
+        但因为只能用数据库事务保证一致性，下游的写入压力被硬生生塞进了同一个事务。
+        <br><br>
+        <strong>如果换一条路呢？</strong>
+        一个开源的、追求 6 个 9 可靠性的反应式 MES 核心引擎。
+        用事件溯源取代巨型事务，用 Saga 取代存储过程，
+        用流批一体的 DAG 执行引擎编排跨系统流程。
+        <br><br>
+        里程碑 1 和 2 已完成上线。里程碑 3 和 4——我们希望<em>与 Fab 行业的人一起定义</em>。
     </p>
     <div class="hero-actions">
-        <a href="/projection-showcase" class="btn btn-primary">▶ 在线演示</a>
-        <a href="/ddd-guide" class="btn btn-outline">DDD 任务雷达</a>
+        <a href="#problem" class="btn btn-primary">了解问题</a>
+        <a href="/projection-showcase" class="btn btn-outline">▶ 在线演示</a>
         <a href="https://github.com" class="btn btn-outline">GitHub ↗</a>
     </div>
 </section>
 
-<!-- ==================== 架构一览 ==================== -->
-<section class="section" id="architecture">
-    <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> 架构一览</h2>
+<!-- ==================== 问题 ==================== -->
+<section class="section" id="problem">
+    <h2 class="section-title"><span class="dot" style="background:var(--danger)"></span> 以数据库为核心的架构死胡同</h2>
     <p class="section-desc">
-        系统遵循<strong>洋葱架构</strong>，具有严格的依赖方向规则。
-        领域核心是纯 Scala 代码——不依赖任何框架，不执行 I/O。应用层编排领域逻辑。基础设施层对接外部系统。
-        这是高吞吐量金融系统中常见的架构模式。
+        这不是虚构的稻草人。这是西门子/HPE 在半导体制造领域的真实案例。
     </p>
 
-    <div class="arch-diagram">
-        <div class="arch-layer infra">
-            基础设施层 — Play 控制器、MongoDB 事件日志、MySQL 读库、Protobuf 序列化
+    <div class="story-box">
+        <div class="big-number">1,580,003</div>
+        <p style="font-size:1.1rem; font-weight:600;">行记录，在一个数据库事务中。仅仅为了一个 2000 片晶圆的 Lot。</p>
+        <p style="color:var(--fg-muted); margin-top:8px;">
+            解决方案是什么？存储过程。一项无法做单元测试、无法做版本控制、无法水平扩展的 30 年前的技术。
+        </p>
+
+        <div class="story-insight">
+            <p><strong>关键问题：</strong>其中 1,500,000 条记录根本不需要在当前步骤立刻使用。
+            它们属于<em>下游</em>工序——质量检查、统计过程控制（SPC）、机台历史记录。
+            但因为唯一的可靠性保证是数据库事务的 ACID，所有数据被硬塞进一个原子写操作。
+            下游的写入压力被迁移到了上游，整个流程慢到了最大事务的速度。</p>
         </div>
-        <div class="arch-arrow">▲ 依赖注入</div>
-        <div class="arch-layer app">
-            应用层 — 聚合根 (EventSourcedBehavior)、Saga 事务协调器、投影处理器、应用服务
+
+        <div class="source">
+            来源：Siemens / HPE — 半导体 MES 事务分析报告。每一个处理过大 Lot 事务的 Fab 工程师都体会过这种痛苦。
         </div>
-        <div class="arch-arrow">▲ 依赖</div>
-        <div class="arch-layer domain">
-            领域层 — 实体、值对象、领域事件、不变量规则（零外部依赖）
+    </div>
+
+    <div class="pain-grid">
+        <div class="pain-item">
+            <h4>机台等待 = 产能损失</h4>
+            <p>巨型事务持有锁期间，机台处于空闲等待状态。在 Fab 里，每分钟的机台闲置都是不可挽回的营收损失。</p>
         </div>
-        <div class="arch-side">
-            <span>MongoDB — 事件日志（写）</span>
-            <span>MySQL — 投影存储（读）</span>
-            <span>Akka 集群分片</span>
-            <span>Akka 持久化</span>
-            <span>Akka 投影</span>
+        <div class="pain-item">
+            <h4>跨系统状态漂移</h4>
+            <p>MES 显示晶圆在工序 47。EAP 显示工序 46。RMS 里根本没有记录。这些不一致悄无声息地导致错误派工和错误配方。</p>
+        </div>
+        <div class="pain-item">
+            <h4>脆弱的故障恢复</h4>
+            <p>一个 158 万行的事务执行到一半失败，恢复全靠人工。数小时的停机。没有自动补偿，没有部分进度保留。</p>
+        </div>
+        <div class="pain-item">
+            <h4>吞吐量天花板</h4>
+            <p>一个月产 10 万片晶圆的 Fab，每片数百道工序，产生的海量并发事件会直接击穿请求-响应架构的峰值处理能力。</p>
         </div>
     </div>
 </section>
 
-<!-- ==================== 反应式宣言 ==================== -->
-<section class="section" id="reactive">
-    <h2 class="section-title"><span class="dot" style="background:var(--purple)"></span> 反应式宣言</h2>
+<!-- ==================== 解法 + 路线图 ==================== -->
+<section class="section" id="solution">
+    <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> 换一条路</h2>
     <p class="section-desc">
-        2014 年由 Akka 创始人 Jonas Bonér 发布，
-        <a href="https://www.reactivemanifesto.org/" style="color:var(--accent)">《反应式宣言》</a>
-        定义了构建弹性、灵敏、可伸缩系统的四大基石。
-        Akka 从设计之初就完全贯彻了这些理念。
+        问题的根源不是"数据库不够快"，而是<strong>一致性边界被划错了地方</strong>。
+        150 万条后置数据不应该和当前步骤放在同一个事务里。
+        跨系统的数据对齐不应该依赖数据库外键，而应该靠事件驱动的最终一致性。
+        流程编排不应该硬编码在存储过程中，而应该是显式的、可测试的、可演进的 DAG（有向无环图）。
     </p>
 
-    <div class="pillar-grid">
-        <div class="pillar">
-            <div class="pillar-icon">📨</div>
-            <h3>消息驱动</h3>
-            <p>异步消息传递是系统的骨架。松耦合、位置透明、非阻塞通信支撑了弹性和伸缩性。</p>
-            <div class="akka-note">Akka：Actor 模型的异步消息传递</div>
-        </div>
-        <div class="pillar">
-            <div class="pillar-icon">🛡️</div>
-            <h3>韧性</h3>
-            <p>故障被隔离在单个 Actor 内部。监督层级树控制故障传播，系统自我修复，不会产生雪崩效应。</p>
-            <div class="akka-note">Akka：监督策略、断路器、退避重试</div>
-        </div>
-        <div class="pillar">
-            <div class="pillar-icon">📈</div>
-            <h3>弹性</h3>
-            <p>根据负载动态伸缩。集群分片将实体分布到多个节点，自动重新平衡，无需手动干预。</p>
-            <div class="akka-note">Akka：集群分片、自适应负载均衡</div>
-        </div>
-        <div class="pillar">
-            <div class="pillar-icon">⚡</div>
-            <h3>灵敏性</h3>
-            <p>在任何条件下都提供快速、一致的响应时间。非阻塞 I/O 和背压机制确保高负载下延迟仍然可控。</p>
-            <div class="akka-note">Akka：全链路非阻塞、Reactive Streams 背压</div>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== 事件溯源 + CQRS ==================== -->
-<section class="section" id="event-sourcing">
-    <h2 class="section-title"><span class="dot" style="background:var(--orange)"></span> 事件溯源 × CQRS</h2>
-    <p class="section-desc">
-        事件溯源和 CQRS 是互补的模式。结合反应式原则，它们构成了一个强大的系统基础，
-        适用于需要可审计性、可伸缩性和高韧性的场景。Akka 为两者提供了开箱即用的一等支持。
-    </p>
-
-    <div class="feature-list">
-        <div class="feature-item" style="border-left-color: var(--accent)">
-            <h4>事件溯源</h4>
-            <p>系统状态通过重放不可变的事件日志来重建。每一次状态变更都被捕获为领域事件——提供完整的审计追踪、时间点查询和可靠的调试能力。Akka Persistence 自动处理事件日志和快照。</p>
-        </div>
-        <div class="feature-item" style="border-left-color: var(--success)">
-            <h4>CQRS — 命令查询职责分离</h4>
-            <p>命令修改状态（写端，事件溯源）。查询读取优化的投影（读端，MySQL）。这种分离让两端可以独立伸缩，各自使用最适合的数据模型。</p>
-        </div>
-        <div class="feature-item" style="border-left-color: var(--warning)">
-            <h4>实时投影（ETL 流处理）</h4>
-            <p>Akka Projections 将事件流转换为读模型表。每个投影订阅标签事件，事务性地处理它们并更新 MySQL——提供最终一致性的查询模型，保证至少一次投递。</p>
-        </div>
-        <div class="feature-item" style="border-left-color: var(--purple)">
-            <h4>Saga 模式（TCC 分布式事务）</h4>
-            <p>基于 Try-Confirm/Cancel 模式的分布式事务。每个步骤都有 Prepare → Commit → Compensate 三个阶段。失败触发向后补偿。挂起的事务支持人工介入。全部由事件溯源的 Saga Actor 协调。</p>
-        </div>
-    </div>
-
-    <div class="table-wrap" style="margin-top: 32px;">
-        <table>
+    <div class="table-wrap" style="margin-bottom:40px;">
+        <table class="map-table">
             <thead>
-                <tr><th>能力维度</th><th>传统 CRUD</th><th>事件溯源 + CQRS</th></tr>
+                <tr><th>Fab 痛点</th><th>反应式解法</th></tr>
             </thead>
             <tbody>
-                <tr><td>审计追踪</td><td class="muted">手动日志，不完整</td><td>每次状态变更都是事件——完整历史</td></tr>
-                <tr><td>读性能</td><td class="muted">被写操作竞争</td><td>专用读模型，独立伸缩</td></tr>
-                <tr><td>调试</td><td class="muted">"下午2点的状态是什么？"——很难回答</td><td>重放事件到任意时间点</td></tr>
-                <tr><td>模式演进</td><td class="muted">迁移是破坏性的</td><td>事件只追加；上抛器处理演进</td></tr>
-                <tr><td>系统集成</td><td class="muted">批量 ETL，轮询</td><td>实时事件流，推送式</td></tr>
-                <tr><td>故障恢复</td><td class="muted">重试循环、死信队列</td><td>监督层级 + Saga 补偿</td></tr>
+                <tr><td class="pain">158 万行巨型事务</td><td class="fix">Saga 将事务拆为独立步骤，只锁定<em>当前</em>需要的数据。下游写入通过事件异步驱动，不阻塞当前流程。</td></tr>
+                <tr><td class="pain">跨系统状态不一致</td><td class="fix">事件溯源提供不可篡改的完整审计日志。投影订阅事件流，各系统的读模型通过事件流保持最终一致。</td></tr>
+                <tr><td class="pain">机台等待数据就绪</td><td class="fix">异步消息驱动消除同步阻塞。机台发信号即刻得到响应，后续处理在后台完成。</td></tr>
+                <tr><td class="pain">故障恢复靠人工</td><td class="fix">Saga 自动补偿已完成的步骤，监督层级树自动重启失败的组件。已知故障模式无需人工介入。</td></tr>
+                <tr><td class="pain">峰值吞吐扩展</td><td class="fix">集群分片将实体实例分布至多节点。水平扩展无单点瓶颈。每个聚合根独立处理自身事件。</td></tr>
             </tbody>
         </table>
+    </div>
+
+    <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:16px; letter-spacing:-0.02em;">
+        工程里程碑 — 一步步构建内核
+    </h3>
+
+    <div class="roadmap">
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M1</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">线上质量 — 已完成</span>
+                <h4>Saga 分布式事务协调器</h4>
+                <p>将巨型事务拆分为独立的 Try-Confirm/Cancel 步骤。只锁定当前需要的资源，失败自动补偿。挂起事务支持通过紧急修复面板人工介入。直接回应 158 万行巨型事务的难题。</p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M2</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">线上质量 — 已完成</span>
+                <h4>流批一体多层级 DAG 执行引擎</h4>
+                <p>编排跨组织边界的复杂流程，集成遗留系统，在统一的 DAG 管道中同时处理流式和批量工作负载。DAG 中的每个节点均可独立版本化、测试和部署。</p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M3</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">探索中 — 共同定义</span>
+                <h4>面向制造业控制论的 CIMs iPaaS · M2 抽象层</h4>
+                <p>将 M2 抽象为一个可配置的计算机集成制造系统集成平台。跨 MES、EAP、RMS、SPC、WMS、RTD 等异构制造系统，编排多个 DAG 执行引擎。类似于 iPaaS，但专为制造业控制论范畴构建。</p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M4</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">探索中 — 共同定义</span>
+                <h4>即时反馈闭环 · 自适应 DAG 引擎</h4>
+                <p>闭合控制论环路。DAG 规则基于实时量测数据与过程状态动态演进。引擎根据工厂现场<em>此刻正在发生</em>的情况自适应调整路由、配方和排程——而不是几小时前的计划。</p>
+            </div>
+        </div>
     </div>
 </section>
 
 <!-- ==================== 在线演示 ==================== -->
 <section class="section" id="showcases">
-    <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> 在线演示</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> 在线演示 — 看到实际运行的代码</h2>
     <p class="section-desc">
-        三个交互式演示分别展示架构的不同层次。它们连接到同一个实时系统——在一个演示中的操作会反映到其他演示中。
+        三个交互式 Demo 连接到同一个实时系统。每个展示架构的不同层次——从分布式事务、实时事件流到完整构件全景。
     </p>
 
     <div class="card-grid">
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
             <div class="card-tags"><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">补偿</span></div>
-            <h3>Saga 事务演示</h3>
-            <p>观察分布式转账如何流经 Saga 状态机。注入故障，观察自动重试、补偿操作和人工修复流程的实时执行。</p>
-            <a href="/showcase" class="card-link">打开演示 →</a>
+            <h3>Saga 事务展示</h3>
+            <p>一个分布式转账流程在 Saga 状态机中执行。观察 Prepare → Commit → Compensate 的完整生命周期。在任意步骤注入故障。实时观察自动重试、向后补偿和挂起事务的恢复过程。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：MES ↔ EAP ↔ RMS 的跨系统数据对齐</p>
+            <br>
+            <a href="/showcase" class="card-link">打开展示 →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(63,185,80,0.12);color:var(--success)">📊</div>
-            <div class="card-tags"><span class="tag">CQRS</span><span class="tag">投影</span><span class="tag">读模型</span></div>
+            <div class="card-tags"><span class="tag">CQRS</span><span class="tag">投影</span><span class="tag">事件流</span></div>
             <h3>投影流程看板</h3>
-            <p>存款、取款、转账。观察领域事件如何从聚合根 → 事件日志 → 投影处理器 → 读模型卡片，以 SVG 粒子动画实时呈现。</p>
+            <p>存款、取款、转账。观察领域事件从聚合根 → 事件日志（MongoDB）→ 投影处理器 → 读模型（MySQL），以 SVG 粒子动画实时追踪完整管道。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：从机台事件信号到实时数据看板的事件流管道</p>
+            <br>
             <a href="/projection-showcase" class="card-link">打开看板 →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(88,166,255,0.12);color:var(--accent)">🎯</div>
             <div class="card-tags"><span class="tag">DDD</span><span class="tag">洋葱架构</span><span class="tag">依赖关系</span></div>
-            <h3>DDD 架构任务雷达</h3>
-            <p>探索 36+ 个 DDD 构件，覆盖领域层、应用层和基础设施层。查看依赖关系边、设计约束和每个组件的源码路径。</p>
+            <h3>DDD 架构雷达</h3>
+            <p>探索 36+ DDD 构件，覆盖领域层、应用层和基础设施层。切换依赖关系边，点击任意构件查看设计约束和源码路径。完整的代码架构，可视化呈现。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：面向贡献者的内核代码全景地图</p>
+            <br>
             <a href="/ddd-guide" class="card-link">打开雷达 →</a>
         </div>
     </div>
 </section>
 
+<!-- ==================== CTA：邀请协作 ==================== -->
+<section class="section" id="collaborate">
+    <div class="cta-section">
+        <h2>M3 和 M4 — 与我们一起定义</h2>
+        <p>
+            M1 和 M2 已经以线上质量运行。但 M3 和 M4 真正的业务场景，
+            只有每天在 Fab 现场的人才知道答案。
+            <br><br>
+            如果你是 Fab 工程师、自动化架构师或制造系统专家——
+            我们希望听到那些真正让你夜不能寐的跨系统协同问题。
+            哪些集成点最脆弱？哪些批次间的变异需要实时响应？
+            如果可以定义下一层，你会构建什么？
+        </p>
+        <div class="cta-links">
+            <a href="https://github.com" class="btn btn-primary">GitHub 讨论区</a>
+            <a href="https://github.com" class="btn btn-outline">提交 Issue</a>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== 反应式宣言 ==================== -->
+<section class="section" id="reactive">
+    <h2 class="section-title"><span class="dot" style="background:var(--purple)"></span> 反应式基石</h2>
+    <p class="section-desc">
+        <a href="https://www.reactivemanifesto.org/" style="color:var(--accent)">《反应式宣言》</a>
+        的四大支柱不是抽象原则——它们直接对应 Fab 控制系统的核心需求。
+        基于 <strong>Akka</strong>（反应式宣言作者 Jonas Bon&eacute;r 创建的宣言参考实现）。
+    </p>
+
+    <div class="pillar-grid">
+        <div class="pillar">
+            <div class="pillar-icon">📨</div>
+            <h3>消息驱动</h3>
+            <p>异步消息传递是系统的骨架。松耦合和位置透明使每个子系统可以独立伸缩——EAP 信号、MES 状态变更、SPC 告警全部以消息形式流转。</p>
+            <div class="fab-note">Fab：机台信号作为消息到达，永不阻塞发送方</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">🛡️</div>
+            <h3>韧性</h3>
+            <p>故障被隔离在单个组件内部。监督层级树阻止故障传播——一个 EAP 连接失败不会级联导致整个 Fab 控制系统崩溃。</p>
+            <div class="fab-note">Fab：单台机台通信故障不拖垮 MES</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">📈</div>
+            <h3>弹性</h3>
+            <p>根据负载动态伸缩。集群分片将实体实例分布至多节点——新产线投产时，系统无缝吸收新负载，无需重新架构。</p>
+            <div class="fab-note">Fab：新增产线无需推倒重来</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">⚡</div>
+            <h3>灵敏性</h3>
+            <p>任何条件下都提供快速、一致的响应时间。非阻塞 I/O 和背压机制确保延迟可预测——这是 Fab 运营所依赖的即时反馈环。</p>
+            <div class="fab-note">Fab：机台派工在毫秒级响应，不是秒级</div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== 事件溯源 + CQRS ==================== -->
+<section class="section" id="event-sourcing">
+    <h2 class="section-title"><span class="dot" style="background:var(--orange)"></span> 事件溯源 &times; CQRS</h2>
+    <p class="section-desc">
+        事件溯源和 CQRS 是驱动反应式 MES 内核的两个核心模式。
+        它们解决了数据库中心架构无法解决的问题。
+    </p>
+
+    <div class="feature-list">
+        <div class="feature-item" style="border-left-color: var(--accent)">
+            <h4>事件溯源</h4>
+            <p>系统状态通过重放不可变的事件日志来重建。每一次状态变更——机台分配、晶圆移动、配方执行——都被捕获为领域事件。完整的审计追踪、时间点查询（14:03:27 时状态是什么？）和可靠的调试能力。Akka Persistence 自动处理日志存储和快照。</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--success)">
+            <h4>CQRS — 读写分离</h4>
+            <p>命令修改写端状态（事件溯源聚合根）。查询读取优化的投影（MySQL）。写端只追加事件，保持极速。读端可自由去规范化、索引和优化，每种查询模式独立调优。</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--warning)">
+            <h4>实时投影</h4>
+            <p>Akka Projections 将事件流转换为读模型表。每个投影订阅特定聚合类型的标签事件，事务性处理并更新 MySQL——提供最终一致性的查询视图，保证至少一次投递。</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--purple)">
+            <h4>Saga 模式（TCC 分布式事务）</h4>
+            <p>无需分布式锁的分布式事务。Try-Confirm/Cancel：每个步骤先预留资源（Prepare），然后确认提交或补偿取消。失败触发向后补偿——只补偿 Prepare 成功的步骤。挂起事务支持人工介入。</p>
+        </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top: 32px;">
+        <table>
+            <thead>
+                <tr><th>能力维度</th><th>数据库中心（存储过程）</th><th>事件溯源 + CQRS</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>审计追踪</td><td class="muted">触发器手动记录，不完整</td><td>每次状态变更是不可变事件——完整历史</td></tr>
+                <tr><td>读取性能</td><td class="muted">被同一事务中的写操作竞争</td><td>专用读模型，每种查询模式独立优化和伸缩</td></tr>
+                <tr><td>调试</td><td class="muted">"下午2点的状态是什么？"——从备份猜测</td><td>确定性重放事件到任意时间点</td></tr>
+                <tr><td>模式演进</td><td class="muted">破坏性迁移，存储过程版本管理噩梦</td><td>仅追加事件；上抛器无损处理模式演进</td></tr>
+                <tr><td>跨系统集成</td><td class="muted">批量 ETL、轮询、跨库外键</td><td>实时事件流；推送式投影保持所有系统对齐</td></tr>
+                <tr><td>故障恢复</td><td class="muted">人工介入，小时级停机</td><td>Saga 自动补偿 + 监督层级；已知故障模式自动恢复</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
 <!-- ==================== 免费部署资源 ==================== -->
 <section class="section" id="hosting">
-    <h2 class="section-title"><span class="dot" style="background:var(--warning)"></span> 免费部署资源指南</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--warning)"></span> 免费部署指南</h2>
     <p class="section-desc">
-        本项目需要 <strong>MongoDB</strong>（事件日志）+ <strong>MySQL</strong>（读模型）+ <strong>JVM 应用服务器</strong>。
-        以下是真正提供免费套餐的平台，可以跑起来完整的技术栈。
+        本技术栈需要 <strong>MongoDB</strong>（事件日志）+ <strong>MySQL</strong>（读模型）+ <strong>JVM 应用服务器</strong>。
+        三者都可以在真正的免费套餐上运行。以下是可用的平台。
     </p>
 
     <div class="host-grid">
         <div class="host-card">
             <h4>Fly.io</h4>
             <div class="tier">免费 — 3 台共享 VM（每台 256MB）</div>
-            <p>将 Play 应用打包为 Docker 容器部署。全球边缘网络。适合跑应用服务器。</p>
+            <p>将 Play 应用打包为 Docker 容器部署。内置全球边缘网络。适合应用服务器。</p>
         </div>
         <div class="host-card">
             <h4>MongoDB Atlas</h4>
             <div class="tier">免费 — M0 集群，512MB 存储</div>
-            <p>共享集群用于事件日志。demo 级别完全够用。内置监控面板。</p>
+            <p>共享集群用于事件日志。demo 和开发完全够用。内置监控面板。</p>
         </div>
         <div class="host-card">
             <h4>PlanetScale</h4>
             <div class="tier">免费 — 1 个数据库，5GB 存储</div>
-            <p>MySQL 兼容，免费额度很充裕。适合读模型。支持数据库分支，方便变更管理。</p>
+            <p>MySQL 兼容，免费额度充裕。适合读模型。数据库分支功能支持安全的表结构变更。</p>
         </div>
         <div class="host-card">
             <h4>Render</h4>
             <div class="tier">免费 — Web 服务 + PostgreSQL</div>
-            <p>GitHub 一键部署。Web 服务闲置后会休眠（有冷启动延迟），但用作 demo 足够。</p>
+            <p>GitHub 推送即部署。Web 服务闲置后休眠（冷启动），demo 足够。</p>
         </div>
         <div class="host-card">
             <h4>Oracle Cloud 永久免费</h4>
@@ -371,7 +551,7 @@
         <div class="host-card">
             <h4>Railway</h4>
             <div class="tier">每月 $5 额度，无时间限制</div>
-            <p>一键部署，内置 MySQL 和 MongoDB 模板。比 Fly.io 更简单的 UX。</p>
+            <p>一键部署，内置 MySQL 和 MongoDB 模板。比 Fly.io 更简单。</p>
         </div>
     </div>
 
@@ -379,7 +559,7 @@
         <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:8px;">推荐组合方案</h4>
         <p style="color:var(--fg-muted); font-size:0.84rem;">
             <strong>Fly.io</strong>（应用服务器）+ <strong>MongoDB Atlas M0</strong>（事件日志）+ <strong>PlanetScale</strong>（读模型）。
-            三个平台都有不会过期的免费套餐。总费用：$0/月。
+            三个平台都有永不过期的免费套餐。总费用：$0/月。
             只需要一份 <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">fly.toml</code> 加上几个环境变量配置连接字符串即可部署上线。
         </p>
     </div>
@@ -394,7 +574,7 @@
         <a href="https://www.reactivemanifesto.org/">反应式宣言</a>
     </p>
     <p style="margin-top:6px;">
-        事件日志：MongoDB &nbsp;|&nbsp; 读模型：MySQL &nbsp;|&nbsp; 序列化：Protobuf (ScalaPB) &nbsp;|&nbsp; 依赖注入：Guice
+        事件日志：MongoDB &nbsp;|&nbsp; 读模型：MySQL &nbsp;|&nbsp; 序列化：Protobuf (ScalaPB)
     </p>
 </footer>
 

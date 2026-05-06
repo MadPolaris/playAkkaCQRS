@@ -4,7 +4,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PlayAkkaCQRS — Reactive CQRS/ES Showcase</title>
+    <title>Reactive MES Kernel — for Fab Factories</title>
     <style>
         :root {
             --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
@@ -53,7 +53,7 @@
         }
         .hero h1 { font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 16px; }
         .hero h1 span.grad { background: linear-gradient(135deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .hero p.lead { font-size: 1.15rem; color: var(--fg-muted); max-width: 640px; margin: 0 auto 32px; }
+        .hero p.lead { font-size: 1.15rem; color: var(--fg-muted); max-width: 720px; margin: 0 auto 32px; }
         .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
         .btn {
             display: inline-flex; align-items: center; gap: 6px;
@@ -72,7 +72,59 @@
             display: flex; align-items: center; gap: 10px;
         }
         .section-title .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-        .section-desc { color: var(--fg-muted); margin-bottom: 32px; font-size: 0.95rem; max-width: 680px; }
+        .section-desc { color: var(--fg-muted); margin-bottom: 32px; font-size: 0.95rem; max-width: 720px; }
+
+        /* ---- Story Box ---- */
+        .story-box {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
+            padding: 32px; margin-bottom: 32px;
+        }
+        .story-box .big-number {
+            font-size: 3rem; font-weight: 800; letter-spacing: -0.03em;
+            background: linear-gradient(135deg, var(--danger), var(--orange));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            line-height: 1.1; margin-bottom: 8px;
+        }
+        .story-box .source {
+            font-size: 0.75rem; color: var(--fg-subtle); margin-top: 16px;
+            border-top: 1px solid var(--border); padding-top: 16px;
+        }
+        .story-insight {
+            background: rgba(248, 81, 73, 0.06); border-left: 3px solid var(--danger);
+            padding: 16px 20px; border-radius: 0 8px 8px 0; margin-top: 20px;
+        }
+        .story-insight p { color: var(--fg-muted); font-size: 0.9rem; }
+
+        /* ---- Pain Points ---- */
+        .pain-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 24px; }
+        .pain-item {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+            padding: 20px;
+        }
+        .pain-item h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; color: var(--danger); }
+        .pain-item p { color: var(--fg-muted); font-size: 0.84rem; }
+
+        /* ---- Roadmap ---- */
+        .roadmap { display: flex; flex-direction: column; gap: 0; margin-top: 24px; }
+        .roadmap-item {
+            display: flex; gap: 20px; padding: 24px 0; border-bottom: 1px solid var(--border);
+            align-items: flex-start;
+        }
+        .roadmap-item:last-child { border-bottom: none; }
+        .roadmap-marker {
+            width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 0.85rem; font-weight: 800; flex-shrink: 0;
+        }
+        .roadmap-marker.done { background: rgba(63, 185, 80, 0.15); color: var(--success); border: 2px solid var(--success); }
+        .roadmap-marker.next { background: rgba(168, 85, 247, 0.12); color: var(--purple); border: 2px solid var(--purple); }
+        .roadmap-body h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+        .roadmap-body p { color: var(--fg-muted); font-size: 0.84rem; }
+        .roadmap-body .badge {
+            display: inline-block; font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .badge-done { background: rgba(63,185,80,0.12); color: var(--success); }
+        .badge-explore { background: rgba(168,85,247,0.12); color: var(--purple); }
 
         /* ---- Cards ---- */
         .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
@@ -88,6 +140,7 @@
         .card-link:hover { text-decoration: underline; }
         .card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
         .tag { font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(88, 166, 255, 0.12); color: var(--accent); }
+        .fab-tag { font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(248, 129, 73, 0.12); color: var(--orange); }
 
         /* ---- Feature list ---- */
         .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
@@ -104,7 +157,7 @@
         .pillar-icon { font-size: 2.2rem; margin-bottom: 12px; }
         .pillar h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
         .pillar p { color: var(--fg-muted); font-size: 0.82rem; }
-        .pillar .akka-note { margin-top: 12px; font-size: 0.75rem; color: var(--accent); font-weight: 600; }
+        .pillar .fab-note { margin-top: 12px; font-size: 0.75rem; color: var(--accent); font-weight: 600; }
 
         /* ---- Comparison table ---- */
         .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
@@ -114,6 +167,22 @@
         td { color: var(--fg); }
         td.muted { color: var(--fg-muted); }
         tr:last-child td { border-bottom: none; }
+
+        /* ---- Solution mapping table ---- */
+        .map-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 24px; }
+        .map-table th, .map-table td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border); }
+        .map-table th { background: var(--bg-alt); font-weight: 700; color: var(--fg-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .map-table td.pain { color: var(--danger); font-weight: 600; }
+        .map-table td.fix { color: var(--success); }
+
+        /* ---- CTA ---- */
+        .cta-section {
+            background: linear-gradient(135deg, rgba(31, 111, 235, 0.08), rgba(163, 113, 247, 0.08));
+            border: 1px solid var(--border); border-radius: 12px; padding: 40px; text-align: center;
+        }
+        .cta-section h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.02em; }
+        .cta-section p { color: var(--fg-muted); font-size: 0.95rem; margin-bottom: 24px; max-width: 640px; margin-left: auto; margin-right: auto; }
+        .cta-section .cta-links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 
         /* ---- Hosting grid ---- */
         .host-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
@@ -154,9 +223,11 @@
         @@media (max-width: 768px) {
             .hero h1 { font-size: 1.8rem; }
             .header-inner { flex-wrap: wrap; height: auto; padding: 10px 0; }
-            .card-grid, .pillar-grid, .feature-list, .host-grid { grid-template-columns: 1fr; }
+            .card-grid, .pillar-grid, .feature-list, .host-grid, .pain-grid { grid-template-columns: 1fr; }
             .arch-layer.app { margin: 0 8px; }
             .arch-layer.domain { margin: 0 18px; }
+            .story-box .big-number { font-size: 2rem; }
+            .roadmap-item { flex-direction: column; gap: 12px; }
         }
     </style>
 </head>
@@ -166,14 +237,14 @@
 <header class="header">
     <div class="header-inner">
         <a href="/" class="logo">
-            <span class="logo-icon">⚡</span> PlayAkkaCQRS
+            <span class="logo-icon">⚡</span> Reactive MES Kernel
         </a>
         <nav class="nav-links">
-            <a href="#architecture" class="nav-link">Architecture</a>
+            <a href="#problem" class="nav-link">The Problem</a>
+            <a href="#solution" class="nav-link">Roadmap</a>
+            <a href="#showcases" class="nav-link">Live Demos</a>
             <a href="#reactive" class="nav-link">Reactive</a>
-            <a href="#event-sourcing" class="nav-link">EventSourcing</a>
-            <a href="#showcases" class="nav-link">Demos</a>
-            <a href="#hosting" class="nav-link">Free Hosting</a>
+            <a href="#event-sourcing" class="nav-link">CQRS/ES</a>
             <a href="/showcase" class="nav-link">Saga ↗</a>
             <a href="/projection-showcase" class="nav-link">Projection ↗</a>
             <a href="/ddd-guide" class="nav-link">DDD Radar ↗</a>
@@ -184,145 +255,153 @@
 
 <!-- ==================== HERO ==================== -->
 <section class="hero">
-    <div class="hero-badge">Reference Implementation</div>
+    <div class="hero-badge">Open Source · MES Kernel</div>
     <h1>
-        <span class="grad">Reactive CQRS/ES</span><br>
-        on the JVM
+        2,000 Wafers.<br>
+        <span class="grad">1.58 Million Rows.</span><br>
+        One Transaction.
     </h1>
     <p class="lead">
-        A production-grade showcase of Domain-Driven Design, Command Query Responsibility Segregation,
-        Event Sourcing, and the Saga pattern — built with Scala, Akka, and Play Framework.
-        Explore the architecture, watch live events flow through the system, and understand why
-        reactive systems win at scale.
+        Siemens/HPE documented a Fab MES batch Lot that writes 1,580,003 database rows
+        in a single transaction — using 30-year-old stored procedures.
+        1.5 million of those rows aren't even needed right now.
+        They're dragged in because the database is the only thing holding consistency together.
+        <br><br>
+        <strong>What if there's a better way?</strong>
+        An open-source reactive MES kernel targeting six nines of reliability.
+        Event sourcing instead of giant transactions. Sagas instead of stored procedures.
+        A streaming DAG execution engine that orchestrates across systems.
+        <br><br>
+        Milestones 1 &amp; 2 are live. Milestones 3 &amp; 4 — we want to define them
+        <em>with</em> the Fab industry.
     </p>
     <div class="hero-actions">
-        <a href="/projection-showcase" class="btn btn-primary">▶ Live Demo</a>
-        <a href="/ddd-guide" class="btn btn-outline">DDD Task Radar</a>
+        <a href="#problem" class="btn btn-primary">Read the Story</a>
+        <a href="/projection-showcase" class="btn btn-outline">▶ Live Demo</a>
         <a href="https://github.com" class="btn btn-outline">GitHub ↗</a>
     </div>
 </section>
 
-<!-- ==================== ARCHITECTURE ==================== -->
-<section class="section" id="architecture">
-    <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> Architecture at a Glance</h2>
+<!-- ==================== THE PROBLEM ==================== -->
+<section class="section" id="problem">
+    <h2 class="section-title"><span class="dot" style="background:var(--danger)"></span> The Database-Centric Dead End</h2>
     <p class="section-desc">
-        The system follows <strong>Onion Architecture</strong> with strict dependency rules.
-        The domain core is pure Scala — no framework, no I/O. Application services orchestrate
-        domain logic. Infrastructure adapts external systems. This is the same pattern used
-        in high-throughput financial systems.
+        This is not a straw man. It's a real case from Siemens/HPE in semiconductor manufacturing.
     </p>
 
-    <div class="arch-diagram">
-        <div class="arch-layer infra">
-            Infrastructure — Play Controllers, MongoDB Journal, MySQL Read-Side, Protobuf Serialization
+    <div class="story-box">
+        <div class="big-number">1,580,003</div>
+        <p style="font-size:1.1rem; font-weight:600;">rows in a single database transaction. For one Lot of 2,000 wafers.</p>
+        <p style="color:var(--fg-muted); margin-top:8px;">
+            The solution? A stored procedure. A 30-year-old technology that can't be unit-tested,
+            can't be version-controlled properly, and can't scale horizontally.
+        </p>
+
+        <div class="story-insight">
+            <p><strong>The kicker:</strong> 1,500,000 of those records aren't needed immediately.
+            They belong to <em>downstream</em> process steps — quality checks, statistical process control,
+            equipment history. But because the only consistency guarantee is the database transaction,
+            everything gets crammed into one atomic write. The downstream's write pressure gets
+            dragged upstream, and the whole process slows to the speed of the largest transaction.</p>
         </div>
-        <div class="arch-arrow">▲ depends on (via DI)</div>
-        <div class="arch-layer app">
-            Application — Aggregates (EventSourcedBehavior), Saga Transactor, Projection Handlers, Services
+
+        <div class="source">
+            Source: Siemens / HPE — semiconductor MES transaction analysis.
+            Every Fab engineer who has dealt with large Lot transactions knows this pain.
         </div>
-        <div class="arch-arrow">▲ depends on</div>
-        <div class="arch-layer domain">
-            Domain — Entity, ValueObject, DomainEvent, InvariantRule (zero external dependencies)
+    </div>
+
+    <div class="pain-grid">
+        <div class="pain-item">
+            <h4>Tool Waiting = Capacity Loss</h4>
+            <p>Giant transactions hold locks while tools sit idle. In a Fab, every minute of idle tool time is lost revenue that can never be recovered.</p>
         </div>
-        <div class="arch-side">
-            <span>MongoDB — Event Journal (Write)</span>
-            <span>MySQL — Projections (Read)</span>
-            <span>Akka Cluster Sharding</span>
-            <span>Akka Persistence</span>
-            <span>Akka Projections</span>
+        <div class="pain-item">
+            <h4>Cross-System State Drift</h4>
+            <p>MES says the wafer is at Step 47. EAP says Step 46. RMS has no record. These inconsistencies cause wrong dispatching and wrong recipes — silently.</p>
+        </div>
+        <div class="pain-item">
+            <h4>Brittle Recovery</h4>
+            <p>When a transaction spanning 1.58M rows fails halfway through, recovery is manual. Hours of downtime. No automatic compensation, no partial progress saved.</p>
+        </div>
+        <div class="pain-item">
+            <h4>Throughput Ceiling</h4>
+            <p>A Fab producing 100K wafers/month, each passing hundreds of process steps, generates an event storm. Request-response architectures hit a wall at peak load.</p>
         </div>
     </div>
 </section>
 
-<!-- ==================== REACTIVE MANIFESTO ==================== -->
-<section class="section" id="reactive">
-    <h2 class="section-title"><span class="dot" style="background:var(--purple)"></span> The Reactive Manifesto</h2>
+<!-- ==================== THE SOLUTION ==================== -->
+<section class="section" id="solution">
+    <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> A Different Path</h2>
     <p class="section-desc">
-        Published in 2014 by Jonas Bonér (creator of Akka), the
-        <a href="https://www.reactivemanifesto.org/" style="color:var(--accent)">Reactive Manifesto</a>
-        defines four pillars for building systems that are resilient, responsive, and elastic.
-        Akka was built from the ground up to embody these principles.
+        The root cause isn't "the database is too slow." It's that the <strong>consistency boundary is drawn in the wrong place</strong>.
+        1.5 million downstream records don't belong in the same transaction as the current step.
+        Cross-system alignment shouldn't rely on foreign keys — it should be event-driven, eventually consistent.
+        Process orchestration shouldn't be hard-coded in stored procedures — it should be explicit, testable, and evolvable DAGs.
     </p>
 
-    <div class="pillar-grid">
-        <div class="pillar">
-            <div class="pillar-icon">📨</div>
-            <h3>Message-Driven</h3>
-            <p>Asynchronous message-passing forms the backbone. Loose coupling, location transparency, and non-blocking communication enable elasticity and resilience.</p>
-            <div class="akka-note">Akka: Actor model with asynchronous message passing</div>
-        </div>
-        <div class="pillar">
-            <div class="pillar-icon">🛡️</div>
-            <h3>Resilient</h3>
-            <p>Failures are contained within individual actors. Supervision hierarchies isolate faults, allowing the system to self-heal without cascading failures.</p>
-            <div class="akka-note">Akka: Supervision strategies, circuit breakers, backoff</div>
-        </div>
-        <div class="pillar">
-            <div class="pillar-icon">📈</div>
-            <h3>Elastic</h3>
-            <p>Scale up and down dynamically in response to load. Cluster Sharding distributes entities across nodes, rebalancing automatically.</p>
-            <div class="akka-note">Akka: Cluster Sharding, adaptive load balancing</div>
-        </div>
-        <div class="pillar">
-            <div class="pillar-icon">⚡</div>
-            <h3>Responsive</h3>
-            <p>Rapid, consistent response times under all conditions. Non-blocking I/O and back-pressure ensure predictable latency even at peak load.</p>
-            <div class="akka-note">Akka: Non-blocking throughout, back-pressure via Reactive Streams</div>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== EVENT SOURCING + CQRS ==================== -->
-<section class="section" id="event-sourcing">
-    <h2 class="section-title"><span class="dot" style="background:var(--orange)"></span> Event Sourcing × CQRS</h2>
-    <p class="section-desc">
-        Event Sourcing and CQRS are complementary patterns. Together with the Reactive principles
-        above, they form a powerful foundation for systems that need auditability, scalability,
-        and resilience. Akka provides first-class support for both.
-    </p>
-
-    <div class="feature-list">
-        <div class="feature-item" style="border-left-color: var(--accent)">
-            <h4>Event Sourcing</h4>
-            <p>State is derived by replaying an immutable event journal. Every state change is captured as a domain event — giving you a full audit trail, temporal queries, and reliable debugging. Akka Persistence handles journaling and snapshots automatically.</p>
-        </div>
-        <div class="feature-item" style="border-left-color: var(--success)">
-            <h4>CQRS — Command Query Responsibility Segregation</h4>
-            <p>Commands mutate state (write-side, event-sourced). Queries read from optimized projections (read-side, MySQL). This separation allows each side to scale independently and use the right data model for the job.</p>
-        </div>
-        <div class="feature-item" style="border-left-color: var(--warning)">
-            <h4>Projections (ETL in real-time)</h4>
-            <p>Akka Projections transform the event stream into read-model tables. Each projection subscribes to tagged events, processes them transactionally, and updates MySQL — providing eventually-consistent query models with at-least-once semantics.</p>
-        </div>
-        <div class="feature-item" style="border-left-color: var(--purple)">
-            <h4>Saga Pattern (TCC)</h4>
-            <p>Distributed transactions with the Try-Confirm/Cancel pattern. Each step has Prepare → Commit → Compensate phases. Failures trigger backward recovery. Suspended transactions support manual intervention. All coordinated by event-sourced saga actors.</p>
-        </div>
-    </div>
-
-    <div class="table-wrap" style="margin-top: 32px;">
-        <table>
+    <div class="table-wrap" style="margin-bottom:40px;">
+        <table class="map-table">
             <thead>
-                <tr><th>Capability</th><th>Traditional CRUD</th><th>Event Sourcing + CQRS</th></tr>
+                <tr><th>Fab Pain Point</th><th>Reactive Approach</th></tr>
             </thead>
             <tbody>
-                <tr><td>Audit Trail</td><td class="muted">Manual logging, incomplete</td><td>Every state change is an event — full history</td></tr>
-                <tr><td>Read Performance</td><td class="muted">Contended by writes</td><td>Dedicated read models, independently scaled</td></tr>
-                <tr><td>Debugging</td><td class="muted">"What was the state at 2:03pm?" — hard</td><td>Replay events to any point in time</td></tr>
-                <tr><td>Schema Evolution</td><td class="muted">Migrations are destructive</td><td>Events are append-only; upcasters handle evolution</td></tr>
-                <tr><td>Integration</td><td class="muted">Batch ETL, polling</td><td>Real-time event stream, push-based</td></tr>
-                <tr><td>Failure Recovery</td><td class="muted">Retry loops, dead-letter queues</td><td>Supervision hierarchies + Saga compensation</td></tr>
+                <tr><td class="pain">1.58M-row giant transaction</td><td class="fix">Saga splits it into independent steps. Only the data needed <em>right now</em> is locked. Downstream writes are event-driven and asynchronous.</td></tr>
+                <tr><td class="pain">Cross-system state inconsistency</td><td class="fix">Event sourcing gives a complete, immutable audit log. Projections subscribe to event streams to keep each system's read model eventually consistent.</td></tr>
+                <tr><td class="pain">Tool waiting on data readiness</td><td class="fix">Asynchronous message-driven communication eliminates blocking. A tool sends a signal and gets an immediate acknowledgment — processing happens behind the scenes.</td></tr>
+                <tr><td class="pain">Manual failure recovery</td><td class="fix">Saga auto-compensation rolls back completed steps on failure. Supervision hierarchies restart failed components automatically. No manual intervention needed for known failure modes.</td></tr>
+                <tr><td class="pain">Peak throughput scaling</td><td class="fix">Cluster Sharding distributes entities across nodes. Horizontal scaling has no single bottleneck. Each aggregate handles its own events independently.</td></tr>
             </tbody>
         </table>
     </div>
+
+    <!-- Milestone Roadmap -->
+    <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:16px; letter-spacing:-0.02em;">
+        Engineering Milestones — Building the Kernel Step by Step
+    </h3>
+
+    <div class="roadmap">
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M1</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">Production Quality — Live</span>
+                <h4>Saga Distributed Transaction Coordinator</h4>
+                <p>Splits giant transactions into independent Try-Confirm/Cancel steps. Only locks the resources needed right now. Automatic compensation on failure. Suspended transactions support manual intervention via emergency fix panel. This directly addresses the 1.58M-row transaction problem.</p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M2</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">Production Quality — Live</span>
+                <h4>Streaming-Batch Multi-Level DAG Execution Engine</h4>
+                <p>Orchestrates complex processes across organizational boundaries, integrates with legacy systems, and handles streaming and batch workloads in a unified DAG pipeline. Each node in the DAG is independently versionable, testable, and deployable.</p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M3</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">Exploring — Collaborate With Us</span>
+                <h4>Manufacturing CIMs iPaaS — Abstraction Layer over M2</h4>
+                <p>Generalize M2 into a configurable integration platform for Computer Integrated Manufacturing. Orchestrate multiple DAG execution engines across heterogeneous systems — MES, EAP, RMS, SPC, WMS, RTD. Think iPaaS, but purpose-built for the cybernetics domain in manufacturing.</p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M4</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">Exploring — Collaborate With Us</span>
+                <h4>Instant Feedback Loop — Adaptive DAG Engine</h4>
+                <p>Close the cybernetic loop. DAG rules evolve dynamically based on real-time metrology data and process state. The engine adapts routing, recipes, and scheduling in response to what is happening <em>right now</em> on the factory floor — not what was planned hours ago.</p>
+            </div>
+        </div>
+    </div>
 </section>
 
-<!-- ==================== SHOWCASE DEMOS ==================== -->
+<!-- ==================== LIVE DEMOS ==================== -->
 <section class="section" id="showcases">
-    <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> Live Demos</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> See It In Action</h2>
     <p class="section-desc">
-        Three interactive showcases demonstrate different layers of the architecture.
-        Each is connected to the same live system — actions in one are visible in the others.
+        Three interactive demos connected to the same live system. Each shows a different layer of the architecture — from distributed transactions to real-time event flow to the full component map.
     </p>
 
     <div class="card-grid">
@@ -330,73 +409,181 @@
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
             <div class="card-tags"><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">Compensation</span></div>
             <h3>Saga Transaction Showcase</h3>
-            <p>Watch a distributed money transfer flow through the Saga state machine. Inject faults, observe automatic retries, compensation, and manual fix workflows in real time.</p>
+            <p>A distributed money transfer flowing through the Saga state machine. Watch the Prepare → Commit → Compensate lifecycle. Inject faults at any step. See automatic retries, backward recovery, and suspended-transaction recovery in real time.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: MES ↔ EAP ↔ RMS data alignment</p>
+            <br>
             <a href="/showcase" class="card-link">Open Showcase →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(63,185,80,0.12);color:var(--success)">📊</div>
-            <div class="card-tags"><span class="tag">CQRS</span><span class="tag">Projection</span><span class="tag">Read Model</span></div>
+            <div class="card-tags"><span class="tag">CQRS</span><span class="tag">Projection</span><span class="tag">Event Flow</span></div>
             <h3>Projection Flow Dashboard</h3>
-            <p>Deposit, withdraw, and transfer funds. Watch domain events travel from Aggregate → Journal → Projection → Read Model cards with animated SVG particles.</p>
+            <p>Deposit, withdraw, and transfer funds. Watch domain events travel from Aggregate → Journal (MongoDB) → Projection Handler → Read Model (MySQL) — with animated SVG particles tracing the pipeline.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Event stream from tool signal to real-time dashboard</p>
+            <br>
             <a href="/projection-showcase" class="card-link">Open Dashboard →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(88,166,255,0.12);color:var(--accent)">🎯</div>
-            <div class="card-tags"><span class="tag">DDD</span><span class="tag">Onion</span><span class="tag">Dependencies</span></div>
-            <h3>DDD Architectural Task Radar</h3>
-            <p>Explore 36+ DDD artifacts across Domain, Application, and Infrastructure layers. See dependency edges, design constraints, and file paths for every component.</p>
+            <div class="card-tags"><span class="tag">DDD</span><span class="tag">Onion Architecture</span><span class="tag">Dependencies</span></div>
+            <h3>DDD Architecture Radar</h3>
+            <p>Explore 36+ components across Domain, Application, and Infrastructure layers. Toggle dependency edges, click any component to see its design constraints and source paths. The full code architecture, visualized.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Kernel codebase map for contributors</p>
+            <br>
             <a href="/ddd-guide" class="card-link">Open Radar →</a>
         </div>
     </div>
 </section>
 
+<!-- ==================== CTA: INVITATION ==================== -->
+<section class="section" id="collaborate">
+    <div class="cta-section">
+        <h2>M3 and M4 — Define Them With Us</h2>
+        <p>
+            M1 and M2 are running in production-quality code. But the real questions for M3 and M4
+            can only be answered by people who live the Fab floor every day.
+            <br><br>
+            If you're a Fab engineer, an automation architect, or a manufacturing systems expert —
+            we want to hear about the cross-system orchestration problems that actually keep you up at night.
+            What integrations are brittle? What batch-to-batch variations need real-time response?
+            What would you build if you could define the next layer?
+        </p>
+        <div class="cta-links">
+            <a href="https://github.com" class="btn btn-primary">GitHub Discussions</a>
+            <a href="https://github.com" class="btn btn-outline">Open an Issue</a>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== REACTIVE MANIFESTO ==================== -->
+<section class="section" id="reactive">
+    <h2 class="section-title"><span class="dot" style="background:var(--purple)"></span> The Reactive Foundation</h2>
+    <p class="section-desc">
+        The four pillars of the
+        <a href="https://www.reactivemanifesto.org/" style="color:var(--accent)">Reactive Manifesto</a>
+        are not abstract principles — they map directly to what a Fab control system demands.
+        Built on <strong>Akka</strong> (the reference implementation of the Reactive Manifesto, created by its original author Jonas Bon&eacute;r).
+    </p>
+
+    <div class="pillar-grid">
+        <div class="pillar">
+            <div class="pillar-icon">📨</div>
+            <h3>Message-Driven</h3>
+            <p>Asynchronous message-passing is the backbone. Loose coupling and location transparency enable independent scaling of each subsystem — EAP signals, MES state changes, SPC alerts all flow as messages.</p>
+            <div class="fab-note">Fab: Tool signals arrive as messages, never block the sender</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">🛡️</div>
+            <h3>Resilient</h3>
+            <p>Failures are contained within individual components. Supervision hierarchies isolate faults so a single tool integration failure doesn't cascade across the entire Fab control system.</p>
+            <div class="fab-note">Fab: One EAP connection failure doesn't take down MES</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">📈</div>
+            <h3>Elastic</h3>
+            <p>Scale up and down with load. Cluster Sharding distributes entity instances across nodes — when a new Fab line comes online, the system absorbs it without rewiring.</p>
+            <div class="fab-note">Fab: Add a new production line without re-architecting</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">⚡</div>
+            <h3>Responsive</h3>
+            <p>Rapid, consistent response times under all conditions. Non-blocking I/O and back-pressure ensure predictable latency — the instant feedback loop that Fab operations depend on.</p>
+            <div class="fab-note">Fab: Tool dispatch responds in milliseconds, not seconds</div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== EVENT SOURCING + CQRS ==================== -->
+<section class="section" id="event-sourcing">
+    <h2 class="section-title"><span class="dot" style="background:var(--orange)"></span> Event Sourcing &times; CQRS</h2>
+    <p class="section-desc">
+        Event Sourcing and CQRS are the two patterns that make the reactive MES kernel work.
+        They solve problems that database-centric architectures can't.
+    </p>
+
+    <div class="feature-list">
+        <div class="feature-item" style="border-left-color: var(--accent)">
+            <h4>Event Sourcing</h4>
+            <p>State is derived by replaying an immutable event journal. Every state change — tool assignment, wafer move, recipe execution — is captured as a domain event. Complete audit trail, temporal queries (what was the state at 14:03:27?), and reliable debugging. Akka Persistence handles journaling and snapshots.</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--success)">
+            <h4>CQRS — Separate Reads from Writes</h4>
+            <p>Commands mutate state on the write side (event-sourced aggregates). Queries read from optimized projections (MySQL). The write side stays fast because it only appends events. The read side is free to denormalize, index, and optimize for every query pattern independently.</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--warning)">
+            <h4>Real-Time Projections</h4>
+            <p>Akka Projections transform the event stream into read-model tables. Each projection subscribes to tagged events from a specific aggregate type, processes them transactionally, and updates MySQL — providing eventually-consistent views with at-least-once delivery guarantees.</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--purple)">
+            <h4>Saga Pattern (TCC)</h4>
+            <p>Distributed transactions without distributed locks. Try-Confirm/Cancel: each step reserves resources (Prepare), then either commits or compensates. Failures trigger backward recovery — only steps that succeeded in Prepare get compensated. Suspended transactions support manual intervention.</p>
+        </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top: 32px;">
+        <table>
+            <thead>
+                <tr><th>Capability</th><th>Database-Centric (Stored Procedures)</th><th>Event Sourcing + CQRS</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Audit Trail</td><td class="muted">Manual logging via triggers, incomplete</td><td>Every state change is an event — immutable, complete history</td></tr>
+                <tr><td>Read Performance</td><td class="muted">Contended by writes in the same transaction</td><td>Dedicated read models, independently scaled per query pattern</td></tr>
+                <tr><td>Debugging</td><td class="muted">"What was the state at 2:03pm?" — guess from backups</td><td>Replay events to any point in time, deterministically</td></tr>
+                <tr><td>Schema Evolution</td><td class="muted">Destructive migrations, stored procedure versioning nightmares</td><td>Append-only events; upcasters handle schema evolution non-destructively</td></tr>
+                <tr><td>Cross-System Integration</td><td class="muted">Batch ETL, polling, foreign keys across databases</td><td>Real-time event streams; push-based projections keep all systems aligned</td></tr>
+                <tr><td>Failure Recovery</td><td class="muted">Manual intervention, hours of downtime</td><td>Saga auto-compensation + supervision hierarchies; automatic for known failure modes</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
 <!-- ==================== FREE HOSTING RESOURCES ==================== -->
 <section class="section" id="hosting">
-    <h2 class="section-title"><span class="dot" style="background:var(--warning)"></span> Free Resources for Your Demo</h2>
+    <h2 class="section-title"><span class="dot" style="background:var(--warning)"></span> Deploy Your Own — Free Tier Guide</h2>
     <p class="section-desc">
-        This project needs <strong>MongoDB</strong> (event journal) + <strong>MySQL</strong> (read model) + <strong>a JVM app server</strong>.
-        Here are platforms with genuine free tiers that can run this stack.
+        This stack needs <strong>MongoDB</strong> (event journal) + <strong>MySQL</strong> (read model) + <strong>a JVM app server</strong>.
+        All three can run on genuine free tiers. Here are the platforms that work.
     </p>
 
     <div class="host-grid">
         <div class="host-card">
             <h4>Fly.io</h4>
             <div class="tier">Free — 3 shared VMs (256MB each)</div>
-            <p>Deploy the Play app as a Docker container. Includes a global edge network. Good for the app server.</p>
+            <p>Deploy the Play app as a Docker container. Global edge network included. Ideal for the app server.</p>
         </div>
         <div class="host-card">
             <h4>MongoDB Atlas</h4>
             <div class="tier">Free — M0 cluster, 512MB storage</div>
-            <p>Shared cluster for the event journal. Enough for demo workloads. Includes monitoring dashboard.</p>
+            <p>Shared cluster for the event journal. Ample for demo and development workloads. Monitoring dashboard included.</p>
         </div>
         <div class="host-card">
             <h4>PlanetScale</h4>
             <div class="tier">Free — 1 database, 5GB storage</div>
-            <p>MySQL-compatible with a generous free tier. Great for the read model. Includes branching for schema changes.</p>
+            <p>MySQL-compatible with generous free tier. Great for the read model. Database branching for safe schema changes.</p>
         </div>
         <div class="host-card">
             <h4>Render</h4>
             <div class="tier">Free — Web Service + PostgreSQL</div>
-            <p>Zero-config deploys from GitHub. The web service sleeps after inactivity (cold start), but good for demos.</p>
+            <p>GitHub-push deploy. Web service sleeps after inactivity (cold start), but fine for demos.</p>
         </div>
         <div class="host-card">
             <h4>Oracle Cloud Always Free</h4>
             <div class="tier">Free — 4 ARM cores, 24GB RAM VM</div>
-            <p>The most generous free compute tier. Run everything on a single VM with Docker Compose.</p>
+            <p>The most generous free compute tier. Run the entire stack on one VM with Docker Compose.</p>
         </div>
         <div class="host-card">
             <h4>Railway</h4>
             <div class="tier">$5 credit/month, no time limit</div>
-            <p>One-click deploys with built-in MySQL and MongoDB templates. Simpler UX than Fly.io.</p>
+            <p>One-click deploys with built-in MySQL and MongoDB templates. Easier UX than Fly.io.</p>
         </div>
     </div>
 
     <div style="margin-top:28px; background:var(--bg-alt); border:1px solid var(--border); border-radius:10px; padding:22px;">
-        <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:8px;">Recommended combo for this project</h4>
+        <h4 style="font-size:0.9rem; font-weight:700; margin-bottom:8px;">Recommended combo</h4>
         <p style="color:var(--fg-muted); font-size:0.84rem;">
             <strong>Fly.io</strong> (app server) + <strong>MongoDB Atlas M0</strong> (event journal) + <strong>PlanetScale</strong> (read model).
             All three have free tiers that don't expire. Total cost: $0/month.
-            A single <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">fly.toml</code> + environment variables for connection strings is all you need to deploy.
+            A single <code style="background:var(--bg);padding:1px 5px;border-radius:3px;">fly.toml</code> + environment variables for connection strings is all you need.
         </p>
     </div>
 </section>
@@ -411,7 +598,7 @@
         <a href="https://www.reactivemanifesto.org/">The Reactive Manifesto</a>
     </p>
     <p style="margin-top:6px;">
-        Journal: MongoDB &nbsp;|&nbsp; Read Model: MySQL &nbsp;|&nbsp; Serialization: Protobuf (ScalaPB) &nbsp;|&nbsp; DI: Guice
+        Event Journal: MongoDB &nbsp;|&nbsp; Read Model: MySQL &nbsp;|&nbsp; Serialization: Protobuf (ScalaPB)
     </p>
 </footer>
 

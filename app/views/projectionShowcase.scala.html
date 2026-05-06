@@ -38,10 +38,10 @@
 
         .arch-viz {
             display: grid;
-            grid-template-columns: 280px 140px 180px 140px 280px 140px 420px;
+            grid-template-columns: 150px 80px 260px 100px 160px 100px 260px 100px 400px;
             align-items: center;
             background: var(--panel-dark);
-            padding: 50px;
+            padding: 40px 30px;
             border-radius: 24px;
             border: 1px solid #334155;
             min-height: 600px;
@@ -63,16 +63,27 @@
         .node h4 { margin: 0; font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
 
         .agg-node { border-color: var(--color-aggregate); background: rgba(251, 191, 36, 0.03); }
-        .agg-balance { color: var(--color-aggregate); font-weight: 800; font-size: 1.3rem; margin: 6px 0; font-family: 'Fira Code', monospace; }
         .agg-status { font-size: 0.55rem; color: #64748b; word-break: break-all; font-family: monospace; line-height: 1.2; }
+        .agg-field { display: flex; justify-content: space-between; align-items: center; padding: 5px 10px; margin: 3px 0; border-radius: 6px; background: rgba(15, 23, 42, 0.5); border: 1px solid transparent; transition: all 0.4s ease; }
+        .agg-field .agg-field-label { font-size: 0.58rem; color: #94a3b8; text-transform: uppercase; }
+        .agg-field .agg-field-value { font-family: 'Fira Code', monospace; font-size: 0.8rem; font-weight: 800; color: var(--color-aggregate); }
+        .agg-field.highlight-field { border-color: var(--color-journal); box-shadow: 0 0 12px rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.08); }
 
         .journal-node { border-color: var(--color-journal); background: rgba(249, 115, 22, 0.03); width: 160px; }
+        .coordinator-node { border-color: #a855f7; background: rgba(168, 85, 247, 0.03); }
         .proj-node { border-color: var(--color-projection); background: rgba(59, 130, 246, 0.03); }
 
-        .record-node { border-color: var(--color-read); width: 400px; text-align: left; margin-bottom: 12px; background: rgba(34, 197, 94, 0.02); padding: 15px 20px; }
-        .record-id { font-family: 'Fira Code', monospace; font-size: 0.6rem; color: #475569; word-break: break-all; margin-bottom: 6px; }
+        .record-node { border-color: var(--color-read); width: auto; text-align: left; margin-bottom: 12px; background: rgba(34, 197, 94, 0.02); padding: 12px 20px; }
+        .record-id { font-family: 'Fira Code', monospace; font-size: 0.58rem; color: #475569; word-break: break-all; margin-bottom: 8px; }
         .record-data { color: var(--color-read); font-weight: 800; font-size: 0.9rem; display: flex; justify-content: space-between; align-items: center; }
         .record-period { font-size: 0.7rem; color: #94a3b8; background: #0f172a; padding: 2px 8px; border-radius: 4px; border: 1px solid #1e293b; }
+        .record-field { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin: 3px 0; border-radius: 6px; background: rgba(15, 23, 42, 0.5); border: 1px solid transparent; transition: all 0.4s ease; }
+        .record-field .field-label { font-size: 0.65rem; color: #94a3b8; text-transform: uppercase; }
+        .record-field .field-value { font-family: 'Fira Code', monospace; font-size: 0.85rem; font-weight: 800; }
+        .record-field.field-amount .field-value { color: var(--color-read); }
+        .record-field.field-reserved .field-value { color: var(--color-aggregate); }
+        .record-field.field-incoming .field-value { color: var(--color-projection); }
+        .record-field.highlight-field { border-color: var(--color-journal); box-shadow: 0 0 12px rgba(249, 115, 22, 0.4); background: rgba(249, 115, 22, 0.08); }
 
         .decoder-panel { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; padding: 25px; margin-top: 30px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; }
         .decoder-item h5 { margin: 0 0 10px 0; color: #38bdf8; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; }
@@ -179,41 +190,67 @@
             <svg class="connector-svg" id="svgCanvas"></svg>
 
             <div class="arch-viz" id="archViz">
-                <!-- Aggregates Container (column 1) -->
-                <div style="display: flex; flex-direction: column; gap: 30px; grid-column: 1;" id="aggregateList">
-                    <div class="node agg-node tooltip" id="agg-sender" data-tip="@messages("proj.tooltip_sender")">
-                        <h4>@messages("proj.agg_sender")</h4>
-                        <div class="agg-balance" id="sender-balance">¥0.00</div>
-                        <div class="agg-status" id="sender-id-label">...</div>
-                    </div>
-                    <div class="node agg-node tooltip" id="agg-receiver" data-tip="@messages("proj.tooltip_receiver")">
-                        <h4>@messages("proj.agg_receiver")</h4>
-                        <div class="agg-balance" id="receiver-balance">¥0.00</div>
-                        <div class="agg-status" id="receiver-id-label">...</div>
-                    </div>
+                <!-- Coordinator (column 1) -->
+                <div class="node coordinator-node tooltip" id="coordinator" style="grid-column: 1;" data-tip="@messages("proj.tooltip_coordinator")">
+                    <h4>@messages("proj.coordinator")</h4>
+                    <div style="font-weight:800; color:#a855f7; font-size:0.75rem;">Akka Cluster</div>
+                    <div style="font-size: 0.5rem; color: #64748b; margin-top: 5px;">Orchestration & Dispatch</div>
                 </div>
 
                 <!-- Spacer column 2 -->
                 <div></div>
 
-                <!-- Journal Node (column 3) -->
-                <div class="node journal-node tooltip" id="journal" style="grid-column: 3;" data-tip="@messages("proj.tooltip_journal")">
-                    <h4>@messages("proj.journal")</h4>
-                    <div style="font-weight:800; color:var(--color-journal);">@messages("proj.journal_db")</div>
-                    <div style="font-size: 0.5rem; color: #64748b; margin-top: 5px;">@messages("proj.journal_desc")</div>
+                <!-- Aggregates Container (column 3) -->
+                <div style="display: flex; flex-direction: column; gap: 30px; grid-column: 3;" id="aggregateList">
+                    <div class="node agg-node tooltip" id="agg-sender" data-tip="@messages("proj.tooltip_sender")">
+                        <h4>@messages("proj.agg_sender")</h4>
+                        <div class="agg-status" id="sender-id-label" style="margin-bottom:6px;">...</div>
+                        <div class="agg-field" data-field="amount">
+                            <span class="agg-field-label">@messages("proj.card_amount")</span>
+                            <span class="agg-field-value" id="sender-amount">¥0.00</span></div>
+                        <div class="agg-field" data-field="reservedAmount">
+                            <span class="agg-field-label">@messages("proj.card_reserved")</span>
+                            <span class="agg-field-value" id="sender-reserved">¥0.00</span></div>
+                        <div class="agg-field" data-field="incomingAmount">
+                            <span class="agg-field-label">@messages("proj.card_incoming")</span>
+                            <span class="agg-field-value" id="sender-incoming">¥0.00</span></div>
+                    </div>
+                    <div class="node agg-node tooltip" id="agg-receiver" data-tip="@messages("proj.tooltip_receiver")">
+                        <h4>@messages("proj.agg_receiver")</h4>
+                        <div class="agg-status" id="receiver-id-label" style="margin-bottom:6px;">...</div>
+                        <div class="agg-field" data-field="amount">
+                            <span class="agg-field-label">@messages("proj.card_amount")</span>
+                            <span class="agg-field-value" id="receiver-amount">¥0.00</span></div>
+                        <div class="agg-field" data-field="reservedAmount">
+                            <span class="agg-field-label">@messages("proj.card_reserved")</span>
+                            <span class="agg-field-value" id="receiver-reserved">¥0.00</span></div>
+                        <div class="agg-field" data-field="incomingAmount">
+                            <span class="agg-field-label">@messages("proj.card_incoming")</span>
+                            <span class="agg-field-value" id="receiver-incoming">¥0.00</span></div>
+                    </div>
                 </div>
 
                 <!-- Spacer column 4 -->
                 <div></div>
 
-                <!-- Projection List (column 5) -->
-                <div class="projection-list" id="projectionList" style="grid-column: 5;"></div>
+                <!-- Journal Node (column 5) -->
+                <div class="node journal-node tooltip" id="journal" style="grid-column: 5;" data-tip="@messages("proj.tooltip_journal")">
+                    <h4>@messages("proj.journal")</h4>
+                    <div style="font-weight:800; color:var(--color-journal);">@messages("proj.journal_db")</div>
+                    <div style="font-size: 0.5rem; color: #64748b; margin-top: 5px;">@messages("proj.journal_desc")</div>
+                </div>
 
                 <!-- Spacer column 6 -->
                 <div></div>
 
-                <!-- Read Model Cards (column 7) -->
-                <div class="readmodel-list" id="readModelList" style="display: flex; flex-direction: column; gap: 10px; grid-column: 7;"></div>
+                <!-- Projection List (column 7) -->
+                <div class="projection-list" id="projectionList" style="grid-column: 7;"></div>
+
+                <!-- Spacer column 8 -->
+                <div></div>
+
+                <!-- Read Model Cards (column 9) -->
+                <div class="readmodel-list" id="readModelList" style="display: flex; flex-direction: column; gap: 10px; grid-column: 9;"></div>
             </div>
 
             <div class="decoder-panel">
@@ -249,7 +286,11 @@
         logTransferTriggered: "@messages("proj.log_transfer_triggered")",
         logTransferFailed: "@messages("proj.log_transfer_failed")",
         logRejected: "@messages("proj.log_rejected")",
-        traveling: "Traveling..."
+        traveling: "Traveling...",
+        coordinatorTitle: "@messages("proj.coordinator")",
+        cardAmount: "@messages("proj.card_amount")",
+        cardReserved: "@messages("proj.card_reserved")",
+        cardIncoming: "@messages("proj.card_incoming")"
     };
 </script>
 <script src="@routes.Assets.versioned("javascripts/graph_engine.js")" type="text/javascript"></script>

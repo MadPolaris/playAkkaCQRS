@@ -11,6 +11,7 @@
     svgViz: 'archViz',
     settings: { mode: 'svg', animationSpeed: 1.0, eventTravelTime: 800 },
     nodes: [
+      { id: 'coordinator',  dynamic: false },
       { id: 'agg-sender',   dynamic: false },
       { id: 'agg-receiver', dynamic: false },
       { id: 'journal',      dynamic: false },
@@ -27,16 +28,47 @@
       }
     ],
     edges: [
+      { from: 'coordinator',  to: 'agg-sender' },
+      { from: 'coordinator',  to: 'agg-receiver' },
+      { from: 'coordinator',  to: 'journal' },
       { from: 'agg-sender',   to: 'journal' },
       { from: 'agg-receiver', to: 'journal' },
       { from: 'journal',      to: 'proj-monthly' },
       { from: 'proj-monthly', to: 'card-{userId}' }
     ],
     eventRouting: {
+      // Saga coordinator events
+      'TransactionStarted': [
+        { from: 'coordinator', to: 'journal' }
+      ],
+      'StepOngoing': [
+        { from: 'coordinator', to: 'agg-sender' },
+        { from: 'coordinator', to: 'agg-receiver' },
+        { from: 'coordinator', to: 'journal' }
+      ],
+      'StepCompleted': [
+        { from: 'coordinator', to: 'journal' }
+      ],
+      'PhaseCompleted': [
+        { from: 'coordinator', to: 'journal' }
+      ],
+      'StepGroupStarted': [
+        { from: 'coordinator', to: 'journal' }
+      ],
+      'TransactionCompleted': [
+        { from: 'coordinator', to: 'journal' }
+      ],
+      'TransactionFailed': [
+        { from: 'coordinator', to: 'journal' }
+      ],
+      'TransactionSuspended': [
+        { from: 'coordinator', to: 'journal' }
+      ],
+      // Domain events — aggregate → journal → projection → card
       'BalanceChanged': [
         { from: 'agg-sender', to: 'journal' },
         { from: 'journal',    to: 'proj-monthly' },
-        { from: 'proj-monthly', to: 'card-{userId}', updateCard: true }
+        { from: 'proj-monthly', to: 'card-{userId}', updateCard: true, updater: 'default' }
       ],
       'FundsReserved': [
         { from: 'agg-sender', to: 'journal' }
@@ -44,12 +76,12 @@
       'FundsDeducted': [
         { from: 'agg-sender', to: 'journal' },
         { from: 'journal',    to: 'proj-monthly' },
-        { from: 'proj-monthly', to: 'card-{userId}', updateCard: true }
+        { from: 'proj-monthly', to: 'card-{userId}', updateCard: true, updater: 'default' }
       ],
       'ReservationReleased': [
         { from: 'agg-sender', to: 'journal' },
         { from: 'journal',    to: 'proj-monthly' },
-        { from: 'proj-monthly', to: 'card-{userId}', updateCard: true }
+        { from: 'proj-monthly', to: 'card-{userId}', updateCard: true, updater: 'default' }
       ],
       'IncomingCreditsRecorded': [
         { from: 'agg-receiver', to: 'journal' }
@@ -57,7 +89,7 @@
       'IncomingCreditsCommited': [
         { from: 'agg-receiver', to: 'journal' },
         { from: 'journal',      to: 'proj-monthly' },
-        { from: 'proj-monthly', to: 'card-{userId}', updateCard: true }
+        { from: 'proj-monthly', to: 'card-{userId}', updateCard: true, updater: 'default' }
       ],
       'IncomingCreditsCanceled': [
         { from: 'agg-receiver', to: 'journal' }
@@ -66,24 +98,42 @@
     cardStateUpdaters: {
       'default': async function (event) {
         var userId = event.userId;
-        try {
-          var res = await fetch('/api/projection/status');
-          var data = await res.json();
-          var summary = (data.summaries || []).find(function (s) { return s.userId === userId; });
-          if (summary) {
-            var node = document.querySelector('[data-user-id="' + userId + '"]');
-            if (node) {
-              node.querySelector('.record-data-inner').innerHTML =
-                '<span class="record-period">' + summary.year + '-' + summary.month + '</span>' +
-                '<div style="display:flex; gap:15px;">' +
-                '<span style="color:var(--color-read)">+' + summary.income + '</span>' +
-                '<span style="color:#ef4444">-' + summary.expense + '</span></div>';
-              node.classList.add('highlight-read');
-              setTimeout(function () { node.classList.remove('highlight-read'); }, 1000);
+        var maxRetries = 5;
+        var retryDelay = 400;
+        for (var attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            var res = await fetch('/api/projection/status');
+            var data = await res.json();
+            var summary = (data.summaries || []).find(function (s) { return s.userId === userId; });
+            if (summary) {
+              var node = document.querySelector('[data-user-id="' + userId + '"]');
+              if (node) {
+                node.querySelector('.record-data-inner').innerHTML =
+                  '<span class="record-period">' + summary.year + '-' + summary.month + '</span>' +
+                  '<div style="display:flex; gap:15px;">' +
+                  '<span style="color:var(--color-read)">+' + summary.income + '</span>' +
+                  '<span style="color:#ef4444">-' + summary.expense + '</span></div>';
+                node.classList.add('highlight-read');
+                setTimeout(function () { node.classList.remove('highlight-read'); }, 1000);
+              }
+              return;
             }
+          } catch (e) { console.error('Card update attempt ' + (attempt + 1) + ' failed', e); }
+          if (attempt < maxRetries - 1) {
+            await new Promise(function (r) { setTimeout(r, retryDelay); });
           }
-        } catch (e) { console.error('Card update failed', e); }
+        }
+        console.warn('Card update for ' + userId + ' failed after ' + maxRetries + ' attempts');
       }
+    },
+    aggregateStateUpdaters: {
+      'BalanceChanged':            ['amount'],
+      'FundsReserved':             ['amount', 'reservedAmount'],
+      'FundsDeducted':             ['reservedAmount'],
+      'ReservationReleased':       ['amount', 'reservedAmount'],
+      'IncomingCreditsRecorded':   ['incomingAmount'],
+      'IncomingCreditsCommited':   ['amount', 'incomingAmount'],
+      'IncomingCreditsCanceled':   ['incomingAmount']
     }
   };
 
@@ -130,6 +180,7 @@
       var res = await fetch('/' + type + '/' + uid + '/' + Math.abs(amt), { method: 'POST' });
       var data = await res.json();
       if (data.error) addLog((window.__i18n && window.__i18n.logRejected || 'Rejected: ') + data.error.message, '#ef4444');
+      else updateAggregateNode('agg-sender', 'BalanceChanged');
     } catch (e) { addLog((window.__i18n && window.__i18n.logError || 'Error: ') + e.message, '#ef4444'); }
   };
 
@@ -146,6 +197,52 @@
     } catch (e) { addLog((window.__i18n && window.__i18n.logTransferFailed || 'Transfer Error: ') + e.message, '#ef4444'); }
   };
 
+  // ---- Aggregate State Updater ----
+  async function updateAggregateNode(aggId, eventType) {
+    var userId = document.getElementById(aggId === 'agg-sender' ? 'userId' : 'targetId').value;
+    try {
+      var res = await fetch('/api/aggregate/balances/' + encodeURIComponent(userId));
+      var data = await res.json();
+      var bal = data[userId];
+      if (!bal) return;
+
+      var fields = {
+        amount: 'sender-amount',
+        reservedAmount: 'sender-reserved',
+        incomingAmount: 'sender-incoming'
+      };
+      if (aggId === 'agg-receiver') {
+        fields = {
+          amount: 'receiver-amount',
+          reservedAmount: 'receiver-reserved',
+          incomingAmount: 'receiver-incoming'
+        };
+      }
+
+      var elAmount = document.getElementById(fields.amount);
+      var elReserved = document.getElementById(fields.reservedAmount);
+      var elIncoming = document.getElementById(fields.incomingAmount);
+      if (elAmount) elAmount.textContent = '¥' + (bal.balance != null ? Number(bal.balance).toFixed(2) : '0.00');
+      if (elReserved) elReserved.textContent = '¥' + (bal.reservedAmount != null ? Number(bal.reservedAmount).toFixed(2) : '0.00');
+      if (elIncoming) elIncoming.textContent = '¥' + (bal.incomingAmount != null ? Number(bal.incomingAmount).toFixed(2) : '0.00');
+
+      var aggEl = document.getElementById(aggId);
+      if (aggEl) {
+        aggEl.classList.add('highlight-proj');
+        setTimeout(function () { aggEl.classList.remove('highlight-proj'); }, 1000);
+      }
+
+      var highlightFields = graphConfig.aggregateStateUpdaters[eventType] || [];
+      highlightFields.forEach(function (f) {
+        var fieldEl = aggEl ? aggEl.querySelector('[data-field="' + f + '"]') : null;
+        if (fieldEl) {
+          fieldEl.classList.add('highlight-field');
+          setTimeout(function () { fieldEl.classList.remove('highlight-field'); }, 1200);
+        }
+      });
+    } catch (e) { console.error('Aggregate update failed', e); }
+  }
+
   // ---- WebSocket ----
   var ws = new WebSocket((window.location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + window.location.host + '/ws/saga/events');
   ws.onopen = function () { addLog((window.__i18n && window.__i18n.logConnected || 'Event Stream Connected'), '#22c55e'); };
@@ -160,36 +257,47 @@
       console.warn('[ws] Failed to parse message', msg.data);
       return;
     }
-    // Only process domain events (skip Saga coordinator/executor events)
-    if (!event.data || !event.data.isDomainEvent) {
-      console.log('[ws] Skipping non-domain event:', event.type);
-      return;
-    }
 
     var eventType = event.type;
-    console.log('[ws] Dispatching domain event:', eventType, 'detail:', event.data.detail);
-
-    // Determine correct userId:
-    //   Sender-side events (FundsReserved, FundsDeducted, ReservationReleased, BalanceChanged)
-    //     → use the sender userId field
-    //   Receiver-side events (IncomingCreditsRecorded, IncomingCreditsCommited, IncomingCreditsCanceled)
-    //     → use the target/recipient userId field
-    var userId;
-    if (eventType === 'IncomingCreditsRecorded' || eventType === 'IncomingCreditsCommited' || eventType === 'IncomingCreditsCanceled') {
-      userId = document.getElementById('targetId').value;
-    } else {
-      userId = document.getElementById('userId').value;
-    }
-
-    // Parse amount from event detail when available (supports both "Update: " and "Amount: " prefixes)
+    var isDomainEvent = event.data && event.data.isDomainEvent;
+    var isSagaEvent = event.data && !isDomainEvent && eventType && graphConfig.eventRouting[eventType];
+    var senderId = document.getElementById('userId').value;
+    var receiverId = document.getElementById('targetId').value;
     var amount = document.getElementById('amount').value;
-    if (event.data.detail) {
-      var match = event.data.detail.match(/^.*:\s*(-?\d+(?:\.\d+)?)/);
-      if (match) amount = match[1];
-    }
 
-    engine.dispatchEvent({ type: eventType, userId: userId, amount: amount, payload: event.data });
-    console.log('[ws] Queued event for animation:', eventType, 'userId:', userId, 'amount:', amount);
+    if (isDomainEvent) {
+      console.log('[ws] Dispatching domain event:', eventType, 'detail:', event.data.detail);
+
+      var userId;
+      var aggId;
+      if (eventType === 'IncomingCreditsRecorded' || eventType === 'IncomingCreditsCommited' || eventType === 'IncomingCreditsCanceled') {
+        userId = receiverId;
+        aggId = 'agg-receiver';
+      } else {
+        userId = senderId;
+        aggId = 'agg-sender';
+      }
+
+      if (event.data.detail) {
+        var match = event.data.detail.match(/^.*:\s*(-?\d+(?:\.\d+)?)/);
+        if (match) amount = match[1];
+      }
+
+      // Update aggregate node immediately with fine-grained highlight
+      updateAggregateNode(aggId, eventType);
+
+      engine.dispatchEvent({ type: eventType, userId: userId, amount: amount, payload: event.data });
+      console.log('[ws] Queued domain event:', eventType, 'userId:', userId, 'amount:', amount);
+
+    } else if (isSagaEvent) {
+      console.log('[ws] Dispatching saga event:', eventType);
+      addLog(eventType, '#a855f7');
+      engine.dispatchEvent({ type: eventType, userId: senderId, amount: amount, payload: event.data });
+      console.log('[ws] Queued saga event:', eventType);
+
+    } else {
+      console.log('[ws] Skipping unknown event:', eventType);
+    }
   };
 
   // ---- Periodic Refresh ----
@@ -202,8 +310,18 @@
     try {
       var balRes = await fetch('/api/aggregate/balances/' + senderId + ',' + receiverId);
       var b = await balRes.json();
-      if (b[senderId]) document.getElementById('sender-balance').textContent = '¥' + b[senderId].balance;
-      if (b[receiverId]) document.getElementById('receiver-balance').textContent = '¥' + b[receiverId].balance;
+      if (b[senderId]) {
+        var sb = b[senderId];
+        var el = document.getElementById('sender-amount'); if (el) el.textContent = '¥' + Number(sb.balance || 0).toFixed(2);
+        el = document.getElementById('sender-reserved'); if (el) el.textContent = '¥' + Number(sb.reservedAmount || 0).toFixed(2);
+        el = document.getElementById('sender-incoming'); if (el) el.textContent = '¥' + Number(sb.incomingAmount || 0).toFixed(2);
+      }
+      if (b[receiverId]) {
+        var rb = b[receiverId];
+        var el = document.getElementById('receiver-amount'); if (el) el.textContent = '¥' + Number(rb.balance || 0).toFixed(2);
+        el = document.getElementById('receiver-reserved'); if (el) el.textContent = '¥' + Number(rb.reservedAmount || 0).toFixed(2);
+        el = document.getElementById('receiver-incoming'); if (el) el.textContent = '¥' + Number(rb.incomingAmount || 0).toFixed(2);
+      }
     } catch (e) {}
 
     try {
@@ -218,14 +336,6 @@
           '<td style="color:var(--color-read); font-weight:bold;">+' + s.income + '</td>' +
           '<td style="color:#ef4444; font-weight:bold;">-' + s.expense + '</td></tr>';
         engine.createDynamicSvgNode(s.userId);
-        var node = document.querySelector('[data-user-id="' + s.userId + '"]');
-        if (node) {
-          node.querySelector('.record-data-inner').innerHTML =
-            '<span class="record-period">' + s.year + '-' + s.month + '</span>' +
-            '<div style="display:flex; gap:15px;">' +
-            '<span style="color:var(--color-read)">+' + s.income + '</span>' +
-            '<span style="color:#ef4444">-' + s.expense + '</span></div>';
-        }
       });
     } catch (e) {}
   }

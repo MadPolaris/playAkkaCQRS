@@ -1,7 +1,7 @@
 package net.imadz.application.queries
 
 import akka.util.Timeout
-import net.imadz.application.aggregates.CreditBalanceProtocol.GetBalance
+import net.imadz.application.aggregates.CreditBalanceProtocol.{GetBalance, CreditBalanceConfirmation}
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.common.CommonTypes.Id
 import net.imadz.domain.values.Money
@@ -20,5 +20,14 @@ class GetBalanceQuery @Inject()(creditBalanceRepository: CreditBalanceRepository
     creditBalanceRepository.findCreditBalanceByUserId(userId)
       .ask(GetBalance)
       .map(confirmation => confirmation.error.map(_ => Nil).getOrElse(confirmation.balances))
+
+  def fetchFullBalanceByUserId(userId: Id): Future[CreditBalanceConfirmation] =
+    creditBalanceRepository.findCreditBalanceByUserId(userId)
+      .ask(GetBalance)
+      .map { confirmation =>
+        confirmation.error.map(err =>
+          CreditBalanceConfirmation(Some(err), Nil, Nil, Nil)
+        ).getOrElse(confirmation)
+      }
 
 }

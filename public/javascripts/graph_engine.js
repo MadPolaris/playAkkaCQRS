@@ -300,8 +300,9 @@
               setTimeout(function () { toEl.classList.remove('highlight-proj'); }, 800);
             }
             if (route.updateCard && toId.indexOf('card-') === 0) {
+              var updaterKey = route.updater || 'default';
               var updater = self.config.cardStateUpdaters
-                ? self.config.cardStateUpdaters['default']
+                ? self.config.cardStateUpdaters[updaterKey]
                 : null;
               if (updater) updater(event);
             }

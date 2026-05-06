@@ -132,6 +132,11 @@ proj.log_disconnected=Event Stream Disconnected
 proj.log_transfer_triggered=Transfer Saga Triggered
 proj.log_transfer_failed=Transfer Failed:
 proj.log_rejected=Rejected:
+proj.coordinator=Saga Coordinator
+proj.tooltip_coordinator=Distributed Saga Coordinator: Orchestrates transactions, persists saga events, dispatches commands to Aggregates
+proj.card_amount=Amount
+proj.card_reserved=Reserved
+proj.card_incoming=Incoming
 
 # DDD Guide Page
 ddd.title=DDD Architectural Task Radar - PlayAkkaCQRS

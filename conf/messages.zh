@@ -132,6 +132,11 @@ proj.log_disconnected=事件流已断开
 proj.log_transfer_triggered=转账 Saga 已触发
 proj.log_transfer_failed=转账失败:
 proj.log_rejected=已拒绝:
+proj.coordinator=Saga 协调器
+proj.tooltip_coordinator=分布式 Saga 协调器：编排事务，持久化 Saga 事件，向聚合根派发命令
+proj.card_amount=余额
+proj.card_reserved=已预留
+proj.card_incoming=待入账
 
 # DDD Guide Page
 ddd.title=DDD 架构任务雷达 - PlayAkkaCQRS

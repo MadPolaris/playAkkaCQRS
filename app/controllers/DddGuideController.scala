@@ -24,11 +24,17 @@ class DddGuideController @Inject()(val controllerComponents: ControllerComponent
 
   def getBalances(ids: String) = Action.async {
     val idList = ids.split(",").map(Id.of).toList
-    Future.sequence(idList.map(id => getBalanceQuery.fetchBalanceByUserId(id).map(b => id.toString -> b)))
+    Future.sequence(idList.map(id => getBalanceQuery.fetchFullBalanceByUserId(id).map(c => id.toString -> c)))
       .map(results => {
-        val balancesMap: Map[String, JsObject] = results.map { case (id, b) =>
-          val amount: BigDecimal = b.headOption.map(_.amount).getOrElse(BigDecimal(0))
-          id -> Json.obj("balance" -> amount)
+        val balancesMap: Map[String, JsObject] = results.map { case (id, confirmation) =>
+          val balance = confirmation.balances.map(_.amount).foldLeft(BigDecimal(0))(_ + _)
+          val reservedAmount = confirmation.reservedAmounts.map(_.amount).foldLeft(BigDecimal(0))(_ + _)
+          val incomingAmount = confirmation.incomingCredits.map(_.amount).foldLeft(BigDecimal(0))(_ + _)
+          id -> Json.obj(
+            "balance" -> balance,
+            "reservedAmount" -> reservedAmount,
+            "incomingAmount" -> incomingAmount
+          )
         }.toMap
         Ok(Json.toJson(balancesMap))
       })

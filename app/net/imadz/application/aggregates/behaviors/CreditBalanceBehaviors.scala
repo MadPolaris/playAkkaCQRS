@@ -28,7 +28,12 @@ object CreditBalanceBehaviors extends CreditBalanceCommandHelpers {
       runReplyingPolicy(DepositRule, DepositHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
 
     case GetBalance(replyTo) =>
-      Effect.reply(replyTo)(CreditBalanceConfirmation(None, state.accountBalance.values.toList))
+      Effect.reply(replyTo)(CreditBalanceConfirmation(
+        None,
+        state.accountBalance.values.toList,
+        state.reservedAmount.values.toList,
+        state.incomingCredits.values.toList
+      ))
   }
 
   // --- 行为分组 2: 预留资金 (Reserve) ---
