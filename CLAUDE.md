@@ -1,5 +1,18 @@
 # Play-Akka-CQRS Project
 
+## Project Identity
+
+开源反应式 MES 内核，面向 Fab 晶圆厂。用事件溯源取代巨型事务，用 Saga 取代存储过程，用流批一体 DAG 执行引擎编排跨系统流程。
+
+| Milestone | 状态 |
+|-----------|------|
+| M1 — Saga 分布式事务协调器 | ✅ 线上质量 |
+| M2 — 流批一体多层级 DAG 执行引擎 | ✅ 线上质量 |
+| M3 — 面向制造业控制论的 CIMs iPaaS | 🔮 探索中 |
+| M4 — 即时反馈闭环 + 自适应 DAG 引擎 | 🔮 探索中 |
+
+详见首页：`/` (EN) 和 `/zh` (中文)。
+
 ## Tech Stack
 - Scala 2.13.14 · Play Framework · Akka 2.6.20
 - Akka Cluster/Sharding · Akka Persistence (MongoDB journal) · Akka Projections (MySQL/ScalikeJDBC)
@@ -77,18 +90,10 @@ app/net/imadz/
 ├── application/     Aggregate, ApplicationService, Projection, Saga
 └── infrastructure/  Persistence adapter, Bootstrap, Guice module
 
+app/views/           Play Twirl 模板（首页、Demo 页、文档页）
 app/protobuf/        .proto 文件
 conf/                application.conf / persistence.conf / cluster.conf
 conf/sql/1.sql       MySQL read-side schema（docker-compose 自动初始化）
-knowledge_base/      架构文档
+knowledge_base/      架构文档 & 方法论文档
 test/                单元 + 集成测试
 ```
-```
-
-主要改动点：
-
-- **Architecture 部分**加了依赖方向铁律，明确告诉 Claude 违反时要拒绝
-- **FP 约定**独立成节，`Either`/`Option` 偏好、副作用隔离都显式声明
-- **TDD 部分**把 Lessons Learned 里的测试陷阱整合进去，变成可操作的规则
-- **精简了描述性文字**，把"是什么"压缩到最小，把"怎么做"放大
-- **Protobuf 三件套**单独高亮，避免被淹没
