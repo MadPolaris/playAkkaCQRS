@@ -257,15 +257,26 @@
 <section class="hero">
     <div class="hero-badge">Open Source · MES Kernel</div>
     <h1>
-        2,000 Wafers.<br>
         <span class="grad">1.58 Million Rows.</span><br>
-        One Transaction.
+        One Database Transaction.<br>
+        One Lot Start.
     </h1>
     <p class="lead">
-        Siemens/HPE documented a Fab MES batch Lot that writes 1,580,003 database rows
-        in a single transaction — using 30-year-old stored procedures.
-        1.5 million of those rows aren't even needed right now.
-        They're dragged in because the database is the only thing holding consistency together.
+        Siemens Opcenter EX CR's High Performance Engine technical reference (July 2021)
+        documents a Multi-Level Start transaction that writes <strong>1,580,003 database records</strong>
+        in a single Oracle transaction — executed through a chain of stored procedures
+        (<code>clfExecute</code>, <code>clffunc*</code>). Most of those records are audit trail,
+        history tables, and cross-reference inserts — data that belongs to downstream process
+        steps, not the current operation. But because the database transaction is the only
+        consistency guarantee, everything is crammed into one atomic write.
+        <br><br>
+        <strong>Now project this to 2nm.</strong>
+        GAA nanosheet transistors. 2,000–3,000+ process steps per wafer (vs. ~1,000 at 7nm).
+        Multi-patterning at every critical layer. In-line metrology at every step.
+        That 1.58 million rows per Lot is not the ceiling — it's the starting point.
+        At 2nm, we're looking at <strong>5 to 15 million rows per Lot transaction</strong>.
+        Oracle and DB2 can execute it — but can they do it while keeping the tool waiting
+        under a second? Can they recover from a mid-transaction failure in under a minute?
         <br><br>
         <strong>What if there's a better way?</strong>
         An open-source reactive MES kernel targeting six nines of reliability.
@@ -291,24 +302,45 @@
 
     <div class="story-box">
         <div class="big-number">1,580,003</div>
-        <p style="font-size:1.1rem; font-weight:600;">rows in a single database transaction. For one Lot of 2,000 wafers.</p>
+        <p style="font-size:1.1rem; font-weight:600;">database records, in a single Oracle transaction. For one Multi-Level Lot Start.</p>
         <p style="color:var(--fg-muted); margin-top:8px;">
-            The solution? A stored procedure. A 30-year-old technology that can't be unit-tested,
-            can't be version-controlled properly, and can't scale horizontally.
+            The mechanism? JSON payloads sent to stored procedures (<code>clfExecute</code>, <code>clffunc*</code>)
+            that parse and execute SQL in bulk on the database server — what Siemens calls the
+            "High Performance Engine" (HPE), a separately licensed feature of Opcenter EX CR.
+            No unit tests. No version control for the stored procedure logic. No horizontal scaling.
         </p>
 
         <div class="story-insight">
-            <p><strong>The kicker:</strong> 1,500,000 of those records aren't needed immediately.
-            They belong to <em>downstream</em> process steps — quality checks, statistical process control,
-            equipment history. But because the only consistency guarantee is the database transaction,
-            everything gets crammed into one atomic write. The downstream's write pressure gets
-            dragged upstream, and the whole process slows to the speed of the largest transaction.</p>
+            <p><strong>The kicker:</strong> The vast majority of those 1.58 million records aren't needed for the
+            current operation. They're history tables (HistoryMainline, StartHistoryDetail, HistoryCrossRef),
+            current status snapshots, cross-reference indexes, step-pass counters — data that exists to
+            serve <em>downstream</em> queries and audit requirements. But because the database transaction is
+            the only consistency guarantee, everything is chained into one atomic write. The downstream's
+            data pressure gets dragged upstream, and the Lot Start slows to the speed of the largest insert.</p>
         </div>
 
         <div class="source">
-            Source: Siemens / HPE — semiconductor MES transaction analysis.
-            Every Fab engineer who has dealt with large Lot transactions knows this pain.
+            Source: Siemens Opcenter EX CR — Technical Reference: High Performance Engine, Release 8G.1 (July 2021).
         </div>
+    </div>
+
+    <div class="story-box" style="margin-top:24px; border-color: var(--purple);">
+        <h3 style="font-size:1rem; font-weight:700; margin-bottom:8px; color:var(--purple);">
+            🔮 Project to 2nm GAA
+        </h3>
+        <p style="color:var(--fg-muted); font-size:0.9rem;">
+            The 1.58M-row reference is from the 7nm/5nm era (~1,000 process steps per wafer).
+            At 2nm — with GAA nanosheet transistors, high-NA EUV, and 2,000–3,000+ process steps —
+            the number of containers, history records, and cross-references per Lot explodes.
+            <strong>Conservative estimate: 5–15 million rows per Lot transaction.</strong>
+        </p>
+        <p style="color:var(--fg-muted); font-size:0.9rem; margin-top:8px;">
+            Can Oracle or DB2 execute a 15-million-row stored procedure? Technically yes.
+            But while holding locks across dozens of tables? While the tool sits idle?
+            Can it recover from a mid-transaction failure — not in hours, but in seconds?
+            At 2nm, the stored-procedure approach doesn't just hurt performance —
+            it becomes the bottleneck that caps throughput for the entire Fab.
+        </p>
     </div>
 
     <div class="pain-grid">
@@ -322,11 +354,11 @@
         </div>
         <div class="pain-item">
             <h4>Brittle Recovery</h4>
-            <p>When a transaction spanning 1.58M rows fails halfway through, recovery is manual. Hours of downtime. No automatic compensation, no partial progress saved.</p>
+            <p>When a stored procedure spanning 1.58M rows (or 10M+ at 2nm) fails mid-execution, recovery is manual. Hours of downtime while operators and DBAs figure out partial state. No automatic compensation, no partial progress preserved.</p>
         </div>
         <div class="pain-item">
-            <h4>Throughput Ceiling</h4>
-            <p>A Fab producing 100K wafers/month, each passing hundreds of process steps, generates an event storm. Request-response architectures hit a wall at peak load.</p>
+            <h4>Throughput Ceiling at 2nm</h4>
+            <p>A Fab producing 100K wafers/month at 3,000 steps each generates an event storm that dwarfs current MES loads. The stored-procedure-in-a-single-transaction approach doesn't scale — each Lot Start becomes a serialization point.</p>
         </div>
     </div>
 </section>
@@ -336,9 +368,12 @@
     <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> A Different Path</h2>
     <p class="section-desc">
         The root cause isn't "the database is too slow." It's that the <strong>consistency boundary is drawn in the wrong place</strong>.
-        1.5 million downstream records don't belong in the same transaction as the current step.
-        Cross-system alignment shouldn't rely on foreign keys — it should be event-driven, eventually consistent.
-        Process orchestration shouldn't be hard-coded in stored procedures — it should be explicit, testable, and evolvable DAGs.
+        Audit trail records, history snapshots, cross-reference indexes — they don't belong in the same transaction
+        as the current operation. Cross-system alignment shouldn't rely on foreign keys — it should be event-driven,
+        eventually consistent. Process orchestration shouldn't be hard-coded in JSON-driven stored procedures —
+        it should be explicit, testable, and evolvable DAGs.
+        <br><br>
+        This matters now. At 2nm, it becomes existential for Fab throughput.
     </p>
 
     <div class="table-wrap" style="margin-bottom:40px;">
@@ -531,7 +566,7 @@
                 <tr><td>Debugging</td><td class="muted">"What was the state at 2:03pm?" — guess from backups</td><td>Replay events to any point in time, deterministically</td></tr>
                 <tr><td>Schema Evolution</td><td class="muted">Destructive migrations, stored procedure versioning nightmares</td><td>Append-only events; upcasters handle schema evolution non-destructively</td></tr>
                 <tr><td>Cross-System Integration</td><td class="muted">Batch ETL, polling, foreign keys across databases</td><td>Real-time event streams; push-based projections keep all systems aligned</td></tr>
-                <tr><td>Failure Recovery</td><td class="muted">Manual intervention, hours of downtime</td><td>Saga auto-compensation + supervision hierarchies; automatic for known failure modes</td></tr>
+                <tr><td>Failure Recovery</td><td class="muted">Manual intervention, hours of downtime. At 2nm scale (10M+ rows), partial failure analysis alone takes hours</td><td>Saga auto-compensation + supervision hierarchies; automatic for known failure modes. Each step recovers independently</td></tr>
             </tbody>
         </table>
     </div>

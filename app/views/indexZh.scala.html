@@ -240,15 +240,25 @@
 <section class="hero">
     <div class="hero-badge">开源 · MES 内核</div>
     <h1>
-        2000 片晶圆。<br>
         <span class="grad">158 万行记录。</span><br>
-        一个事务。
+        一个数据库事务。<br>
+        一个 Lot 的 Start。
     </h1>
     <p class="lead">
-        西门子/HPE 的一份技术报告中披露：一个 Fab MES 的批次（Lot）在一个数据库事务中
-        写入了 1,580,003 行记录。解决方案？存储过程——一项 30 年前的技术。
-        更关键的是：其中 150 万条记录根本不需要立刻使用，它们属于后置环节。
-        但因为只能用数据库事务保证一致性，下游的写入压力被硬生生塞进了同一个事务。
+        西门子 Opcenter EX CR 的高性能引擎（HPE）技术参考文档（2021 年 7 月）
+        记录了一个 Multi-Level Start 事务：在单个 Oracle 事务中写入了
+        <strong>1,580,003 条数据库记录</strong>——通过一连串存储过程（<code>clfExecute</code>、
+        <code>clffunc*</code>）在数据库中批量执行 SQL。其中绝大多数是审计追踪记录、
+        历史快照、交叉引用索引——属于下游工序需要的数据，而不是当前操作。
+        但因为数据库事务是唯一的一致性保证，所有数据被硬塞进一个原子写。
+        <br><br>
+        <strong>把这个场景投射到 2nm 工艺。</strong>
+        GAA 纳米片晶体管。每片晶圆 2000–3000+ 道工序（7nm 时代大约 1000 道）。
+        每个关键层都需要多重曝光。每一道工序都需要在线量测。
+        158 万行不是天花板——它只是起点。
+        在 2nm 节点，我们面对的是<strong>每个 Lot 事务 500 万到 1500 万行记录</strong>。
+        Oracle 和 DB2 能执行吗？技术上能。但是在锁住数十张表的同时？
+        让机台在一边闲置等待？在事务执行到一半失败时——能在几秒内恢复，而不是几小时？
         <br><br>
         <strong>如果换一条路呢？</strong>
         一个开源的、追求 6 个 9 可靠性的反应式 MES 核心引擎。
@@ -273,21 +283,44 @@
 
     <div class="story-box">
         <div class="big-number">1,580,003</div>
-        <p style="font-size:1.1rem; font-weight:600;">行记录，在一个数据库事务中。仅仅为了一个 2000 片晶圆的 Lot。</p>
+        <p style="font-size:1.1rem; font-weight:600;">条数据库记录，在单个 Oracle 事务中。一个 Multi-Level Lot Start。</p>
         <p style="color:var(--fg-muted); margin-top:8px;">
-            解决方案是什么？存储过程。一项无法做单元测试、无法做版本控制、无法水平扩展的 30 年前的技术。
+            机制：JSON 负载发送到存储过程（<code>clfExecute</code>、<code>clffunc*</code>），
+            在数据库服务器上解析并批量执行 SQL——西门子称之为"高性能引擎"（HPE），
+            Opcenter EX CR 的一个单独授权功能。
+            存储过程逻辑无法单元测试、无法版本控制、无法水平扩展。
         </p>
 
         <div class="story-insight">
-            <p><strong>关键问题：</strong>其中 1,500,000 条记录根本不需要在当前步骤立刻使用。
-            它们属于<em>下游</em>工序——质量检查、统计过程控制（SPC）、机台历史记录。
-            但因为唯一的可靠性保证是数据库事务的 ACID，所有数据被硬塞进一个原子写操作。
-            下游的写入压力被迁移到了上游，整个流程慢到了最大事务的速度。</p>
+            <p><strong>关键问题：</strong>这 158 万条记录中绝大多数不是当前操作需要的。
+            它们是历史表（HistoryMainline、StartHistoryDetail、HistoryCrossRef）、
+            当前状态快照、交叉引用索引、工序计数——为<em>下游</em>查询和审计需求而存在的数据。
+            但因为数据库事务是唯一的一致性保证，所有写入被锁在同一次原子操作中。
+            下游的数据压力被迁移到上游，Lot Start 慢到了最大批量插入的速度。</p>
         </div>
 
         <div class="source">
-            来源：Siemens / HPE — 半导体 MES 事务分析报告。每一个处理过大 Lot 事务的 Fab 工程师都体会过这种痛苦。
+            来源：Siemens Opcenter EX CR — Technical Reference: High Performance Engine, Release 8G.1 (July 2021)。
         </div>
+    </div>
+
+    <div class="story-box" style="margin-top:24px; border-color: var(--purple);">
+        <h3 style="font-size:1rem; font-weight:700; margin-bottom:8px; color:var(--purple);">
+            🔮 投射到 2nm GAA 工艺节点
+        </h3>
+        <p style="color:var(--fg-muted); font-size:0.9rem;">
+            158 万行的参考数据来自 7nm/5nm 时代（每片晶圆约 1000 道工序）。
+            到了 2nm——GAA 纳米片晶体管、高 NA EUV 光刻、2000–3000+ 道工序——
+            每个 Lot 的 Container、历史记录、交叉引用数量会爆炸式增长。
+            <strong>保守估计：每个 Lot 事务 500 万–1500 万行记录。</strong>
+        </p>
+        <p style="color:var(--fg-muted); font-size:0.9rem; margin-top:8px;">
+            Oracle 或 DB2 能执行 1500 万行的存储过程吗？技术上能。
+            但在锁住数十张表的同时？在机台闲置等待的同时？
+            在事务执行到一半失败时——能在几秒内恢复，而不是几小时？
+            到了 2nm，存储过程方案不仅仅是性能瓶颈——
+            它会成为限制整个 Fab 吞吐量的天花板。
+        </p>
     </div>
 
     <div class="pain-grid">
@@ -301,11 +334,11 @@
         </div>
         <div class="pain-item">
             <h4>脆弱的故障恢复</h4>
-            <p>一个 158 万行的事务执行到一半失败，恢复全靠人工。数小时的停机。没有自动补偿，没有部分进度保留。</p>
+            <p>一个 158 万行（2nm 时代 1000 万+ 行）的存储过程执行到一半失败，恢复全靠人工。数小时的停机。DBA 和操作员手动分析部分状态。没有自动补偿，没有部分进度保留。</p>
         </div>
         <div class="pain-item">
-            <h4>吞吐量天花板</h4>
-            <p>一个月产 10 万片晶圆的 Fab，每片数百道工序，产生的海量并发事件会直接击穿请求-响应架构的峰值处理能力。</p>
+            <h4>2nm 时代的吞吐量天花板</h4>
+            <p>月产 10 万片晶圆、每片 3000 道工序的 Fab 产生的并发事件远超当前 MES 负载。存储过程串行执行模型不伸缩——每个 Lot Start 都成为全局串行化点。</p>
         </div>
     </div>
 </section>
@@ -315,9 +348,11 @@
     <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> 换一条路</h2>
     <p class="section-desc">
         问题的根源不是"数据库不够快"，而是<strong>一致性边界被划错了地方</strong>。
-        150 万条后置数据不应该和当前步骤放在同一个事务里。
+        审计追踪记录、历史快照、交叉引用索引——它们不应该和当前操作放在同一个事务里。
         跨系统的数据对齐不应该依赖数据库外键，而应该靠事件驱动的最终一致性。
-        流程编排不应该硬编码在存储过程中，而应该是显式的、可测试的、可演进的 DAG（有向无环图）。
+        流程编排不应该硬编码在 JSON 驱动的存储过程中，而应该是显式的、可测试的、可演进的 DAG（有向无环图）。
+        <br><br>
+        这在今天很重要。到了 2nm，它决定了 Fab 的吞吐量上限。
     </p>
 
     <div class="table-wrap" style="margin-bottom:40px;">
@@ -508,7 +543,7 @@
                 <tr><td>调试</td><td class="muted">"下午2点的状态是什么？"——从备份猜测</td><td>确定性重放事件到任意时间点</td></tr>
                 <tr><td>模式演进</td><td class="muted">破坏性迁移，存储过程版本管理噩梦</td><td>仅追加事件；上抛器无损处理模式演进</td></tr>
                 <tr><td>跨系统集成</td><td class="muted">批量 ETL、轮询、跨库外键</td><td>实时事件流；推送式投影保持所有系统对齐</td></tr>
-                <tr><td>故障恢复</td><td class="muted">人工介入，小时级停机</td><td>Saga 自动补偿 + 监督层级；已知故障模式自动恢复</td></tr>
+                <tr><td>故障恢复</td><td class="muted">人工介入，小时级停机。2nm 规模（1000万+行），部分故障分析本身就需要数小时</td><td>Saga 自动补偿 + 监督层级；已知故障模式自动恢复。每个步骤独立恢复</td></tr>
             </tbody>
         </table>
     </div>
