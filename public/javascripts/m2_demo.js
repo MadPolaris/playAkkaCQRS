@@ -1,7 +1,7 @@
 /**
  * M2 DAG Execution Engine — 薪资存入完整 23 FSM 场景
  *
- * 23 Akka Persistent FSM + 出站网关。同层节点上下布局，边严格向下。
+ * 23 Akka Persistent FSM + 外部系统。同层节点上下布局，边严格向下。
  * 5 阶段动画：故障注入、自愈闭环、动态批次、外部容错。
  */
 (function () {
@@ -27,24 +27,25 @@
     // Row 1: BatchWorker centered below BatchMaster
     { id: 'batch-worker',  label: '批次工人 ×N', sub: 'BatchWorker', level: 2, type: 'orchestrator', col: 1, row: 1 },
     // Row 2: quota cleanup
-    { id: 'quota-release-u', label: '用户额度释放', sub: 'UserQuotaReleaseActor', level: 2, type: 'protector', col: 0, row: 2 },
-    { id: 'quota-release-t', label: '总额度释放', sub: 'TotalQuotaReleaseActor', level: 2, type: 'protector', col: 2, row: 2 },
+    { id: 'quota-release-u', label: '用户额度释放', sub: 'UserQuotaReleaseActor', level: 5, type: 'protector', col: 0, row: 0 },
+    { id: 'quota-release-t', label: '总额度释放', sub: 'TotalQuotaReleaseActor', level: 5, type: 'protector', col: 0, row: 1 },
 
-    // ===== Level 3: 业务链路层 (12, 2 columns × 6 rows, vertical flow) =====
-    // Recharge chain — left column
+    // ===== Level 3: 业务链路层 (12, 2 chains × 5 rows, tree layout) =====
+    // Each chain: req → resp → reconf → [success | failure] → p2b
+    // Recharge chain — left half
     { id: 'recharge-req',     label: '充值请求', sub: 'RechargeRequestActor', level: 3, chain: 'recharge', row: 0 },
     { id: 'recharge-resp',    label: '充值响应', sub: 'RechargeResponseActor', level: 3, chain: 'recharge', row: 1 },
     { id: 'recharge-reconf',  label: '充值重确认', sub: 'RechargeReconfirmActor', level: 3, chain: 'recharge', row: 2 },
-    { id: 'recharge-success', label: '充值成功', sub: 'RechargeSuccessActor', level: 3, chain: 'recharge', row: 3 },
-    { id: 'recharge-failure', label: '充值失败', sub: 'RechargeFailureActor', level: 3, chain: 'recharge', row: 4 },
-    { id: 'recharge-p2b',     label: '充值P2B通知', sub: 'RechargeP2BNotifyActor', level: 3, chain: 'recharge', row: 5 },
-    // Purchase chain — right column
+    { id: 'recharge-success', label: '充值成功', sub: 'RechargeSuccessActor', level: 3, chain: 'recharge', row: 3, col: 0 },
+    { id: 'recharge-failure', label: '充值失败', sub: 'RechargeFailureActor', level: 3, chain: 'recharge', row: 3, col: 1 },
+    { id: 'recharge-p2b',     label: '充值P2B通知', sub: 'RechargeP2BNotifyActor', level: 3, chain: 'recharge', row: 4 },
+    // Purchase chain — right half
     { id: 'purchase-req',     label: '申购请求', sub: 'PurchaseRequestActor', level: 3, chain: 'purchase', row: 0 },
     { id: 'purchase-resp',    label: '申购响应', sub: 'PurchaseResponseActor', level: 3, chain: 'purchase', row: 1 },
     { id: 'purchase-reconf',  label: '申购重确认', sub: 'PurchaseReconfirmActor', level: 3, chain: 'purchase', row: 2 },
-    { id: 'purchase-success', label: '申购成功', sub: 'PurchaseSuccessActor', level: 3, chain: 'purchase', row: 3 },
-    { id: 'purchase-failure', label: '申购失败', sub: 'PurchaseFailureActor', level: 3, chain: 'purchase', row: 4 },
-    { id: 'purchase-p2b',     label: '申购P2B通知', sub: 'PurchaseP2BNotifyActor', level: 3, chain: 'purchase', row: 5 },
+    { id: 'purchase-success', label: '申购成功', sub: 'PurchaseSuccessActor', level: 3, chain: 'purchase', row: 3, col: 0 },
+    { id: 'purchase-failure', label: '申购失败', sub: 'PurchaseFailureActor', level: 3, chain: 'purchase', row: 3, col: 1 },
+    { id: 'purchase-p2b',     label: '申购P2B通知', sub: 'PurchaseP2BNotifyActor', level: 3, chain: 'purchase', row: 4 },
 
     // ===== Level 4: 通知层 (2) =====
     { id: 'sms-service',  label: '短信服务', sub: 'SmsService · 合规窗口', level: 4, type: 'support', col: 0, row: 0 },
@@ -55,7 +56,7 @@
   var GATEWAY_ENTRIES = [
     { id: 'gw-sftp',   label: '银行 SFTP', sub: '文件上传 / 轮询下载' },
     { id: 'gw-core',   label: '核心账户 API', sub: '余额 / 交易状态查证' },
-    { id: 'gw-p2b',    label: 'P2B 理财平台', sub: '产品申购 / 回盘解析' },
+    { id: 'gw-p2b',    label: '基金申购平台', sub: '产品申购 / 回盘解析' },
     { id: 'gw-sms',    label: '短信通道', sub: '合规窗口下发' }
   ];
 
@@ -108,10 +109,12 @@
 
     // ===== DAG → Outbound Gateway (external edges) =====
     { from: 'recharge-req',  to: 'gw-sftp', external: true },
+    { from: 'recharge-req',  to: 'gw-core', external: true },
     { from: 'recharge-resp', to: 'gw-sftp', external: true },
     { from: 'recharge-reconf', to: 'gw-core', external: true },
     { from: 'recharge-p2b', to: 'gw-p2b', external: true },
     { from: 'purchase-req',  to: 'gw-sftp', external: true },
+    { from: 'purchase-req',  to: 'gw-core', external: true },
     { from: 'purchase-resp', to: 'gw-sftp', external: true },
     { from: 'purchase-p2b', to: 'gw-p2b', external: true },
     { from: 'sms-service',  to: 'gw-sms', external: true },
@@ -144,10 +147,10 @@
       paths: [['quota-reserve','batch-worker']],
       events: ['QuotaFrozen(per user)', 'TimeoutInvariantSet'] },
     { id: 4, key: 'execute', color: '#22c55e', pattern: 'communicator',
-      title: '阶段 4：并发执行 → 流批一体 + 出站网关通信',
-      desc: 'BatchMaster 扇出至 N 个 Worker。每个 Worker 分叉到充值链路（6 FSM 上下串联）和申购链路（同构）。通过出站网关与银行 SFTP、核心账户 API、P2B 平台通信。Communicator 模式：ReceiveTimeout 驱动主动轮询——不阻塞等待。',
-      insight: '流批一体 + Communicator + 出站网关：DAG 与外部世界的所有通信通过统一的出站网关——SFTP/API/P2B/短信四种协议被封装在网关内部。Communicator 把外部不确定性封装在可重试的异步边界内。网关对外部系统的不可用进行缓冲——外部抖动不会拖垮 DAG 内部。',
-      contrast: '传统：同步 HTTP + 固定超时。外部系统抖动 = 整个流程卡死。流/批两套代码。出站网关把"与外部系统通信"从遍布各处的集成代码变成了一个明确的架构边界。',
+      title: '阶段 4：并发执行 → 流批一体 + 外部系统通信',
+      desc: 'BatchMaster 扇出至 N 个 Worker。每个 Worker 分叉到充值链路（6 FSM 上下串联）和申购链路（同构）。通过外部系统与银行 SFTP、核心账户 API、P2B 平台通信。Communicator 模式：ReceiveTimeout 驱动主动轮询——不阻塞等待。',
+      insight: '流批一体 + Communicator + 外部系统：DAG 与外部世界的所有通信通过统一的外部系统——SFTP/API/P2B/短信四种协议被封装在网关内部。Communicator 把外部不确定性封装在可重试的异步边界内。网关对外部系统的不可用进行缓冲——外部抖动不会拖垮 DAG 内部。',
+      contrast: '传统：同步 HTTP + 固定超时。外部系统抖动 = 整个流程卡死。流/批两套代码。外部系统把"与外部系统通信"从遍布各处的集成代码变成了一个明确的架构边界。',
       highlight: ['batch-master', 'batch-worker', 'recharge-req', 'recharge-resp', 'recharge-reconf', 'recharge-success', 'purchase-req', 'purchase-resp', 'purchase-reconf', 'purchase-success'],
       paths: [['batch-master','batch-worker'], ['batch-worker','recharge-req'], ['batch-worker','purchase-req'],
               ['recharge-req','recharge-resp'], ['recharge-resp','recharge-success'],
@@ -156,9 +159,9 @@
       events: ['BatchDispatched(×N)', 'SFTPFileUploaded', 'BankPollingStarted', 'ReconfirmTriggered', 'ResponsePolled'] },
     { id: 5, key: 'compensate', color: '#ef4444', pattern: 'compensator',
       title: '阶段 5：通信层 → 成功/故障路由 + 补偿闭环',
-      desc: '通信层演示两条路由：✅ 成功路径 — recharge/purchase-success → SmsService → 出站网关短信通道，通知用户。✕ 故障路径 — recharge/purchase-failure → QuotaRelease → 额度清理，ReminderSms 发送告警。♻ 补偿闭环 — ReBatchActor 扫描失败批次 → 重新注入 Worker Pool。',
-      insight: '通信层是 DAG 与外部世界的边界。成功消息和故障消息在此层分流——成功走通知通道（绿），失败走补偿通道（红）。出站网关统一对外通信（SFTP/API/P2B/短信），隔离外部不确定性。Compensator 确保故障闭环——只要补偿器在运行，没有失败会被遗漏。',
-      contrast: '传统：成功和失败的处理逻辑混在一起，缺少明确的通信边界。外部系统调用散落各处——换个短信通道要改 10 个文件。M2 的通信层把所有外部通信集中到出站网关，成功/失败路径在 DAG 中显式声明。',
+      desc: '通信层演示两条路由：✅ 成功路径 — recharge/purchase-success → SmsService → 外部系统短信通道，通知用户。✕ 故障路径 — recharge/purchase-failure → QuotaRelease → 额度清理，ReminderSms 发送告警。♻ 补偿闭环 — ReBatchActor 扫描失败批次 → 重新注入 Worker Pool。',
+      insight: '通信层是 DAG 与外部世界的边界。成功消息和故障消息在此层分流——成功走通知通道（绿），失败走补偿通道（红）。外部系统统一对外通信（SFTP/API/P2B/短信），隔离外部不确定性。Compensator 确保故障闭环——只要补偿器在运行，没有失败会被遗漏。',
+      contrast: '传统：成功和失败的处理逻辑混在一起，缺少明确的通信边界。外部系统调用散落各处——换个短信通道要改 10 个文件。M2 的通信层把所有外部通信集中到外部系统，成功/失败路径在 DAG 中显式声明。',
       highlight: ['re-batch', 'batch-worker', 'quota-release-u', 'quota-release-t', 'sms-service', 'reminder-sms', 'recharge-failure', 'purchase-failure', 'recharge-success', 'purchase-success'],
       // Success paths (green), failure paths (red), recovery (blue)
       successPaths: [['recharge-success','sms-service'], ['purchase-success','sms-service'], ['sms-service','gw-sms']],
@@ -177,7 +180,7 @@
   var vizArea = document.getElementById('vizArea');
   var logContainer = document.getElementById('logContainer');
   var infoTitle = document.getElementById('infoTitle'), infoDesc = document.getElementById('infoDesc'), infoMeta = document.getElementById('infoMeta');
-  var jCount = document.getElementById('jCount'), toast = document.getElementById('toast');
+  var toast = document.getElementById('toast');
   var m2InsightBox = document.getElementById('m2InsightBox'), m2InsightText = document.getElementById('m2InsightText');
   var m2ContrastBox = document.getElementById('m2ContrastBox'), m2ContrastText = document.getElementById('m2ContrastText');
   var phaseBtns = []; for (var i = 1; i <= 5; i++) phaseBtns[i] = document.getElementById('phaseBtn' + i);
@@ -189,72 +192,120 @@
 
   // ======================== LAYOUT ========================
   var NODE_W = 118, NODE_H = 40;
-  var GW_CONTAINER_W = 152, GW_ENTRY_W = 138, GW_ENTRY_H = 38;
-  var GW_PAD_TOP = 48, GW_ENTRY_GAP = 6;
+  var GW_CONTAINER_W = 156, GW_ENTRY_W = 142, GW_ENTRY_H = 38;
+  var GW_PAD_TOP = 48, GW_ENTRY_GAP = 40;
 
   function layoutNodes() {
     var w = vizArea.clientWidth, h = vizArea.clientHeight;
-    var gwX = w - GW_CONTAINER_W - 12;
-    var innerW = gwX - 20;
-    var usableH = h - 24 - 8;
+    var innerW = w - 40;
+    var GAP = Math.round(NODE_H * 1.5); // 60 — uniform 1.5x card-height spacing
+    var LEVEL_GAP = GAP;
+    var TOP_MARGIN = 24;
 
-    // Weight-based height allocation: L0(5) L1(12) L2(18) L3(20) L4(8) = 63
-    var weights = [5, 12, 18, 20, 8];
-    var sumW = 63;
-    var LEVEL_GAP = 14; // gap between levels
-    var totalGap = LEVEL_GAP * 4; // 4 gaps between 5 levels
-    var usableForLevels = usableH - totalGap;
-    var lvlY = [24];
-    for (var lv = 1; lv < 5; lv++) {
-      lvlY.push(lvlY[lv - 1] + usableForLevels * weights[lv - 1] / sumW + LEVEL_GAP);
+    // Content-aware heights
+    var l0MinH = NODE_H;                     // 1 node = 40
+    var l1MinH = 2 * NODE_H + GAP;           // 2 rows with GAP = 140
+    var l2MinH = 2 * NODE_H + GAP;           // 2 rows with GAP = 140
+    var l3MinH = 5 * NODE_H + 4 * GAP;       // 5 rows per chain = 440
+    var l4MinH = NODE_H;                      // 1 row = 40
+    var l5MinH = 2 * NODE_H + GAP;           // 2 nodes with GAP = 140
+
+    // Stack levels sequentially from top
+    var lvlY = [TOP_MARGIN];
+    var heights = [l0MinH, l1MinH, l2MinH, l3MinH, l4MinH, l5MinH];
+    for (var lv = 1; lv <= 5; lv++) {
+      lvlY.push(lvlY[lv - 1] + heights[lv - 1] + LEVEL_GAP);
     }
-    var l2Height = usableForLevels * weights[2] / sumW;
-    var l3Height = usableForLevels * weights[3] / sumW;
-    var l4Height = usableForLevels * weights[4] / sumW;
 
     // Level 0: 1 node centered
     placeRow(NODES.filter(function (n) { return n.level === 0; }), lvlY[0], 1, innerW);
 
-    // Level 1: 2 sub-rows — JobActor above, PreBatch + ReBatch below
-    var l1Height = usableForLevels * weights[1] / sumW;
-    var l1r0 = NODES.filter(function (n) { return n.level === 1 && n.row === 0; }); // 1 node: JobActor
-    var l1r1 = NODES.filter(function (n) { return n.level === 1 && n.row === 1; }); // 2 nodes: PreBatch, ReBatch
-    placeRow(l1r0, lvlY[1], 1, innerW);
-    placeRow(l1r1, lvlY[1] + l1Height - NODE_H - 4, 2, innerW);
+    // Level 1: 2 sub-rows centered vertically — JobActor above, PreBatch+ReBatch below
+    var l1Total = 2 * NODE_H + GAP;
+    var l1start = lvlY[1] + (l1MinH - l1Total) / 2;
+    var l1r0 = NODES.filter(function (n) { return n.level === 1 && n.row === 0; });
+    var l1r1 = NODES.filter(function (n) { return n.level === 1 && n.row === 1; });
+    placeRow(l1r0, l1start, 1, innerW);
+    placeRow(l1r1, l1start + NODE_H + GAP, 2, innerW);
 
-    // Level 2: 3 sub-rows with doubled spacing
+    // Level 2: 2 sub-rows centered vertically
+    var l2Total = 2 * NODE_H + GAP;
+    var l2start = lvlY[2] + (l2MinH - l2Total) / 2;
     var l2r0 = NODES.filter(function (n) { return n.level === 2 && n.row === 0; });
     var l2r1 = NODES.filter(function (n) { return n.level === 2 && n.row === 1; });
-    var l2r2 = NODES.filter(function (n) { return n.level === 2 && n.row === 2; });
-    var l2gap = Math.max((l2Height - 3 * NODE_H) / 4, 6); // 4 gaps for 3 rows
-    var l2r0y = lvlY[2] + l2gap;
-    var l2r1y = l2r0y + NODE_H + l2gap * 2;
-    var l2r2y = l2r1y + NODE_H + l2gap * 2;
-    placeRow(l2r0, l2r0y, 3, innerW);
-    placeRow(l2r1, l2r1y, 3, innerW);
-    placeRow(l2r2, l2r2y, 2, innerW);
+    placeRow(l2r0, l2start, 3, innerW);
+    placeRow(l2r1, l2start + NODE_H + GAP, 3, innerW);
 
-    // Level 3: 2 vertical columns (recharge left, purchase right)
-    placeColumn(NODES.filter(function (n) { return n.chain === 'recharge'; }), lvlY[3], l3Height, NODE_H, innerW * 0.33, innerW);
-    placeColumn(NODES.filter(function (n) { return n.chain === 'purchase'; }), lvlY[3], l3Height, NODE_H, innerW * 0.67, innerW);
+    // Level 3: 2 chains side by side, tree layout per chain
+    // Each chain: req → resp → [reconf | success | failure] → p2b
+    var l3LeftCx = innerW * 0.25;   // center of left half
+    var l3RightCx = innerW * 0.75;  // center of right half
+    var l3ChainW = innerW * 0.42;   // available width per chain for 3-node row
+    layoutChainL3(NODES.filter(function (n) { return n.chain === 'recharge'; }), lvlY[3], l3MinH, l3LeftCx, l3ChainW);
+    layoutChainL3(NODES.filter(function (n) { return n.chain === 'purchase'; }), lvlY[3], l3MinH, l3RightCx, l3ChainW);
 
-    // Level 4: 2 internal nodes + gateway on the right at same height
-    placeRow(NODES.filter(function (n) { return n.level === 4; }), lvlY[4], 2, innerW);
+    // Level 5 (moved up to old L4 level): 2 nodes stacked vertically centered
+    var l5start = lvlY[4];
+    var l5nodes = NODES.filter(function (n) { return n.level === 5; });
+    var qru = l5nodes.find(function (n) { return n.id === 'quota-release-u'; });
+    if (qru) { placeNode(qru, l5start, innerW * 0.5); }
+    var qrt = l5nodes.find(function (n) { return n.id === 'quota-release-t'; });
+    if (qrt) { placeNode(qrt, l5start + NODE_H + GAP, innerW * 0.5); }
 
-    // ===== Gateway at Level 4 height (same vertical position) =====
-    var gwTop = lvlY[4] - 8;
-    var gwHeight = l4Height + 16;
-    GATEWAY_ENTRIES.forEach(function (entry, idx) {
-      var ey = gwTop + GW_PAD_TOP + idx * (GW_ENTRY_H + GW_ENTRY_GAP);
-      var ex = gwX + (GW_CONTAINER_W - GW_ENTRY_W) / 2;
-      gwPositions[entry.id] = { x: ex, y: ey, cx: ex + GW_ENTRY_W / 2, cy: ey + GW_ENTRY_H / 2, left: ex, right: ex + GW_ENTRY_W, bottom: ey + GW_ENTRY_H };
+    // ===== External Systems =====
+    // Bank system: center column, aligned with L3 resp/reconf rows
+    var bankCenterX = w / 2;
+    var bankX = bankCenterX - GW_CONTAINER_W / 2;
+    var respCenterY = lvlY[3] + NODE_H + GAP + NODE_H / 2;
+    var reconfCenterY = lvlY[3] + 2 * (NODE_H + GAP) + NODE_H / 2;
+    var bankEntryGap = reconfCenterY - respCenterY - GW_ENTRY_H;
+    var bankStartY = respCenterY - GW_ENTRY_H / 2;
+    ['gw-sftp', 'gw-core'].forEach(function (id, idx) {
+      var ey = bankStartY + idx * (GW_ENTRY_H + bankEntryGap);
+      var ex = bankX + (GW_CONTAINER_W - GW_ENTRY_W) / 2;
+      gwPositions[id] = { x: ex, y: ey, cx: ex + GW_ENTRY_W / 2, cy: ey + GW_ENTRY_H / 2, left: ex, right: ex + GW_ENTRY_W, bottom: ey + GW_ENTRY_H };
     });
-    gwPositions._container = { x: gwX, y: gwTop, w: GW_CONTAINER_W, h: gwHeight };
+    var bankTop = bankStartY - GW_PAD_TOP;
+    var bankH = GW_PAD_TOP + 2 * GW_ENTRY_H + bankEntryGap + 12;
+    gwPositions._leftCol = { x: bankX, y: bankTop, w: GW_CONTAINER_W, h: bankH };
+
+    // 理财平台: center column, below L5
+    var l5Bottom = lvlY[4] + 2 * NODE_H + GAP;
+    var p2bCenterX = w / 2;
+    var p2bColX = p2bCenterX - GW_CONTAINER_W / 2;
+    var p2bColTop = l5Bottom + 24;
+    var p2bEntryY = p2bColTop + GW_PAD_TOP;
+    var p2bEx = p2bColX + (GW_CONTAINER_W - GW_ENTRY_W) / 2;
+    gwPositions['gw-p2b'] = { x: p2bEx, y: p2bEntryY, cx: p2bEx + GW_ENTRY_W / 2, cy: p2bEntryY + GW_ENTRY_H / 2, left: p2bEx, right: p2bEx + GW_ENTRY_W, bottom: p2bEntryY + GW_ENTRY_H };
+    var p2bColH = GW_PAD_TOP + GW_ENTRY_H + 12;
+    gwPositions._p2bCol = { x: p2bColX, y: p2bColTop, w: GW_CONTAINER_W, h: p2bColH };
+
+    // Level 4 (moved below 理财平台): 2 nodes side by side on a single row
+    var l4Y = p2bColTop + p2bColH + LEVEL_GAP;
+    var l4nodes = NODES.filter(function (n) { return n.level === 4; });
+    var smsSvc = l4nodes.find(function (n) { return n.id === 'sms-service'; });
+    if (smsSvc) { placeNode(smsSvc, l4Y, innerW * 0.35); }
+    var reminder = l4nodes.find(function (n) { return n.id === 'reminder-sms'; });
+    if (reminder) { placeNode(reminder, l4Y, innerW * 0.65); }
+
+    // gw-sms: centered below L4, styled container
+    var smsCenterX = w / 2;
+    var smsColX = smsCenterX - GW_CONTAINER_W / 2;
+    var smsColTop = l4Y + NODE_H + 24;
+    var smsEntryY = smsColTop + GW_PAD_TOP;
+    var smsEx = smsColX + (GW_CONTAINER_W - GW_ENTRY_W) / 2;
+    gwPositions['gw-sms'] = { x: smsEx, y: smsEntryY, cx: smsEx + GW_ENTRY_W / 2, cy: smsEntryY + GW_ENTRY_H / 2, left: smsEx, right: smsEx + GW_ENTRY_W, bottom: smsEntryY + GW_ENTRY_H };
+    var smsColH = GW_PAD_TOP + GW_ENTRY_H + 12;
+    gwPositions._smsCol = { x: smsColX, y: smsColTop, w: GW_CONTAINER_W, h: smsColH };
 
     // Set SVG canvas height to fit all content
-    var maxY = gwTop + gwHeight + 16;
+    var maxY = smsColTop + smsColH + 24;
     canvas.style.height = maxY + 'px';
     canvas.setAttribute('viewBox', '0 0 ' + w + ' ' + maxY);
+  }
+
+  function placeNode(n, y, x) {
+    nodePositions[n.id] = { x: x - NODE_W / 2, y: y, cx: x, cy: y + NODE_H / 2, right: x + NODE_W / 2, bottom: y + NODE_H };
   }
 
   function placeRow(nodes, y, cols, innerW) {
@@ -269,13 +320,44 @@
 
   function placeColumn(nodes, topY, totalH, nodeH, colCenter, innerW) {
     var count = nodes.length;
-    var totalNodesH = count * nodeH + (count - 1) * 6;
+    var colGap = Math.round(nodeH * 1.5);
+    var totalNodesH = count * nodeH + (count - 1) * colGap;
     var startY = topY + (totalH - totalNodesH) / 2;
     nodes.forEach(function (n) {
-      var y = startY + n.row * (nodeH + 6);
+      var y = startY + n.row * (nodeH + colGap);
       var x = colCenter - NODE_W / 2;
       nodePositions[n.id] = { x: x, y: y, cx: x + NODE_W / 2, cy: y + NODE_H / 2, right: x + NODE_W, bottom: y + NODE_H, top: y };
     });
+  }
+
+  function layoutChainL3(nodes, topY, totalH, centerX, chainW) {
+    // 5 rows: req(0), resp(1), reconf(2), [success | failure](3), p2b(4)
+    var GAP = Math.round(NODE_H * 1.5);
+    var totalNodesH = 5 * NODE_H + 4 * GAP;
+    var startY = topY + (totalH - totalNodesH) / 2;
+
+    var req = nodes.find(function (n) { return n.row === 0; });
+    var resp = nodes.find(function (n) { return n.row === 1; });
+    var reconf = nodes.find(function (n) { return n.row === 2; });
+    var outcomes = nodes.filter(function (n) { return n.row === 3; }).sort(function (a, b) { return (a.col || 0) - (b.col || 0); });
+    var p2b = nodes.find(function (n) { return n.row === 4; });
+
+    if (req) placeNode(req, startY, centerX);
+    if (resp) placeNode(resp, startY + NODE_H + GAP, centerX);
+    if (reconf) placeNode(reconf, startY + 2 * (NODE_H + GAP), centerX);
+
+    // Outcome row: 2 nodes (success | failure) side by side, centered on centerX
+    var outcomeY = startY + 3 * (NODE_H + GAP);
+    var outcomeTotalW = 2 * NODE_W + GAP;
+    var outcomeStartX = centerX - outcomeTotalW / 2 + NODE_W / 2;
+    outcomes.forEach(function (n, idx) {
+      var x = outcomeStartX + idx * (NODE_W + GAP);
+      nodePositions[n.id] = { x: x - NODE_W / 2, y: outcomeY, cx: x, cy: outcomeY + NODE_H / 2, right: x + NODE_W / 2, bottom: outcomeY + NODE_H };
+    });
+
+    // p2b aligned under success (col:0), not centered
+    var p2bCx = outcomeStartX; // same X center as success node
+    if (p2b) placeNode(p2b, startY + 4 * (NODE_H + GAP), p2bCx);
   }
 
   function getEdgePath(fromId, toId, isFeedback, isExternal) {
@@ -283,40 +365,92 @@
     var t = isExternal ? gwPositions[toId] : nodePositions[toId];
     if (!f || !t) return '';
 
+    // Smooth S-curve helper
+    function sCurve(x1, y1, x2, y2, tension) {
+      var t = tension || 0.45;
+      var dx = Math.abs(x2 - x1), dy = Math.abs(y2 - y1);
+      var cp = Math.max(dy * t, Math.min(dx * 0.5, 40));
+      return 'M ' + x1 + ' ' + y1 + ' ' +
+             'C ' + x1 + ' ' + (y1 + cp) + ', ' +
+             x2 + ' ' + (y2 - cp) + ', ' +
+             x2 + ' ' + y2;
+    }
+
     if (isFeedback) {
-      var bulge = vizArea.clientWidth - 20;
-      return 'M ' + f.right + ' ' + (f.y + NODE_H / 2) + ' ' +
-             'C ' + bulge + ' ' + (f.y + NODE_H / 2) + ', ' +
-             bulge + ' ' + (t.y + NODE_H / 2) + ', ' +
-             t.right + ' ' + (t.y + NODE_H / 2);
+      var bulge = vizArea.clientWidth - 30;
+      var fy = f.y + NODE_H / 2, ty = t.y + NODE_H / 2;
+      return 'M ' + f.right + ' ' + fy + ' ' +
+             'C ' + bulge + ' ' + fy + ', ' +
+             bulge + ' ' + ty + ', ' +
+             t.right + ' ' + ty;
     }
 
     if (isExternal) {
-      // From DAG node right edge → gateway entry left edge
-      var midX = (f.right + t.left) / 2;
-      return 'M ' + f.right + ' ' + (f.y + NODE_H / 2) + ' ' +
-             'C ' + midX + ' ' + (f.y + NODE_H / 2) + ', ' +
-             midX + ' ' + (t.y + GW_ENTRY_H / 2) + ', ' +
-             t.left + ' ' + (t.y + GW_ENTRY_H / 2);
+      var fsy = f.y + NODE_H / 2, tty = t.y + GW_ENTRY_H / 2;
+      if (f.cx < t.cx) {
+        // DAG node left of gateway: right edge → gateway left edge
+        var mx = (f.right + t.left) / 2;
+        return 'M ' + f.right + ' ' + fsy + ' ' +
+               'C ' + mx + ' ' + fsy + ', ' +
+               mx + ' ' + tty + ', ' +
+               t.left + ' ' + tty;
+      } else {
+        // DAG node right of gateway: left edge → gateway right edge
+        var mx = (f.x + t.right) / 2;
+        return 'M ' + f.x + ' ' + fsy + ' ' +
+               'C ' + mx + ' ' + fsy + ', ' +
+               mx + ' ' + tty + ', ' +
+               t.right + ' ' + tty;
+      }
     }
 
-    // Get target node dimensions
-    var tH = NODE_H;
-    var fromBot = f.bottom, toTop = t.y;
+    // Normal downward: source bottom-center → target top-center
+    var x1 = f.cx, y1 = f.bottom;
+    var x2 = t.cx, y2 = t.y;
+    var dx = x2 - x1, dy = y2 - y1;
 
-    // Normal downward: source bottom → target top
-    var dx = t.cx - f.cx;
-    var curve = Math.max(Math.abs(dx) * 0.4, 30);
-    return 'M ' + f.cx + ' ' + fromBot + ' ' +
-           'C ' + f.cx + ' ' + (fromBot + curve) + ', ' +
-           t.cx + ' ' + (toTop - curve) + ', ' +
-           t.cx + ' ' + toTop;
+    if (Math.abs(dx) < 8) {
+      // Same column: straight down with minimal curve
+      var cp = Math.max(dy * 0.35, 24);
+      return sCurve(x1, y1, x2, y2, 0.35);
+    } else {
+      // Different columns: smooth S-curve
+      var cp = Math.max(Math.abs(dx) * 0.35, 18);
+      var midY = (y1 + y2) / 2;
+      return 'M ' + x1 + ' ' + y1 + ' ' +
+             'C ' + x1 + ' ' + (y1 + cp) + ', ' +
+             x2 + ' ' + (y2 - cp) + ', ' +
+             x2 + ' ' + y2;
+    }
   }
 
   // ======================== RENDER ========================
   function renderAll() {
     layoutNodes();
     while (canvas.firstChild) canvas.removeChild(canvas.firstChild);
+
+    // Thin arrow markers for edges
+    var defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    var arrows = [
+      { id: 'arrow-normal',  fill: 'rgba(255,255,255,0.12)' },
+      { id: 'arrow-feedback', fill: 'rgba(239,68,68,0.5)' },
+      { id: 'arrow-external', fill: 'rgba(240,136,62,0.5)' },
+      { id: 'arrow-highlight', fill: 'rgba(88,166,255,0.7)' }
+    ];
+    arrows.forEach(function(a) {
+      var m = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+      m.setAttribute('id', a.id);
+      m.setAttribute('markerWidth', '5'); m.setAttribute('markerHeight', '4');
+      m.setAttribute('refX', '5'); m.setAttribute('refY', '2');
+      m.setAttribute('orient', 'auto');
+      m.setAttribute('markerUnits', 'userSpaceOnUse');
+      var p = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      p.setAttribute('points', '0,0 5,2 0,4');
+      p.setAttribute('fill', a.fill);
+      m.appendChild(p);
+      defs.appendChild(m);
+    });
+    canvas.appendChild(defs);
     svgEdges = {}; svgNodeGroups = {};
     renderLevelLabels();
     renderGatewayContainer();
@@ -327,12 +461,12 @@
   }
 
   function renderLevelLabels() {
-    var labels = ['触发层', '编排层', '执行与资源层', '业务链路层 (2 链 × 6 FSM)', '通信层'];
+    var labels = ['触发层', '编排层', '执行与资源层', '业务链路层 (2 链 × 5 行)', '通信层', '补偿释放层'];
     var h = vizArea.clientHeight;
     var usableH = h - 24 - 8;
-    var slotH = usableH / 6;
-    var yPos = [24, 24 + slotH, 24 + 2 * slotH, 24 + 3 * slotH, 24 + 4 * slotH];
-    for (var lv = 0; lv <= 4; lv++) {
+    var slotH = usableH / 7;
+    var yPos = [24, 24 + slotH, 24 + 2 * slotH, 24 + 3 * slotH, 24 + 4 * slotH, 24 + 5 * slotH];
+    for (var lv = 0; lv <= 5; lv++) {
       var el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       el.setAttribute('class', 'level-label');
       el.setAttribute('x', 6); el.setAttribute('y', yPos[lv] + 8);
@@ -342,9 +476,16 @@
   }
 
   function renderGatewayContainer() {
-    var c = gwPositions._container;
+    // Center: Bank system (SFTP + Core API)
+    _renderGatewayColumn(gwPositions._leftCol, '银行系统', 'SFTP / Core API');
+    // Center: 理财平台 (P2B)
+    _renderGatewayColumn(gwPositions._p2bCol, '理财平台', '基金申购 / 回盘');
+    // Center: 短信通道 (SMS)
+    _renderGatewayColumn(gwPositions._smsCol, '短信通道', '合规窗口下发');
+  }
+
+  function _renderGatewayColumn(c, title, sub) {
     var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    // Container rect
     var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', c.x); rect.setAttribute('y', c.y);
     rect.setAttribute('width', c.w); rect.setAttribute('height', c.h);
@@ -353,30 +494,47 @@
     rect.setAttribute('stroke', 'rgba(240,136,62,0.3)');
     rect.setAttribute('stroke-width', 1.5);
     g.appendChild(rect);
-    // Title
-    var title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    title.setAttribute('x', c.x + c.w / 2); title.setAttribute('y', c.y + 22);
-    title.setAttribute('text-anchor', 'middle');
-    title.setAttribute('fill', '#f0883e');
-    title.setAttribute('font-size', '0.68rem'); title.setAttribute('font-weight', '700');
-    title.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
-    title.textContent = '出站网关';
-    g.appendChild(title);
-    // Subtitle
-    var sub = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    sub.setAttribute('x', c.x + c.w / 2); sub.setAttribute('y', c.y + 38);
-    sub.setAttribute('text-anchor', 'middle');
-    sub.setAttribute('fill', 'rgba(240,136,62,0.6)');
-    sub.setAttribute('font-size', '0.55rem');
-    sub.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
-    sub.textContent = 'Outbound Gateway';
-    g.appendChild(sub);
+    var t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', c.x + c.w / 2); t.setAttribute('y', c.y + 18);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('fill', '#f0883e');
+    t.setAttribute('font-size', '0.62rem'); t.setAttribute('font-weight', '700');
+    t.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
+    t.textContent = title;
+    g.appendChild(t);
+    var s = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    s.setAttribute('x', c.x + c.w / 2); s.setAttribute('y', c.y + 34);
+    s.setAttribute('text-anchor', 'middle');
+    s.setAttribute('fill', 'rgba(240,136,62,0.5)');
+    s.setAttribute('font-size', '0.52rem');
+    s.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
+    s.textContent = sub;
+    g.appendChild(s);
     canvas.appendChild(g);
+  }
+
+  function renderCenterDivider() {
+    // Find the Y range of L3 nodes
+    var l3nodes = NODES.filter(function (n) { return n.level === 3; });
+    var minY = Infinity, maxY = -Infinity;
+    l3nodes.forEach(function (n) {
+      var pos = nodePositions[n.id];
+      if (pos) { minY = Math.min(minY, pos.y); maxY = Math.max(maxY, pos.bottom); }
+    });
+    if (minY === Infinity) return;
+    var cx = vizArea.clientWidth / 2;
+    var line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', cx); line.setAttribute('y1', minY - 8);
+    line.setAttribute('x2', cx); line.setAttribute('y2', maxY + 8);
+    line.setAttribute('stroke', 'rgba(255,255,255,0.12)');
+    line.setAttribute('stroke-width', 1);
+    line.setAttribute('stroke-dasharray', '6,4');
+    canvas.appendChild(line);
   }
 
   function renderGatewayEntries() {
     Object.keys(gwPositions).forEach(function (key) {
-      if (key === '_container') return;
+      if (key.charAt(0) === '_') return;
       var pos = gwPositions[key];
       var entry = GATEWAY_ENTRIES.find(function (e) { return e.id === key; });
       if (!entry) return;
@@ -423,6 +581,8 @@
       if (e.external) cls += ' external';
       path.setAttribute('class', cls);
       path.setAttribute('fill', 'none');
+      var marker = e.feedback ? 'url(#arrow-feedback)' : e.external ? 'url(#arrow-external)' : 'url(#arrow-normal)';
+      path.setAttribute('marker-end', marker);
       canvas.appendChild(path);
       svgEdges[key] = { el: path, feedback: !!e.feedback, external: !!e.external };
     });
@@ -477,6 +637,14 @@
       sub.textContent = n.sub;
       g.setAttribute('transform', 'translate(' + pos.x + ',' + pos.y + ')');
       g.classList.add('dimmed');
+      // 只有 FSM 节点可以下钻（排除 cron 触发器）
+      if (n.id !== 'cron') {
+        g.setAttribute('data-fsm-id', n.id);
+        g.addEventListener('dblclick', function(e) {
+          e.stopPropagation();
+          FSMViewer.open(n.id);
+        });
+      }
       svgNodeGroups[n.id] = { g: g, rect: rect, badge: badge, label: label, sub: sub };
     });
   }
@@ -536,7 +704,12 @@
 
     // Dim all
     Object.keys(svgNodeGroups).forEach(function (id) { svgNodeGroups[id].g.classList.add('dimmed'); svgNodeGroups[id].g.classList.remove('active', 'completed', 'failed', 'recovered'); });
-    Object.keys(svgEdges).forEach(function (key) { svgEdges[key].el.classList.remove('highlight'); svgEdges[key].el.style.stroke = ''; });
+    Object.keys(svgEdges).forEach(function (key) {
+      var e = svgEdges[key];
+      e.el.classList.remove('highlight'); e.el.style.stroke = '';
+      var m = e.feedback ? 'url(#arrow-feedback)' : e.external ? 'url(#arrow-external)' : 'url(#arrow-normal)';
+      e.el.setAttribute('marker-end', m);
+    });
 
     setTimeout(function () {
       phase.highlight.forEach(function (id) {
@@ -560,7 +733,7 @@
             setTimeout(function () {
               var edgeKey = pair[0] + '->' + pair[1];
               var edgeObj = svgEdges[edgeKey];
-              if (edgeObj) { edgeObj.el.classList.add('highlight'); edgeObj.el.style.stroke = grp.color; }
+              if (edgeObj) { edgeObj.el.classList.add('highlight'); edgeObj.el.style.stroke = grp.color; edgeObj.el.setAttribute('marker-end', 'url(#arrow-highlight)'); }
               addLog(grp.logType, (pair[0] + ' → ' + pair[1]));
               animateParticle(pair[0], pair[1], grp.events[idx] || 'Event', grp.color);
             }, pathDelay);
@@ -576,7 +749,7 @@
           setTimeout(function () {
             var edgeKey = pair[0] + '->' + pair[1];
             var edgeObj = svgEdges[edgeKey];
-            if (edgeObj) { edgeObj.el.classList.add('highlight'); edgeObj.el.style.stroke = edgeColor; }
+            if (edgeObj) { edgeObj.el.classList.add('highlight'); edgeObj.el.style.stroke = edgeColor; edgeObj.el.setAttribute('marker-end', 'url(#arrow-highlight)'); }
             addLog(phase.pattern, (pair[0] + ' → ' + pair[1]));
             animateParticle(pair[0], pair[1], events[idx] || 'Event', edgeColor);
           }, pathDelay);
@@ -597,9 +770,9 @@
           var gws = svgNodeGroups['gw-sftp'];
           if (rcf) { rcf.g.classList.remove('active', 'completed'); rcf.g.classList.add('failed'); }
           if (gws) { gws.g.classList.remove('dimmed'); gws.g.classList.add('active'); }
-          addLog('comp', '✕ 充值链路 SFTP 超时! 出站网关无响应 → 批次 ABORTED');
+          addLog('comp', '✕ 充值链路 SFTP 超时! 外部系统无响应 → 批次 ABORTED');
           animateParticle('recharge-resp', 'recharge-failure', 'SFTP Timeout!', '#f85149');
-          eventCount++; jCount.textContent = eventCount;
+          eventCount++;
         }, failTime);
         pathDelay = failTime + 1400;
       }
@@ -613,7 +786,7 @@
         completedPhases[phaseId] = true;
         var evCount = phase.events ? phase.events.length : 0;
         if (phase.successEvents) evCount = phase.successEvents.length + phase.failEvents.length + phase.recoverEvents.length;
-        eventCount += evCount; jCount.textContent = eventCount;
+        eventCount += evCount;
         updatePhaseButtonStates(); isAnimating = false;
 
         if (phaseId === 5) {
@@ -624,14 +797,14 @@
             if (rb) rb.g.classList.add('completed');
             addLog('info', '✔ ReBatchActor 扫描到 ABORTED → 重新注入 Worker Pool → 充值链路恢复');
             animateParticle('re-batch', 'batch-worker', 'ReInject → Recovered', '#3fb950');
-            eventCount++; jCount.textContent = eventCount;
+            eventCount++;
             showToast('自愈完成：失败批次已重新注入 Worker Pool');
           }, 1200);
         }
 
         if (Object.keys(completedPhases).length === 5) {
           setTimeout(function () {
-            showToast('全部 5 阶段完成——23 FSM + 出站网关，自愈闭环验证通过');
+            showToast('全部 5 阶段完成——23 FSM + 外部系统，自愈闭环验证通过');
             addLog('info', '=== DAG 完整执行: 5 阶段, 23 FSM, ' + eventCount + ' 事件已持久化 ===');
             var rcf = svgNodeGroups['recharge-failure'];
             if (rcf) { rcf.g.classList.add('completed'); rcf.g.classList.remove('recovered'); }
@@ -669,17 +842,22 @@
 
   function resetAll() {
     if (isAnimating) return;
-    currentPhase = 0; completedPhases = {}; eventCount = 0; jCount.textContent = '0';
+    currentPhase = 0; completedPhases = {}; eventCount = 0;
     Object.keys(svgNodeGroups).forEach(function (id) {
       svgNodeGroups[id].g.classList.add('dimmed');
       svgNodeGroups[id].g.classList.remove('active', 'completed', 'failed', 'recovered');
       if (id === 'batch-worker') svgNodeGroups[id].sub.textContent = 'BatchWorker';
     });
-    Object.keys(svgEdges).forEach(function (key) { svgEdges[key].el.classList.remove('highlight'); svgEdges[key].el.style.stroke = ''; });
+    Object.keys(svgEdges).forEach(function (key) {
+      var e = svgEdges[key];
+      e.el.classList.remove('highlight'); e.el.style.stroke = '';
+      var m = e.feedback ? 'url(#arrow-feedback)' : e.external ? 'url(#arrow-external)' : 'url(#arrow-normal)';
+      e.el.setAttribute('marker-end', m);
+    });
     infoTitle.textContent = '点击阶段按钮开始';
-    infoDesc.textContent = '23 Akka Persistent FSM + 出站网关，跨 4 层级协作。点击按钮逐步推进。';
+    infoDesc.textContent = '23 Akka Persistent FSM + 外部系统，跨 4 层级协作。点击按钮逐步推进。';
     infoMeta.innerHTML = ''; m2InsightBox.style.display = 'none'; m2ContrastBox.style.display = 'none';
-    logContainer.innerHTML = '<div class="log-entry info"><span class="ts">00:00</span> 已重置。23 FSM + 出站网关就绪。</div>';
+    logContainer.innerHTML = '<div class="log-entry info"><span class="ts">00:00</span> 已重置。23 FSM + 外部系统就绪。</div>';
     for (var i = 1; i <= 5; i++) phaseBtns[i].classList.remove('active', 'completed', 'locked');
     phaseBtns[2].classList.add('locked'); phaseBtns[3].classList.add('locked'); phaseBtns[4].classList.add('locked'); phaseBtns[5].classList.add('locked');
   }
@@ -695,6 +873,6 @@
   canvas.setAttribute('preserveAspectRatio', 'xMidYMid meet');
   renderAll();
   phaseBtns[2].classList.add('locked'); phaseBtns[3].classList.add('locked'); phaseBtns[4].classList.add('locked'); phaseBtns[5].classList.add('locked');
-  addLog('info', 'M2 DAG 就绪: 23 FSM + 出站网关(4协议), ' + EDGES.length + ' 条边, 4 层级, 5 阶段.');
+  addLog('info', 'M2 DAG 就绪: 23 FSM + 外部系统(4协议), ' + EDGES.length + ' 条边, 4 层级, 5 阶段.');
 
 })();
