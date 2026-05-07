@@ -1,5 +1,5 @@
 # Showcase Page
-showcase.title=Saga 工业级执行引擎展示
+showcase.title=Saga TCC 演示 - PlayAkkaCQRS
 showcase.header=Saga 工业级分布式事务引擎
 showcase.control_panel=控制中心
 showcase.scenario=业务执行场景
@@ -91,10 +91,10 @@ showcase.log.System=系统控制台
 showcase.ui.enter_txid=请输入有效的事务 ID (Trace ID)
 
 # Projection Showcase Page
-proj.title=并行投影流程 - PlayAkkaCQRS
-proj.header=并行投影流程
-proj.nav_saga=Saga 演示
-proj.nav_ddd=DDD 雷达
+proj.title=CQRS 投影管道 - PlayAkkaCQRS
+proj.header=CQRS 投影管道
+proj.nav_saga=Saga
+proj.nav_ddd=架构
 proj.deposit_withdraw=存款 / 取款
 proj.transfer_saga=转账 Saga
 proj.placeholder_user=用户 UUID
@@ -139,10 +139,10 @@ proj.card_reserved=已预留
 proj.card_incoming=待入账
 
 # DDD Guide Page
-ddd.title=DDD 架构任务雷达 - PlayAkkaCQRS
-ddd.header=DDD 架构任务雷达
-ddd.nav_showcase=主演示页
-ddd.nav_projection=投影流程
+ddd.title=架构雷达 - PlayAkkaCQRS
+ddd.header=架构雷达
+ddd.nav_showcase=Saga
+ddd.nav_projection=投影
 ddd.filter_all=所有层级
 ddd.filter_domain=领域层
 ddd.filter_application=应用层

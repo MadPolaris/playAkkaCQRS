@@ -5,7 +5,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M2 — 流批一体 DAG 执行引擎 · 薪资存入场景</title>
+    <title>DAG 执行引擎演示 · 薪资存入场景</title>
+    <meta name="description" content="流批一体多层级 DAG 执行引擎演示——23 Akka Persistent FSM + 4 外部系统，完整容错与自愈闭环。薪资自动存入场景，跨 5 层级协作。">
+    <meta name="keywords" content="DAG执行引擎, Akka, FSM, 流批一体, Saga, 补偿, 自愈, 容错, 外部系统">
     <style>
         :root {
             --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
@@ -183,12 +185,18 @@
         }
         .toast.show { opacity: 1; }
 
-        /* ---- Back link ---- */
-        .back-link {
-            font-size: 0.7rem; color: var(--fg-subtle); text-decoration: none;
-            display: inline-flex; align-items: center; gap: 4px; margin-bottom: 4px;
+        /* ---- Top nav ---- */
+        .dag-nav {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
         }
-        .back-link:hover { color: var(--fg-muted); }
+        .dag-nav a {
+            font-size: 0.72rem; color: var(--fg-muted); text-decoration: none;
+            padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px;
+            transition: all 0.15s;
+        }
+        .dag-nav a:hover { color: var(--fg); border-color: var(--fg-muted); }
+        .dag-nav a.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
         /* ---- Responsive ---- */
         @@media (max-width: 768px) {
@@ -296,10 +304,17 @@
 <div class="layout">
     <!-- ============ SIDEBAR ============ -->
     <aside class="sidebar">
-        <a href="/" class="back-link">← 返回首页</a>
+        <nav class="dag-nav">
+            <a href="/">Home</a>
+            <a href="/saga">Saga</a>
+            <a href="/architecture">Architecture</a>
+            <a href="/projection">Projection</a>
+            <a href="/dag" class="active">DAG</a>
+            <a href="/lang/zh">中文</a>
+        </nav>
 
         <div class="sb-header">
-            <h1>M2 — 流批一体 DAG 执行引擎</h1>
+            <h1>DAG 执行引擎</h1>
             <p class="subtitle">薪资自动存入 · 23 Akka Persistent FSM + 4 外部系统 · 完整容错演示</p>
             <div class="badge-row">
                 <span class="m2-badge">23 FSMs</span>

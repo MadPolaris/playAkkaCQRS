@@ -1,5 +1,5 @@
 # Showcase Page
-showcase.title=Saga Core Industrial Showcase
+showcase.title=Saga TCC Demo - PlayAkkaCQRS
 showcase.header=Saga Industrial Execution Engine
 showcase.control_panel=Control Center
 showcase.scenario=Execution Scenario
@@ -91,10 +91,10 @@ showcase.log.System=System
 showcase.ui.enter_txid=Please enter a Transaction ID
 
 # Projection Showcase Page
-proj.title=Parallel Projection Flow - PlayAkkaCQRS
-proj.header=Parallel Projection Flow
-proj.nav_saga=Saga Showcase
-proj.nav_ddd=DDD Radar
+proj.title=CQRS Projection Pipeline - PlayAkkaCQRS
+proj.header=CQRS Projection Pipeline
+proj.nav_saga=Saga
+proj.nav_ddd=Architecture
 proj.deposit_withdraw=Deposit / Withdraw
 proj.transfer_saga=Money Transfer Saga
 proj.placeholder_user=User UUID
@@ -139,10 +139,10 @@ proj.card_reserved=Reserved
 proj.card_incoming=Incoming
 
 # DDD Guide Page
-ddd.title=DDD Architectural Task Radar - PlayAkkaCQRS
-ddd.header=DDD Architectural Task Radar
-ddd.nav_showcase=Main Showcase
-ddd.nav_projection=Projection Flow
+ddd.title=Architecture Radar - PlayAkkaCQRS
+ddd.header=Architecture Radar
+ddd.nav_showcase=Saga
+ddd.nav_projection=Projection
 ddd.filter_all=All Layers
 ddd.filter_domain=Domain
 ddd.filter_application=Application

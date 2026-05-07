@@ -5,6 +5,8 @@
 <head>
     <meta charset="UTF-8">
     <title>反应式 MES 内核 — 面向 Fab 晶圆厂</title>
+    <meta name="description" content="开源反应式 MES 内核，面向半导体晶圆厂。用事件溯源取代巨型事务，用 Saga 取代存储过程，用流批一体 DAG 执行引擎编排跨系统流程。">
+    <meta name="keywords" content="MES, CQRS, 事件溯源, Akka, Saga, DAG, 半导体, 晶圆厂, 制造业, 反应式">
     <style>
         :root {
             --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
@@ -229,10 +231,10 @@
             <a href="#showcases" class="nav-link">在线演示</a>
             <a href="#reactive" class="nav-link">反应式</a>
             <a href="#event-sourcing" class="nav-link">CQRS/ES</a>
-            <a href="/showcase" class="nav-link">Saga ↗</a>
-            <a href="/projection-showcase" class="nav-link">Projection ↗</a>
-            <a href="/ddd-guide" class="nav-link">DDD雷达 ↗</a>
-            <a href="/m2-demo" class="nav-link">M2 DAG ↗</a>
+            <a href="/saga" class="nav-link">Saga ↗</a>
+            <a href="/projection" class="nav-link">Projection ↗</a>
+            <a href="/architecture" class="nav-link">架构 ↗</a>
+            <a href="/dag" class="nav-link">DAG ↗</a>
             <a href="/" class="nav-link" style="border:1px solid var(--border);">EN</a>
         </nav>
     </div>
@@ -271,7 +273,7 @@
     </p>
     <div class="hero-actions">
         <a href="#problem" class="btn btn-primary">了解问题</a>
-        <a href="/projection-showcase" class="btn btn-outline">▶ 在线演示</a>
+        <a href="/projection" class="btn btn-outline">▶ 在线演示</a>
         <a href="https://github.com/MadPolaris/playAkkaCQRS" class="btn btn-outline">GitHub ↗</a>
     </div>
 </section>
@@ -390,7 +392,7 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
                 <h4>流批一体多层级 DAG 执行引擎</h4>
-                <p>5 层级 DAG 执行引擎，23 个 Persistent FSM 内建 4 种弹性模式——监督自动重启、超时资源保护、失败补偿最终一致。每个节点独立版本化、测试和部署。统一管道同时处理流式与批量负载，通信层封装异构外部系统。 <a href="/m2-demo" style="color:var(--accent);font-weight:600;">观看动画演示 →</a></p>
+                <p>5 层级 DAG 执行引擎，23 个 Persistent FSM 内建 4 种弹性模式——监督自动重启、超时资源保护、失败补偿最终一致。每个节点独立版本化、测试和部署。统一管道同时处理流式与批量负载，通信层封装异构外部系统。 <a href="/dag" style="color:var(--accent);font-weight:600;">观看动画演示 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -423,44 +425,44 @@
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
             <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">补偿</span></div>
-            <h3>Saga 事务展示</h3>
+            <h3>Saga TCC 演示</h3>
             <p>一个分布式转账流程在 Saga 状态机中执行。观察 Prepare → Commit → Compensate 的完整生命周期。在任意步骤注入故障。实时观察自动重试、向后补偿和挂起事务的恢复过程。</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：MES ↔ EAP ↔ RMS 的跨系统数据对齐</p>
             <br>
-            <a href="/showcase" class="card-link">打开展示 →</a>
+            <a href="/saga" class="card-link">打开演示 →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(240,136,62,0.12);color:var(--orange)">⚙️</div>
             <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M2</span><span class="tag">DAG</span><span class="tag">FSM</span><span class="tag">弹性</span><span class="tag">流批一体</span></div>
-            <h3>M2 DAG 执行引擎演示</h3>
+            <h3>DAG 执行引擎演示</h3>
             <p>23 个 Akka Persistent FSM 跨 5 层级协作，完成薪资存入场景的完整编排。逐步推进 5 个阶段，观察编排器、保护器、通信器、补偿器 4 种弹性模式的实时运作。点击任意节点深入状态机内部。</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：跨 MES/EAP/RMS/SPC 的 DAG 流程编排引擎</p>
             <br>
-            <a href="/m2-demo" class="card-link">打开演示 →</a>
+            <a href="/dag" class="card-link">打开演示 →</a>
         </div>
     </div>
 
     <h3 style="font-size:1rem; font-weight:700; margin: 36px 0 16px; color: var(--fg-muted); letter-spacing: -0.02em;">
-        DDD 最佳架构实践展示
+        架构与 CQRS 深度探索
     </h3>
     <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(63,185,80,0.12);color:var(--success)">📊</div>
             <div class="card-tags"><span class="tag">CQRS</span><span class="tag">投影</span><span class="tag">事件流</span></div>
-            <h3>投影流程看板</h3>
+            <h3>CQRS 投影管道</h3>
             <p>存款、取款、转账。观察领域事件从聚合根 → 事件日志（MongoDB）→ 投影处理器 → 读模型（MySQL），以 SVG 粒子动画实时追踪完整管道。</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：从机台事件信号到实时数据看板的事件流管道</p>
             <br>
-            <a href="/projection-showcase" class="card-link">打开看板 →</a>
+            <a href="/projection" class="card-link">打开管道 →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(88,166,255,0.12);color:var(--accent)">🎯</div>
             <div class="card-tags"><span class="tag">DDD</span><span class="tag">洋葱架构</span><span class="tag">依赖关系</span></div>
-            <h3>DDD 架构雷达</h3>
+            <h3>架构雷达</h3>
             <p>探索 36+ DDD 构件，覆盖领域层、应用层和基础设施层。切换依赖关系边，点击任意构件查看设计约束和源码路径。完整的代码架构，可视化呈现。</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：面向贡献者的内核代码全景地图</p>
             <br>
-            <a href="/ddd-guide" class="card-link">打开雷达 →</a>
+            <a href="/architecture" class="card-link">打开雷达 →</a>
         </div>
     </div>
 </section>

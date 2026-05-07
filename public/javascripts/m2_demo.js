@@ -171,7 +171,7 @@
       desc: '通信层演示两条路由：✅ 成功路径 — recharge/purchase-success → SmsService → 外部系统短信通道，通知用户。✕ 故障路径 — recharge/purchase-failure → QuotaRelease → 额度清理，ReminderSms 发送告警。♻ 补偿闭环 — ReBatchActor 扫描失败批次 → 重新注入 Worker Pool。',
       insight: '通信层是 DAG 与外部世界的边界。成功消息和故障消息在此层分流——成功走通知通道（绿），失败走补偿通道（红）。外部系统统一对外通信（SFTP/API/P2B/短信），隔离外部不确定性。Compensator 确保故障闭环——只要补偿器在运行，没有失败会被遗漏。',
       contrast: '传统：成功和失败的处理逻辑混在一起，缺少明确的通信边界。外部系统调用散落各处——换个短信通道要改 10 个文件。M2 的通信层把所有外部通信集中到外部系统，成功/失败路径在 DAG 中显式声明。',
-      highlight: ['re-batch', 'batch-worker', 'quota-release-u', 'quota-release-t', 'sms-service', 'reminder-sms', 'recharge-failure', 'purchase-failure', 'recharge-success', 'purchase-success', 'recharge-req', 'recharge-resp', 'recharge-reconf', 'recharge-p2b', 'purchase-req', 'purchase-resp', 'purchase-reconf', 'purchase-p2b'],
+      highlight: ['re-batch'],
       // Success paths (green), failure paths (red), recovery (blue)
       successPaths: [['recharge-success','sms-service'], ['purchase-success','sms-service'], ['sms-service','gw-sms']],
       failPaths: [['recharge-failure','quota-release-u'], ['purchase-failure','quota-release-u'], ['quota-release-u','quota-release-t'], ['recharge-failure','reminder-sms'], ['purchase-failure','reminder-sms'], ['reminder-sms','gw-sms']],
@@ -190,6 +190,7 @@
       successEvents: ['RechargeOK→Notify', 'PurchaseOK→Notify', 'SMS Sent✓'],
       failEvents: ['RechargeFAIL→Release', 'PurchaseFAIL→Release', 'QuotaReleased', 'Alert SMS!'],
       recoverEvents: ['ReInject→Recovered'],
+      replayNodes: ['batch-worker', 'recharge-req', 'recharge-resp', 'recharge-reconf', 'recharge-success', 'recharge-p2b', 'purchase-req', 'purchase-resp', 'purchase-reconf', 'purchase-success', 'purchase-p2b', 'sms-service', 'gw-sftp', 'gw-core', 'gw-p2b', 'gw-sms'],
       replayEvents: [
         'ReDispatch', 'RechargeReq', 'Upload', 'Reserve',
         'RechargeResp', 'PollResp',
@@ -541,14 +542,17 @@
 
   function renderLevelLabels() {
     var labels = ['触发层', '编排层', '执行与资源层', '业务链路层 (2 链 × 5 行)', '通信层', '补偿释放层'];
-    var h = vizArea.clientHeight;
-    var usableH = h - 24 - 8;
-    var slotH = usableH / 7;
-    var yPos = [24, 24 + slotH, 24 + 2 * slotH, 24 + 3 * slotH, 24 + 4 * slotH, 24 + 5 * slotH];
     for (var lv = 0; lv <= 5; lv++) {
+      var lvNodes = NODES.filter(function (n) { return n.level === lv; });
+      var minY = Infinity, maxY = -Infinity;
+      lvNodes.forEach(function (n) {
+        var pos = nodePositions[n.id];
+        if (pos) { minY = Math.min(minY, pos.y); maxY = Math.max(maxY, pos.bottom); }
+      });
+      var centerY = (minY !== Infinity) ? (minY + maxY) / 2 : (24 + lv * 80);
       var el = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       el.setAttribute('class', 'level-label');
-      el.setAttribute('x', 6); el.setAttribute('y', yPos[lv] + 8);
+      el.setAttribute('x', 6); el.setAttribute('y', centerY + 4);
       el.textContent = 'L' + lv + ' ' + labels[lv];
       canvas.appendChild(el);
     }
@@ -894,14 +898,37 @@
 
       if (phaseId === 5 && phase.successPaths) {
         // Phase 5: animate success (green), then failure (red), then recovery (blue)
+        // Each group lights up its own nodes and dims them before the next group
         var groups = [
-          { paths: phase.successPaths, events: phase.successEvents, color: '#22c55e', logType: 'info' },
-          { paths: phase.failPaths,    events: phase.failEvents,    color: '#f85149', logType: 'comp' },
-          { paths: phase.recoverPaths, events: phase.recoverEvents, color: '#3b82f6', logType: 'orch' }
+          { paths: phase.successPaths, events: phase.successEvents, color: '#22c55e', logType: 'info',
+            nodes: ['recharge-success', 'purchase-success', 'sms-service', 'gw-sms'] },
+          { paths: phase.failPaths,    events: phase.failEvents,    color: '#f85149', logType: 'comp',
+            nodes: ['recharge-failure', 'purchase-failure', 'quota-release-u', 'quota-release-t', 'reminder-sms', 'gw-sms'] },
+          { paths: phase.recoverPaths, events: phase.recoverEvents, color: '#3b82f6', logType: 'orch',
+            nodes: ['re-batch', 'batch-worker'] }
         ];
+        var groupStart = pathDelay;
         groups.forEach(function (grp) {
+          // Light up this group's nodes, dim all others (including edges)
+          setTimeout(function () {
+            Object.keys(svgNodeGroups).forEach(function (id) {
+              svgNodeGroups[id].g.classList.add('dimmed');
+              svgNodeGroups[id].g.classList.remove('active', 'completed', 'failed', 'recovered');
+            });
+            Object.keys(svgEdges).forEach(function (key) {
+              var e = svgEdges[key];
+              e.el.classList.remove('highlight'); e.el.style.stroke = '';
+              var m = e.feedback ? 'url(#arrow-feedback)' : e.external ? 'url(#arrow-external)' : 'url(#arrow-normal)';
+              e.el.setAttribute('marker-end', m);
+            });
+            (grp.nodes || []).forEach(function (nid) {
+              var g = svgNodeGroups[nid];
+              if (g) { g.g.classList.remove('dimmed'); g.g.classList.add('active'); }
+            });
+          }, groupStart);
+
           grp.paths.forEach(function (pair, idx) {
-            pathDelay += 350;
+            pathDelay = groupStart + 350 + idx * 350;
             setTimeout(function () {
               var edgeKey = pair[0] + '->' + pair[1];
               var edgeObj = svgEdges[edgeKey];
@@ -910,7 +937,8 @@
               animateParticle(pair[0], pair[1], grp.events[idx] || 'Event', grp.color);
             }, pathDelay);
           });
-          pathDelay += 600; // gap between groups
+          groupStart += grp.paths.length * 350 + 800; // gap between groups
+          pathDelay = groupStart;
         });
       } else {
         paths = phase.paths || [];
@@ -974,6 +1002,25 @@
 
             // Replay happy path after recovery
             if (phase.replayPaths) {
+              // Light up replay nodes, dim previous group nodes
+              Object.keys(svgNodeGroups).forEach(function (id) {
+                svgNodeGroups[id].g.classList.add('dimmed');
+                svgNodeGroups[id].g.classList.remove('active', 'completed', 'failed', 'recovered');
+              });
+              Object.keys(svgEdges).forEach(function (key) {
+                var e = svgEdges[key];
+                e.el.classList.remove('highlight'); e.el.style.stroke = '';
+                var m = e.feedback ? 'url(#arrow-feedback)' : e.external ? 'url(#arrow-external)' : 'url(#arrow-normal)';
+                e.el.setAttribute('marker-end', m);
+              });
+              // Keep re-batch lit as the recovery anchor
+              var rbNode = svgNodeGroups['re-batch'];
+              if (rbNode) { rbNode.g.classList.remove('dimmed'); rbNode.g.classList.add('completed'); }
+              (phase.replayNodes || []).forEach(function (nid) {
+                var g = svgNodeGroups[nid];
+                if (g) { g.g.classList.remove('dimmed'); g.g.classList.add('active'); }
+              });
+
               var replayDelay = 600;
               phase.replayPaths.forEach(function (pair, idx) {
                 replayDelay += 320;

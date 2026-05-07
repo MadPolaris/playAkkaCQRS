@@ -15,15 +15,15 @@ class DddGuideController @Inject()(val controllerComponents: ControllerComponent
                                    val getBalanceQuery: GetBalanceQuery)(implicit ec: ExecutionContext) extends BaseController with I18nSupport {
 
   def index() = Action { implicit request: Request[AnyContent] =>
-    Ok(views.html.dddGuide())
+    Ok(views.html.architecture())
   }
 
   def projectionShowcase() = Action { implicit request: Request[AnyContent] =>
-    Ok(views.html.projectionShowcase())
+    Ok(views.html.projection())
   }
 
   def m2Demo() = Action {
-    Ok(views.html.m2Demo())
+    Ok(views.html.dagDemo())
   }
 
   def getBalances(ids: String) = Action.async {

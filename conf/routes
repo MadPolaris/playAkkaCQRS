@@ -7,6 +7,10 @@
 GET     /                           controllers.HomeController.index()
 GET     /zh                         controllers.HomeController.indexZh()
 
+# SEO
+GET     /robots.txt                 controllers.Assets.at(path="/public", file="robots.txt")
+GET     /sitemap.xml                controllers.Assets.at(path="/public", file="sitemap.xml")
+
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file                   controllers.Assets.versioned(path="/public", file: Asset)
 GET     /balance/:userId                controllers.HomeController.getBalance(userId: String)
@@ -14,9 +18,9 @@ POST    /deposit/:userId/:amount        controllers.HomeController.deposit(userI
 POST    /withdraw/:userId/:amount       controllers.HomeController.withdraw(userId: String, amount: Double)
 POST    /transfer/:fromUserId/:toUserId/:amount   controllers.HomeController.transfer(fromUserId: String, toUserId: String, amount: Double)
 
-# Showcase
-GET     /showcase                   controllers.ShowcaseController.index()
-GET     /docs/saga/:page            controllers.ShowcaseController.sagaDocs(page: String)
+# Saga
+GET     /saga                       controllers.ShowcaseController.index()
+GET     /saga/docs/:page            controllers.ShowcaseController.sagaDocs(page: String)
 GET     /lang/:code                 controllers.ShowcaseController.setLang(code: String)
 GET     /ws/saga/events             controllers.ShowcaseController.socket
 POST    /api/saga/inject-fault/:stepId/:behavior  controllers.ShowcaseController.injectFault(stepId: String, behavior: String)
@@ -28,10 +32,10 @@ POST    /api/saga/resume/:transactionId           controllers.ShowcaseController
 POST    /api/saga/retry-phase/:transactionId      controllers.ShowcaseController.retryPhase(transactionId: String)
 GET     /api/saga/history/:transactionId          controllers.ShowcaseController.getHistory(transactionId: String)
 
-# DDD & Projections
-GET     /ddd-guide                  controllers.DddGuideController.index()
-GET     /projection-showcase        controllers.DddGuideController.projectionShowcase()
-GET     /m2-demo                    controllers.DddGuideController.m2Demo()
+# Architecture & Projection & DAG
+GET     /architecture               controllers.DddGuideController.index()
+GET     /projection                 controllers.DddGuideController.projectionShowcase()
+GET     /dag                        controllers.DddGuideController.m2Demo()
 GET     /api/projection/status      controllers.DddGuideController.getProjectionStatus()
 GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(ids: String)
 

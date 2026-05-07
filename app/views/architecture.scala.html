@@ -5,6 +5,8 @@
 <head>
     <meta charset="UTF-8">
     <title>@messages("ddd.title")</title>
+    <meta name="description" content="DDD + CQRS/ES 架构指南——Onion Architecture 四层模型，Event Sourcing 事件溯源，CQRS 读写分离，Akka Cluster Sharding 部署拓扑。">
+    <meta name="keywords" content="DDD, CQRS, Event Sourcing, Onion Architecture, Akka Cluster, Sharding, 架构">
     <style>
         :root {
             --color-event: #f97316;
@@ -120,9 +122,13 @@
         <header>
             <h1>@messages("ddd.header")</h1>
             <nav class="nav-links">
-                <a href="/showcase">@messages("ddd.nav_showcase")</a>
-                <a href="/projection-showcase">@messages("ddd.nav_projection")</a>
-                <a href="/zh">中文</a>
+                <a href="/">Home</a>
+                <a href="/saga">@messages("ddd.nav_showcase")</a>
+                <a href="/architecture" class="active">Architecture</a>
+                <a href="/projection">@messages("ddd.nav_projection")</a>
+                <a href="/dag">DAG</a>
+                <a href="/lang/en">EN</a>
+                <a href="/lang/zh">中文</a>
             </nav>
         </header>
 

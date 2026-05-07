@@ -5,6 +5,8 @@
 <head>
     <meta charset="UTF-8">
     <title>@messages("proj.title")</title>
+    <meta name="description" content="Akka Projection 读模型演示——MongoDB Journal → MySQL Read Side，事件驱动的 CQRS 投影，实时查询余额与交易历史。">
+    <meta name="keywords" content="Akka Projection, CQRS, 读模型, Event Sourcing, MongoDB, MySQL, 实时投影">
     <style>
         :root {
             --color-journal: #f97316;
@@ -144,9 +146,13 @@
     <header>
         <h1>@messages("proj.header")</h1>
         <nav class="nav-links">
-            <a href="/showcase">@messages("proj.nav_saga")</a>
-            <a href="/ddd-guide">@messages("proj.nav_ddd")</a>
-            <a href="/zh">中文</a>
+            <a href="/">Home</a>
+            <a href="/saga">@messages("proj.nav_saga")</a>
+            <a href="/architecture">@messages("proj.nav_ddd")</a>
+            <a href="/projection" class="active">Projection</a>
+            <a href="/dag">DAG</a>
+            <a href="/lang/en">EN</a>
+            <a href="/lang/zh">中文</a>
         </nav>
     </header>
 

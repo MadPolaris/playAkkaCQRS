@@ -5,6 +5,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Reactive MES Kernel — for Fab Factories</title>
+    <meta name="description" content="Open-source reactive MES kernel for semiconductor wafer fabs. Event Sourcing replaces giant transactions, Saga replaces stored procedures, stream-batch unified DAG engine orchestrates cross-system workflows.">
+    <meta name="keywords" content="MES, CQRS, Event Sourcing, Akka, Saga, DAG, semiconductor, wafer fab, manufacturing, reactive">
     <style>
         :root {
             --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
@@ -246,10 +248,10 @@
             <a href="#showcases" class="nav-link">Live Demos</a>
             <a href="#reactive" class="nav-link">Reactive</a>
             <a href="#event-sourcing" class="nav-link">CQRS/ES</a>
-            <a href="/showcase" class="nav-link">Saga ↗</a>
-            <a href="/projection-showcase" class="nav-link">Projection ↗</a>
-            <a href="/ddd-guide" class="nav-link">DDD Radar ↗</a>
-            <a href="/m2-demo" class="nav-link">M2 DAG ↗</a>
+            <a href="/saga" class="nav-link">Saga ↗</a>
+            <a href="/projection" class="nav-link">Projection ↗</a>
+            <a href="/architecture" class="nav-link">Architecture ↗</a>
+            <a href="/dag" class="nav-link">DAG ↗</a>
             <a href="/zh" class="nav-link" style="border:1px solid var(--border);">中文</a>
         </nav>
     </div>
@@ -290,7 +292,7 @@
     </p>
     <div class="hero-actions">
         <a href="#problem" class="btn btn-primary">Read the Story</a>
-        <a href="/projection-showcase" class="btn btn-outline">▶ Live Demo</a>
+        <a href="/projection" class="btn btn-outline">▶ Live Demo</a>
         <a href="https://github.com/MadPolaris/playAkkaCQRS" class="btn btn-outline">GitHub ↗</a>
     </div>
 </section>
@@ -412,7 +414,7 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">Production Quality — Live</span>
                 <h4>Streaming-Batch Multi-Level DAG Execution Engine</h4>
-                <p>A 5-level DAG execution engine: 23 Persistent FSMs with 4 built-in resilience patterns — supervision with auto-restart, timeout resource protection, compensating recovery to eventual consistency. Each node independently versionable, testable, and deployable. Unified pipeline handles both streaming and batch workloads, with a communication layer that encapsulates heterogeneous external systems. <a href="/m2-demo" style="color:var(--accent);font-weight:600;">Watch animated demo →</a></p>
+                <p>A 5-level DAG execution engine: 23 Persistent FSMs with 4 built-in resilience patterns — supervision with auto-restart, timeout resource protection, compensating recovery to eventual consistency. Each node independently versionable, testable, and deployable. Unified pipeline handles both streaming and batch workloads, with a communication layer that encapsulates heterogeneous external systems. <a href="/dag" style="color:var(--accent);font-weight:600;">Watch animated demo →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -445,44 +447,44 @@
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
             <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">Compensation</span></div>
-            <h3>Saga Transaction Showcase</h3>
+            <h3>Saga TCC Demo</h3>
             <p>A distributed money transfer flowing through the Saga state machine. Watch the Prepare → Commit → Compensate lifecycle. Inject faults at any step. See automatic retries, backward recovery, and suspended-transaction recovery in real time.</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: MES ↔ EAP ↔ RMS data alignment</p>
             <br>
-            <a href="/showcase" class="card-link">Open Showcase →</a>
+            <a href="/saga" class="card-link">Open Demo →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(240,136,62,0.12);color:var(--orange)">⚙️</div>
             <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M2</span><span class="tag">DAG</span><span class="tag">FSM</span><span class="tag">Resilience</span><span class="tag">Stream-Batch</span></div>
-            <h3>M2 DAG Execution Engine</h3>
+            <h3>DAG Execution Engine</h3>
             <p>23 Akka Persistent FSMs collaborate across 5 levels to orchestrate a salary deposit scenario. Step through 5 phases, watch 4 resilience patterns — Orchestrator, Protector, Communicator, Compensator — in real time. Click any node to drill into its state machine.</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: DAG orchestration across MES, EAP, RMS, SPC</p>
             <br>
-            <a href="/m2-demo" class="card-link">Open Demo →</a>
+            <a href="/dag" class="card-link">Open Demo →</a>
         </div>
     </div>
 
     <h3 style="font-size:1rem; font-weight:700; margin: 36px 0 16px; color: var(--fg-muted); letter-spacing: -0.02em;">
-        DDD Best-Practice Architecture Showcase
+        Architecture & CQRS Deep Dive
     </h3>
     <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(63,185,80,0.12);color:var(--success)">📊</div>
             <div class="card-tags"><span class="tag">CQRS</span><span class="tag">Projection</span><span class="tag">Event Flow</span></div>
-            <h3>Projection Flow Dashboard</h3>
+            <h3>CQRS Projection Pipeline</h3>
             <p>Deposit, withdraw, and transfer funds. Watch domain events travel from Aggregate → Journal (MongoDB) → Projection Handler → Read Model (MySQL) — with animated SVG particles tracing the pipeline.</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Event stream from tool signal to real-time dashboard</p>
             <br>
-            <a href="/projection-showcase" class="card-link">Open Dashboard →</a>
+            <a href="/projection" class="card-link">Open Pipeline →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(88,166,255,0.12);color:var(--accent)">🎯</div>
             <div class="card-tags"><span class="tag">DDD</span><span class="tag">Onion Architecture</span><span class="tag">Dependencies</span></div>
-            <h3>DDD Architecture Radar</h3>
+            <h3>Architecture Radar</h3>
             <p>Explore 36+ components across Domain, Application, and Infrastructure layers. Toggle dependency edges, click any component to see its design constraints and source paths. The full code architecture, visualized.</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Kernel codebase map for contributors</p>
             <br>
-            <a href="/ddd-guide" class="card-link">Open Radar →</a>
+            <a href="/architecture" class="card-link">Open Radar →</a>
         </div>
     </div>
 </section>

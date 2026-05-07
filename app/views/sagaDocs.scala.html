@@ -5,6 +5,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Saga Framework - @activePage.capitalize</title>
+    <meta name="description" content="Saga 分布式事务框架文档——Backward Recovery、Compensation、SUSPENDED 恢复、ManualFix 机制。Akka Persistence + Event Sourcing 实现。">
+    <meta name="keywords" content="Saga, 分布式事务, 补偿, Backward Recovery, Akka, Event Sourcing, 文档">
     <!-- GitHub Markdown CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown-dark.min.css">
     <!-- Highlight.js -->
@@ -49,10 +51,10 @@
 <body>
     <div id="loading-overlay"><div class="spinner"></div></div>
     <header>
-        <h1><a href="/showcase">Saga Framework Showcase</a></h1>
+        <h1><a href="/saga">Saga TCC Demo</a></h1>
         <div class="nav-links">
-            <a href="/showcase">@messages("showcase.dashboard")</a>
-            <a href="/docs/saga/overview" class="active">@messages("showcase.documentation")</a>
+            <a href="/saga">Dashboard</a>
+            <a href="/saga/docs/overview" class="active">Documentation</a>
             <a href="/lang/en">EN</a>
             <a href="/lang/zh">ZH</a>
         </div>
@@ -62,9 +64,9 @@
             <nav class="sidebar-nav">
                 <h3>@messages("showcase.documentation")</h3>
                 <ul>
-                    <li><a href="/docs/saga/overview" class="@if(activePage == "overview"){active}">@messages("showcase.docs.overview")</a></li>
-                    <li><a href="/docs/saga/architecture" class="@if(activePage == "architecture"){active}">@messages("showcase.docs.architecture")</a></li>
-                    <li><a href="/docs/saga/guide" class="@if(activePage == "guide"){active}">@messages("showcase.docs.guide")</a></li>
+                    <li><a href="/saga/docs/overview" class="@if(activePage == "overview"){active}">@messages("showcase.docs.overview")</a></li>
+                    <li><a href="/saga/docs/architecture" class="@if(activePage == "architecture"){active}">@messages("showcase.docs.architecture")</a></li>
+                    <li><a href="/saga/docs/guide" class="@if(activePage == "guide"){active}">@messages("showcase.docs.guide")</a></li>
                 </ul>
             </nav>
         </aside>

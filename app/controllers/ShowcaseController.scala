@@ -138,13 +138,13 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
   }
 
   def index() = Action { implicit request: Request[AnyContent] =>
-    Ok(views.html.showcase()).withHeaders(
+    Ok(views.html.sagaDemo()).withHeaders(
       "Content-Security-Policy" -> "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data:; connect-src 'self' ws: wss:;"
     )
   }
 
   def setLang(code: String) = Action { implicit request =>
-    val redirectUrl = request.headers.get("Referer").getOrElse("/showcase")
+    val redirectUrl = request.headers.get("Referer").getOrElse("/saga")
     Redirect(redirectUrl).withLang(Lang(code))
   }
 

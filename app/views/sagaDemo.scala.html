@@ -5,6 +5,8 @@
 <head>
     <meta charset="UTF-8">
     <title>@messages("showcase.title")</title>
+    <meta name="description" content="Saga 分布式事务协调器——Backward Recovery 补偿机制，Prepare/Commit/Compensate 三阶段，支持 SUSPENDED 状态手动修复。Akka Persistence + Event Sourcing 实现。">
+    <meta name="keywords" content="Saga, 分布式事务, 补偿, Backward Recovery, Akka, Event Sourcing, CQRS">
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
         .container { max-width: 1400px; margin: 0 auto; }
@@ -111,10 +113,13 @@
         <div class="header-top">
             <h1>@messages("showcase.header")</h1>
             <div class="lang-switcher">
-                <a href="/ddd-guide" style="background: #0ea5e9; color: white; border-color: #0ea5e9;">DDD Guide</a>
-                <a href="/projection-showcase" style="background: #22c55e; color: white; border-color: #22c55e;">Projection Dashboard</a>
-                <a href="/docs/saga/overview" style="background: #1f6feb; color: white; border-color: #1f6feb;">@messages("showcase.documentation")</a>
-                <a href="/lang/en" class="@if(messages.lang.code == "en"){active}">English</a>
+                <a href="/">Home</a>
+                <a href="/saga" class="active">Saga</a>
+                <a href="/architecture">Architecture</a>
+                <a href="/projection">Projection</a>
+                <a href="/dag">DAG</a>
+                <a href="/saga/docs/overview">Docs</a>
+                <a href="/lang/en" class="@if(messages.lang.code == "en"){active}">EN</a>
                 <a href="/lang/zh" class="@if(messages.lang.code == "zh"){active}">中文</a>
             </div>
         </div>
