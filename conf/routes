@@ -31,6 +31,7 @@ GET     /api/saga/history/:transactionId          controllers.ShowcaseController
 # DDD & Projections
 GET     /ddd-guide                  controllers.DddGuideController.index()
 GET     /projection-showcase        controllers.DddGuideController.projectionShowcase()
+GET     /m2-demo                    controllers.DddGuideController.m2Demo()
 GET     /api/projection/status      controllers.DddGuideController.getProjectionStatus()
 GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(ids: String)
 

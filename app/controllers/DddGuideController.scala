@@ -22,6 +22,10 @@ class DddGuideController @Inject()(val controllerComponents: ControllerComponent
     Ok(views.html.projectionShowcase())
   }
 
+  def m2Demo() = Action {
+    Ok(views.html.m2Demo())
+  }
+
   def getBalances(ids: String) = Action.async {
     val idList = ids.split(",").map(Id.of).toList
     Future.sequence(idList.map(id => getBalanceQuery.fetchFullBalanceByUserId(id).map(c => id.toString -> c)))

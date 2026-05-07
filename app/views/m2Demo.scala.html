@@ -1,0 +1,303 @@
+@()
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M2 — 流批一体 DAG 执行引擎 · 薪资存入场景</title>
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff;
+            --orch: #3b82f6; --prot: #f59e0b; --comm: #a855f7; --comp: #ef4444; --support: #14b8a6;
+            --phase-1: #38bdf8; --phase-2: #f97316; --phase-3: #f59e0b; --phase-4: #22c55e; --phase-5: #ef4444;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); height: 100vh; }
+
+        /* ---- Layout ---- */
+        .layout { display: flex; height: 100vh; }
+        .sidebar {
+            width: 360px; min-width: 360px; background: var(--bg-alt);
+            border-right: 1px solid var(--border); display: flex; flex-direction: column;
+            overflow-y: auto; padding: 20px; gap: 16px;
+        }
+        .viz-area { flex: 1; position: relative; overflow-y: auto; overflow-x: hidden; }
+
+        /* ---- Sidebar Header ---- */
+        .sb-header h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+        .sb-header .subtitle { font-size: 0.75rem; color: var(--fg-muted); margin-top: 2px; }
+        .sb-header .badge-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .m2-badge {
+            font-size: 0.64rem; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+            background: rgba(88, 166, 255, 0.12); color: var(--accent);
+        }
+
+        /* ---- Phase Buttons ---- */
+        .phase-list { display: flex; flex-direction: column; gap: 6px; }
+        .phase-btn {
+            display: flex; align-items: center; gap: 10px; width: 100%;
+            padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--fg-muted); font-size: 0.78rem;
+            font-weight: 600; cursor: pointer; transition: all 0.2s; text-align: left;
+            font-family: var(--font);
+        }
+        .phase-btn:hover:not(.locked):not(.active) {
+            border-color: var(--fg-muted); color: var(--fg);
+        }
+        .phase-btn .p-num {
+            width: 24px; height: 24px; border-radius: 6px; display: flex;
+            align-items: center; justify-content: center; font-size: 0.68rem;
+            font-weight: 700; background: rgba(255,255,255,0.06); flex-shrink: 0;
+        }
+        .phase-btn.completed .p-num { background: rgba(63, 185, 80, 0.2); color: #3fb950; }
+        .phase-btn.active { border-color: var(--accent); color: var(--fg); background: rgba(88,166,255,0.06); }
+        .phase-btn.active .p-num { background: rgba(88,166,255,0.2); color: var(--accent); }
+        .phase-btn.locked { opacity: 0.4; cursor: not-allowed; }
+
+        .ctrl-row { display: flex; gap: 8px; }
+        .ctrl-btn {
+            flex: 1; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--bg); color: var(--fg-muted); font-size: 0.75rem;
+            font-weight: 600; cursor: pointer; transition: all 0.15s; font-family: var(--font);
+        }
+        .ctrl-btn:hover { border-color: var(--fg-muted); color: var(--fg); }
+        .ctrl-btn.primary { background: rgba(88,166,255,0.12); border-color: rgba(88,166,255,0.3); color: var(--accent); }
+        .ctrl-btn.primary:hover { background: rgba(88,166,255,0.2); }
+
+        /* ---- Info Panel ---- */
+        .info-panel {
+            background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+            padding: 14px; font-size: 0.75rem; line-height: 1.55;
+        }
+        .info-panel .info-title { font-weight: 700; font-size: 0.82rem; margin-bottom: 6px; }
+        .info-panel .info-desc { color: var(--fg-muted); }
+        .info-panel .info-meta { display: flex; gap: 12px; margin-top: 10px; font-size: 0.68rem; color: var(--fg-subtle); }
+
+        /* ---- M2 Insight Callout ---- */
+        .m2-insight-box {
+            margin-top: 10px; padding: 10px 12px; border-radius: 8px;
+            border-left: 3px solid var(--accent);
+            background: rgba(88, 166, 255, 0.06);
+        }
+        .m2-insight-box .m2-label {
+            font-size: 0.6rem; font-weight: 700; color: var(--accent);
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;
+        }
+        .m2-insight-box .m2-text { font-size: 0.72rem; color: var(--fg); line-height: 1.55; }
+        .m2-contrast-box {
+            margin-top: 8px; padding: 8px 12px; border-radius: 8px;
+            border-left: 3px solid var(--fg-subtle);
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .m2-contrast-box .m2-label { font-size: 0.6rem; font-weight: 700; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+        .m2-contrast-box .m2-text { font-size: 0.68rem; color: var(--fg-muted); line-height: 1.5; }
+        .info-meta span { display: flex; align-items: center; gap: 4px; }
+        .info-meta .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+        /* ---- Legend ---- */
+        .legend { display: flex; flex-direction: column; gap: 5px; }
+        .legend-title { font-size: 0.68rem; font-weight: 700; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: var(--fg-muted); }
+        .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+        /* ---- Log ---- */
+        .log-container {
+            flex: 1; min-height: 120px; max-height: 200px; background: var(--bg);
+            border: 1px solid var(--border); border-radius: 8px; overflow-y: auto;
+            padding: 10px; font-family: var(--mono); font-size: 0.65rem; line-height: 1.6;
+        }
+        .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .log-entry .ts { color: var(--fg-subtle); margin-right: 6px; }
+        .log-entry.orch { color: var(--orch); }
+        .log-entry.prot { color: var(--prot); }
+        .log-entry.comm { color: var(--comm); }
+        .log-entry.comp { color: var(--comp); }
+        .log-entry.info { color: var(--fg-muted); }
+
+        /* ---- SVG DAG ---- */
+        #dagCanvas { width: 100%; height: 100%; }
+        .dag-edge { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 2; transition: stroke 0.5s, stroke-width 0.5s; }
+        .dag-edge.highlight { stroke-width: 3.5; filter: drop-shadow(0 0 6px currentColor); }
+        .dag-edge.feedback { stroke: rgba(239,68,68,0.25); stroke-dasharray: 8 4; }
+        .dag-edge.feedback.highlight { stroke: var(--comp); stroke-dasharray: 6 3; filter: drop-shadow(0 0 8px rgba(239,68,68,0.6)); }
+        .dag-edge.external { stroke: rgba(240,136,62,0.2); stroke-dasharray: 5 5; stroke-width: 1.5; }
+        .dag-edge.external.highlight { stroke: #f0883e; stroke-dasharray: 4 3; filter: drop-shadow(0 0 6px rgba(240,136,62,0.5)); }
+        .dag-node { cursor: default; transition: opacity 0.5s; }
+        .dag-node.dimmed { opacity: 0.18; }
+        .dag-node.active { opacity: 1; }
+        .dag-node .node-rect { fill: rgba(22, 27, 34, 0.92); stroke: var(--border); stroke-width: 1.5; rx: 8; ry: 8; transition: all 0.4s; }
+        .dag-node.type-orchestrator .node-rect { stroke: rgba(59,130,246,0.35); }
+        .dag-node.type-protector    .node-rect { stroke: rgba(245,158,11,0.35); }
+        .dag-node.type-communicator .node-rect { stroke: rgba(168,85,247,0.35); }
+        .dag-node.type-compensator  .node-rect { stroke: rgba(239,68,68,0.35); }
+        .dag-node.type-support      .node-rect { stroke: rgba(20,184,166,0.35); }
+        .dag-node.type-external     .node-rect { stroke: rgba(240,136,62,0.4); fill: rgba(240,136,62,0.06); }
+        .dag-node.ext-node .node-rect { rx: 4; ry: 4; }
+        .dag-node.active.type-orchestrator .node-rect { stroke: var(--orch); filter: drop-shadow(0 0 10px rgba(59,130,246,0.5)); }
+        .dag-node.active.type-protector    .node-rect { stroke: var(--prot); filter: drop-shadow(0 0 10px rgba(245,158,11,0.5)); }
+        .dag-node.active.type-communicator .node-rect { stroke: var(--comm); filter: drop-shadow(0 0 10px rgba(168,85,247,0.5)); }
+        .dag-node.active.type-compensator  .node-rect { stroke: var(--comp); filter: drop-shadow(0 0 10px rgba(239,68,68,0.5)); }
+        .dag-node.active.type-support      .node-rect { stroke: var(--support); filter: drop-shadow(0 0 10px rgba(20,184,166,0.5)); }
+        .dag-node.active.type-external     .node-rect { stroke: #f0883e; filter: drop-shadow(0 0 10px rgba(240,136,62,0.5)); }
+        .dag-node.completed .node-rect { stroke: rgba(63,185,80,0.5); }
+        .dag-node.failed .node-rect { stroke: #f85149; filter: drop-shadow(0 0 12px rgba(248,81,73,0.6)); animation: node-pulse-red 0.6s ease-in-out infinite; }
+        .dag-node.recovered .node-rect { stroke: #3fb950; filter: drop-shadow(0 0 12px rgba(63,185,80,0.6)); }
+        @@keyframes node-pulse-red {
+            0%, 100% { filter: drop-shadow(0 0 8px rgba(248,81,73,0.4)); }
+            50% { filter: drop-shadow(0 0 18px rgba(248,81,73,0.8)); }
+        }
+
+        .dag-node .node-label { fill: var(--fg); font-size: 0.72rem; font-weight: 600; font-family: var(--font); }
+        .dag-node .node-sub { fill: var(--fg-muted); font-size: 0.6rem; font-family: var(--font); }
+        .dag-node .node-type-badge { font-size: 0.55rem; font-weight: 700; }
+
+        /* Level labels */
+        .level-label { fill: var(--fg-subtle); font-size: 0.6rem; font-weight: 600; font-family: var(--font); text-transform: uppercase; letter-spacing: 0.8px; }
+
+        /* ---- Particles ---- */
+        .event-particle {
+            position: absolute; z-index: 9999; pointer-events: none;
+            background: rgba(13, 17, 23, 0.95); backdrop-filter: blur(8px);
+            border-radius: 6px; padding: 4px 10px; font-size: 0.62rem;
+            font-family: var(--mono); color: var(--fg); white-space: nowrap;
+            display: flex; align-items: center; gap: 4px;
+            border: 1px solid var(--border);
+            transform: translate(-50%, -50%);
+            animation: particle-pop-in 0.2s ease-out;
+        }
+        @@keyframes particle-pop-in { from { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } to { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
+        .event-particle .p-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+
+        /* ---- Event Sourcing Journal ---- */
+        .journal-panel {
+            position: absolute; bottom: 24px; right: 24px; width: 200px;
+            background: rgba(22, 27, 34, 0.95); border: 1px solid var(--border);
+            border-radius: 10px; padding: 12px; backdrop-filter: blur(8px);
+        }
+        .journal-panel .j-title { font-size: 0.64rem; font-weight: 700; color: var(--fg-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.6px; }
+        .journal-panel .j-db { font-size: 0.68rem; font-weight: 600; color: #3fb950; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+        .journal-panel .j-db .j-icon { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; }
+        .journal-panel .j-stat { font-size: 0.62rem; color: var(--fg-muted); }
+        .journal-panel .j-stat strong { color: var(--fg); }
+
+        /* ---- Toast ---- */
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999;
+            background: rgba(63, 185, 80, 0.15); border: 1px solid rgba(63, 185, 80, 0.4);
+            color: #3fb950; padding: 10px 24px; border-radius: 8px; font-size: 0.82rem;
+            font-weight: 700; opacity: 0; transition: opacity 0.4s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+
+        /* ---- Back link ---- */
+        .back-link {
+            font-size: 0.7rem; color: var(--fg-subtle); text-decoration: none;
+            display: inline-flex; align-items: center; gap: 4px; margin-bottom: 4px;
+        }
+        .back-link:hover { color: var(--fg-muted); }
+
+        /* ---- Responsive ---- */
+        @@media (max-width: 768px) {
+            .layout { flex-direction: column; }
+            .sidebar { width: 100%; min-width: unset; max-height: 45vh; }
+            .journal-panel { bottom: 8px; right: 8px; width: 160px; padding: 8px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="layout">
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar">
+        <a href="/" class="back-link">← 返回首页</a>
+
+        <div class="sb-header">
+            <h1>M2 — 流批一体 DAG 执行引擎</h1>
+            <p class="subtitle">薪资自动存入 · 23 Akka Persistent FSM + 4 外部系统 · 完整容错演示</p>
+            <div class="badge-row">
+                <span class="m2-badge">23 FSMs</span>
+                <span class="m2-badge">4 层级</span>
+                <span class="m2-badge">5 阶段</span>
+                <span class="m2-badge">4 弹性模式</span>
+            </div>
+        </div>
+
+        <!-- Phase step buttons -->
+        <div class="phase-list" id="phaseList">
+            <button class="phase-btn" data-phase="1" id="phaseBtn1">
+                <span class="p-num">1</span> 定时触发 · 作业创建
+            </button>
+            <button class="phase-btn locked" data-phase="2" id="phaseBtn2">
+                <span class="p-num">2</span> 数据预处理 · 额度预留
+            </button>
+            <button class="phase-btn locked" data-phase="3" id="phaseBtn3">
+                <span class="p-num">3</span> 额度冻结 · 超时守卫
+            </button>
+            <button class="phase-btn locked" data-phase="4" id="phaseBtn4">
+                <span class="p-num">4</span> 并发执行 · 流批一体
+            </button>
+            <button class="phase-btn locked" data-phase="5" id="phaseBtn5">
+                <span class="p-num">5</span> 补偿收尾 · 最终一致
+            </button>
+        </div>
+
+        <div class="ctrl-row">
+            <button class="ctrl-btn primary" id="autoPlayBtn">▶ 自动播放</button>
+            <button class="ctrl-btn" id="resetBtn">↺ 重置</button>
+        </div>
+
+        <!-- Info panel -->
+        <div class="info-panel" id="infoPanel">
+            <div class="info-title" id="infoTitle">点击阶段按钮开始</div>
+            <div class="info-desc" id="infoDesc">左侧按钮逐步推进 DAG 执行流程，或点击"自动播放"观看完整演示。场景：发薪日薪资自动存入，23 个 Akka Persistent FSM 跨 4 层级协作。</div>
+            <div class="info-meta" id="infoMeta"></div>
+            <div class="m2-insight-box" id="m2InsightBox" style="display:none;">
+                <div class="m2-label">M2 理念</div>
+                <div class="m2-text" id="m2InsightText"></div>
+            </div>
+            <div class="m2-contrast-box" id="m2ContrastBox" style="display:none;">
+                <div class="m2-label">对比传统</div>
+                <div class="m2-text" id="m2ContrastText"></div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-title">弹性模式 (Resilience Patterns)</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--orch)"></span> 编排器 — 父子监督 · ChildTerminated 自动重启</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--prot)"></span> 保护器 — 超时不变量 · 崩溃自动释放资源</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--comm)"></span> 通信器 — 主动轮询 · ReceiveTimeout 驱动查证</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--comp)"></span> 补偿器 — 死循环扫描 · 失败重注入最终一致</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#f0883e"></span> 出站网关 — SFTP/API/P2B/短信 · 虚线连接</div>
+        </div>
+
+        <!-- Event log -->
+        <div class="log-container" id="logContainer">
+            <div class="log-entry info"><span class="ts">00:00</span> 就绪。点击阶段按钮或自动播放开始。</div>
+        </div>
+    </aside>
+
+    <!-- ============ VISUALIZATION AREA ============ -->
+    <main class="viz-area" id="vizArea">
+        <svg id="dagCanvas" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="journal-panel" id="journalPanel">
+            <div class="j-title">事件日志 (Event Journal)</div>
+            <div class="j-db"><span class="j-icon"></span> MongoDB Journal</div>
+            <div class="j-stat">已持久化事件: <strong id="jCount">0</strong></div>
+        </div>
+    </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/assets/javascripts/graph_engine.js"></script>
+<script src="/assets/javascripts/m2_demo.js"></script>
+
+</body>
+</html>
