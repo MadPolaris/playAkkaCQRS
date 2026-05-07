@@ -38,14 +38,14 @@
     { id: 'recharge-reconf',  label: '充值重确认', sub: 'RechargeReconfirmActor', level: 3, chain: 'recharge', row: 2 },
     { id: 'recharge-success', label: '充值成功', sub: 'RechargeSuccessActor', level: 3, chain: 'recharge', row: 3, col: 0 },
     { id: 'recharge-failure', label: '充值失败', sub: 'RechargeFailureActor', level: 3, chain: 'recharge', row: 3, col: 1 },
-    { id: 'recharge-p2b',     label: '充值P2B通知', sub: 'RechargeP2BNotifyActor', level: 3, chain: 'recharge', row: 4 },
+    { id: 'recharge-p2b',     label: '通知理财平台充值成功', sub: 'RechargeP2BNotifyActor', level: 3, chain: 'recharge', row: 4 },
     // Purchase chain — right half
     { id: 'purchase-req',     label: '申购请求', sub: 'PurchaseRequestActor', level: 3, chain: 'purchase', row: 0 },
     { id: 'purchase-resp',    label: '申购响应', sub: 'PurchaseResponseActor', level: 3, chain: 'purchase', row: 1 },
     { id: 'purchase-reconf',  label: '申购重确认', sub: 'PurchaseReconfirmActor', level: 3, chain: 'purchase', row: 2 },
     { id: 'purchase-success', label: '申购成功', sub: 'PurchaseSuccessActor', level: 3, chain: 'purchase', row: 3, col: 0 },
     { id: 'purchase-failure', label: '申购失败', sub: 'PurchaseFailureActor', level: 3, chain: 'purchase', row: 3, col: 1 },
-    { id: 'purchase-p2b',     label: '申购P2B通知', sub: 'PurchaseP2BNotifyActor', level: 3, chain: 'purchase', row: 4 },
+    { id: 'purchase-p2b',     label: '通知理财平台申购成功', sub: 'PurchaseP2BNotifyActor', level: 3, chain: 'purchase', row: 4 },
 
     // ===== Level 4: 通知层 (2) =====
     { id: 'sms-service',  label: '短信服务', sub: 'SmsService · 合规窗口', level: 4, type: 'support', col: 0, row: 0 },
@@ -116,6 +116,7 @@
     { from: 'purchase-req',  to: 'gw-sftp', external: true },
     { from: 'purchase-req',  to: 'gw-core', external: true },
     { from: 'purchase-resp', to: 'gw-sftp', external: true },
+    { from: 'purchase-reconf', to: 'gw-core', external: true },
     { from: 'purchase-p2b', to: 'gw-p2b', external: true },
     { from: 'sms-service',  to: 'gw-sms', external: true },
     { from: 'reminder-sms', to: 'gw-sms', external: true }
@@ -155,21 +156,43 @@
       paths: [['batch-master','batch-worker'], ['batch-worker','recharge-req'], ['batch-worker','purchase-req'],
               ['recharge-req','recharge-resp'], ['recharge-resp','recharge-success'],
               ['purchase-req','purchase-resp'], ['purchase-resp','purchase-success'],
-              ['recharge-req','gw-sftp'], ['purchase-req','gw-sftp']],
-      events: ['BatchDispatched(×N)', 'SFTPFileUploaded', 'BankPollingStarted', 'ReconfirmTriggered', 'ResponsePolled'] },
+              ['recharge-req','gw-sftp'], ['purchase-req','gw-sftp'], ['purchase-reconf','gw-core']],
+      events: ['BatchDispatched(×N)', 'SFTPFileUploaded', 'BankPollingStarted', 'ReconfirmTriggered', 'ResponsePolled', 'PurchaseReconfirmVerify'] },
     { id: 5, key: 'compensate', color: '#ef4444', pattern: 'compensator',
       title: '阶段 5：通信层 → 成功/故障路由 + 补偿闭环',
       desc: '通信层演示两条路由：✅ 成功路径 — recharge/purchase-success → SmsService → 外部系统短信通道，通知用户。✕ 故障路径 — recharge/purchase-failure → QuotaRelease → 额度清理，ReminderSms 发送告警。♻ 补偿闭环 — ReBatchActor 扫描失败批次 → 重新注入 Worker Pool。',
       insight: '通信层是 DAG 与外部世界的边界。成功消息和故障消息在此层分流——成功走通知通道（绿），失败走补偿通道（红）。外部系统统一对外通信（SFTP/API/P2B/短信），隔离外部不确定性。Compensator 确保故障闭环——只要补偿器在运行，没有失败会被遗漏。',
       contrast: '传统：成功和失败的处理逻辑混在一起，缺少明确的通信边界。外部系统调用散落各处——换个短信通道要改 10 个文件。M2 的通信层把所有外部通信集中到外部系统，成功/失败路径在 DAG 中显式声明。',
-      highlight: ['re-batch', 'batch-worker', 'quota-release-u', 'quota-release-t', 'sms-service', 'reminder-sms', 'recharge-failure', 'purchase-failure', 'recharge-success', 'purchase-success'],
+      highlight: ['re-batch', 'batch-worker', 'quota-release-u', 'quota-release-t', 'sms-service', 'reminder-sms', 'recharge-failure', 'purchase-failure', 'recharge-success', 'purchase-success', 'recharge-req', 'recharge-resp', 'recharge-reconf', 'recharge-p2b', 'purchase-req', 'purchase-resp', 'purchase-reconf', 'purchase-p2b'],
       // Success paths (green), failure paths (red), recovery (blue)
       successPaths: [['recharge-success','sms-service'], ['purchase-success','sms-service'], ['sms-service','gw-sms']],
       failPaths: [['recharge-failure','quota-release-u'], ['purchase-failure','quota-release-u'], ['quota-release-u','quota-release-t'], ['recharge-failure','reminder-sms'], ['purchase-failure','reminder-sms'], ['reminder-sms','gw-sms']],
       recoverPaths: [['re-batch','batch-worker']],
+      replayPaths: [
+        ['batch-worker','recharge-req'], ['recharge-req','recharge-resp'], ['recharge-req','gw-sftp'], ['recharge-req','gw-core'],
+        ['recharge-resp','recharge-reconf'], ['recharge-resp','gw-sftp'],
+        ['recharge-reconf','recharge-success'], ['recharge-reconf','gw-core'],
+        ['recharge-success','recharge-p2b'], ['recharge-p2b','gw-p2b'],
+        ['batch-worker','purchase-req'], ['purchase-req','purchase-resp'], ['purchase-req','gw-sftp'], ['purchase-req','gw-core'],
+        ['purchase-resp','purchase-reconf'], ['purchase-resp','gw-sftp'],
+        ['purchase-reconf','purchase-success'], ['purchase-reconf','gw-core'],
+        ['purchase-success','purchase-p2b'], ['purchase-p2b','gw-p2b'],
+        ['recharge-success','sms-service'], ['purchase-success','sms-service'], ['sms-service','gw-sms']
+      ],
       successEvents: ['RechargeOK→Notify', 'PurchaseOK→Notify', 'SMS Sent✓'],
       failEvents: ['RechargeFAIL→Release', 'PurchaseFAIL→Release', 'QuotaReleased', 'Alert SMS!'],
-      recoverEvents: ['ReInject→Recovered'] }
+      recoverEvents: ['ReInject→Recovered'],
+      replayEvents: [
+        'ReDispatch', 'RechargeReq', 'Upload', 'Reserve',
+        'RechargeResp', 'PollResp',
+        'Reconfirm', 'Verify',
+        'RechargeOK', 'NotifyP2B',
+        'ReDispatch', 'PurchaseReq', 'Upload', 'Reserve',
+        'PurchaseResp', 'PollResp',
+        'Reconfirm', 'Verify',
+        'PurchaseOK', 'NotifyP2B',
+        'NotifySMS', 'NotifySMS', 'SMS Sent'
+      ] }
   ];
 
   var PATTERN_LABELS = { orchestrator: '编排器', protector: '保护器', communicator: '通信器', compensator: '补偿器', support: '辅助' };
@@ -244,8 +267,30 @@
     layoutChainL3(NODES.filter(function (n) { return n.chain === 'recharge'; }), lvlY[3], l3MinH, l3LeftCx, l3ChainW);
     layoutChainL3(NODES.filter(function (n) { return n.chain === 'purchase'; }), lvlY[3], l3MinH, l3RightCx, l3ChainW);
 
+    // ===== Outbound Gateway Anti-Corruption Layer =====
+    // Recharge chain nodes (rows 0-3): req, resp, reconf, success, failure
+    var rcNodes = ['recharge-req','recharge-resp','recharge-reconf','recharge-success','recharge-failure'];
+    var rcMinX = Infinity, rcMaxX = -Infinity, rcMinY = Infinity, rcMaxY = -Infinity;
+    rcNodes.forEach(function(id) {
+      var p = nodePositions[id]; if (!p) return;
+      rcMinX = Math.min(rcMinX, p.x); rcMaxX = Math.max(rcMaxX, p.x + NODE_W);
+      rcMinY = Math.min(rcMinY, p.y); rcMaxY = Math.max(rcMaxY, p.bottom);
+    });
+    var RCGW_PAD = 16;
+    gwPositions._rechargeGw = { x: rcMinX - RCGW_PAD, y: rcMinY - RCGW_PAD - 20, w: rcMaxX - rcMinX + 2 * RCGW_PAD, h: rcMaxY - rcMinY + 2 * RCGW_PAD + 20 };
+
+    // Purchase chain nodes (rows 0-3): req, resp, reconf, success, failure
+    var pcNodes = ['purchase-req','purchase-resp','purchase-reconf','purchase-success','purchase-failure'];
+    var pcMinX = Infinity, pcMaxX = -Infinity, pcMinY = Infinity, pcMaxY = -Infinity;
+    pcNodes.forEach(function(id) {
+      var p = nodePositions[id]; if (!p) return;
+      pcMinX = Math.min(pcMinX, p.x); pcMaxX = Math.max(pcMaxX, p.x + NODE_W);
+      pcMinY = Math.min(pcMinY, p.y); pcMaxY = Math.max(pcMaxY, p.bottom);
+    });
+    gwPositions._purchaseGw = { x: pcMinX - RCGW_PAD, y: pcMinY - RCGW_PAD - 20, w: pcMaxX - pcMinX + 2 * RCGW_PAD, h: pcMaxY - pcMinY + 2 * RCGW_PAD + 20 };
+
     // Level 5 (moved up to old L4 level): 2 nodes stacked vertically centered
-    var l5start = lvlY[4];
+    var l5start = lvlY[4] - (NODE_H + GAP);
     var l5nodes = NODES.filter(function (n) { return n.level === 5; });
     var qru = l5nodes.find(function (n) { return n.id === 'quota-release-u'; });
     if (qru) { placeNode(qru, l5start, innerW * 0.5); }
@@ -476,12 +521,45 @@
   }
 
   function renderGatewayContainer() {
+    // Outbound Gateway Anti-Corruption Layer
+    _renderOutboundGw(gwPositions._rechargeGw, '充值出站网关防腐层', '多协议 · 多接口 · 各异BatchSize', '#6366f1');
+    _renderOutboundGw(gwPositions._purchaseGw, '申购出站网关防腐层', '多协议 · 多接口 · 各异BatchSize', '#6366f1');
     // Center: Bank system (SFTP + Core API)
     _renderGatewayColumn(gwPositions._leftCol, '银行系统', 'SFTP / Core API');
     // Center: 理财平台 (P2B)
     _renderGatewayColumn(gwPositions._p2bCol, '理财平台', '基金申购 / 回盘');
     // Center: 短信通道 (SMS)
     _renderGatewayColumn(gwPositions._smsCol, '短信通道', '合规窗口下发');
+  }
+
+  function _renderOutboundGw(c, title, sub, color) {
+    var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', c.x); rect.setAttribute('y', c.y);
+    rect.setAttribute('width', c.w); rect.setAttribute('height', c.h);
+    rect.setAttribute('rx', 8); rect.setAttribute('ry', 8);
+    rect.setAttribute('fill', 'rgba(99,102,241,0.04)');
+    rect.setAttribute('stroke', 'rgba(99,102,241,0.28)');
+    rect.setAttribute('stroke-width', 1.5);
+    rect.setAttribute('stroke-dasharray', '6,3');
+    g.appendChild(rect);
+    var t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('x', c.x + c.w / 2); t.setAttribute('y', c.y + 17);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('fill', '#818cf8');
+    t.setAttribute('font-size', '0.6rem'); t.setAttribute('font-weight', '700');
+    t.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
+    t.textContent = title;
+    g.appendChild(t);
+    var s = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    s.setAttribute('x', c.x + c.w / 2); s.setAttribute('y', c.y + 33);
+    s.setAttribute('text-anchor', 'middle');
+    s.setAttribute('fill', 'rgba(129,140,248,0.5)');
+    s.setAttribute('font-size', '0.5rem');
+    s.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
+    s.textContent = sub;
+    g.appendChild(s);
+    canvas.appendChild(g);
   }
 
   function _renderGatewayColumn(c, title, sub) {
@@ -795,14 +873,38 @@
             var rb = svgNodeGroups['re-batch'];
             if (rcf) { rcf.g.classList.remove('failed'); rcf.g.classList.add('recovered'); }
             if (rb) rb.g.classList.add('completed');
-            addLog('info', '✔ ReBatchActor 扫描到 ABORTED → 重新注入 Worker Pool → 充值链路恢复');
-            animateParticle('re-batch', 'batch-worker', 'ReInject → Recovered', '#3fb950');
+            addLog('info', '✔ ReBatchActor 扫描到 ABORTED → 重新注入 Worker Pool → 补偿重放 Happy Path');
+            animateParticle('re-batch', 'batch-worker', 'ReInject → Recover', '#3fb950');
             eventCount++;
-            showToast('自愈完成：失败批次已重新注入 Worker Pool');
-          }, 1200);
-        }
+            showToast('自愈完成：失败批次已重新注入 Worker Pool，重走 Happy Path');
 
-        if (Object.keys(completedPhases).length === 5) {
+            // Replay happy path after recovery
+            if (phase.replayPaths) {
+              var replayDelay = 600;
+              phase.replayPaths.forEach(function (pair, idx) {
+                replayDelay += 320;
+                setTimeout(function () {
+                  var edgeKey = pair[0] + '->' + pair[1];
+                  var edgeObj = svgEdges[edgeKey];
+                  if (edgeObj) { edgeObj.el.classList.add('highlight'); edgeObj.el.style.stroke = '#3fb950'; edgeObj.el.setAttribute('marker-end', 'url(#arrow-highlight)'); }
+                  addLog('info', '♻ ' + pair[0] + ' → ' + pair[1]);
+                  animateParticle(pair[0], pair[1], phase.replayEvents[idx] || 'Event', '#3fb950');
+                  eventCount++;
+                }, replayDelay);
+              });
+
+              // Final all-done toast after replay completes
+              setTimeout(function () {
+                if (Object.keys(completedPhases).length === 5) {
+                  showToast('全部 5 阶段完成——自愈闭环 + Happy Path 重放，23 FSM + 外部系统验证通过');
+                  addLog('info', '=== DAG 完整执行: 5 阶段, 23 FSM, ' + eventCount + ' 事件已持久化 ===');
+                  var rcf2 = svgNodeGroups['recharge-failure'];
+                  if (rcf2) { rcf2.g.classList.add('completed'); rcf2.g.classList.remove('recovered'); }
+                }
+              }, replayDelay + 800);
+            }
+          }, 1200);
+        } else if (Object.keys(completedPhases).length === 5) {
           setTimeout(function () {
             showToast('全部 5 阶段完成——23 FSM + 外部系统，自愈闭环验证通过');
             addLog('info', '=== DAG 完整执行: 5 阶段, 23 FSM, ' + eventCount + ' 事件已持久化 ===');
