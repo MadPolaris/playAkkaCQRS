@@ -121,6 +121,7 @@
         .badge-explore { background: rgba(168,85,247,0.12); color: var(--purple); }
 
         .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        .card-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
         .card {
             background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
             padding: 28px; transition: border-color 0.2s, box-shadow 0.2s;
@@ -207,7 +208,7 @@
         @@media (max-width: 768px) {
             .hero h1 { font-size: 1.8rem; }
             .header-inner { flex-wrap: wrap; height: auto; padding: 10px 0; }
-            .card-grid, .pillar-grid, .feature-list, .host-grid, .pain-grid { grid-template-columns: 1fr; }
+            .card-grid, .card-grid-2, .pillar-grid, .feature-list, .host-grid, .pain-grid { grid-template-columns: 1fr; }
             .arch-layer.app { margin: 0 8px; }
             .arch-layer.domain { margin: 0 18px; }
             .story-box .big-number { font-size: 2rem; }
@@ -389,7 +390,7 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
                 <h4>流批一体多层级 DAG 执行引擎</h4>
-                <p>编排跨组织边界的复杂流程，集成遗留系统，在统一的 DAG 管道中同时处理流式和批量工作负载。DAG 中的每个节点均可独立版本化、测试和部署。 <a href="/m2-demo" style="color:var(--accent);font-weight:600;">观看动画演示 →</a></p>
+                <p>5 层级 DAG 执行引擎，23 个 Persistent FSM 内建 4 种弹性模式——监督自动重启、超时资源保护、失败补偿最终一致。每个节点独立版本化、测试和部署。统一管道同时处理流式与批量负载，通信层封装异构外部系统。 <a href="/m2-demo" style="color:var(--accent);font-weight:600;">观看动画演示 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -415,19 +416,34 @@
 <section class="section" id="showcases">
     <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> 在线演示 — 看到实际运行的代码</h2>
     <p class="section-desc">
-        三个交互式 Demo 连接到同一个实时系统。每个展示架构的不同层次——从分布式事务、实时事件流到完整构件全景。
+        四个交互式 Demo 连接到同一个实时系统，按里程碑与最佳实践分层展示。
     </p>
 
-    <div class="card-grid">
+    <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
-            <div class="card-tags"><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">补偿</span></div>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">补偿</span></div>
             <h3>Saga 事务展示</h3>
             <p>一个分布式转账流程在 Saga 状态机中执行。观察 Prepare → Commit → Compensate 的完整生命周期。在任意步骤注入故障。实时观察自动重试、向后补偿和挂起事务的恢复过程。</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：MES ↔ EAP ↔ RMS 的跨系统数据对齐</p>
             <br>
             <a href="/showcase" class="card-link">打开展示 →</a>
         </div>
+        <div class="card">
+            <div class="card-icon" style="background:rgba(240,136,62,0.12);color:var(--orange)">⚙️</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M2</span><span class="tag">DAG</span><span class="tag">FSM</span><span class="tag">弹性</span><span class="tag">流批一体</span></div>
+            <h3>M2 DAG 执行引擎演示</h3>
+            <p>23 个 Akka Persistent FSM 跨 5 层级协作，完成薪资存入场景的完整编排。逐步推进 5 个阶段，观察编排器、保护器、通信器、补偿器 4 种弹性模式的实时运作。点击任意节点深入状态机内部。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：跨 MES/EAP/RMS/SPC 的 DAG 流程编排引擎</p>
+            <br>
+            <a href="/m2-demo" class="card-link">打开演示 →</a>
+        </div>
+    </div>
+
+    <h3 style="font-size:1rem; font-weight:700; margin: 36px 0 16px; color: var(--fg-muted); letter-spacing: -0.02em;">
+        DDD 最佳架构实践展示
+    </h3>
+    <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(63,185,80,0.12);color:var(--success)">📊</div>
             <div class="card-tags"><span class="tag">CQRS</span><span class="tag">投影</span><span class="tag">事件流</span></div>

@@ -22,12 +22,12 @@
     // ===== Level 2: 执行与资源层 (6, 3 sub-rows, BatchMaster+Worker center, QuotaReserve left) =====
     // Row 0: QuotaReserve (left), BatchMaster (center), BatchItemCreation (right)
     { id: 'batch-master',  label: '批次分发器', sub: 'BatchMaster', level: 2, type: 'orchestrator', col: 1, row: 0 },
-    { id: 'quota-reserve', label: '用户额度预留', sub: 'UserQuotaReservation', level: 2, type: 'protector', col: 0, row: 0 },
+    { id: 'quota-reserve', label: '用户申购额度锁定', sub: 'UserQuotaReservation', level: 2, type: 'protector', col: 0, row: 0 },
     { id: 'batch-item',    label: '明细创建器', sub: 'BatchItemCreationActor', level: 2, type: 'orchestrator', col: 2, row: 0 },
     // Row 1: BatchWorker centered below BatchMaster
     { id: 'batch-worker',  label: '批次工人 ×N', sub: 'BatchWorker', level: 2, type: 'orchestrator', col: 1, row: 1 },
     // Row 2: quota cleanup
-    { id: 'quota-release-u', label: '用户额度释放', sub: 'UserQuotaReleaseActor', level: 5, type: 'protector', col: 0, row: 0 },
+    { id: 'quota-release-u', label: '用户申购额度解锁', sub: 'UserQuotaReleaseActor', level: 5, type: 'protector', col: 0, row: 0 },
     { id: 'quota-release-t', label: '总额度释放', sub: 'TotalQuotaReleaseActor', level: 5, type: 'protector', col: 0, row: 1 },
 
     // ===== Level 3: 业务链路层 (12, 2 chains × 5 rows, tree layout) =====
@@ -59,6 +59,14 @@
     { id: 'gw-p2b',    label: '基金申购平台', sub: '产品申购 / 回盘解析' },
     { id: 'gw-sms',    label: '短信通道', sub: '合规窗口下发' }
   ];
+
+  // Outbound connector style by gateway protocol
+  var CONNECTOR_BY_GW = {
+    'gw-sftp': { label: 'SFTP出站连接器', short: 'SFTP', color: '#f0883e' },
+    'gw-core': { label: 'HTTP出站连接器 · XML', short: 'HTTP/XML', color: '#a855f7' },
+    'gw-p2b':  { label: 'HTTP出站连接器 · JSON', short: 'HTTP/JSON', color: '#22c55e' },
+    'gw-sms':  { label: 'HTTP出站连接器 · JSON', short: 'HTTP/JSON', color: '#22c55e' }
+  };
 
   var EDGES = [
     // ===== Level 0→1 =====
@@ -132,7 +140,7 @@
       paths: [['cron','job-actor'], ['job-actor','pre-batch'], ['job-actor','re-batch']],
       events: ['JobCreated', 'FtpDirectoryCreated', 'ReminderSent'] },
     { id: 2, key: 'preprocess', color: '#f97316', pattern: 'orchestrator',
-      title: '阶段 2：数据预处理 → 额度预留',
+      title: '阶段 2：数据预处理 → 额度锁定',
       desc: 'PreBatchActor 读取薪资计划。BatchItemCreationActor 拆分微批次。三个额度守卫预留总额度与个人额度。',
       insight: '节点独立性：每个 DAG 节点独立版本化、独立测试、独立部署。6 个执行层节点各自独立——改 PreBatchActor 不影响 Worker，改预留不影响释放。爆炸半径限制在单节点内。',
       contrast: '对比西门子 1,580,000 行存储过程：每行共享事务作用域，改一行可能破坏全局。',
@@ -289,6 +297,18 @@
     });
     gwPositions._purchaseGw = { x: pcMinX - RCGW_PAD, y: pcMinY - RCGW_PAD - 20, w: pcMaxX - pcMinX + 2 * RCGW_PAD, h: pcMaxY - pcMinY + 2 * RCGW_PAD + 20 };
 
+    // ===== 单节点出站网关防腐层 =====
+    var SINGLE_GW_PAD_X = 16, SINGLE_GW_PAD_TOP = 36, SINGLE_GW_PAD_BOT = 16;
+    function wrapSingleNode(nodeId) {
+      var p = nodePositions[nodeId]; if (!p) return null;
+      return {
+        x: p.x - SINGLE_GW_PAD_X,
+        y: p.y - SINGLE_GW_PAD_TOP,
+        w: NODE_W + 2 * SINGLE_GW_PAD_X,
+        h: NODE_H + SINGLE_GW_PAD_TOP + SINGLE_GW_PAD_BOT
+      };
+    }
+
     // Level 5 (moved up to old L4 level): 2 nodes stacked vertically centered
     var l5start = lvlY[4] - (NODE_H + GAP);
     var l5nodes = NODES.filter(function (n) { return n.level === 5; });
@@ -332,6 +352,12 @@
     if (smsSvc) { placeNode(smsSvc, l4Y, innerW * 0.35); }
     var reminder = l4nodes.find(function (n) { return n.id === 'reminder-sms'; });
     if (reminder) { placeNode(reminder, l4Y, innerW * 0.65); }
+
+    // ===== 单节点出站网关防腐层（所有节点位置已就绪）=====
+    gwPositions._rechargeP2bGw = wrapSingleNode('recharge-p2b');
+    gwPositions._purchaseP2bGw = wrapSingleNode('purchase-p2b');
+    gwPositions._smsServiceGw = wrapSingleNode('sms-service');
+    gwPositions._reminderSmsGw = wrapSingleNode('reminder-sms');
 
     // gw-sms: centered below L4, styled container
     var smsCenterX = w / 2;
@@ -503,6 +529,14 @@
     renderInternalNodes();
     renderGatewayEntries();
     updateAllEdgePaths();
+    // Bring connector dots/labels to front so they're not covered by node rects
+    Object.keys(svgEdges).forEach(function (key) {
+      var e = svgEdges[key];
+      if (e.connector) {
+        canvas.appendChild(e.connector.el);
+        if (e.connector.labelEl) canvas.appendChild(e.connector.labelEl);
+      }
+    });
   }
 
   function renderLevelLabels() {
@@ -522,8 +556,13 @@
 
   function renderGatewayContainer() {
     // Outbound Gateway Anti-Corruption Layer
-    _renderOutboundGw(gwPositions._rechargeGw, '充值出站网关防腐层', '多协议 · 多接口 · 各异BatchSize', '#6366f1');
-    _renderOutboundGw(gwPositions._purchaseGw, '申购出站网关防腐层', '多协议 · 多接口 · 各异BatchSize', '#6366f1');
+    _renderOutboundGw(gwPositions._rechargeGw, '充值子流程动态批次防腐层', '多协议 · 多接口 · 各异BatchSize', '#3b82f6');
+    _renderOutboundGw(gwPositions._purchaseGw, '申购子流程动态批次防腐层', '多协议 · 多接口 · 各异BatchSize', '#10b981');
+    // 单节点出站网关防腐层
+    _renderOutboundGw(gwPositions._rechargeP2bGw, '充值通知出站防腐层', 'P2B · 通知理财平台', '#6366f1');
+    _renderOutboundGw(gwPositions._purchaseP2bGw, '申购通知出站防腐层', 'P2B · 通知理财平台', '#6366f1');
+    _renderOutboundGw(gwPositions._smsServiceGw,  '短信服务出站防腐层', '合规窗口 · 消息队列', '#6366f1');
+    _renderOutboundGw(gwPositions._reminderSmsGw, '提醒短信出站防腐层', '告警通知 · 用户触达', '#6366f1');
     // Center: Bank system (SFTP + Core API)
     _renderGatewayColumn(gwPositions._leftCol, '银行系统', 'SFTP / Core API');
     // Center: 理财平台 (P2B)
@@ -533,20 +572,24 @@
   }
 
   function _renderOutboundGw(c, title, sub, color) {
+    // Parse hex color for rgba variants
+    var r = parseInt(color.slice(1, 3), 16);
+    var g_ = parseInt(color.slice(3, 5), 16);
+    var b = parseInt(color.slice(5, 7), 16);
     var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', c.x); rect.setAttribute('y', c.y);
     rect.setAttribute('width', c.w); rect.setAttribute('height', c.h);
     rect.setAttribute('rx', 8); rect.setAttribute('ry', 8);
-    rect.setAttribute('fill', 'rgba(99,102,241,0.04)');
-    rect.setAttribute('stroke', 'rgba(99,102,241,0.28)');
+    rect.setAttribute('fill', 'rgba(' + r + ',' + g_ + ',' + b + ',0.04)');
+    rect.setAttribute('stroke', 'rgba(' + r + ',' + g_ + ',' + b + ',0.28)');
     rect.setAttribute('stroke-width', 1.5);
     rect.setAttribute('stroke-dasharray', '6,3');
     g.appendChild(rect);
     var t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     t.setAttribute('x', c.x + c.w / 2); t.setAttribute('y', c.y + 17);
     t.setAttribute('text-anchor', 'middle');
-    t.setAttribute('fill', '#818cf8');
+    t.setAttribute('fill', color);
     t.setAttribute('font-size', '0.6rem'); t.setAttribute('font-weight', '700');
     t.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
     t.textContent = title;
@@ -554,7 +597,7 @@
     var s = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     s.setAttribute('x', c.x + c.w / 2); s.setAttribute('y', c.y + 33);
     s.setAttribute('text-anchor', 'middle');
-    s.setAttribute('fill', 'rgba(129,140,248,0.5)');
+    s.setAttribute('fill', 'rgba(' + r + ',' + g_ + ',' + b + ',0.5)');
     s.setAttribute('font-size', '0.5rem');
     s.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
     s.textContent = sub;
@@ -650,6 +693,7 @@
   }
 
   function renderEdges() {
+    var connectorCountByNode = {}; // track dots per source node for offset
     EDGES.forEach(function (e) {
       var key = e.from + '->' + e.to;
       if (svgEdges[key]) return;
@@ -662,8 +706,46 @@
       var marker = e.feedback ? 'url(#arrow-feedback)' : e.external ? 'url(#arrow-external)' : 'url(#arrow-normal)';
       path.setAttribute('marker-end', marker);
       canvas.appendChild(path);
-      svgEdges[key] = { el: path, feedback: !!e.feedback, external: !!e.external };
+      var edgeObj = { el: path, feedback: !!e.feedback, external: !!e.external };
+      if (e.external) {
+        var conn = CONNECTOR_BY_GW[e.to];
+        if (conn) {
+          var idx = connectorCountByNode[e.from] || 0;
+          connectorCountByNode[e.from] = idx + 1;
+          // Stack dots vertically when multiple connectors share same start point
+          var yOff = (idx - (connectorCountByNode[e.from] - 1) / 2) * 10;
+          var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('r', '6');
+          dot.setAttribute('fill', 'none');
+          dot.setAttribute('stroke', conn.color);
+          dot.setAttribute('stroke-width', '1.5');
+          dot.setAttribute('class', 'connector-dot');
+          var tip = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+          tip.textContent = conn.label;
+          dot.appendChild(tip);
+          canvas.appendChild(dot);
+          var lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          lbl.setAttribute('fill', conn.color);
+          lbl.setAttribute('pointer-events', 'none');
+          lbl.setAttribute('font-size', '0.5rem');
+          lbl.setAttribute('font-family', '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif');
+          lbl.setAttribute('class', 'connector-label');
+          lbl.textContent = conn.short;
+          canvas.appendChild(lbl);
+          edgeObj.connector = { el: dot, labelEl: lbl, toGw: e.to, yOff: yOff };
+        }
+      }
+      svgEdges[key] = edgeObj;
     });
+  }
+
+  function getExternalEdgeStartPos(fromId, toId) {
+    var f = nodePositions[fromId];
+    var t = gwPositions[toId];
+    if (!f || !t) return null;
+    var fsy = f.y + NODE_H / 2;
+    var startX = f.cx < t.cx ? f.right : f.x;
+    return { x: startX, y: fsy };
   }
 
   function updateAllEdgePaths() {
@@ -671,6 +753,18 @@
       var parts = key.split('->');
       var e = svgEdges[key];
       e.el.setAttribute('d', getEdgePath(parts[0], parts[1], e.feedback, e.external));
+      if (e.connector) {
+        var sp = getExternalEdgeStartPos(parts[0], e.connector.toGw);
+        if (sp) {
+          var cy = sp.y + (e.connector.yOff || 0);
+          e.connector.el.setAttribute('cx', sp.x);
+          e.connector.el.setAttribute('cy', cy);
+          if (e.connector.labelEl) {
+            e.connector.labelEl.setAttribute('x', sp.x + 10);
+            e.connector.labelEl.setAttribute('y', cy + 4);
+          }
+        }
+      }
     });
   }
 
