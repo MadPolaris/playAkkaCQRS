@@ -5,8 +5,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M2.5+ · Three-Dimension Architecture — From Template Generation to Composable Design</title>
-    <meta name="description" content="M2.5+ replaces FSM template generation with a three-dimension separation architecture. Fix once, apply everywhere. M3 reuses the same components for Fab dynamic process orchestration. A roadmap for product managers and architects.">
+    <title>M2.5+ · Three-Dimension Architecture — Business Parameterization, Event Sourcing, Six Nines</title>
+    <meta name="description" content="M2.5+ achieves business parameterization via three-dimension separation — pure config-driven ErrorCodeMapping/ReBatchPolicy. ChainExecutionActor provides Event Sourcing + self-healing. M3 reuses the same components for Fab dynamic process orchestration. A roadmap for product managers and architects.">
     <meta name="keywords" content="M2.5+, M3, three-dimension architecture, composable components, dynamic process orchestration, Fab, semiconductor, Akka, DAG">
     <style>
         :root {
@@ -254,7 +254,7 @@
             <span class="m3">M3 Dynamic Orchestration</span>
         </h1>
         <p class="tagline">
-            M2.5+ replaces template code generation with a <strong>three-dimension separation architecture</strong> — Business, Technical, and Scheduling dimensions evolve independently, fix once and apply everywhere.
+            M2.5+ achieves business parameterization with a <strong>three-dimension separation architecture</strong> — Business, Technical, and Scheduling dimensions evolve independently, fix once and apply everywhere.
             M3 directly reuses the same components for Fab <strong>9 equipment areas + logistics</strong> dynamic process orchestration.
             This is an <strong>incremental evolution</strong> path, not a ground-up rewrite.
         </p>
@@ -661,7 +661,7 @@
             <strong>Key Design Decision: Three-Dimension Separation vs Monolithic FSM.</strong>
             Business Dimension defines "what to do" (step sequences), Technical Dimension provides "how to do it" (communication/fault-tolerance/encryption), Scheduling Dimension decides "where results go" (success advance/failure compensate/suspicious reconfirm).
             Three-dimension separation means: business teams modify step sequences without touching tech components; infrastructure teams upgrade circuit breakers without understanding business logic; scheduling policy changes (e.g. "suspicious threshold from 5% to 3%") are parameter config, not code changes.
-            Unlike M2 template generation: components are instantiated at runtime by parameters — fix a bug once, all instances automatically inherit the fix.
+            Unlike M2 hand-written FSMs: components are instantiated at runtime by parameters — fix a bug once, all instances automatically inherit the fix.
         </blockquote>
     </section>
 
@@ -843,39 +843,20 @@
             or ReBatchPolicy routing rules.
         </p>
 
-        <!-- ===== 7.1 Two Architectures ===== -->
-        <h3>7.1 First, Distinguish: M2.5 Templates vs M2.5+ Runtime</h3>
+        <!-- ===== 7.1 Mapping Basis ===== -->
+        <h3>7.1 Mapping Basis</h3>
 
         <p style="font-size:0.82rem; color:var(--fg-muted);">
-            The <span style="font-family:var(--mono);">app/net/imadz/m25/</span> package contains two architectures.
-            <strong>All mappings below are based on the M2.5+ runtime approach.</strong>
-        </p>
+            The M2.5+ three-dimension architecture is powered by two cooperating parts: the <strong>runtime component engine</strong>
+            (component/ + pipeline/ + business/ + binding/) handles pipeline execution and business parameterization; the
+            <strong>ChainExecutionActor</strong> (component/ChainExecutionActor.scala) handles Event Sourcing, self-healing recovery,
+            and horizontal scaling. All mappings below are based on the M2.5+ runtime approach.</p>
 
-        <div class="info-grid">
-            <div class="info-card deprecated">
-                <h5><span class="badge-deprecated">DEPRECATED</span> M2.5 Template Generation</h5>
-                <p class="file-ref">template/ExternalTwoPhaseChain.scala · 563 lines</p>
-                <p style="margin-top:8px;">
-                    Approach: takes <span class="file-ref">Params(chainId, bindings, messages, rules)</span> →
-                    generates 6 FSMs via <strong>EventSourcedBehavior</strong>.<br/>
-                    Problem: still goes through Akka Persistence journal — 563 lines of template code merely
-                    replace M2 Java FSM duplication with Scala parameterization.<br/>
-                    Contains: <span class="file-ref">ExternalTwoPhaseChainTemplate</span> / <span class="file-ref">BatchOrchestratorTemplate</span> /
-                    <span class="file-ref">ResourceGuardTemplate</span> / <span class="file-ref">NotificationRelayTemplate</span>
-                </p>
-            </div>
-            <div class="info-card target">
-                <h5><span class="badge-target">TARGET</span> M2.5+ Runtime Component Engine</h5>
-                <p class="file-ref">component/ + pipeline/ + business/ + binding/ · 14 files</p>
-                <p style="margin-top:8px;">
-                    Approach: <span class="file-ref">SubBatchPipeline</span> defines 6 stage interfaces →
-                    <span class="file-ref">SubBatchProcessor</span> executes via <strong>Future</strong> pipeline,
-                    variation captured in <strong>pure configuration objects</strong>.<br/>
-                    Adding a new business chain requires ~20 lines of DSL config — no FSM generation.<br/>
-                    Core: <span class="file-ref">ErrorCodeMapping</span> / <span class="file-ref">ReBatchPolicy</span> /
-                    <span class="file-ref">PhysicalConstraints</span> / <span class="file-ref">ChainDsl</span>
-                </p>
-            </div>
+        <div class="arch-callout">
+            <strong>Note:</strong> the <span class="file-ref">app/net/imadz/m25/template/</span> directory contains an earlier design iteration
+            (template-based FSM generation) and is not used as mapping reference. All mappings below are based on the
+            <strong>runtime component engine</strong> — SubBatchPipeline's 6 stage interfaces + ChainExecutionActor's
+            EventSourcedBehavior wrapper. For the full Event Sourcing and self-healing walkthrough, see <strong>Section 8</strong>.
         </div>
 
         <!-- ===== 7.2 Compression Overview ===== -->
@@ -1006,9 +987,10 @@
         <h3>7.4 Detailed Command/Event Mapping</h3>
 
         <div class="arch-callout">
-            <strong>Key: M2.5+ runtime does not generate FSM protocol types (Command/Event/State)</strong> — those exist only in the deprecated
-            <span class="file-ref">ExternalTwoPhaseChainTemplate</span>.
-            M2.5+ runtime replaces FSM state machines with <strong>Future pipelines + config objects</strong>.
+            <strong>SubBatchProcessor uses no FSM internally</strong> — the 6-stage pipeline executes via Future chains without going through
+            Akka Persistence. Event Sourcing, state recovery, and audit trail are provided by the outer
+            <strong>ChainExecutionActor (EventSourcedBehavior)</strong>, which uses 4 generic event types
+            (Started / PhaseDone / AllCompleted / ExecutionFailed) across all business chains. See <strong>Section 8</strong> for details.
             Mapping form: <strong>M2 Command/Event → M2.5+ runtime call chain → equivalent data carrier</strong>.
         </div>
 
@@ -1230,7 +1212,7 @@
         </p>
 
         <!-- Example 1 -->
-        <h4 style="margin-top:20px;">Ex 1: Starting a Recharge Request — From FSM Transitions to Pipeline Execution</h4>
+        <h4 style="margin-top:20px;">Ex 1: Starting a Recharge Request — M2 FSM to M2.5+ Pipeline Equivalent</h4>
         <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:10px;">
             M2's <span class="mono">StartRechargeRequest → FileGenerating → FileGeneratedCompleted → FileUploading → ...</span>
             is a full FSM transition chain. M2.5+ replaces it with a Future pipeline.
@@ -1264,8 +1246,8 @@ case <span class="kw">FileGenerating</span>:
 <span class="co">// ↑ each transition = command → event → side-effect → new state</span></pre>
             </div>
             <div class="code-panel">
-                <div class="code-label m25-l">M2.5+ Scala — SubBatchProcessor (0 FSMs)</div>
-                <pre><span class="co">// No FSM, no state transitions. Direct pipeline execution:</span>
+                <div class="code-label m25-l">M2.5+ Scala — SubBatchProcessor (no FSM internally)</div>
+                <pre><span class="co">// SubBatchProcessor uses Future chains internally:</span>
 <span class="kw">val</span> processor = <span class="kw">new</span> SubBatchProcessor[Item, Raw](pipeline)
 
 <span class="co">// 6-stage Future chain:</span>
@@ -1282,7 +1264,8 @@ case <span class="kw">FileGenerating</span>:
     cls   &lt;- pipeline.classify.classify(raw, batch.items)
   } <span class="kw">yield</span> SubBatchResult(cls)
 
-<span class="co">// All "intermediate states" disappear — they're just types in a flatMap chain</span></pre>
+<span class="co">// No explicit state inside the pipeline — phases connect via type changes</span>
+<span class="co">// Event Sourcing & state recovery provided by outer ChainExecutionActor (see Section 8)</span></pre>
             </div>
         </div>
 
@@ -1389,8 +1372,8 @@ case <span class="kw">FileGenerating</span>:
         <h3>7.7 Runtime Component Coverage Verification Matrix</h3>
 
         <p style="font-size:0.82rem; color:var(--fg-muted);">
-            Verifying only <strong>M2.5+ runtime components</strong> (component/ + pipeline/ + business/ + binding/),
-            excluding the deprecated template/ package.
+            Verifying <strong>M2.5+ runtime components</strong> (component/ + pipeline/ + business/ + binding/),
+            including the new ChainExecutionActor (Event Sourcing layer).
         </p>
 
         <table class="mapping-table">
@@ -1416,13 +1399,14 @@ case <span class="kw">FileGenerating</span>:
                 <tr class="row-blue"><td>ChainTemplates (pre-built)</td><td><span class="status-done">DONE</span></td><td class="mono">business/ChainTemplates.scala</td><td>recharge() / purchase() / equipmentArea() — three pre-built chains</td></tr>
                 <tr class="row-blue"><td>ChainBindings (parameters)</td><td><span class="status-done">DONE</span></td><td class="mono">binding/ChainBindings.scala</td><td>ExternalBindings · ChainMessages(RechargeSuccess/PurchaseSuccess) · BusinessRules · FailureCategory</td></tr>
                 <tr class="row-blue"><td>GatewayRef (ACL)</td><td><span class="status-done">DONE</span></td><td class="mono">binding/GatewayRef.scala</td><td>GatewayRef[T] trait + ActorGatewayRef[T]</td></tr>
+                <tr class="row-purple"><td><strong>ChainExecutionActor</strong> (Event Sourcing + Self-Healing)</td><td><span class="status-done">DONE</span></td><td class="mono">component/ChainExecutionActor.scala</td><td>EventSourcedBehavior wraps SubBatchProcessor; PhaseDone event persistence; auto-recovery after crash</td></tr>
             </tbody>
         </table>
 
         <p style="font-size:0.78rem; color:var(--fg-muted); margin-top:8px;">
-            <strong>Total: 15 runtime components, 14 fully implemented, 1 (AckWaiter) interface defined but no standalone implementation yet.</strong>
-            All 50+ M2 message types across recharge and purchase can be equivalently represented through these components'
-            method calls, return types, and configuration parameters.
+            <strong>Total: 16 runtime components, 15 fully implemented, 1 (AckWaiter) interface defined but no standalone implementation yet.</strong>
+            ChainExecutionActor is the key bridge between runtime components and Akka infrastructure — it uses 4 generic event types
+            (Started/PhaseDone/AllCompleted/ExecutionFailed) to provide Event Sourcing across all business chains. See <strong>Section 8</strong> for the full recovery walkthrough.
         </p>
 
         <!-- ===== 7.8 Information Equivalence Summary ===== -->
@@ -1474,7 +1458,7 @@ case <span class="kw">FileGenerating</span>:
         </p>
 
         <!-- ===== 8.1 Event Sourcing ===== -->
-        <h3>8.1 ChainExecutionActor: Event Sourcing Returns</h3>
+        <h3>8.1 ChainExecutionActor: The Event Sourcing Layer for Runtime Pipelines</h3>
 
         <p style="font-size:0.82rem; color:var(--fg-muted);">
             <span class="file-ref">ChainExecutionActor</span> (new, 342 lines) wraps SubBatchProcessor's Future pipeline

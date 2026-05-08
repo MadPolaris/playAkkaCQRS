@@ -5,8 +5,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M2.5+ · 标准组件库 — 从模板生成到可组合架构</title>
-    <meta name="description" content="M2.5+ 用标准组件库替代 FSM 模板生成——一次修复、全局生效。M3 将同一套组件用于 Fab 动态工序编排。面向产品经理与架构师的演进路线图。">
+    <title>M2.5+ · 三层分离架构 — 业务参数化、事件溯源、6个9稳定性</title>
+    <meta name="description" content="M2.5+ 通过三层分离架构实现业务参数化——ErrorCodeMapping/ReBatchPolicy 纯配置驱动。ChainExecutionActor 提供事件溯源+自愈恢复。M3 将同一套组件用于 Fab 动态工序编排。面向产品经理与架构师的演进路线图。">
     <meta name="keywords" content="M2.5+, M3, 组件库, SubBatchProcessor, 动态工序编排, Fab, 半导体, Akka, DAG">
     <style>
         :root {
@@ -254,7 +254,7 @@
             <span class="m3">M3 动态工序编排</span>
         </h1>
         <p class="tagline">
-            M2.5+ 用<strong>三层分离架构</strong>替代模板代码生成——业务/技术/调度维度独立演进、修复一次全局生效。
+            M2.5+ 用<strong>三层分离架构</strong>实现业务参数化——业务/技术/调度维度独立演进、修复一次全局生效。
             M3 将同一套组件直接用于 Fab <strong>9 个设备区 + 物流</strong>的动态工序编排。
             这是一条<strong>渐进演进</strong>路径，不是一次推倒重来。
         </p>
@@ -661,7 +661,7 @@
             <strong>关键设计决策：三层分离 vs 单体 FSM。</strong>
             业务维度定义"做什么"（步骤序列），技术维度提供"怎么做"（通信/容错/加密），调度维度决定"结果去哪"（成功推进/失败补偿/可疑复核）。
             三层分离意味着：业务人员修改步骤序列不需碰技术组件；基础设施团队升级断路器不需理解业务逻辑；调度策略变更（如"可疑阈值从 5% 调至 3%"）是参数配置而非代码修改。
-            区别于 M2 的模板生成：组件在运行期按参数实例化——修 bug 改一次组件，所有实例自动继承修复。
+            区别于 M2 的手写 FSM：组件在运行期按参数实例化——修 bug 改一次组件，所有实例自动继承修复。
         </blockquote>
     </section>
 
@@ -841,37 +841,18 @@
             每条 M2 消息携带的信息量，在 M2.5+ 中都能找到一一对应的承载方式——通过 Pipeline 阶段返回值、ErrorCodeMapping 配置项、或 ReBatchPolicy 路由规则。
         </p>
 
-        <!-- ===== 7.1 两套架构区分 ===== -->
-        <h3>7.1 先辨明：M2.5 模板 vs M2.5+ 运行时</h3>
+        <!-- ===== 7.1 映射基础 ===== -->
+        <h3>7.1 映射基础</h3>
 
         <p style="font-size:0.82rem; color:var(--fg-muted);">
-            当前 <span style="font-family:var(--mono);">app/net/imadz/m25/</span> 包含两套架构。<strong>下面所有映射均基于 M2.5+ 运行时方法。</strong>
-        </p>
+            M2.5+ 的三层分离架构由两部分协同工作：<strong>运行时组件引擎</strong>（component/ + pipeline/ + business/ + binding/）
+            负责执行流水线和业务参数化；<strong>ChainExecutionActor</strong>（component/ChainExecutionActor.scala）负责事件溯源、自愈恢复和水平扩展。
+            下面所有映射均基于 M2.5+ 运行时方法。</p>
 
-        <div class="info-grid">
-            <div class="info-card deprecated">
-                <h5><span class="badge-deprecated">废弃参考</span> M2.5 模板化生成</h5>
-                <p class="file-ref">template/ExternalTwoPhaseChain.scala · 563 行</p>
-                <p style="margin-top:8px;">
-                    原理：接收 <span class="file-ref">Params(chainId, bindings, messages, rules)</span> →
-                    用 <strong>EventSourcedBehavior</strong> 动态生成 6 个 FSM。<br/>
-                    问题：仍走 Akka Persistence journal，563 行模板代码只是把 M2 的 Java FSM 重复换成 Scala 参数化。<br/>
-                    包含：<span class="file-ref">ExternalTwoPhaseChainTemplate</span> / <span class="file-ref">BatchOrchestratorTemplate</span> /
-                    <span class="file-ref">ResourceGuardTemplate</span> / <span class="file-ref">NotificationRelayTemplate</span>
-                </p>
-            </div>
-            <div class="info-card target">
-                <h5><span class="badge-target">目标架构</span> M2.5+ 运行时组件引擎</h5>
-                <p class="file-ref">component/ + pipeline/ + business/ + binding/ · 14 文件</p>
-                <p style="margin-top:8px;">
-                    原理：<span class="file-ref">SubBatchPipeline</span> 定义 6 阶段接口 →
-                    <span class="file-ref">SubBatchProcessor</span> 用 <strong>Future</strong> 直接执行流水线，
-                    差异存于 <strong>纯配置对象</strong> 中。<br/>
-                    新增一条业务链路只需 ~20 行 DSL 配置，不生成任何新 FSM。<br/>
-                    核心：<span class="file-ref">ErrorCodeMapping</span> / <span class="file-ref">ReBatchPolicy</span> /
-                    <span class="file-ref">PhysicalConstraints</span> / <span class="file-ref">ChainDsl</span>
-                </p>
-            </div>
+        <div class="arch-callout">
+            <strong>阅读提示：</strong><span class="file-ref">app/net/imadz/m25/template/</span> 目录中的代码是早期设计迭代产物（模板化 FSM 生成），不作为映射参考。
+            下面所有映射基于 <strong>运行时组件引擎</strong>——SubBatchPipeline 的 6 阶段接口 + ChainExecutionActor 的 EventSourcedBehavior 包装。
+            事件溯源和自愈恢复的完整推演见<strong>第 8 章</strong>。
         </div>
 
         <!-- ===== 7.2 压缩比概览 ===== -->
@@ -1002,9 +983,9 @@
         <h3>7.4 命令/事件详细映射</h3>
 
         <div class="arch-callout">
-            <strong>关键：M2.5+ 运行时方法不生成 FSM 协议类型（Command/Event/State）</strong>——这些只存在于已废弃的
-            <span class="file-ref">ExternalTwoPhaseChainTemplate</span> 中。
-            M2.5+ 运行时用 <strong>Future 流水线 + 配置对象</strong> 替代了 FSM 状态机。
+            <strong>SubBatchProcessor 内部不使用 FSM</strong>——6 阶段流水线用 Future 链直接执行，不经过 Akka Persistence。
+            事件溯源、状态恢复和审计追踪由外层的 <strong>ChainExecutionActor（EventSourcedBehavior）</strong> 提供，通过 4 个通用事件类型
+            （Started / PhaseDone / AllCompleted / ExecutionFailed）统一覆盖所有业务链路。详见<strong>第 8 章</strong>。
             映射形式：<strong>M2 命令/事件 → M2.5+ 运行时调用链 → 等价信息承载方式</strong>。
         </div>
 
@@ -1224,7 +1205,7 @@
         </p>
 
         <!-- Example 1 -->
-        <h4 style="margin-top:20px;">例 1：发起充值请求——从 FSM 状态迁移到 Pipeline 执行</h4>
+        <h4 style="margin-top:20px;">例 1：发起充值请求——M2 FSM 到 M2.5+ Pipeline 的等价映射</h4>
         <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:10px;">
             M2 的 <span class="mono">StartRechargeRequest → FileGenerating → FileGeneratedCompleted → FileUploading → RequestUploadFile → ...</span>
             是一次完整的 FSM 状态迁移链条。M2.5+ 用 Pipeline 的 Future 链替代。
@@ -1258,8 +1239,8 @@ case <span class="kw">FileGenerating</span>:
 <span class="co">// ↑ 每个状态迁移 = 命令 → 事件 → 副作用 → 新状态</span></pre>
             </div>
             <div class="code-panel">
-                <div class="code-label m25-l">M2.5+ Scala — SubBatchProcessor（0 个 FSM）</div>
-                <pre><span class="co">// 无 FSM，无状态迁移。Pipeline 直接执行：</span>
+                <div class="code-label m25-l">M2.5+ Scala — SubBatchProcessor（流水线内部无 FSM）</div>
+                <pre><span class="co">// SubBatchProcessor 内部用 Future 链直接执行：</span>
 <span class="kw">val</span> processor = <span class="kw">new</span> SubBatchProcessor[Item, Raw](pipeline)
 
 <span class="co">// 6 阶段 Future 链：</span>
@@ -1276,7 +1257,8 @@ case <span class="kw">FileGenerating</span>:
     cls   &lt;- pipeline.classify.classify(raw, batch.items)
   } <span class="kw">yield</span> SubBatchResult(cls)
 
-<span class="co">// 所有 "中间状态" 消失了——它们只是 flatMap 链中的类型变化</span></pre>
+<span class="co">// 流水线内部无显式状态——阶段间通过类型变化连接</span>
+<span class="co">// 事件溯源和状态恢复由外层 ChainExecutionActor 提供（详见第 8 章）</span></pre>
             </div>
         </div>
 
@@ -1383,8 +1365,8 @@ case <span class="kw">FileGenerating</span>:
         <h3>7.7 运行时组件覆盖验证矩阵</h3>
 
         <p style="font-size:0.82rem; color:var(--fg-muted);">
-            只验证 <strong>M2.5+ 运行时方法</strong>（component/ + pipeline/ + business/ + binding/），
-            不含已废弃的 template/ 包。
+            验证 <strong>M2.5+ 运行时组件</strong>（component/ + pipeline/ + business/ + binding/），
+            含新增的 ChainExecutionActor（事件溯源层）。
         </p>
 
         <table class="mapping-table">
@@ -1410,12 +1392,13 @@ case <span class="kw">FileGenerating</span>:
                 <tr class="row-blue"><td>ChainTemplates（预定义）</td><td><span class="status-done">完整</span></td><td class="mono">business/ChainTemplates.scala</td><td>recharge() / purchase() / equipmentArea() 三条预定义链路</td></tr>
                 <tr class="row-blue"><td>ChainBindings（参数）</td><td><span class="status-done">完整</span></td><td class="mono">binding/ChainBindings.scala</td><td>ExternalBindings · ChainMessages(RechargeSuccess/PurchaseSuccess) · BusinessRules · FailureCategory</td></tr>
                 <tr class="row-blue"><td>GatewayRef（防腐层）</td><td><span class="status-done">完整</span></td><td class="mono">binding/GatewayRef.scala</td><td>GatewayRef[T] trait + ActorGatewayRef[T]</td></tr>
+                <tr class="row-purple"><td><strong>ChainExecutionActor</strong>（事件溯源+自愈）</td><td><span class="status-done">完整</span></td><td class="mono">component/ChainExecutionActor.scala</td><td>EventSourcedBehavior 包装 SubBatchProcessor，PhaseDone 事件持久化，宕机自动恢复</td></tr>
             </tbody>
         </table>
 
         <p style="font-size:0.78rem; color:var(--fg-muted); margin-top:8px;">
-            <strong>总计：15 个运行时组件，14 个完整实现，1 个（AckWaiter）接口已定义但暂无独立实现文件。</strong>
-            所有 M2 充值+申购的 50+ 消息类型，均可通过上述组件的方法调用、返回值类型、配置参数得到等价信息承载。
+            <strong>总计：16 个运行时组件，15 个完整实现，1 个（AckWaiter）接口已定义但暂无独立实现文件。</strong>
+            ChainExecutionActor 是桥接运行时组件与 Akka 基础设施的关键组件——它用 4 个通用事件类型（Started/PhaseDone/AllCompleted/ExecutionFailed）统一覆盖所有业务链路的事件溯源。完整恢复推演见<strong>第 8 章</strong>。
         </p>
 
         <!-- ===== 7.8 信息量等价性总结 ===== -->
@@ -1466,7 +1449,7 @@ case <span class="kw">FileGenerating</span>:
         </p>
 
         <!-- ===== 8.1 Event Sourcing ===== -->
-        <h3>8.1 ChainExecutionActor：事件溯源回来了</h3>
+        <h3>8.1 ChainExecutionActor：运行时流水线的事件溯源层</h3>
 
         <p style="font-size:0.82rem; color:var(--fg-muted);">
             <span class="file-ref">ChainExecutionActor</span>（新增 342 行）用一个轻量 <strong>EventSourcedBehavior</strong> 包装了
