@@ -22,10 +22,10 @@
     { id: 'batch-worker',  label: '批次工人 xN', sub: 'BatchWorker', level: 2, template: 'batch', col: 1, row: 1 },
     { id: 'batch-item',    label: '明细创建器', sub: 'BatchItemCreation', level: 2, template: 'batch', col: 2, row: 0 },
     { id: 'quota-reserve', label: '额度锁定', sub: 'QuotaReserve', level: 2, template: 'guard', col: 0, row: 0 },
-    { id: 'recharge-pipeline', label: '充值链路', sub: '从生成申请文件 → 上传银行 → 等待回盘 → 解析结果 → 分类处理', level: 3, template: 'chain', chain: 'recharge',
-      pipeline: true, stages: ['生成文件','上传银行','等待回盘','解析结果','分类处理','可疑复核'] },
+    { id: 'recharge-pipeline', label: '充值链路', sub: '生成文件 → 上传银行 → 通知理财平台 → 等待回盘 → 解析 → 分类', level: 3, template: 'chain', chain: 'recharge',
+      pipeline: true, stages: ['生成文件','上传银行','通知理财平台','等待回盘','解析结果','分类处理','可疑复核'] },
     { id: 'purchase-pipeline', label: '申购链路', sub: '同充值链路完全相同的 Pipeline，仅错误码映射不同', level: 3, template: 'chain', chain: 'purchase',
-      pipeline: true, stages: ['生成文件','上传银行','等待回盘','解析结果','分类处理','可疑复核'] },
+      pipeline: true, stages: ['生成文件','上传银行','通知理财平台','等待回盘','解析结果','分类处理','可疑复核'] },
     { id: 'sms-success', label: '交易成功通知', sub: '短信通知用户 · 合规窗口', level: 3, template: 'chain' },
     { id: 'sms-failure', label: '交易失败通知', sub: '短信通知用户 · 合规窗口', level: 3, template: 'chain' },
     { id: 'quota-release', label: '额度释放', sub: 'QuotaRelease · 超时自释放', level: 4, template: 'guard', col: 0, row: 0 },
@@ -47,37 +47,37 @@
   ];
 
   var EDGES = [
-    { from: 'cron', to: 'job-actor' },
-    { from: 'job-actor', to: 'pre-batch' },
+    { from: 'cron', to: 'job-actor', label: 'ScheduleTriggered' },
+    { from: 'job-actor', to: 'pre-batch', label: 'JobStarted' },
     { from: 'job-actor', to: 're-batch' },
-    { from: 'pre-batch', to: 'batch-master' },
-    { from: 'pre-batch', to: 'batch-item' },
-    { from: 'pre-batch', to: 'quota-reserve' },
-    { from: 'batch-master', to: 'batch-worker' },
-    { from: 'batch-item',   to: 'batch-worker' },
-    { from: 'quota-reserve', to: 'batch-worker' },
-    { from: 'batch-worker',  to: 'recharge-pipeline' },
-    { from: 'batch-worker',  to: 'purchase-pipeline' },
+    { from: 'pre-batch', to: 'batch-master', label: 'BatchFormed' },
+    { from: 'pre-batch', to: 'batch-item', label: 'ItemsAssigned' },
+    { from: 'pre-batch', to: 'quota-reserve', label: 'QuotaReserveReq' },
+    { from: 'batch-master', to: 'batch-worker', label: 'WorkDispatched' },
+    { from: 'batch-item',   to: 'batch-worker', label: 'ItemsAttached' },
+    { from: 'quota-reserve', to: 'batch-worker', label: 'QuotaGranted' },
+    { from: 'batch-worker',  to: 'recharge-pipeline', label: 'SubBatchReady' },
+    { from: 'batch-worker',  to: 'purchase-pipeline', label: 'SubBatchReady' },
     { from: 'quota-reserve', to: 'recharge-pipeline' },
     { from: 'quota-reserve', to: 'purchase-pipeline' },
     // Pipeline outcomes → SMS notification (within L3)
-    { from: 'recharge-pipeline', to: 'sms-success', label: 'success' },
-    { from: 'recharge-pipeline', to: 'sms-failure', label: 'failure' },
-    { from: 'purchase-pipeline', to: 'sms-success', label: 'success' },
-    { from: 'purchase-pipeline', to: 'sms-failure', label: 'failure' },
+    { from: 'recharge-pipeline', to: 'sms-success', label: 'TradeSuccess' },
+    { from: 'recharge-pipeline', to: 'sms-failure', label: 'TradeFailed' },
+    { from: 'purchase-pipeline', to: 'sms-success', label: 'TradeSuccess' },
+    { from: 'purchase-pipeline', to: 'sms-failure', label: 'TradeFailed' },
     // SMS failure → resource unlock
-    { from: 'sms-failure',  to: 'quota-release' },
-    { from: 'quota-release', to: 'quota-cascade' },
-    { from: 're-batch', to: 'batch-worker', feedback: true },
+    { from: 'sms-failure',  to: 'quota-release', label: 'ReleaseQuota' },
+    { from: 'quota-release', to: 'quota-cascade', label: 'CascadeRelease' },
+    { from: 're-batch', to: 'batch-worker', feedback: true, label: 'ReBatchScan' },
     // Pipeline → Connectors (Zone A right edge → Zone B left edge)
-    { from: 'recharge-pipeline', to: 'conn-sftp',      zoneEdge: true },
-    { from: 'recharge-pipeline', to: 'conn-http-xml',  zoneEdge: true },
-    { from: 'recharge-pipeline', to: 'conn-http-json', zoneEdge: true },
-    { from: 'purchase-pipeline', to: 'conn-sftp',      zoneEdge: true },
-    { from: 'purchase-pipeline', to: 'conn-http-xml',  zoneEdge: true },
-    { from: 'purchase-pipeline', to: 'conn-http-json', zoneEdge: true },
-    { from: 'sms-success',  to: 'conn-sms', zoneEdge: true },
-    { from: 'sms-failure',  to: 'conn-sms', zoneEdge: true },
+    { from: 'recharge-pipeline', to: 'conn-sftp',      zoneEdge: true, label: 'FileToUpload' },
+    { from: 'recharge-pipeline', to: 'conn-http-xml',  zoneEdge: true, label: 'VerifyWithCore' },
+    { from: 'recharge-pipeline', to: 'conn-http-json', zoneEdge: true, label: 'NotifyPlatform' },
+    { from: 'purchase-pipeline', to: 'conn-sftp',      zoneEdge: true, label: 'FileToUpload' },
+    { from: 'purchase-pipeline', to: 'conn-http-xml',  zoneEdge: true, label: 'VerifyWithCore' },
+    { from: 'purchase-pipeline', to: 'conn-http-json', zoneEdge: true, label: 'NotifyPlatform' },
+    { from: 'sms-success',  to: 'conn-sms', zoneEdge: true, label: 'SendSuccessSMS' },
+    { from: 'sms-failure',  to: 'conn-sms', zoneEdge: true, label: 'SendFailureSMS' },
     // Connectors → External (Zone B right edge → Zone C left edge)
     { from: 'conn-sftp',     to: 'gw-sftp', external: true },
     { from: 'conn-http-xml', to: 'gw-core', external: true },
@@ -203,9 +203,9 @@
 
   // ======================== LAYOUT ========================
   var NODE_W = 118, NODE_H = 40;
-  var PIPELINE_W = 270, PIPELINE_H = 58;
-  var CONN_W = 148, CONN_H = 38;
-  var GW_CONTAINER_W = 156, GW_ENTRY_W = 142, GW_ENTRY_H = 38;
+  var PIPELINE_W = 330, PIPELINE_H = 58;
+  var CONN_W = 126, CONN_H = 38;
+  var GW_CONTAINER_W = 138, GW_ENTRY_W = 124, GW_ENTRY_H = 38;
   var GW_PAD_TOP = 48;
 
   function layoutNodes() {
@@ -214,9 +214,9 @@
     var LEVEL_GAP = GAP + 10;
     var TOP = 28;
     var totalW = w - 20;
-    var zoneA = { left: 10, right: totalW * 0.52 };
-    var zoneB = { left: totalW * 0.54, right: totalW * 0.78 };
-    var zoneC = { left: totalW * 0.80, right: totalW };
+    var zoneA = { left: 10, right: totalW * 0.58 };
+    var zoneB = { left: totalW * 0.60, right: totalW * 0.79 };
+    var zoneC = { left: totalW * 0.81, right: totalW };
     var zoneAw = zoneA.right - zoneA.left;
     var zoneBw = zoneB.right - zoneB.left;
     var zoneCw = zoneC.right - zoneC.left;
@@ -480,22 +480,28 @@
       rect.setAttribute('x',pos.x);rect.setAttribute('y',pos.y);rect.setAttribute('width',w);rect.setAttribute('height',h);
       rect.setAttribute('class','node-rect');if(isPipeline)rect.setAttribute('rx','10');g.appendChild(rect);
       if(isPipeline){
-        var stages=n.stages||[],stageW=(PIPELINE_W-20)/stages.length,stageH=PIPELINE_H-26,stageY=pos.y+6;
+        var stages=n.stages||[],stageH=PIPELINE_H-26,stageY=pos.y+6;
+        // Calculate stage widths: 通知理财平台 is 2x, others 1x
+        var stageUnits=stages.reduce(function(sum,s){return sum+(s==='通知理财平台'?2:1);},0);
+        var unitW=(PIPELINE_W-20)/stageUnits;
+        var stageWidths=stages.map(function(s){return (s==='通知理财平台'?2:1)*unitW;});
+        var sx=pos.x+10;
         stages.forEach(function(s,idx){
-          var sx=pos.x+10+idx*stageW;
+          var sw=stageWidths[idx];
           var sr=document.createElementNS('http://www.w3.org/2000/svg','rect');
-          sr.setAttribute('x',sx+1);sr.setAttribute('y',stageY);sr.setAttribute('width',stageW-2);sr.setAttribute('height',stageH);
+          sr.setAttribute('x',sx+1);sr.setAttribute('y',stageY);sr.setAttribute('width',sw-2);sr.setAttribute('height',stageH);
           sr.setAttribute('rx','3');sr.setAttribute('ry','3');sr.setAttribute('fill','rgba(59,130,246,0.08)');
           sr.setAttribute('stroke','rgba(59,130,246,0.2)');sr.setAttribute('stroke-width','0.8');g.appendChild(sr);
           var sl=document.createElementNS('http://www.w3.org/2000/svg','text');
-          sl.setAttribute('x',sx+stageW/2);sl.setAttribute('y',stageY+stageH/2+3);sl.setAttribute('text-anchor','middle');
+          sl.setAttribute('x',sx+sw/2);sl.setAttribute('y',stageY+stageH/2+3);sl.setAttribute('text-anchor','middle');
           sl.setAttribute('fill','#93c5fd');sl.setAttribute('font-size','0.55rem');sl.setAttribute('font-family','monospace');
           sl.textContent=s;g.appendChild(sl);
           if(idx<stages.length-1){
             var arrow=document.createElementNS('http://www.w3.org/2000/svg','text');
-            arrow.setAttribute('x',sx+stageW);arrow.setAttribute('y',stageY+stageH/2+3);arrow.setAttribute('text-anchor','middle');
+            arrow.setAttribute('x',sx+sw);arrow.setAttribute('y',stageY+stageH/2+3);arrow.setAttribute('text-anchor','middle');
             arrow.setAttribute('fill','rgba(255,255,255,0.2)');arrow.setAttribute('font-size','0.5rem');arrow.textContent='→';g.appendChild(arrow);
           }
+          sx+=sw;
         });
         var tlabel=document.createElementNS('http://www.w3.org/2000/svg','text');
         tlabel.setAttribute('x',pos.cx);tlabel.setAttribute('y',pos.y+PIPELINE_H-6);tlabel.setAttribute('text-anchor','middle');
@@ -550,8 +556,21 @@
       path.setAttribute('class','dag-edge'+(fb?' feedback':'')+(ext?' external':'')+(zone?' zone-edge':''));
       path.setAttribute('marker-end','url(#'+(fb?'arrow-feedback':ext?'arrow-external':'arrow-normal')+')');
       path.setAttribute('data-from',e.from);path.setAttribute('data-to',e.to);canvas.appendChild(path);
-      svgEdgeEls[e.from+'|'+e.to]={path:path,isFeedback:fb,isExternal:ext,isZone:zone,connectorEdge:null};
+      var key=e.from+'|'+e.to;
+      svgEdgeEls[key]={path:path,isFeedback:fb,isExternal:ext,isZone:zone,connectorEdge:null,labelEl:null};
       var ck=e.from+'|'+e.to;if(ce[ck])svgEdgeEls[ck].connectorEdge=ce[ck];
+      // Edge event label
+      if (e.label) {
+        var d=getEdgePath(e.from,e.to,fb,ext,zone);
+        var mid=getBezierMidpoint(d);
+        if (mid) {
+          var lbl=document.createElementNS('http://www.w3.org/2000/svg','text');
+          lbl.setAttribute('x',mid.x);lbl.setAttribute('y',mid.y-6);lbl.setAttribute('text-anchor','middle');
+          lbl.setAttribute('fill','rgba(139,148,158,0.55)');lbl.setAttribute('font-size','0.5rem');lbl.setAttribute('font-family','monospace');
+          lbl.textContent=e.label;canvas.appendChild(lbl);
+          svgEdgeEls[key].labelEl=lbl;
+        }
+      }
     });
     Object.keys(ce).forEach(function(key){
       var c=ce[key],f=nodePositions[c.from],t=gwPositions[c.to];if(!f||!t)return;
@@ -564,6 +583,13 @@
       var dg=document.createElementNS('http://www.w3.org/2000/svg','g');dg.appendChild(dot);dg.appendChild(dl);canvas.appendChild(dg);
       if(svgEdgeEls[key])svgEdgeEls[key].connectorEl=dg;else svgEdgeEls[key]={path:null,isFeedback:false,isExternal:true,isZone:false,connectorEl:dg,connectorEdge:c};
     });
+  }
+
+  function getBezierMidpoint(d) {
+    var m=d.match(/M\s+([\d.]+)\s+([\d.]+)\s+C\s+([\d.]+)\s+([\d.]+),\s*([\d.]+)\s+([\d.]+),\s*([\d.]+)\s+([\d.]+)/);
+    if(!m)return null;
+    var x0=+m[1],y0=+m[2],cx1=+m[3],cy1=+m[4],cx2=+m[5],cy2=+m[6],x1=+m[7],y1=+m[8];
+    return {x:0.125*x0+0.375*cx1+0.375*cx2+0.125*x1, y:0.125*y0+0.375*cy1+0.375*cy2+0.125*y1};
   }
 
   function renderIsomorphismAnnotation() {
@@ -645,30 +671,33 @@
 
   // Flow sequences — how domain events propagate through the DAG
   var EVENT_FLOWS = [
-    // Orchestration layer: cron trigger → batch dispatch
+    // L0→L2 Orchestration: cron trigger → batch dispatch
     { keys: ['cron|job-actor','job-actor|pre-batch','pre-batch|batch-master','batch-master|batch-worker'],
       color: '#14b8a6', count: 3, stagger: 180, delay: 0, dur: 1.0 },
-    // Pipeline dispatch: batch-worker → both pipelines
+    // L2→L3 Pipeline dispatch: batch-worker → both pipelines
     { keys: ['batch-worker|recharge-pipeline','batch-worker|purchase-pipeline'],
       color: '#3b82f6', count: 2, stagger: 220, delay: 1600, dur: 0.9 },
-    // Cross-zone: pipelines → connectors
-    { keys: ['recharge-pipeline|conn-sftp','recharge-pipeline|conn-http-xml','purchase-pipeline|conn-sftp','purchase-pipeline|conn-http-xml'],
-      color: '#f0883e', count: 2, stagger: 200, delay: 2600, dur: 1.1 },
-    // External: connectors → gateway systems
-    { keys: ['conn-sftp|gw-sftp','conn-http-xml|gw-core'],
-      color: '#f59e0b', count: 2, stagger: 200, delay: 3600, dur: 1.0 },
-    // SMS notification: pipelines → notification
+    // L3→Zone B Cross-zone: pipelines → connectors (SFTP → Bank, HTTP/XML → Core, HTTP/JSON → P2B)
+    { keys: ['recharge-pipeline|conn-sftp','recharge-pipeline|conn-http-xml','recharge-pipeline|conn-http-json','purchase-pipeline|conn-sftp','purchase-pipeline|conn-http-xml','purchase-pipeline|conn-http-json'],
+      color: '#f0883e', count: 2, stagger: 140, delay: 2400, dur: 1.1 },
+    // L3 SMS notification: pipelines → sms nodes
     { keys: ['recharge-pipeline|sms-success','recharge-pipeline|sms-failure','purchase-pipeline|sms-success','purchase-pipeline|sms-failure'],
-      color: '#a855f7', count: 2, stagger: 200, delay: 3200, dur: 0.8 },
-    // Resource unlock: failure → quota release cascade
+      color: '#a855f7', count: 2, stagger: 200, delay: 2800, dur: 0.8 },
+    // SMS → SMS Connector (Zone B)
+    { keys: ['sms-success|conn-sms','sms-failure|conn-sms'],
+      color: '#c084fc', count: 2, stagger: 180, delay: 3400, dur: 0.9 },
+    // Zone B→C External: connectors → gateway systems (all 4 gateways)
+    { keys: ['conn-sftp|gw-sftp','conn-http-xml|gw-core','conn-http-json|gw-p2b','conn-sms|gw-sms'],
+      color: '#f59e0b', count: 2, stagger: 180, delay: 3800, dur: 1.0 },
+    // L3→L4 Resource unlock: sms-failure → quota-release → quota-cascade
     { keys: ['sms-failure|quota-release','quota-release|quota-cascade'],
-      color: '#f59e0b', count: 2, stagger: 200, delay: 4400, dur: 0.9 },
-    // Compensation loop: re-batch → worker (feedback, always running at low opacity)
+      color: '#f59e0b', count: 2, stagger: 220, delay: 4400, dur: 0.9 },
+    // L1 Compensation loop: re-batch → worker (always pulsing)
     { keys: ['re-batch|batch-worker'],
-      color: '#f85149', count: 1, stagger: 0, delay: 800, dur: 2.0 }
+      color: '#f85149', count: 1, stagger: 0, delay: 600, dur: 2.0 }
   ];
 
-  var CYCLE_TOTAL = 5800; // ms — one full event propagation cycle, then repeat
+  var CYCLE_TOTAL = 6200; // ms — one full event propagation cycle, then repeat
 
   function makeParticle(color) {
     var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
