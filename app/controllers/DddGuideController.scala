@@ -30,6 +30,10 @@ class DddGuideController @Inject()(val controllerComponents: ControllerComponent
     Ok(views.html.m25())
   }
 
+  def m25En() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.m25_en())
+  }
+
   def m25Demo() = Action {
     Ok(views.html.m25Demo())
   }

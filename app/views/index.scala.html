@@ -465,7 +465,15 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">Production Quality — Live</span>
                 <h4>Streaming-Batch Multi-Level DAG Execution Engine</h4>
-                <p>A 5-level DAG execution engine: 23 Persistent FSMs with 4 built-in resilience patterns — supervision with auto-restart, timeout resource protection, compensating recovery to eventual consistency. Each node independently versionable, testable, and deployable. Unified pipeline handles both streaming and batch workloads, with a communication layer that encapsulates heterogeneous external systems. <b>M2.5+ evolved this into a 6-component standard library</b> — replacing hand-written FSM templates with composable, parameterized components. Fix once, apply everywhere. <a href="/dag" style="color:var(--accent);font-weight:600;">Watch M2 demo →</a> <a href="/m25" style="color:var(--accent);font-weight:600;">M2.5+ explainer →</a></p>
+                <p>A 5-level DAG execution engine: 23 Persistent FSMs with 4 built-in resilience patterns — supervision with auto-restart, timeout resource protection, compensating recovery to eventual consistency. Each node independently versionable, testable, and deployable. Unified pipeline handles both streaming and batch workloads, with a communication layer that encapsulates heterogeneous external systems. <a href="/dag" style="color:var(--accent);font-weight:600;">Watch M2 demo →</a></p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M2.5</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">Production Quality — Live</span>
+                <h4>Standard Component Library — Fix Once, Apply Everywhere</h4>
+                <p>6 standard components replace 4 hand-written FSM templates: SubBatchProcessor, ResultClassifier, ReconfirmHandler, ReBatchRouter, AreaScheduler, and ExceptionScheduler. Same pipeline handles recharge and purchase — only error-code mapping differs. One fix point, every instance updated globally. M3 Fab dynamic process orchestration reuses all 6 components directly. <a href="/en/m25" style="color:var(--accent);font-weight:600;">Read the Explainer →</a> <a href="/m25-demo" style="color:var(--accent);font-weight:600;">Live Demo →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -523,7 +531,7 @@
             <p>6 standard components replace 4 hand-written FSM templates. Same pipeline handles recharge and purchase — only the error-code mapping differs. SMS notification reuses the same pipeline stages. One fix point, every instance updated globally. M3 Fab dynamic process orchestration reuses all 6 components directly.</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: SubBatchProcessor → any equipment area; ResultClassifier → any quality gate</p>
             <br>
-            <a href="/m25" class="card-link">Read the Explainer →</a>
+            <a href="/en/m25" class="card-link">Read the Explainer →</a>
             <a href="/m25-demo" class="card-link" style="margin-left:16px;">Open Live Demo →</a>
         </div>
     </div>

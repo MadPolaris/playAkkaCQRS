@@ -44,13 +44,46 @@
             display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px;
             padding-bottom: 12px; border-bottom: 1px solid var(--border);
         }
-        .m25-nav a {
+        .m25-nav > a {
             font-size: 0.72rem; color: var(--fg-muted); text-decoration: none;
             padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px;
             transition: all 0.15s;
         }
-        .m25-nav a:hover { color: var(--fg); border-color: var(--fg-muted); }
-        .m25-nav a.active { background: #a855f7; color: #fff; border-color: #a855f7; }
+        .m25-nav > a:hover { color: var(--fg); border-color: var(--fg-muted); }
+        .m25-nav > a.active { background: #a855f7; color: #fff; border-color: #a855f7; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn {
+            font-size: 0.72rem; color: var(--fg-muted);
+            padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px;
+            cursor: pointer; background: transparent; font-family: var(--font);
+            display: flex; align-items: center; gap: 4px; transition: all 0.15s;
+        }
+        .nav-dropdown-btn:hover, .nav-dropdown:hover .nav-dropdown-btn { color: var(--fg); border-color: var(--fg-muted); }
+        .nav-dropdown-btn .arrow { font-size: 0.55rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu {
+            position: absolute; top: 100%; left: 0; margin-top: 4px;
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px;
+            min-width: 210px; padding: 4px; display: none; z-index: 100;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item {
+            display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+            border-radius: 6px; text-decoration: none; color: var(--fg);
+            font-size: 0.78rem; font-weight: 500; transition: all 0.1s;
+        }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge {
+            font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+            flex-shrink: 0; min-width: 36px; text-align: center;
+        }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .mm-active { background: rgba(255,255,255,0.05); }
 
         /* Template Cards */
         .tpl-list { display: flex; flex-direction: column; gap: 8px; }
@@ -227,12 +260,21 @@
     <div class="sidebar">
         <div class="m25-nav">
             <a href="/">首页</a>
-            <a href="/saga">Saga</a>
-            <a href="/projection">Projection</a>
-            <a href="/architecture">架构</a>
-            <a href="/dag">M2 DAG</a>
-            <a href="/m25">M2.5 探索</a>
-            <a href="/m25-demo" class="active">M2.5 Demo</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
+                    <a href="/m25-demo" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD 架构实践 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection 管道</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>架构雷达</a>
+                </div>
+            </div>
         </div>
 
         <div class="sb-header">

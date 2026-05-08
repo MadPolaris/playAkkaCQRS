@@ -443,7 +443,15 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
                 <h4>流批一体多层级 DAG 执行引擎</h4>
-                <p>5 层级 DAG 执行引擎，23 个 Persistent FSM 内建 4 种弹性模式——监督自动重启、超时资源保护、失败补偿最终一致。每个节点独立版本化、测试和部署。统一管道同时处理流式与批量负载，通信层封装异构外部系统。<b>M2.5+ 进一步演进为标准组件库</b>——用 6 大组件替代手写 FSM 模板，实现修复一次、全局生效。 <a href="/dag" style="color:var(--accent);font-weight:600;">观看 M2 演示 →</a> <a href="/m25" style="color:var(--accent);font-weight:600;">M2.5+ 详解 →</a></p>
+                <p>5 层级 DAG 执行引擎，23 个 Persistent FSM 内建 4 种弹性模式——监督自动重启、超时资源保护、失败补偿最终一致。每个节点独立版本化、测试和部署。统一管道同时处理流式与批量负载，通信层封装异构外部系统。 <a href="/dag" style="color:var(--accent);font-weight:600;">观看 M2 演示 →</a></p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M2.5</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">线上质量 — 已完成</span>
+                <h4>标准组件库 — 修复一次，全局生效</h4>
+                <p>6 大标准组件替代 4 种手写 FSM 模板：SubBatchProcessor、ResultClassifier、ReconfirmHandler、ReBatchRouter、AreaScheduler、ExceptionScheduler。充值/申购同一套组件，仅错误码映射不同。一个修复点，所有实例同步更新。M3 Fab 动态工序编排直接复用全部 6 个组件。 <a href="/m25" style="color:var(--accent);font-weight:600;">阅读详解 →</a> <a href="/m25-demo" style="color:var(--accent);font-weight:600;">在线演示 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">

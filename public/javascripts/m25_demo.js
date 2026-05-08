@@ -68,7 +68,7 @@
     // SMS failure → resource unlock
     { from: 'sms-failure',  to: 'quota-release', label: 'ReleaseQuota' },
     { from: 'quota-release', to: 'quota-cascade', label: 'CascadeRelease' },
-    { from: 're-batch', to: 'batch-worker', feedback: true, label: 'ReBatchScan' },
+    { from: 're-batch', to: 'batch-master', label: 'ReBatchScan' },
     // Pipeline → Connectors (Zone A right edge → Zone B left edge)
     { from: 'recharge-pipeline', to: 'conn-sftp',      zoneEdge: true, label: 'FileToUpload' },
     { from: 'recharge-pipeline', to: 'conn-http-xml',  zoneEdge: true, label: 'VerifyWithCore' },
@@ -692,8 +692,8 @@
     // L3→L4 Resource unlock: sms-failure → quota-release → quota-cascade
     { keys: ['sms-failure|quota-release','quota-release|quota-cascade'],
       color: '#f59e0b', count: 2, stagger: 220, delay: 4400, dur: 0.9 },
-    // L1 Compensation loop: re-batch → worker (always pulsing)
-    { keys: ['re-batch|batch-worker'],
+    // L1 Compensation loop: re-batch → batch-master (always pulsing)
+    { keys: ['re-batch|batch-master'],
       color: '#f85149', count: 1, stagger: 0, delay: 600, dur: 2.0 }
   ];
 

@@ -40,11 +40,27 @@
         .badge-spec { background: rgba(168, 85, 247, 0.15); color: var(--purple); }
         .badge-future { background: rgba(245, 158, 11, 0.15); color: var(--amber); }
 
-        .nav-links { display: flex; gap: 20px; justify-content: center; margin-top: 24px; font-size: 0.82rem; }
-        .nav-links a { color: var(--accent); text-decoration: none; font-weight: 500; }
-        .nav-links a:hover { text-decoration: underline; }
-        .nav-links a.primary { background: var(--purple); color: #fff; padding: 6px 16px; border-radius: 6px; }
-        .nav-links a.primary:hover { background: #7c3aed; text-decoration: none; }
+        .nav-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; font-size: 0.82rem; align-items: center; }
+        .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links > a:hover { text-decoration: underline; }
+        .nav-links > a.primary { background: var(--purple); color: #fff; padding: 6px 16px; border-radius: 6px; }
+        .nav-links > a.primary:hover { background: #7c3aed; text-decoration: none; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn { color: var(--accent); font-size: 0.82rem; font-weight: 500; cursor: pointer; background: transparent; border: none; font-family: var(--font); display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .nav-dropdown-btn:hover { text-decoration: underline; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; min-width: 220px; padding: 4px; display: none; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.8rem; font-weight: 500; transition: all 0.1s; }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .mm-active { background: rgba(255,255,255,0.05); }
 
         /* Section */
         section { margin-bottom: 60px; }
@@ -71,24 +87,12 @@
         .comp-card .comp-tag { font-size: 0.6rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 8px; }
         .comp-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.6; }
 
-        /* Architecture flow */
-        .arch-flow {
+        /* Architecture SVG */
+        .arch-svg-wrap {
             background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
-            padding: 28px; margin: 20px 0; text-align: center;
+            padding: 20px 12px 10px; margin: 20px 0; text-align: center; overflow-x: auto;
         }
-        .arch-flow .flow-row { display: flex; align-items: center; justify-content: center; gap: 0; margin: 6px 0; flex-wrap: wrap; }
-        .arch-flow .flow-box {
-            padding: 10px 16px; border-radius: 8px; font-size: 0.75rem; font-weight: 600;
-            border: 1px solid; white-space: nowrap;
-        }
-        .flow-box.batch  { background: rgba(20,184,166,0.1); border-color: rgba(20,184,166,0.3); color: var(--teal); }
-        .flow-box.proc   { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3); color: #60a5fa; }
-        .flow-box.class  { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: #fbbf24; }
-        .flow-box.reconf { background: rgba(168,85,247,0.1); border-color: rgba(168,85,247,0.3); color: #c084fc; }
-        .flow-box.route  { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #f87171; }
-        .flow-box.sched  { background: rgba(20,184,166,0.1); border-color: rgba(20,184,166,0.3); color: var(--teal); }
-        .flow-box.merge  { background: rgba(63,185,80,0.1); border-color: rgba(63,185,80,0.3); color: #4ade80; }
-        .flow-arrow { color: var(--fg-subtle); font-size: 1rem; margin: 0 2px; }
+        .arch-svg { width: 100%; max-width: 880px; }
 
         /* Quote */
         blockquote {
@@ -154,7 +158,7 @@
             <span class="m3">M3 动态工序编排</span>
         </h1>
         <p class="tagline">
-            M2.5+ 用<strong>标准组件库</strong>替代模板代码生成——修复一次、全局生效。
+            M2.5+ 用<strong>三层分离架构</strong>替代模板代码生成——业务/技术/调度维度独立演进、修复一次全局生效。
             M3 将同一套组件直接用于 Fab <strong>9 个设备区 + 物流</strong>的动态工序编排。
             这是一条<strong>渐进演进</strong>路径，不是一次推倒重来。
         </p>
@@ -164,13 +168,23 @@
             <span class="badge badge-future">面向产品经理 &amp; 架构师</span>
         </div>
         <nav class="nav-links">
-            <a href="/">Home</a>
-            <a href="/saga">Saga</a>
-            <a href="/projection">Projection</a>
-            <a href="/architecture">架构雷达</a>
-            <a href="/dag">M2 DAG</a>
-            <a href="/m25" class="active">M2.5+</a>
-            <a href="/m25-demo" class="primary">Live Demo ↗</a>
+            <a href="/">首页</a>
+            <a href="/en/m25" style="color:#a855f7; font-weight:700;">EN</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
+                    <a href="/m25-demo" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD 架构实践 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection 管道</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>架构雷达</a>
+                </div>
+            </div>
         </nav>
     </header>
 
@@ -241,114 +255,328 @@
         </table>
     </section>
 
-    <!-- ==================== SECTION 2: M2.5+ COMPONENT LIBRARY ==================== -->
+    <!-- ==================== SECTION 2: M2.5+ THREE-DIMENSION ARCHITECTURE ==================== -->
     <section>
-        <h2>二、M2.5+ 解法：标准组件库</h2>
+        <h2>二、M2.5+ 解法：三层分离架构</h2>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
-            将<strong>技术复杂性</strong>和<strong>业务变化</strong>分离。技术复杂性封装为标准组件（一次编写、独立测试、统一修复点）；
-            业务变化通过参数注入组件实例（不生成代码、不修改状态机）。
+            M2.5+ 将系统划分为三个<strong>正交维度</strong>——<strong>业务维度</strong>定义步骤序列与批次管理、
+            <strong>技术维度</strong>封装通信协议栈与容错组件、<strong>业务调度维度</strong>标准化结果分流与异常处理。
+            每个维度独立演进、独立测试、独立修复，组合起来覆盖完整的跨系统编排生命周期。
         </p>
 
-        <!-- Component Architecture Flow -->
-        <div class="arch-flow">
-            <div style="font-size:0.75rem; color:var(--fg-subtle); margin-bottom:16px;">
-                一条业务链路的处理流程——每个方框是一个独立可替换的标准组件
+        <!-- Three-Dimension Architecture Diagram -->
+        <div class="arch-svg-wrap">
+            <div style="font-size:0.75rem; color:var(--fg-subtle); margin-bottom:10px;">
+                工单 → 批次管理器拆批 → 单批次工序序列管理器推进步骤 → 业务步骤链执行 → 技术组件支撑远程通信 → 批量结果散射器三路分流 → 异常调度 / 再确认
             </div>
+            <svg class="arch-svg" viewBox="0 0 1050 755" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <marker id="ahMuted" markerWidth="8" markerHeight="6" refX="9" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#8b949e"/>
+                    </marker>
+                    <marker id="ahGreen" markerWidth="8" markerHeight="6" refX="9" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#4ade80"/>
+                    </marker>
+                    <marker id="ahAmber" markerWidth="8" markerHeight="6" refX="9" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#fbbf24"/>
+                    </marker>
+                    <marker id="ahRed" markerWidth="8" markerHeight="6" refX="9" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f87171"/>
+                    </marker>
+                    <marker id="ahOrange" markerWidth="8" markerHeight="6" refX="9" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f08c3e"/>
+                    </marker>
+                    <filter id="nodeShadow" x="-10%" y="-20%" width="130%" height="150%">
+                        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
+                    </filter>
+                    <linearGradient id="gTeal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(45,212,191,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(45,212,191,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(96,165,250,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(96,165,250,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gAmber" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(251,191,36,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(251,191,36,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gPurple" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(192,132,252,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(192,132,252,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(248,113,113,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(248,113,113,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(74,222,128,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(74,222,128,0.05)"/>
+                    </linearGradient>
+                </defs>
 
-            <div class="flow-row">
-                <span class="flow-box batch">BatchMaster</span>
-                <span class="flow-arrow">→ fan-out →</span>
-                <span class="flow-box batch">SubBatch ×N</span>
+                <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif">
+
+                <!-- ============================================================ -->
+                <!-- BAND 1: 业务维度 · Business Step Chain                         -->
+                <!-- ============================================================ -->
+                <rect x="130" y="10" width="910" height="330" rx="10" fill="rgba(59,130,246,0.03)" stroke="rgba(59,130,246,0.16)" stroke-width="1"/>
+                <rect x="130" y="10" width="4" height="330" rx="2" fill="#60a5fa" fill-opacity="0.5"/>
+                <text x="148" y="34" fill="#60a5fa" font-size="12" font-weight="700" letter-spacing="1.3">业务维度 · Business Step Chain</text>
+
+                <!-- 工单 (WO) — centered, same size as BatchManager -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="385" y="44" width="150" height="44" rx="8" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.35" stroke-width="1.5"/>
+                    <rect x="385" y="44" width="4" height="44" rx="2" fill="#60a5fa"/>
+                </g>
+                <text x="460" y="70" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">工单 (WO)</text>
+
+                <path d="M 460 88 L 460 108" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <!-- 异常调度器 (far left, same row as 批次管理器) -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="155" y="115" width="150" height="44" rx="8" fill="url(#gRed)" stroke="#f87171" stroke-opacity="0.45" stroke-width="1.5"/>
+                    <rect x="155" y="115" width="4" height="44" rx="2" fill="#f87171"/>
+                </g>
+                <text x="230" y="135" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">异常调度器</text>
+                <text x="230" y="150" fill="#8b949e" font-size="7" font-weight="500" text-anchor="middle">缓冲(空间约束)·超时(事件约束)</text>
+
+                <!-- 批次管理器 — centered below WO -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="385" y="115" width="150" height="44" rx="8" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="385" y="115" width="4" height="44" rx="2" fill="#2dd4bf"/>
+                </g>
+                <text x="460" y="135" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">批次管理器</text>
+                <text x="460" y="150" fill="#8b949e" font-size="7" font-weight="600" text-anchor="middle">拆批 · 管理批次1..N ×2000制造单元</text>
+
+                <!-- 批次管理器 → 批次步骤管理者 -->
+                <path d="M 460 159 L 460 178" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <!-- ====== 批次步骤管理者容器 (包裹业务步骤链) ====== -->
+                <rect x="155" y="185" width="730" height="132" rx="10" fill="rgba(96,165,250,0.03)" stroke="rgba(96,165,250,0.22)" stroke-width="1.5" stroke-dasharray="6 3"/>
+                <text x="175" y="205" fill="#60a5fa" font-size="10.5" font-weight="700">单批次工序序列管理器</text>
+                <text x="175" y="219" fill="#8b949e" font-size="7.5" font-weight="500">管理当前批次所在的业务步骤 — 推进/回退</text>
+
+                <!-- Steps inside container -->
+                <g filter="url(#nodeShadow)"><rect x="165" y="233" width="118" height="52" rx="8" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.4" stroke-width="1.5"/><rect x="165" y="233" width="4" height="52" rx="2" fill="#2dd4bf"/></g>
+                <text x="224" y="255" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">① 额度资源锁定</text>
+                <text x="224" y="272" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">本地 · 同步</text>
+
+                <path d="M 288 259 L 314 259" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <g filter="url(#nodeShadow)"><rect x="320" y="233" width="118" height="52" rx="8" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.4" stroke-width="1.5"/><rect x="320" y="233" width="4" height="52" rx="2" fill="#60a5fa"/></g>
+                <text x="379" y="255" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">② 批量充值</text>
+                <text x="379" y="272" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">远程 · 多系统</text>
+
+                <path d="M 443 259 L 469 259" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <g filter="url(#nodeShadow)"><rect x="475" y="233" width="118" height="52" rx="8" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.4" stroke-width="1.5"/><rect x="475" y="233" width="4" height="52" rx="2" fill="#60a5fa"/></g>
+                <text x="534" y="255" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">③ 批量申购</text>
+                <text x="534" y="272" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">远程 · 多系统</text>
+
+                <path d="M 598 259 L 624 259" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <g filter="url(#nodeShadow)"><rect x="630" y="233" width="118" height="52" rx="8" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.4" stroke-width="1.5"/><rect x="630" y="233" width="4" height="52" rx="2" fill="#60a5fa"/></g>
+                <text x="689" y="255" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">④ 结果批量通知</text>
+                <text x="689" y="272" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">远程 · SMS</text>
+
+                <path d="M 753 259 L 779 259" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <g filter="url(#nodeShadow)"><rect x="785" y="233" width="96" height="52" rx="8" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.4" stroke-width="1.5"/><rect x="785" y="233" width="4" height="52" rx="2" fill="#2dd4bf"/></g>
+                <text x="833" y="255" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">⑤ 资源解锁</text>
+                <text x="833" y="272" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">本地</text>
+
+                <!-- Process annotation inside container -->
+                <text x="520" y="306" fill="#6e7681" font-size="8" font-weight="600" text-anchor="middle">每步骤: 请求发起 → 收集结果 → 结果散射 → 结果再确认 (异步事件驱动)</text>
+
+                <!-- Down arrows: each business step → technical band -->
+                <path d="M 224 285 L 224 345" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-opacity="0.4" stroke-dasharray="3 3" marker-end="url(#ahMuted)"/>
+                <path d="M 379 285 L 379 345" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-opacity="0.4" stroke-dasharray="3 3" marker-end="url(#ahMuted)"/>
+                <path d="M 534 285 L 534 345" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-opacity="0.4" stroke-dasharray="3 3" marker-end="url(#ahMuted)"/>
+                <path d="M 689 285 L 689 345" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-opacity="0.4" stroke-dasharray="3 3" marker-end="url(#ahMuted)"/>
+                <path d="M 833 285 L 833 345" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-opacity="0.4" stroke-dasharray="3 3" marker-end="url(#ahMuted)"/>
+
+                <!-- ============================================================ -->
+                <!-- BAND 2: 技术维度 · Standardized Technical Components          -->
+                <!-- ============================================================ -->
+                <rect x="130" y="352" width="910" height="195" rx="10" fill="rgba(245,158,11,0.03)" stroke="rgba(245,158,11,0.16)" stroke-width="1"/>
+                <rect x="130" y="352" width="4" height="195" rx="2" fill="#f59e0b" fill-opacity="0.5"/>
+                <text x="148" y="376" fill="#f59e0b" font-size="12" font-weight="700" letter-spacing="1.3">技术维度 · Standardized Technical Components</text>
+
+                <g filter="url(#nodeShadow)"><rect x="150" y="390" width="145" height="70" rx="8" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="4 2"/></g>
+                <text x="222" y="412" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">出站缓冲 · 重新成批</text>
+                <text x="222" y="428" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">FOUP容量·时间窗口</text>
+                <text x="222" y="442" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">recipe混批策略</text>
+
+                <g filter="url(#nodeShadow)"><rect x="330" y="390" width="110" height="70" rx="8" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="4 2"/></g>
+                <text x="385" y="412" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">断路器</text>
+                <text x="385" y="428" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">重试 · 超时 · 熔断</text>
+                <text x="385" y="442" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">恢复</text>
+
+                <g filter="url(#nodeShadow)"><rect x="475" y="390" width="100" height="70" rx="8" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="4 2"/></g>
+                <text x="525" y="412" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">编解码</text>
+                <text x="525" y="428" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">JSON · XML · CSV</text>
+                <text x="525" y="442" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">加密文件</text>
+
+                <g filter="url(#nodeShadow)"><rect x="610" y="390" width="100" height="70" rx="8" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="4 2"/></g>
+                <text x="660" y="412" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">安全加密</text>
+                <text x="660" y="428" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">TLS · AES · SM4</text>
+
+                <g filter="url(#nodeShadow)"><rect x="745" y="390" width="128" height="70" rx="8" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.45" stroke-width="1.5" stroke-dasharray="4 2"/></g>
+                <text x="809" y="412" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">通信协议栈</text>
+                <text x="809" y="428" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">SFTP · HTTP/XML</text>
+                <text x="809" y="442" fill="#f08c3e" font-size="8" font-weight="600" text-anchor="middle">HTTP/JSON</text>
+
+                <!-- Result classification -->
+                <rect x="280" y="474" width="380" height="28" rx="6" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+                <text x="340" y="493" fill="#4ade80" font-size="10" font-weight="700" text-anchor="middle">✅ 成功</text>
+                <text x="470" y="493" fill="#f87171" font-size="10" font-weight="700" text-anchor="middle">❌ 失败</text>
+                <text x="600" y="493" fill="#fbbf24" font-size="10" font-weight="700" text-anchor="middle">⚠️ 可疑</text>
+                <text x="215" y="493" fill="#8b949e" font-size="8.5" font-weight="600" text-anchor="middle">远程通信结果:</text>
+
+                <path d="M 340 502 L 340 558" fill="none" stroke="#4ade80" stroke-width="1.8" stroke-opacity="0.6" stroke-dasharray="4 3" marker-end="url(#ahGreen)"/>
+                <path d="M 470 502 L 470 558" fill="none" stroke="#f87171" stroke-width="1.8" stroke-opacity="0.6" stroke-dasharray="4 3" marker-end="url(#ahRed)"/>
+                <path d="M 600 502 L 600 558" fill="none" stroke="#fbbf24" stroke-width="1.8" stroke-opacity="0.6" stroke-dasharray="4 3" marker-end="url(#ahAmber)"/>
+
+                <!-- ============================================================ -->
+                <!-- BAND 3: 业务调度维度 · Scheduling & Scattering                -->
+                <!-- ============================================================ -->
+                <rect x="130" y="565" width="910" height="165" rx="10" fill="rgba(168,85,247,0.03)" stroke="rgba(168,85,247,0.16)" stroke-width="1"/>
+                <rect x="130" y="565" width="4" height="165" rx="2" fill="#a855f7" fill-opacity="0.5"/>
+                <text x="148" y="589" fill="#a855f7" font-size="12" font-weight="700" letter-spacing="1.3">业务调度维度 · Scheduling &amp; Scattering</text>
+
+                <!-- Batch Result Scatterer -->
+                <rect x="195" y="600" width="560" height="44" rx="8" fill="rgba(168,85,247,0.05)" stroke="rgba(168,85,247,0.2)" stroke-width="1"/>
+                <text x="475" y="618" fill="#c084fc" font-size="11" font-weight="700" text-anchor="middle">批量结果散射器 (Batch Result Scatterer)</text>
+                <text x="475" y="634" fill="#8b949e" font-size="8.5" font-weight="500" text-anchor="middle">对每个制造单元的结果进行三路分流，异步事件驱动</text>
+
+                <!-- Success: scatterer right → outside right → UP → 批次步骤管理者容器右侧 -->
+                <path d="M 755 622 L 924 622 L 924 251 L 891 251" fill="none" stroke="#4ade80" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ahGreen)"/>
+                <text x="912" y="440" fill="#4ade80" font-size="9" font-weight="700" text-anchor="start" transform="rotate(-90, 912, 440)">✅ 成功 → 继续下一业务步骤</text>
+
+                <!-- Failed: scatterer left → outside left → UP → 异常调度器 -->
+                <path d="M 195 622 L 60 622 L 60 137 L 149 137" fill="none" stroke="#f87171" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ahRed)"/>
+                <text x="52" y="380" fill="#f87171" font-size="9" font-weight="700" text-anchor="middle" transform="rotate(-90, 52, 380)">❌ 失败 → 异常上报</text>
+
+                <!-- 异常调度器 RIGHT → 批次管理器 LEFT (向前补偿请求) -->
+                <path d="M 305 137 L 375 137" fill="none" stroke="#f87171" stroke-width="2" stroke-opacity="0.8" stroke-linecap="round" stroke-dasharray="8 4" marker-end="url(#ahRed)"/>
+                <text x="340" y="130" fill="#f87171" font-size="8" font-weight="600" text-anchor="middle">向前补偿</text>
+
+                <!-- Suspicious: scatterer bottom → vertical DOWN → 再确认 (左线) -->
+                <path d="M 450 644 L 450 690" fill="none" stroke="#fbbf24" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ahAmber)"/>
+                <text x="440" y="670" fill="#fbbf24" font-size="8.5" font-weight="700" text-anchor="end">可疑↓</text>
+
+                <!-- 再确认组件 (centered below scatterer) -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="410" y="695" width="160" height="26" rx="8" fill="url(#gAmber)" stroke="#fbbf24" stroke-opacity="0.45" stroke-width="1.5"/>
+                </g>
+                <text x="490" y="712" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">再确认组件 (二次查证)</text>
+
+                <!-- Reconfirm return: 再确认 → vertical UP → scatterer (右线, parallel) -->
+                <path d="M 500 695 L 500 652" fill="none" stroke="#fbbf24" stroke-width="1.8" stroke-opacity="0.7" stroke-linecap="round" stroke-dasharray="5 3" marker-end="url(#ahAmber)"/>
+                <text x="510" y="670" fill="#fbbf24" font-size="8" font-weight="600" text-anchor="start">回传↑</text>
+
+                <!-- FOOTER -->
+                <text x="475" y="742" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">M2.5+ 演进: 技术维度 + 调度维度 → 标准化组件 (一次修复、全局生效) | 业务维度 → 业务数据类型参数化 (不生成代码)</text>
+
+                </g>
+            </svg>
+        </div>
+
+        <h3>三层维度组件</h3>
+
+        <!-- 业务维度 -->
+        <h4 style="color:#60a5fa; margin-top:20px; margin-bottom:8px;">业务维度 · 步骤管理与执行</h4>
+        <div class="comp-grid">
+            <div class="comp-card">
+                <div class="comp-icon">📋</div>
+                <div class="comp-tag" style="color:#60a5fa;">批次管理</div>
+                <h4>批次管理器</h4>
+                <p>将工单拆分为多个批次生产，管理批次生命周期。每个批次包含 ×2000 制造单元，独立推进业务步骤序列。</p>
             </div>
-            <div class="flow-row" style="margin:8px 0;">
-                <span style="color:var(--fg-subtle); font-size:0.9rem;">↓</span>
-            </div>
-            <div class="flow-row">
-                <span class="flow-box proc">SubBatchProcessor</span>
-                <span class="flow-arrow">→</span>
-                <span class="flow-box class">ResultClassifier</span>
-                <span class="flow-arrow">→</span>
-                <span style="font-size:0.7rem; color:var(--fg-subtle);">三分类分流</span>
-            </div>
-            <div class="flow-row" style="margin:8px 0; gap: 40px; font-size:0.72rem;">
-                <span style="color:#4ade80;">成功项 → 继续后续</span>
-                <span style="color:#fbbf24;">可疑项 →</span>
-                <span class="flow-box reconf">ReconfirmHandler</span>
-                <span style="color:#f87171;">失败项 →</span>
-                <span class="flow-box route">ReBatchRouter</span>
-            </div>
-            <div class="flow-row" style="margin:8px 0;">
-                <span style="color:var(--fg-subtle); font-size:0.9rem;">↓ 按目标设备区分组</span>
-            </div>
-            <div class="flow-row">
-                <span class="flow-box sched">AreaScheduler</span>
-                <span class="flow-arrow">→ 重新成批分派 →</span>
-                <span class="flow-box proc">...下一工序...</span>
+            <div class="comp-card">
+                <div class="comp-icon">🔀</div>
+                <div class="comp-tag" style="color:#60a5fa;">步骤推进</div>
+                <h4>单批次工序序列管理器</h4>
+                <p>管理当前批次所在的业务步骤，推进/回退步骤序列。5 个标准步骤模板：① 额度资源锁定 → ② 批量充值 → ③ 批量申购 → ④ 结果批量通知 → ⑤ 额度资源解锁。每步骤 4 个标准工序：请求发起 → 收集结果 → 结果散射 → 结果再确认（全部异步、事件驱动）。</p>
             </div>
         </div>
 
-        <h3>六大标准组件</h3>
-
+        <!-- 技术维度 -->
+        <h4 style="color:#f59e0b; margin-top:24px; margin-bottom:8px;">技术维度 · 标准化可复用组件</h4>
         <div class="comp-grid">
             <div class="comp-card">
-                <div class="comp-icon">⚙️</div>
-                <div class="comp-tag" style="color:#60a5fa;">技术组件</div>
-                <h4>SubBatchProcessor</h4>
-                <p>处理一个小批次与外部系统的完整交互周期：文件生成 → 上传 → 等待确认 → 轮询响应 → 解析 → 分类。同一套处理器可用于充值、申购、Fab 光刻——区别仅在于注入的 Pipeline 配置不同。</p>
-            </div>
-
-            <div class="comp-card">
-                <div class="comp-icon">🏷️</div>
-                <div class="comp-tag" style="color:#fbbf24;">业务参数</div>
-                <h4>ResultClassifier</h4>
-                <p>将外部系统返回结果按业务规则分为<strong>成功 / 失败 / 可疑</strong>三类。通过 ErrorCodeMapping（成功码集合、失败码映射、可疑码集合）进行参数化。充值、申购、光刻量测各用不同的映射表，同一分类器。</p>
-            </div>
-
-            <div class="comp-card">
-                <div class="comp-icon">🔍</div>
-                <div class="comp-tag" style="color:#c084fc;">技术组件</div>
-                <h4>ReconfirmHandler</h4>
-                <p>仅对分类为"可疑"的项执行复核（通过 Core API 二次查证、重新量测等），确定最终是成功还是失败。不是流水线的必经阶段——成功和失败项不经过这里。</p>
-            </div>
-
-            <div class="comp-card">
-                <div class="comp-icon">🧠</div>
-                <div class="comp-tag" style="color:#f87171;">业务参数</div>
-                <h4>ReBatchRouter</h4>
-                <p><strong>智能决策</strong>——根据失败原因决定下一步：在同一设备区重试？换设备区？换配方？报废？生成人工工单？通过 ReBatchPolicy（错误码 → 动作映射）参数化。M2 的"重新注入 Worker"只是多种决策之一。</p>
-            </div>
-
-            <div class="comp-card">
                 <div class="comp-icon">📦</div>
-                <div class="comp-tag" style="color:var(--teal);">物理约束</div>
-                <h4>AreaScheduler</h4>
-                <p>接收上游 items，考虑<strong>物理约束</strong>（FOUP 容量、最小/最大批次大小、时间窗口、是否允许混批）重新成批，分派到设备。薪资存入场景约束宽松（1–100 笔），Fab 约束严格（FOUP 25 片、同 recipe 混批）。</p>
+                <div class="comp-tag" style="color:#f59e0b;">物理约束</div>
+                <h4>出站缓冲 · 重新成批</h4>
+                <p>按<strong>物理约束</strong>（FOUP 容量、时间窗口、同 recipe 混批策略）重新成批后分派到设备。薪资场景约束宽松（1–100 笔），Fab 场景约束严格（FOUP 25 片）。</p>
             </div>
-
+            <div class="comp-card">
+                <div class="comp-icon">⚡</div>
+                <div class="comp-tag" style="color:#f59e0b;">容错</div>
+                <h4>断路器</h4>
+                <p>内建<strong>重试 · 超时 · 熔断 · 恢复</strong>机制。所有外部通信统一经过断路器保护，故障隔离不扩散。</p>
+            </div>
+            <div class="comp-card">
+                <div class="comp-icon">🔄</div>
+                <div class="comp-tag" style="color:#f59e0b;">格式</div>
+                <h4>编解码</h4>
+                <p>JSON / XML / CSV / 加密文件格式转换，编码策略与连接器解耦。新增报文格式只需实现 Codec 接口。</p>
+            </div>
+            <div class="comp-card">
+                <div class="comp-icon">🔒</div>
+                <div class="comp-tag" style="color:#f59e0b;">安全</div>
+                <h4>安全加密</h4>
+                <p>传输层 TLS / 应用层 AES / 国密 SM4。加密策略参数化，按外部系统安全等级自动选择。</p>
+            </div>
             <div class="comp-card">
                 <div class="comp-icon">🔌</div>
-                <div class="comp-tag" style="color:#60a5fa;">基础设施</div>
-                <h4>Connector + Encoding</h4>
-                <p>HTTP / SFTP / SMS 连接器，内建<strong>断路器 + 重试 + 超时</strong>。编码策略（JSON / XML / CSV / 加密文件）与连接器解耦。与 Saga 无关——可被 SubBatchProcessor 直接调用。</p>
+                <div class="comp-tag" style="color:#f59e0b;">通信</div>
+                <h4>通信协议栈</h4>
+                <p>SFTP / HTTP-XML / HTTP-JSON 多协议适配。新增传输协议只需实现 Connector 接口，不影响上层业务逻辑。</p>
+            </div>
+        </div>
+
+        <!-- 业务调度维度 -->
+        <h4 style="color:#a855f7; margin-top:24px; margin-bottom:8px;">业务调度维度 · 结果分流与异常处理</h4>
+        <div class="comp-grid">
+            <div class="comp-card">
+                <div class="comp-icon">🎯</div>
+                <div class="comp-tag" style="color:#a855f7;">分流</div>
+                <h4>批量结果散射器</h4>
+                <p>对每个制造单元的远程通信结果进行<strong>三路分流</strong>：✅ 成功 → 继续下一个业务步骤；❌ 失败 → 上报异常调度器；⚠️ 可疑 → 发送再确认组件。全部异步事件驱动。</p>
+            </div>
+            <div class="comp-card">
+                <div class="comp-icon">🚨</div>
+                <div class="comp-tag" style="color:#f87171;">异常</div>
+                <h4>异常调度器</h4>
+                <p>接收散射器上报的失败结果，经过<strong>缓冲（空间约束）与超时（事件约束）</strong>后发出向前补偿请求到批次管理器，重新指定业务步骤（补偿/跳过/终止）。</p>
+            </div>
+            <div class="comp-card">
+                <div class="comp-icon">🔍</div>
+                <div class="comp-tag" style="color:#fbbf24;">复核</div>
+                <h4>再确认组件</h4>
+                <p>对可疑结果进行<strong>二次查证</strong>（通过更高精度量测、Core API 核验或人工复核），确定最终成功/失败后回传散射器。不是流水线的必经阶段——成功和失败项不经过这里。</p>
             </div>
         </div>
 
         <blockquote>
-            <strong>关键设计决策：组件库 vs 模板生成。</strong>
-            模板在编译期展开为 FSM 代码——修 bug 需要改模板、重新生成。
-            组件库在运行期按参数实例化——修 bug 改一次组件，所有实例自动继承修复。
-            两者都保持编译时类型安全（组件接口由 trait 约束，参数由 case class 约束）。
+            <strong>关键设计决策：三层分离 vs 单体 FSM。</strong>
+            业务维度定义"做什么"（步骤序列），技术维度提供"怎么做"（通信/容错/加密），调度维度决定"结果去哪"（成功推进/失败补偿/可疑复核）。
+            三层分离意味着：业务人员修改步骤序列不需碰技术组件；基础设施团队升级断路器不需理解业务逻辑；调度策略变更（如"可疑阈值从 5% 调至 3%"）是参数配置而非代码修改。
+            区别于 M2 的模板生成：组件在运行期按参数实例化——修 bug 改一次组件，所有实例自动继承修复。
         </blockquote>
     </section>
 
     <!-- ==================== SECTION 3: BUSINESS PARAMETERIZATION ==================== -->
     <section>
-        <h2>三、业务参数化：同一套组件，不同配置</h2>
+        <h2>三、业务参数化：三个维度，各自配置</h2>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
             M2.5+ 的核心价值不在于"消除了多少行代码"，而在于<strong>修改的爆炸半径</strong>。
-            产品经理关心的参数（错误码映射、失败处理策略、批次大小）从代码深处提升到配置层。
+            三个维度的参数各自独立：业务维度配置步骤序列与批次约束，技术维度配置协议/重试/加密策略，调度维度配置分流规则与补偿策略。
+            产品经理关心的参数从代码深处提升到配置层，每个维度独立变更、独立验证。
         </p>
 
         <table class="ps-table">
@@ -378,7 +606,7 @@
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
             M3 面向半导体 Fab 的<strong>动态工序编排</strong>。9 个设备区 + 物流指挥系统 = 10 个需连接控制的外部系统。
-            它们<strong>全部共享 M2.5+ 的同一套组件</strong>——SubBatchProcessor、ResultClassifier、ReBatchRouter、AreaScheduler。
+            它们<strong>全部复用 M2.5+ 的三层分离架构</strong>——业务步骤链、技术组件栈、调度分流器无需改动。
             唯一的区别：工序序列不是静态代码，而是从<strong>产品工艺路线数据库</strong>在运行时加载。
         </p>
 
@@ -400,15 +628,15 @@
         <h3>M2.5+ 组件 → M3 的映射关系</h3>
 
         <table class="ps-table">
-            <thead><tr><th>M2.5+ 组件</th><th>薪资存入场景</th><th>Fab M3 场景</th></tr></thead>
+            <thead><tr><th>M2.5+ 组件</th><th>所属维度</th><th>薪资存入场景</th><th>Fab M3 场景</th></tr></thead>
             <tbody>
-                <tr><td>SubBatchProcessor</td><td>处理 100 笔银行交易</td><td>处理 1 个 FOUP (25 片) → 上传 recipe → 机台执行 → 拉取结果</td></tr>
-                <tr><td>ResultClassifier</td><td>按银行错误码分类</td><td>按<strong>量测值范围</strong>分类（pass / fail / borderline）</td></tr>
-                <tr><td>ReconfirmHandler</td><td>通过 Core API 核验可疑交易</td><td>通过<strong>更高精度量测或人工复核</strong>确定边界值</td></tr>
-                <tr><td>ReBatchRouter</td><td>决定重试 / 报废</td><td>决定 <strong>rework / 换设备区 / 换 recipe / 报废 / 人工介入</strong></td></tr>
-                <tr><td>AreaScheduler</td><td>按时间窗口（10 分钟）成批</td><td>按<strong>物理约束</strong>（FOUP 容量 / recipe 兼容性 / 洁净室等级）成批</td></tr>
-                <tr><td>Connector + CB</td><td>SFTP / HTTP to 银行</td><td>HTTP / SECS/GEM to <strong>机台</strong></td></tr>
-                <tr><td>EncodingStrategy</td><td>XML 银行报文</td><td>JSON / SECS-II 机台通信</td></tr>
+                <tr><td>单批次工序序列管理器 + 业务步骤链</td><td><span style="color:#60a5fa">业务</span></td><td>5 步骤链：额度锁定→充值→申购→通知→解锁</td><td>从产品工艺路线 DB 加载步骤序列（11-13 步含重入）</td></tr>
+                <tr><td>批量结果散射器</td><td><span style="color:#a855f7">调度</span></td><td>按银行错误码三路分流（成功/失败/可疑）</td><td>按<strong>量测值范围</strong>三路分流（pass / fail / borderline）</td></tr>
+                <tr><td>再确认组件</td><td><span style="color:#a855f7">调度</span></td><td>通过 Core API 核验可疑交易</td><td>通过<strong>更高精度量测或人工复核</strong>确定边界值</td></tr>
+                <tr><td>异常调度器</td><td><span style="color:#a855f7">调度</span></td><td>决定重试 / 报废，向前补偿至批次管理器</td><td>决定 <strong>rework / 换设备区 / 换 recipe / 报废 / 人工介入</strong></td></tr>
+                <tr><td>出站缓冲 · 重新成批</td><td><span style="color:#f59e0b">技术</span></td><td>按时间窗口（10 分钟）重新成批</td><td>按<strong>物理约束</strong>（FOUP 容量 / recipe 兼容性 / 洁净室等级）成批</td></tr>
+                <tr><td>断路器 + 通信协议栈</td><td><span style="color:#f59e0b">技术</span></td><td>SFTP / HTTP to 银行，断路器保护</td><td>HTTP / SECS/GEM to <strong>机台</strong>，断路器保护</td></tr>
+                <tr><td>编解码</td><td><span style="color:#f59e0b">技术</span></td><td>XML 银行报文 ⇄ 内部模型</td><td>JSON / SECS-II 机台通信 ⇄ 内部模型</td></tr>
             </tbody>
         </table>
 
@@ -434,7 +662,7 @@
 
         <blockquote>
             <strong>架构师视角——为什么不需要新的执行引擎。</strong>
-            M2.5+ 的 SubBatchProcessor、AreaScheduler、ReBatchRouter 已经覆盖了"工序执行的完整生命周期"。
+            M2.5+ 的业务步骤链、技术组件栈、调度分流器已经覆盖了"工序执行的完整生命周期"。
             M3 的变化在<strong>工序序列的来源</strong>——从编译时确定的静态配置变为运行时加载的动态工艺路线。
             SagaTransactionCoordinator 不需要改动；StepExecutor 的断路器/重试/超时不需要改动；Connector 不需要改动。
             <strong>唯一新增的是 ProductRouting（数据模型）+ BatchMergeManager（Fab 物理约束）+ FabFlowEngine（动态组装）。</strong>
@@ -459,12 +687,12 @@
             </div>
             <div class="phase-card m25p">
                 <div class="phase-sub">2026 · 当前</div>
-                <h4>M2.5+ · 标准组件库</h4>
+                <h4>M2.5+ · 三层分离架构</h4>
                 <ul>
-                    <li>6 大标准组件</li>
+                    <li>三层分离：业务/技术/调度</li>
+                    <li>标准化技术+调度组件</li>
                     <li>参数化配置（不生成代码）</li>
                     <li>统一修复点（改一处全局生效）</li>
-                    <li>充值/申购 = 同一套组件</li>
                     <li>增加链路 = 填写参数表</li>
                 </ul>
             </div>
@@ -483,7 +711,7 @@
 
         <p style="font-size:0.85rem; color:var(--fg-muted); margin-top:16px; text-align:center;">
             <strong>每一步都复用上一步的组件。</strong>
-            M2 的 Saga 协调器 → M2.5+ 的 Connector + SubBatchProcessor → M3 的 ProductRouting + FabFlowEngine。
+            M2 的 Saga 协调器 → M2.5+ 的三层分离架构（业务步骤链 + 技术组件栈 + 调度分流器）→ M3 的 ProductRouting + FabFlowEngine。
             没有推倒重来，只有增量叠加。
         </p>
     </section>

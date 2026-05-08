@@ -8,15 +8,50 @@
     <meta name="description" content="Saga 分布式事务协调器——Backward Recovery 补偿机制，Prepare/Commit/Compensate 三阶段，支持 SUSPENDED 状态手动修复。Akka Persistence + Event Sourcing 实现。">
     <meta name="keywords" content="Saga, 分布式事务, 补偿, Backward Recovery, Akka, Event Sourcing, CQRS">
     <style>
+        :root { --bg-alt: #252525; --border: #444; --fg: #e0e0e0; --fg-muted: #999; --accent: #00d4ff; --font: 'Segoe UI', sans-serif; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
         .container { max-width: 1400px; margin: 0 auto; }
         h1 { color: #00d4ff; border-bottom: 2px solid #333; padding-bottom: 10px; text-align: center; }
 
         .header-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; margin-bottom: 20px; }
         .lang-switcher { font-size: 0.9rem; }
-        .lang-switcher a { color: #00d4ff; text-decoration: none; margin-left: 10px; padding: 2px 8px; border: 1px solid #444; border-radius: 4px; }
-        .lang-switcher a:hover { background: #333; }
-        .lang-switcher a.active { background: #00d4ff; color: #000; border-color: #00d4ff; }
+        .lang-switcher > a { color: #00d4ff; text-decoration: none; margin-left: 10px; padding: 2px 8px; border: 1px solid #444; border-radius: 4px; }
+        .lang-switcher > a:hover { background: #333; }
+        .lang-switcher > a.active { background: #00d4ff; color: #000; border-color: #00d4ff; }
+
+        /* Dropdown */
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn {
+            color: #999; font-size: 0.82rem; font-weight: 500;
+            padding: 2px 8px; border-radius: 4px; cursor: pointer;
+            background: transparent; border: 1px solid #444; font-family: inherit;
+            display: flex; align-items: center; gap: 4px; transition: all 0.15s;
+        }
+        .nav-dropdown-btn:hover, .nav-dropdown:hover .nav-dropdown-btn { color: #e0e0e0; background: #333; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu {
+            position: absolute; top: 100%; left: 0; margin-top: 4px;
+            background: #252525; border: 1px solid #444; border-radius: 8px;
+            min-width: 230px; padding: 4px; display: none; z-index: 100;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item {
+            display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+            border-radius: 6px; text-decoration: none; color: #e0e0e0;
+            font-size: 0.8rem; font-weight: 500; transition: all 0.1s;
+        }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge {
+            font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+            flex-shrink: 0; min-width: 36px; text-align: center;
+        }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-ddd { background: rgba(0,212,255,0.12); color: #00d4ff; }
+        .mm-active { background: rgba(255,255,255,0.05); }
 
         .dashboard { display: grid; grid-template-columns: 350px 1fr; gap: 30px; margin-top: 20px; }
 
@@ -114,11 +149,21 @@
             <h1>@messages("showcase.header")</h1>
             <div class="lang-switcher">
                 <a href="/">Home</a>
-                <a href="/saga" class="active">Saga</a>
-                <a href="/architecture">Architecture</a>
-                <a href="/projection">Projection</a>
-                <a href="/dag">DAG</a>
-                <a href="/m25">M2.5</a>
+                <div class="nav-dropdown">
+                    <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
+                    <div class="nav-dropdown-menu">
+                        <a href="/saga" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                        <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
+                        <a href="/m25-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>Component Library</a>
+                    </div>
+                </div>
+                <div class="nav-dropdown">
+                    <span class="nav-dropdown-btn">DDD Practices <span class="arrow">▾</span></span>
+                    <div class="nav-dropdown-menu">
+                        <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection Pipeline</a>
+                        <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>Architecture Radar</a>
+                    </div>
+                </div>
                 <a href="/saga/docs/overview">Docs</a>
                 <a href="/lang/en" class="@if(messages.lang.code == "en"){active}">EN</a>
                 <a href="/lang/zh" class="@if(messages.lang.code == "zh"){active}">中文</a>
