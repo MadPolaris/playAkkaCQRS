@@ -393,7 +393,7 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
                 <h4>流批一体多层级 DAG 执行引擎</h4>
-                <p>5 层级 DAG 执行引擎，23 个 Persistent FSM 内建 4 种弹性模式——监督自动重启、超时资源保护、失败补偿最终一致。每个节点独立版本化、测试和部署。统一管道同时处理流式与批量负载，通信层封装异构外部系统。 <a href="/dag" style="color:var(--accent);font-weight:600;">观看动画演示 →</a></p>
+                <p>5 层级 DAG 执行引擎，23 个 Persistent FSM 内建 4 种弹性模式——监督自动重启、超时资源保护、失败补偿最终一致。每个节点独立版本化、测试和部署。统一管道同时处理流式与批量负载，通信层封装异构外部系统。<b>M2.5+ 进一步演进为标准组件库</b>——用 6 大组件替代手写 FSM 模板，实现修复一次、全局生效。 <a href="/dag" style="color:var(--accent);font-weight:600;">观看 M2 演示 →</a> <a href="/m25" style="color:var(--accent);font-weight:600;">M2.5+ 详解 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -419,7 +419,7 @@
 <section class="section" id="showcases">
     <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> 在线演示 — 看到实际运行的代码</h2>
     <p class="section-desc">
-        四个交互式 Demo 连接到同一个实时系统，按里程碑与最佳实践分层展示。
+        五个交互式 Demo 连接到同一个实时系统，按里程碑与最佳实践分层展示。
     </p>
 
     <div class="card-grid-2">
@@ -440,6 +440,19 @@
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：跨 MES/EAP/RMS/SPC 的 DAG 流程编排引擎</p>
             <br>
             <a href="/dag" class="card-link">打开演示 →</a>
+        </div>
+    </div>
+
+    <div class="card-grid-2" style="margin-top: 24px;">
+        <div class="card">
+            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🧩</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M2.5+</span><span class="tag">组件库</span><span class="tag">修复一次全局生效</span></div>
+            <h3>M2.5+ 标准组件库</h3>
+            <p>6 大标准组件替代 4 种手写 FSM 模板。充值/申购同一套组件，仅错误码映射不同。SMS 通知复用同一条 Pipeline 的阶段。一个修复点，所有实例同步更新。M3 Fab 动态工序编排直接复用全部 6 个组件。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：SubBatchProcessor → 任意设备区；ResultClassifier → 任意质量门禁</p>
+            <br>
+            <a href="/m25" class="card-link">阅读详解 →</a>
+            <a href="/m25-demo" class="card-link" style="margin-left:16px;">打开演示 →</a>
         </div>
     </div>
 
@@ -473,7 +486,7 @@
     <div class="cta-section">
         <h2>M3 和 M4 — 与我们一起定义</h2>
         <p>
-            M1 和 M2 已经以线上质量运行。但 M3 和 M4 真正的业务场景，
+            M1、M2 和 M2.5+ 已经以线上质量运行。但 M3 和 M4 真正的业务场景，
             只有每天在 Fab 现场的人才知道答案。
             <br><br>
             如果你是 Fab 工程师、自动化架构师或制造系统专家——

@@ -415,7 +415,7 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">Production Quality — Live</span>
                 <h4>Streaming-Batch Multi-Level DAG Execution Engine</h4>
-                <p>A 5-level DAG execution engine: 23 Persistent FSMs with 4 built-in resilience patterns — supervision with auto-restart, timeout resource protection, compensating recovery to eventual consistency. Each node independently versionable, testable, and deployable. Unified pipeline handles both streaming and batch workloads, with a communication layer that encapsulates heterogeneous external systems. <a href="/dag" style="color:var(--accent);font-weight:600;">Watch animated demo →</a></p>
+                <p>A 5-level DAG execution engine: 23 Persistent FSMs with 4 built-in resilience patterns — supervision with auto-restart, timeout resource protection, compensating recovery to eventual consistency. Each node independently versionable, testable, and deployable. Unified pipeline handles both streaming and batch workloads, with a communication layer that encapsulates heterogeneous external systems. <b>M2.5+ evolved this into a 6-component standard library</b> — replacing hand-written FSM templates with composable, parameterized components. Fix once, apply everywhere. <a href="/dag" style="color:var(--accent);font-weight:600;">Watch M2 demo →</a> <a href="/m25" style="color:var(--accent);font-weight:600;">M2.5+ explainer →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -441,7 +441,7 @@
 <section class="section" id="showcases">
     <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> See It In Action</h2>
     <p class="section-desc">
-        Four interactive demos connected to the same live system, organized by milestone and best-practice layers.
+        Five interactive demos connected to the same live system, organized by milestone and best-practice layers.
     </p>
 
     <div class="card-grid-2">
@@ -462,6 +462,19 @@
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: DAG orchestration across MES, EAP, RMS, SPC</p>
             <br>
             <a href="/dag" class="card-link">Open Demo →</a>
+        </div>
+    </div>
+
+    <div class="card-grid-2" style="margin-top: 24px;">
+        <div class="card">
+            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🧩</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M2.5+</span><span class="tag">Component Library</span><span class="tag">Fix Once</span></div>
+            <h3>M2.5+ Standard Component Library</h3>
+            <p>6 standard components replace 4 hand-written FSM templates. Same pipeline handles recharge and purchase — only the error-code mapping differs. SMS notification reuses the same pipeline stages. One fix point, every instance updated globally. M3 Fab dynamic process orchestration reuses all 6 components directly.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: SubBatchProcessor → any equipment area; ResultClassifier → any quality gate</p>
+            <br>
+            <a href="/m25" class="card-link">Read the Explainer →</a>
+            <a href="/m25-demo" class="card-link" style="margin-left:16px;">Open Live Demo →</a>
         </div>
     </div>
 
@@ -495,7 +508,7 @@
     <div class="cta-section">
         <h2>M3 and M4 — Define Them With Us</h2>
         <p>
-            M1 and M2 are running in production-quality code. But the real questions for M3 and M4
+            M1, M2, and M2.5+ are running in production-quality code. But the real questions for M3 and M4
             can only be answered by people who live the Fab floor every day.
             <br><br>
             If you're a Fab engineer, an automation architect, or a manufacturing systems expert —
