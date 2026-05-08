@@ -1,0 +1,363 @@
+@()
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M2.5+ 标准组件库 · Live Demo</title>
+    <meta name="description" content="M2.5+ 标准组件库演示——6 大组件替代 4 种模板，修复一次全局生效。充值/申购同一套组件不同参数，M3 Fab 动态工序编排直接复用。">
+    <meta name="keywords" content="M2.5+, 组件库, SubBatchProcessor, ResultClassifier, ReBatchRouter, Akka, DAG, Fab, M3">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff;
+            --tpl-chain: #3b82f6; --tpl-guard: #f59e0b; --tpl-notif: #a855f7; --tpl-batch: #14b8a6;
+            --tpl-chain2: #38bdf8;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); height: 100vh; }
+
+        .layout { display: flex; height: 100vh; }
+        .sidebar {
+            width: 380px; min-width: 380px; background: var(--bg-alt);
+            border-right: 1px solid var(--border); display: flex; flex-direction: column;
+            overflow-y: auto; padding: 20px; gap: 14px;
+        }
+        .viz-area { flex: 1; position: relative; overflow-y: auto; overflow-x: hidden; background: var(--bg); }
+
+        /* Sidebar Header */
+        .sb-header h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+        .sb-header .subtitle { font-size: 0.75rem; color: var(--fg-muted); margin-top: 2px; }
+        .badge-row { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+        .m25-badge {
+            font-size: 0.64rem; font-weight: 600; padding: 2px 8px; border-radius: 4px;
+            background: rgba(168, 85, 247, 0.12); color: #a855f7;
+        }
+
+        /* Nav */
+        .m25-nav {
+            display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 4px;
+            padding-bottom: 12px; border-bottom: 1px solid var(--border);
+        }
+        .m25-nav a {
+            font-size: 0.72rem; color: var(--fg-muted); text-decoration: none;
+            padding: 2px 8px; border: 1px solid var(--border); border-radius: 4px;
+            transition: all 0.15s;
+        }
+        .m25-nav a:hover { color: var(--fg); border-color: var(--fg-muted); }
+        .m25-nav a.active { background: #a855f7; color: #fff; border-color: #a855f7; }
+
+        /* Template Cards */
+        .tpl-list { display: flex; flex-direction: column; gap: 8px; }
+        .tpl-card {
+            background: var(--bg); border: 1px solid var(--border); border-radius: 10px;
+            padding: 14px; cursor: pointer; transition: all 0.2s;
+        }
+        .tpl-card:hover { border-color: var(--fg-muted); }
+        .tpl-card.active { border-color: var(--accent); background: rgba(88,166,255,0.04); }
+        .tpl-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+        .tpl-dot { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; }
+        .tpl-card h3 { font-size: 0.85rem; font-weight: 700; }
+        .tpl-card .tpl-meta { font-size: 0.65rem; color: var(--fg-muted); }
+        .tpl-card .tpl-nodes { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+        .tpl-node-tag {
+            font-size: 0.6rem; padding: 1px 6px; border-radius: 3px;
+            font-family: var(--mono); font-weight: 600;
+        }
+
+        /* Code Panel */
+        .code-panel {
+            background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+            overflow: hidden; display: none;
+        }
+        .code-panel.visible { display: block; }
+        .code-panel-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 8px 12px; background: rgba(255,255,255,0.03);
+            border-bottom: 1px solid var(--border);
+        }
+        .code-panel-header span { font-size: 0.68rem; font-weight: 600; color: var(--fg-muted); }
+        .code-toggle {
+            display: flex; gap: 2px;
+        }
+        .code-toggle button {
+            font-size: 0.62rem; padding: 3px 10px; border: 1px solid var(--border);
+            background: transparent; color: var(--fg-muted); cursor: pointer;
+            font-family: var(--font); border-radius: 4px; transition: all 0.15s;
+        }
+        .code-toggle button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .code-panel pre {
+            padding: 12px; margin: 0; overflow-x: auto;
+            font-family: var(--mono); font-size: 0.62rem; line-height: 1.65;
+            color: var(--fg-muted); max-height: 240px; overflow-y: auto;
+            white-space: pre-wrap; word-break: break-all;
+        }
+
+        /* Legend */
+        .legend { display: flex; flex-direction: column; gap: 5px; }
+        .legend-title { font-size: 0.68rem; font-weight: 700; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+        .legend-item { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: var(--fg-muted); }
+        .legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+        /* Stats */
+        .stat-row { display: flex; gap: 8px; }
+        .stat {
+            flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+            padding: 10px; text-align: center;
+        }
+        .stat .num { font-size: 1.1rem; font-weight: 800; color: var(--accent); }
+        .stat .lbl { font-size: 0.6rem; color: var(--fg-muted); margin-top: 2px; }
+
+        /* SVG */
+        #dagCanvas { width: 100%; }
+        .dag-edge { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 2; transition: stroke 0.4s, stroke-width 0.4s, opacity 0.4s; }
+        .dag-edge.highlight { stroke-width: 3.5; filter: drop-shadow(0 0 6px currentColor); }
+        .dag-edge.feedback { stroke: rgba(239,68,68,0.25); stroke-dasharray: 8 4; }
+        .dag-edge.external { stroke: rgba(240,136,62,0.2); stroke-dasharray: 5 5; stroke-width: 1.5; }
+        .dag-edge.dimmed { opacity: 0.08; }
+
+        .dag-node { cursor: pointer; transition: opacity 0.4s; }
+        .dag-node.dimmed { opacity: 0.15; }
+        .dag-node.active { opacity: 1; }
+        .dag-node .node-rect { fill: rgba(22, 27, 34, 0.92); stroke: var(--border); stroke-width: 1.5; rx: 8; ry: 8; transition: all 0.3s; }
+        .dag-node .node-label { fill: var(--fg); font-size: 0.72rem; font-weight: 600; font-family: var(--font); }
+        .dag-node .node-sub, .gw-entry-group .node-sub { fill: var(--fg-muted); font-size: 0.6rem; font-family: var(--font); }
+
+        /* Template-colored node borders */
+        .dag-node.tpl-chain .node-rect { stroke: rgba(59,130,246,0.4); }
+        .dag-node.tpl-guard .node-rect { stroke: rgba(245,158,11,0.4); }
+        .dag-node.tpl-notif .node-rect { stroke: rgba(168,85,247,0.4); }
+        .dag-node.tpl-batch .node-rect { stroke: rgba(20,184,166,0.4); }
+        .dag-node.tpl-trigger .node-rect { stroke: rgba(255,255,255,0.15); }
+
+        .dag-node.highlight.tpl-chain .node-rect { stroke: var(--tpl-chain); filter: drop-shadow(0 0 12px rgba(59,130,246,0.55)); }
+        .dag-node.highlight.tpl-guard .node-rect { stroke: var(--tpl-guard); filter: drop-shadow(0 0 12px rgba(245,158,11,0.55)); }
+        .dag-node.highlight.tpl-notif .node-rect { stroke: var(--tpl-notif); filter: drop-shadow(0 0 12px rgba(168,85,247,0.55)); }
+        .dag-node.highlight.tpl-batch .node-rect { stroke: var(--tpl-batch); filter: drop-shadow(0 0 12px rgba(20,184,166,0.55)); }
+
+        /* Template Region Background */
+        .tpl-region {
+            fill: rgba(255,255,255,0.015); stroke-width: 1.5; stroke-dasharray: 8 4;
+            rx: 14; ry: 14; pointer-events: none; transition: all 0.4s;
+        }
+        .tpl-region.active { fill: rgba(255,255,255,0.03); stroke-width: 2.5; stroke-dasharray: none; }
+        .tpl-region-label {
+            font-size: 0.62rem; font-weight: 700; font-family: var(--font);
+            letter-spacing: 0.5px; pointer-events: none;
+        }
+
+        /* Level labels */
+        .level-label { fill: var(--fg-subtle); font-size: 0.6rem; font-weight: 600; font-family: var(--font); text-transform: uppercase; letter-spacing: 0.8px; }
+
+        /* Gateway */
+        .gw-container { fill: rgba(240,136,62,0.03); stroke: rgba(240,136,62,0.15); stroke-width: 1.5; rx: 10; ry: 10; stroke-dasharray: 4 4; }
+        .gw-entry { fill: rgba(22, 27, 34, 0.92); stroke: rgba(240,136,62,0.35); stroke-width: 1.5; rx: 4; ry: 4; cursor: pointer; }
+        .gw-label { fill: var(--fg-muted); font-size: 0.58rem; font-family: var(--font); font-weight: 600; }
+        .gw-entry-label { fill: var(--fg); font-size: 0.68rem; font-family: var(--font); font-weight: 600; }
+
+        /* Toast */
+        .toast {
+            position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 99999;
+            background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4);
+            color: #a855f7; padding: 10px 24px; border-radius: 8px; font-size: 0.82rem;
+            font-weight: 700; opacity: 0; transition: opacity 0.4s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+
+        /* FSM Modal */
+        .fsm-modal-overlay {
+            display: none; position: fixed; inset: 0; z-index: 99990;
+            background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+            align-items: center; justify-content: center;
+        }
+        .fsm-modal-overlay.visible { display: flex; }
+        .fsm-modal {
+            width: 90vw; max-width: 1100px; height: 85vh; max-height: 800px;
+            background: var(--bg-alt); border: 1px solid var(--border);
+            border-radius: 12px; display: flex; flex-direction: column;
+            box-shadow: 0 0 60px rgba(0,0,0,0.6); overflow: hidden;
+        }
+        .fsm-modal-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+        }
+        .fsm-modal-header h2 { font-size: 1rem; font-weight: 700; }
+        .fsm-modal-close {
+            background: none; border: 1px solid var(--border); color: var(--fg-muted);
+            font-size: 1.2rem; cursor: pointer; width: 32px; height: 32px;
+            border-radius: 6px; display: flex; align-items: center; justify-content: center;
+        }
+        .fsm-modal-close:hover { color: var(--fg); border-color: var(--fg-muted); }
+        .fsm-modal-body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+        .fsm-diagram-area {
+            flex: 1; min-width: 0; overflow: auto; background: var(--bg); position: relative;
+        }
+        .fsm-diagram-area svg { width: 100%; height: 100%; }
+        .fsm-info-panel {
+            width: 260px; min-width: 260px; border-left: 1px solid var(--border);
+            padding: 14px; overflow-y: auto; font-size: 0.7rem; line-height: 1.55;
+        }
+        .fsm-info-panel h4 { font-size: 0.72rem; margin-bottom: 6px; }
+        .fsm-info-panel .fsm-meta { color: var(--fg-muted); font-size: 0.65rem; margin-bottom: 8px; }
+
+        /* Tabs for template detail */
+        .tpl-tabs { display: flex; gap: 2px; margin-bottom: 8px; }
+        .tpl-tab {
+            flex: 1; font-size: 0.62rem; padding: 4px 8px; border: 1px solid var(--border);
+            background: transparent; color: var(--fg-muted); cursor: pointer;
+            border-radius: 4px; font-family: var(--font); text-align: center;
+        }
+        .tpl-tab.active { background: rgba(88,166,255,0.12); color: var(--accent); border-color: var(--accent); }
+
+        @@media (max-width: 768px) {
+            .layout { flex-direction: column; }
+            .sidebar { width: 100%; min-width: unset; max-height: 48vh; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="layout">
+    <!-- ====== Sidebar ====== -->
+    <div class="sidebar">
+        <div class="m25-nav">
+            <a href="/">首页</a>
+            <a href="/dag">M2 DAG</a>
+            <a href="/m25">M2.5 探索</a>
+            <a href="/m25-demo" class="active">M2.5 Demo</a>
+        </div>
+
+        <div class="sb-header">
+            <h1>M2.5+ 标准组件库</h1>
+            <div class="subtitle">6 大组件 → 统一修复点 · 参数化实例化</div>
+            <div class="badge-row">
+                <span class="m25-badge">Component Library</span>
+                <span class="m25-badge">Fix Once, Apply Everywhere</span>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stat-row">
+            <div class="stat"><div class="num">6</div><div class="lbl">标准组件</div></div>
+            <div class="stat"><div class="num">14</div><div class="lbl">DAG 节点</div></div>
+            <div class="stat"><div class="num">~30</div><div class="lbl">行/链配置</div></div>
+            <div class="stat"><div class="num">1</div><div class="lbl">统一修复点</div></div>
+        </div>
+
+        <!-- DAG Layer Explorer -->
+        <div class="legend-title" style="margin-top:4px;">DAG 拓扑分层 — 点击高亮，查看详情</div>
+        <div class="tpl-list">
+            <div class="tpl-card" data-template="chain" id="tplCard-chain">
+                <div class="tpl-card-header">
+                    <span class="tpl-dot" style="background:var(--tpl-chain)"></span>
+                    <h3>L3 业务链路层</h3>
+                    <span class="tpl-meta">2 Pipeline + 2 SMS · 6 FSM 标准化封装</span>
+                </div>
+                <div class="tpl-nodes">
+                    <span class="tpl-node-tag" style="background:rgba(59,130,246,0.12);color:#60a5fa">fileGen → upload → poll → parse → classify → reconfirm</span>
+                    <span class="tpl-node-tag" style="background:rgba(56,189,248,0.12);color:#38bdf8">充值/申购 同一组件库，仅 ErrorCodeMapping 不同</span>
+                    <span class="tpl-node-tag" style="background:rgba(59,130,246,0.08);color:#93c5fd">短信成功/失败通知 → 同属业务链路，非独立层</span>
+                </div>
+            </div>
+
+            <div class="tpl-card" data-template="guard" id="tplCard-guard">
+                <div class="tpl-card-header">
+                    <span class="tpl-dot" style="background:var(--tpl-guard)"></span>
+                    <h3>L2/L4 资源解锁</h3>
+                    <span class="tpl-meta">2 FSM · 超时自动释放</span>
+                </div>
+                <div class="tpl-nodes">
+                    <span class="tpl-node-tag" style="background:rgba(245,158,11,0.12);color:#fbbf24">quota-reserve 额度锁定 (L2)</span>
+                    <span class="tpl-node-tag" style="background:rgba(245,158,11,0.12);color:#fbbf24">quota-release 额度释放 (L4)</span>
+                    <span class="tpl-node-tag" style="background:rgba(245,158,11,0.12);color:#fbbf24">quota-cascade 级联释放 (L4)</span>
+                </div>
+            </div>
+
+            <div class="tpl-card" data-template="batch" id="tplCard-batch">
+                <div class="tpl-card-header">
+                    <span class="tpl-dot" style="background:var(--tpl-batch)"></span>
+                    <h3>L0–L2 编排调度层</h3>
+                    <span class="tpl-meta">6 FSM · 扇出 + 补偿闭环</span>
+                </div>
+                <div class="tpl-nodes">
+                    <span class="tpl-node-tag" style="background:rgba(20,184,166,0.12);color:#2dd4bf">job-actor 作业</span>
+                    <span class="tpl-node-tag" style="background:rgba(20,184,166,0.12);color:#2dd4bf">pre-batch 预处理</span>
+                    <span class="tpl-node-tag" style="background:rgba(20,184,166,0.12);color:#2dd4bf">re-batch 补偿回注</span>
+                    <span class="tpl-node-tag" style="background:rgba(20,184,166,0.12);color:#2dd4bf">master/worker/item</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Component Mapping -->
+        <div style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:0.65rem; color:var(--fg-muted); line-height:1.7;">
+            <div style="font-weight:700; color:var(--fg-subtle); margin-bottom:5px; text-transform:uppercase; letter-spacing:0.6px;">构建时 6 组件 → 运行时 3 层</div>
+            <span style="color:#60a5fa;">SubBatchProcessor</span> → L3 链路层（含 SMS 通知）<br>
+            <span style="color:#fbbf24;">ResultClassifier + ReconfirmHandler</span> → L2/L4 资源解锁<br>
+            <span style="color:#2dd4bf;">ReBatchRouter + AreaScheduler</span> → L0–L2 编排层
+        </div>
+
+        <!-- Code Panel -->
+        <div class="code-panel" id="codePanel">
+            <div class="code-panel-header">
+                <span id="codeTitle">选择层查看详情</span>
+                <div class="code-toggle">
+                    <button id="btnScala" class="active">Scala (M2.5+)</button>
+                    <button id="btnJava">Java (M2)</button>
+                </div>
+            </div>
+            <pre id="codeContent"></pre>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-title">图例 · DAG 运行时分层</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--tpl-chain)"></span> L3 业务链路层（充值/申购/短信通知）</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--tpl-guard)"></span> L2/L4 资源解锁（额度锁定/释放）</div>
+            <div class="legend-item"><span class="legend-dot" style="background:var(--tpl-batch)"></span> L0–L2 编排调度层（作业/批次/补偿）</div>
+            <div class="legend-item"><span class="legend-dot" style="background:rgba(240,136,62,0.5)"></span> 连接器 + 外部系统网关 (ACL)</div>
+        </div>
+
+        <!-- External systems highlight toggle -->
+        <button id="btnGwToggle" style="width:100%; padding:8px 12px; border:1px solid rgba(240,136,62,0.35); border-radius:8px;
+            background:rgba(240,136,62,0.06); color:var(--fg-muted); font-size:0.72rem; font-weight:600; cursor:pointer;
+            transition:all 0.2s; font-family:var(--font); text-align:left; display:flex; align-items:center; gap:8px;">
+            <span style="font-size:1rem;">🔌</span> 点亮外部系统网关
+        </button>
+    </div>
+
+    <!-- ====== SVG Canvas ====== -->
+    <div class="viz-area" id="vizArea">
+        <svg id="dagCanvas"></svg>
+    </div>
+</div>
+
+<!-- ====== FSM Detail Modal ====== -->
+<div class="fsm-modal-overlay" id="fsmModalOverlay">
+    <div class="fsm-modal">
+        <div class="fsm-modal-header">
+            <div>
+                <h2 id="fsmModalTitle">FSM 详情</h2>
+                <div class="fsm-subtitle" id="fsmModalSubtitle" style="font-size:0.68rem;color:var(--fg-muted)"></div>
+            </div>
+            <button class="fsm-modal-close" onclick="closeFsmModal()">&times;</button>
+        </div>
+        <div class="fsm-modal-body">
+            <div class="fsm-diagram-area" id="fsmDiagramArea">
+                <svg id="fsmSvg"></svg>
+            </div>
+            <div class="fsm-info-panel" id="fsmInfoPanel"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script src="/assets/javascripts/m25_demo.js"></script>
+</body>
+</html>

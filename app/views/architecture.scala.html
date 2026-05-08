@@ -776,6 +776,11 @@
                     path.setAttribute('marker-end', 'url(#arrowHollow)');
                     g.appendChild(path);
 
+                    // Must append g to DOM before getTotalLength(), otherwise
+                    // detached SVG elements return 0 or throw in some browsers
+                    depSvg.appendChild(g);
+                    depPaths.push(g);
+
                     // Relation label at midpoint
                     var mid = path.getPointAtLength(path.getTotalLength() * 0.45);
                     var label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -784,9 +789,6 @@
                     label.setAttribute('class', 'dep-relation-tag');
                     label.textContent = edge.relation;
                     g.appendChild(label);
-
-                    depSvg.appendChild(g);
-                    depPaths.push(g);
                 });
             }
 

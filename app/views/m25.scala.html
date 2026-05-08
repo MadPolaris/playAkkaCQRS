@@ -1,0 +1,516 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M2.5+ · 标准组件库 — 从模板生成到可组合架构</title>
+    <meta name="description" content="M2.5+ 用标准组件库替代 FSM 模板生成——一次修复、全局生效。M3 将同一套组件用于 Fab 动态工序编排。面向产品经理与架构师的演进路线图。">
+    <meta name="keywords" content="M2.5+, M3, 组件库, SubBatchProcessor, 动态工序编排, Fab, 半导体, Akka, DAG">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6;
+            --code-bg: #0f172a;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.7; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        header {
+            text-align: center; padding: 80px 0 50px;
+            border-bottom: 1px solid var(--border); margin-bottom: 50px;
+        }
+        header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 12px; }
+        header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+        header h1 .m2 { color: var(--accent); }
+        header h1 .arrow { color: var(--fg-subtle); margin: 0 6px; }
+        header h1 .m25 { color: var(--purple); }
+        header h1 .m3 { color: var(--amber); }
+        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 700px; margin-left: auto; margin-right: auto; }
+        header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+        .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .badge-live { background: rgba(63, 185, 80, 0.15); color: var(--green); }
+        .badge-spec { background: rgba(168, 85, 247, 0.15); color: var(--purple); }
+        .badge-future { background: rgba(245, 158, 11, 0.15); color: var(--amber); }
+
+        .nav-links { display: flex; gap: 20px; justify-content: center; margin-top: 24px; font-size: 0.82rem; }
+        .nav-links a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links a:hover { text-decoration: underline; }
+        .nav-links a.primary { background: var(--purple); color: #fff; padding: 6px 16px; border-radius: 6px; }
+        .nav-links a.primary:hover { background: #7c3aed; text-decoration: none; }
+
+        /* Section */
+        section { margin-bottom: 60px; }
+        h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: var(--fg); }
+
+        /* Problem-Solution Table */
+        .ps-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .ps-table th { background: var(--bg-alt); padding: 14px 18px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
+        .ps-table td { padding: 14px 18px; border-top: 1px solid var(--border); }
+        .ps-table td.pain { color: var(--red); font-weight: 600; }
+        .ps-table td.fix { color: var(--green); }
+        .ps-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        /* Component Cards */
+        .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 20px 0; }
+        .comp-card {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+            padding: 22px; transition: border-color 0.2s;
+        }
+        .comp-card:hover { border-color: var(--fg-muted); }
+        .comp-card .comp-icon { font-size: 1.5rem; margin-bottom: 10px; }
+        .comp-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+        .comp-card .comp-tag { font-size: 0.6rem; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .comp-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.6; }
+
+        /* Architecture flow */
+        .arch-flow {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
+            padding: 28px; margin: 20px 0; text-align: center;
+        }
+        .arch-flow .flow-row { display: flex; align-items: center; justify-content: center; gap: 0; margin: 6px 0; flex-wrap: wrap; }
+        .arch-flow .flow-box {
+            padding: 10px 16px; border-radius: 8px; font-size: 0.75rem; font-weight: 600;
+            border: 1px solid; white-space: nowrap;
+        }
+        .flow-box.batch  { background: rgba(20,184,166,0.1); border-color: rgba(20,184,166,0.3); color: var(--teal); }
+        .flow-box.proc   { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.3); color: #60a5fa; }
+        .flow-box.class  { background: rgba(245,158,11,0.1); border-color: rgba(245,158,11,0.3); color: #fbbf24; }
+        .flow-box.reconf { background: rgba(168,85,247,0.1); border-color: rgba(168,85,247,0.3); color: #c084fc; }
+        .flow-box.route  { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #f87171; }
+        .flow-box.sched  { background: rgba(20,184,166,0.1); border-color: rgba(20,184,166,0.3); color: var(--teal); }
+        .flow-box.merge  { background: rgba(63,185,80,0.1); border-color: rgba(63,185,80,0.3); color: #4ade80; }
+        .flow-arrow { color: var(--fg-subtle); font-size: 1rem; margin: 0 2px; }
+
+        /* Quote */
+        blockquote {
+            border-left: 3px solid var(--purple); padding: 12px 18px;
+            margin: 16px 0; background: rgba(168,85,247,0.04);
+            border-radius: 0 8px 8px 0; font-size: 0.85rem; color: var(--fg-muted);
+        }
+
+        /* Phase comparison */
+        .phase-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0; }
+        .phase-card {
+            border: 1px solid var(--border); border-radius: 12px; padding: 24px;
+            text-align: center; position: relative;
+        }
+        .phase-card h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 8px; }
+        .phase-card .phase-sub { font-size: 0.65rem; color: var(--fg-subtle); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
+        .phase-card ul { list-style: none; text-align: left; font-size: 0.75rem; color: var(--fg-muted); }
+        .phase-card ul li { padding: 3px 0; }
+        .phase-card ul li::before { content: '✓ '; color: var(--green); }
+        .phase-card.m25  { background: rgba(168,85,247,0.05); border-color: rgba(168,85,247,0.25); }
+        .phase-card.m25 h4 { color: var(--purple); }
+        .phase-card.m25p { background: rgba(20,184,166,0.05); border-color: rgba(20,184,166,0.35); }
+        .phase-card.m25p h4 { color: var(--teal); }
+        .phase-card.m3   { background: rgba(245,158,11,0.05); border-color: rgba(245,158,11,0.25); }
+        .phase-card.m3 h4 { color: var(--amber); }
+
+        /* Stat row */
+        .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
+        .stat-card {
+            background: var(--bg-alt); border: 1px solid var(--border);
+            border-radius: 10px; padding: 18px; text-align: center;
+        }
+        .stat-card .num { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
+        .stat-card .lbl { font-size: 0.7rem; color: var(--fg-muted); margin-top: 4px; }
+        .num-red { color: var(--red); }
+        .num-green { color: var(--green); }
+        .num-purple { color: var(--purple); }
+        .num-amber { color: var(--amber); }
+
+        /* Footer */
+        .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        @@media (max-width: 768px) {
+            .phase-grid, .stat-row, .comp-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.5rem; }
+            .arch-flow .flow-row { gap: 4px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ==================== HERO ==================== -->
+    <header>
+        <div class="kicker">Architecture Evolution</div>
+        <h1>
+            <span class="m2">M2 手写 FSM</span>
+            <span class="arrow">→</span>
+            <span class="m25">M2.5+ 标准组件库</span>
+            <span class="arrow">→</span>
+            <span class="m3">M3 动态工序编排</span>
+        </h1>
+        <p class="tagline">
+            M2.5+ 用<strong>标准组件库</strong>替代模板代码生成——修复一次、全局生效。
+            M3 将同一套组件直接用于 Fab <strong>9 个设备区 + 物流</strong>的动态工序编排。
+            这是一条<strong>渐进演进</strong>路径，不是一次推倒重来。
+        </p>
+        <div class="badge-row">
+            <span class="badge badge-live">M2.5+ 组件库 · 已实现</span>
+            <span class="badge badge-spec">M3 动态工序 · 原型设计</span>
+            <span class="badge badge-future">面向产品经理 &amp; 架构师</span>
+        </div>
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/dag">M2 DAG Demo</a>
+            <a href="/m25-demo" class="primary">M2.5+ Live Demo ↗</a>
+            <a href="/architecture">架构雷达</a>
+        </nav>
+    </header>
+
+    <!-- ==================== SECTION 1: THE PROBLEM ==================== -->
+    <section>
+        <h2>一、问题：复制的代价为什么持续增长</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M2 构建了 23 个 Persistent FSM 的 DAG 执行引擎——薪资存入场景下的完整跨系统编排。
+            但当需要增加<strong>第二条业务链路</strong>（申购）时，团队面临一个选择：
+        </p>
+
+        <div class="stat-row">
+            <div class="stat-card">
+                <div class="num num-red">52%</div>
+                <div class="lbl">同构 FSM（12/23 是充值/申购镜像对）</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-red">5 × 6 × 2</div>
+                <div class="lbl">每条链：5 文件 × 6 子流程 × 2 链 = 60 类文件</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-green">4</div>
+                <div class="lbl">种模板可覆盖全部 23 FSM</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-purple">1 处修改</div>
+                <div class="lbl">修复重试逻辑只需改一个组件</div>
+            </div>
+        </div>
+
+        <table class="ps-table">
+            <thead>
+                <tr><th>痛点</th><th>M2（手写 FSM）</th><th>M2.5+（组件库）</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="pain">新增业务链路</td>
+                    <td>复制 6 个 Java 类，find-replace 类名和枚举值</td>
+                    <td class="fix">注入不同的 ErrorCodeMapping + ReBatchPolicy → 完成</td>
+                </tr>
+                <tr>
+                    <td class="pain">修复重试逻辑 bug</td>
+                    <td>找到 Response FSM 的命令处理器，改重试计数 → 重新生成 6 个 FSM</td>
+                    <td class="fix">改 SubBatchProcessor 一处 → 所有链路自动生效</td>
+                </tr>
+                <tr>
+                    <td class="pain">新增传输协议</td>
+                    <td>在模板中新增 FSM 构建器方法（~80 行），修改 DAG 边</td>
+                    <td class="fix">实现 FileUploader 接口（~30 行），插入 Pipeline</td>
+                </tr>
+                <tr>
+                    <td class="pain">修改失败处理策略</td>
+                    <td>改 ReBatchActor 状态机的状态转换逻辑</td>
+                    <td class="fix">改 ReBatchPolicy.actionMap 配置</td>
+                </tr>
+                <tr>
+                    <td class="pain">代码审查</td>
+                    <td>每条链的 FSM 代码需要独立审查</td>
+                    <td class="fix">审查一次标准组件 → 参数配置只需检查值</td>
+                </tr>
+                <tr>
+                    <td class="pain">扩展到 M3 Fab</td>
+                    <td>为每个设备区手写 6 个 FSM → 10 × 6 = 60 个类文件</td>
+                    <td class="fix">每个设备区一行配置 → 复用同一套组件</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ==================== SECTION 2: M2.5+ COMPONENT LIBRARY ==================== -->
+    <section>
+        <h2>二、M2.5+ 解法：标准组件库</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            将<strong>技术复杂性</strong>和<strong>业务变化</strong>分离。技术复杂性封装为标准组件（一次编写、独立测试、统一修复点）；
+            业务变化通过参数注入组件实例（不生成代码、不修改状态机）。
+        </p>
+
+        <!-- Component Architecture Flow -->
+        <div class="arch-flow">
+            <div style="font-size:0.75rem; color:var(--fg-subtle); margin-bottom:16px;">
+                一条业务链路的处理流程——每个方框是一个独立可替换的标准组件
+            </div>
+
+            <div class="flow-row">
+                <span class="flow-box batch">BatchMaster</span>
+                <span class="flow-arrow">→ fan-out →</span>
+                <span class="flow-box batch">SubBatch ×N</span>
+            </div>
+            <div class="flow-row" style="margin:8px 0;">
+                <span style="color:var(--fg-subtle); font-size:0.9rem;">↓</span>
+            </div>
+            <div class="flow-row">
+                <span class="flow-box proc">SubBatchProcessor</span>
+                <span class="flow-arrow">→</span>
+                <span class="flow-box class">ResultClassifier</span>
+                <span class="flow-arrow">→</span>
+                <span style="font-size:0.7rem; color:var(--fg-subtle);">三分类分流</span>
+            </div>
+            <div class="flow-row" style="margin:8px 0; gap: 40px; font-size:0.72rem;">
+                <span style="color:#4ade80;">成功项 → 继续后续</span>
+                <span style="color:#fbbf24;">可疑项 →</span>
+                <span class="flow-box reconf">ReconfirmHandler</span>
+                <span style="color:#f87171;">失败项 →</span>
+                <span class="flow-box route">ReBatchRouter</span>
+            </div>
+            <div class="flow-row" style="margin:8px 0;">
+                <span style="color:var(--fg-subtle); font-size:0.9rem;">↓ 按目标设备区分组</span>
+            </div>
+            <div class="flow-row">
+                <span class="flow-box sched">AreaScheduler</span>
+                <span class="flow-arrow">→ 重新成批分派 →</span>
+                <span class="flow-box proc">...下一工序...</span>
+            </div>
+        </div>
+
+        <h3>六大标准组件</h3>
+
+        <div class="comp-grid">
+            <div class="comp-card">
+                <div class="comp-icon">⚙️</div>
+                <div class="comp-tag" style="color:#60a5fa;">技术组件</div>
+                <h4>SubBatchProcessor</h4>
+                <p>处理一个小批次与外部系统的完整交互周期：文件生成 → 上传 → 等待确认 → 轮询响应 → 解析 → 分类。同一套处理器可用于充值、申购、Fab 光刻——区别仅在于注入的 Pipeline 配置不同。</p>
+            </div>
+
+            <div class="comp-card">
+                <div class="comp-icon">🏷️</div>
+                <div class="comp-tag" style="color:#fbbf24;">业务参数</div>
+                <h4>ResultClassifier</h4>
+                <p>将外部系统返回结果按业务规则分为<strong>成功 / 失败 / 可疑</strong>三类。通过 ErrorCodeMapping（成功码集合、失败码映射、可疑码集合）进行参数化。充值、申购、光刻量测各用不同的映射表，同一分类器。</p>
+            </div>
+
+            <div class="comp-card">
+                <div class="comp-icon">🔍</div>
+                <div class="comp-tag" style="color:#c084fc;">技术组件</div>
+                <h4>ReconfirmHandler</h4>
+                <p>仅对分类为"可疑"的项执行复核（通过 Core API 二次查证、重新量测等），确定最终是成功还是失败。不是流水线的必经阶段——成功和失败项不经过这里。</p>
+            </div>
+
+            <div class="comp-card">
+                <div class="comp-icon">🧠</div>
+                <div class="comp-tag" style="color:#f87171;">业务参数</div>
+                <h4>ReBatchRouter</h4>
+                <p><strong>智能决策</strong>——根据失败原因决定下一步：在同一设备区重试？换设备区？换配方？报废？生成人工工单？通过 ReBatchPolicy（错误码 → 动作映射）参数化。M2 的"重新注入 Worker"只是多种决策之一。</p>
+            </div>
+
+            <div class="comp-card">
+                <div class="comp-icon">📦</div>
+                <div class="comp-tag" style="color:var(--teal);">物理约束</div>
+                <h4>AreaScheduler</h4>
+                <p>接收上游 items，考虑<strong>物理约束</strong>（FOUP 容量、最小/最大批次大小、时间窗口、是否允许混批）重新成批，分派到设备。薪资存入场景约束宽松（1–100 笔），Fab 约束严格（FOUP 25 片、同 recipe 混批）。</p>
+            </div>
+
+            <div class="comp-card">
+                <div class="comp-icon">🔌</div>
+                <div class="comp-tag" style="color:#60a5fa;">基础设施</div>
+                <h4>Connector + Encoding</h4>
+                <p>HTTP / SFTP / SMS 连接器，内建<strong>断路器 + 重试 + 超时</strong>。编码策略（JSON / XML / CSV / 加密文件）与连接器解耦。与 Saga 无关——可被 SubBatchProcessor 直接调用。</p>
+            </div>
+        </div>
+
+        <blockquote>
+            <strong>关键设计决策：组件库 vs 模板生成。</strong>
+            模板在编译期展开为 FSM 代码——修 bug 需要改模板、重新生成。
+            组件库在运行期按参数实例化——修 bug 改一次组件，所有实例自动继承修复。
+            两者都保持编译时类型安全（组件接口由 trait 约束，参数由 case class 约束）。
+        </blockquote>
+    </section>
+
+    <!-- ==================== SECTION 3: BUSINESS PARAMETERIZATION ==================== -->
+    <section>
+        <h2>三、业务参数化：同一套组件，不同配置</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            M2.5+ 的核心价值不在于"消除了多少行代码"，而在于<strong>修改的爆炸半径</strong>。
+            产品经理关心的参数（错误码映射、失败处理策略、批次大小）从代码深处提升到配置层。
+        </p>
+
+        <table class="ps-table">
+            <thead>
+                <tr><th>业务配置项</th><th>充值链路</th><th>申购链路</th><th>修改影响范围</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>成功判断</td><td><code>code == "OK"</code></td><td><code>code == "OK"</code></td><td>ErrorCodeMapping 配置</td></tr>
+                <tr><td>失败码映射</td><td><code>BALANCE_INSUFFICIENT → Scrap</code></td><td><code>QUOTA_EXCEEDED → Scrap</code></td><td>ErrorCodeMapping 配置</td></tr>
+                <tr><td>可疑码</td><td><code>TIMEOUT, NETWORK_ERROR</code></td><td><code>TIMEOUT, PARTIAL</code></td><td>ErrorCodeMapping 配置</td></tr>
+                <tr><td>超时重试</td><td><code>5 分钟后重试</code></td><td><code>5 分钟后重试</code></td><td>ReBatchPolicy 配置</td></tr>
+                <tr><td>批次大小</td><td><code>1–100 笔</code></td><td><code>1–100 笔</code></td><td>PhysicalConstraints 配置</td></tr>
+                <tr><td>传输协议</td><td><code>SFTP + XML</code></td><td><code>SFTP + XML</code></td><td>同一套 SubBatchPipeline</td></tr>
+                <tr><td>连接器重试/断路器</td><td><code>3 次重试 / 5 次开断</code></td><td><code>3 次重试 / 5 次开断</code></td><td>ConnectorSettings（统一修复点）</td></tr>
+            </tbody>
+        </table>
+
+        <p style="font-size:0.8rem; color:var(--fg-subtle); margin-top:8px;">
+            💡 <strong>产品经理视角：</strong>新增一条业务链路 = 填写一张参数表。如果所有参数与已有链路相同——说明你的抽象是对的。
+            如果每个参数都不同——说明你的组件拆分还不够细。
+        </p>
+    </section>
+
+    <!-- ==================== SECTION 4: M3 VISION ==================== -->
+    <section>
+        <h2>四、M3 愿景：同一套组件，动态工序编排</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            M3 面向半导体 Fab 的<strong>动态工序编排</strong>。9 个设备区 + 物流指挥系统 = 10 个需连接控制的外部系统。
+            它们<strong>全部共享 M2.5+ 的同一套组件</strong>——SubBatchProcessor、ResultClassifier、ReBatchRouter、AreaScheduler。
+            唯一的区别：工序序列不是静态代码，而是从<strong>产品工艺路线数据库</strong>在运行时加载。
+        </p>
+
+        <h3>9+1 设备区</h3>
+
+        <div class="comp-grid">
+            <div class="comp-card"><div class="comp-icon">🧹</div><h4>WetClean 湿法清洗</h4><p>晶圆预处理，去除表面污染物和自然氧化层</p></div>
+            <div class="comp-card"><div class="comp-icon">🔥</div><h4>Diffusion 扩散/氧化</h4><p>高温炉管工艺，生长氧化层或掺杂扩散</p></div>
+            <div class="comp-card"><div class="comp-icon">💡</div><h4>Lithography 光刻</h4><p>图形转移到光刻胶，最常重入的设备区（多重曝光）</p></div>
+            <div class="comp-card"><div class="comp-icon">🔪</div><h4>Etch 刻蚀</h4><p>干法/湿法去除材料，3D NAND 中与沉积循环重入</p></div>
+            <div class="comp-card"><div class="comp-icon">⚡</div><h4>Implant 离子注入</h4><p>精确控制掺杂浓度和深度</p></div>
+            <div class="comp-card"><div class="comp-icon">💨</div><h4>Deposition 薄膜沉积</h4><p>CVD/PVD/ALD 工艺，多层膜堆叠</p></div>
+            <div class="comp-card"><div class="comp-icon">🪞</div><h4>CMP 化学机械抛光</h4><p>全局平坦化，保证下一层光刻的焦深窗口</p></div>
+            <div class="comp-card"><div class="comp-icon">📏</div><h4>Metrology 量测</h4><p>在线尺寸/膜厚/缺陷检测，可疑值复核的触发源</p></div>
+            <div class="comp-card"><div class="comp-icon">🌬️</div><h4>Drying 干燥</h4><p>最终清洗干燥，入库前准备</p></div>
+            <div class="comp-card"><div class="comp-icon">🚛</div><h4>Logistics 物流指挥</h4><p>FOUP 搬运调度，连接所有设备区的物理流转</p></div>
+        </div>
+
+        <h3>M2.5+ 组件 → M3 的映射关系</h3>
+
+        <table class="ps-table">
+            <thead><tr><th>M2.5+ 组件</th><th>薪资存入场景</th><th>Fab M3 场景</th></tr></thead>
+            <tbody>
+                <tr><td>SubBatchProcessor</td><td>处理 100 笔银行交易</td><td>处理 1 个 FOUP (25 片) → 上传 recipe → 机台执行 → 拉取结果</td></tr>
+                <tr><td>ResultClassifier</td><td>按银行错误码分类</td><td>按<strong>量测值范围</strong>分类（pass / fail / borderline）</td></tr>
+                <tr><td>ReconfirmHandler</td><td>通过 Core API 核验可疑交易</td><td>通过<strong>更高精度量测或人工复核</strong>确定边界值</td></tr>
+                <tr><td>ReBatchRouter</td><td>决定重试 / 报废</td><td>决定 <strong>rework / 换设备区 / 换 recipe / 报废 / 人工介入</strong></td></tr>
+                <tr><td>AreaScheduler</td><td>按时间窗口（10 分钟）成批</td><td>按<strong>物理约束</strong>（FOUP 容量 / recipe 兼容性 / 洁净室等级）成批</td></tr>
+                <tr><td>Connector + CB</td><td>SFTP / HTTP to 银行</td><td>HTTP / SECS/GEM to <strong>机台</strong></td></tr>
+                <tr><td>EncodingStrategy</td><td>XML 银行报文</td><td>JSON / SECS-II 机台通信</td></tr>
+            </tbody>
+        </table>
+
+        <h3>M3 特有：三个新增能力</h3>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(245,158,11,0.2);">
+                <div class="comp-icon">🗺️</div>
+                <h4>ProductRouting · 动态工艺路线</h4>
+                <p>工序序列从<strong>数据库加载</strong>，而非硬编码在代码中。产品 LOGIC-28NM-A 可能走 11 道工序（含 Lithography 重入），NAND-96L-A 走 13 道（含 Deposition/Etch 4 次循环）。工艺变更时<strong>更新数据库即可</strong>，不需要改代码。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(63,185,80,0.2);">
+                <div class="comp-icon">📦</div>
+                <h4>BatchMergeManager · 合批入库</h4>
+                <p>原始 Lot（25 片）在加工过程中可能被拆散——部分片 rework 去了别的设备区、部分片报废。入库时，<strong>追踪原始 Lot 归属</strong>，所有合格片完成后自动触发合批。这是 Fab 区别于薪资存入的<strong>物理约束</strong>。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(59,130,246,0.2);">
+                <div class="comp-icon">🔄</div>
+                <h4>Reentry Tracking · 重入追踪</h4>
+                <p>同一设备区可能被访问多次（光刻的多重曝光、3D NAND 的沉积刻蚀循环）。<strong>reentryIndex</strong> 追踪第几次访问，确保每次使用正确的 recipe 和设备状态。</p>
+            </div>
+        </div>
+
+        <blockquote>
+            <strong>架构师视角——为什么不需要新的执行引擎。</strong>
+            M2.5+ 的 SubBatchProcessor、AreaScheduler、ReBatchRouter 已经覆盖了"工序执行的完整生命周期"。
+            M3 的变化在<strong>工序序列的来源</strong>——从编译时确定的静态配置变为运行时加载的动态工艺路线。
+            SagaTransactionCoordinator 不需要改动；StepExecutor 的断路器/重试/超时不需要改动；Connector 不需要改动。
+            <strong>唯一新增的是 ProductRouting（数据模型）+ BatchMergeManager（Fab 物理约束）+ FabFlowEngine（动态组装）。</strong>
+        </blockquote>
+    </section>
+
+    <!-- ==================== SECTION 5: EVOLUTION PATH ==================== -->
+    <section>
+        <h2>五、渐进演进路线图</h2>
+
+        <div class="phase-grid">
+            <div class="phase-card m25">
+                <div class="phase-sub">2025 · 已上线</div>
+                <h4>M2 · 手写 FSM</h4>
+                <ul>
+                    <li>23 个 Persistent FSM</li>
+                    <li>5 层级 DAG 执行引擎</li>
+                    <li>4 种弹性模式</li>
+                    <li>1 条业务链路（充值）</li>
+                    <li>新增链路 = 复制粘贴</li>
+                </ul>
+            </div>
+            <div class="phase-card m25p">
+                <div class="phase-sub">2026 · 当前</div>
+                <h4>M2.5+ · 标准组件库</h4>
+                <ul>
+                    <li>6 大标准组件</li>
+                    <li>参数化配置（不生成代码）</li>
+                    <li>统一修复点（改一处全局生效）</li>
+                    <li>充值/申购 = 同一套组件</li>
+                    <li>增加链路 = 填写参数表</li>
+                </ul>
+            </div>
+            <div class="phase-card m3">
+                <div class="phase-sub">2026 · 原型设计</div>
+                <h4>M3 · 动态工序编排</h4>
+                <ul>
+                    <li>10 个设备区</li>
+                    <li>产品工艺路线驱动</li>
+                    <li>重入支持</li>
+                    <li>合批入库</li>
+                    <li>工艺变更热更新</li>
+                </ul>
+            </div>
+        </div>
+
+        <p style="font-size:0.85rem; color:var(--fg-muted); margin-top:16px; text-align:center;">
+            <strong>每一步都复用上一步的组件。</strong>
+            M2 的 Saga 协调器 → M2.5+ 的 Connector + SubBatchProcessor → M3 的 ProductRouting + FabFlowEngine。
+            没有推倒重来，只有增量叠加。
+        </p>
+    </section>
+
+    <!-- ==================== SECTION 6: LIVE DEMO ==================== -->
+    <section>
+        <h2>六、在线演示</h2>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:12px; padding:24px;">
+                <div style="font-size:1.2rem; margin-bottom:8px;">⚙️</div>
+                <h4 style="font-size:0.95rem; margin-bottom:6px;">M2 DAG 执行引擎</h4>
+                <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:12px;">23 个 FSM、5 层级、4 种弹性模式的完整 DAG 动效演示——薪资存入场景。</p>
+                <a href="/dag" style="color:var(--accent); font-weight:600; text-decoration:none;">打开演示 →</a>
+            </div>
+            <div style="background:var(--bg-alt); border:2px solid var(--purple); border-radius:12px; padding:24px;">
+                <div style="font-size:1.2rem; margin-bottom:8px;">🧩</div>
+                <h4 style="font-size:0.95rem; margin-bottom:6px;">M2.5+ 标准组件库 <span style="font-size:0.65rem; background:rgba(168,85,247,0.15); color:var(--purple); padding:1px 6px; border-radius:3px;">NEW</span></h4>
+                <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:12px;">模板色 DAG + 组件浏览器 + Scala/Java 代码对比 + FSM 下钻。充值/申购同构一目了然。</p>
+                <a href="/m25-demo" style="color:var(--purple); font-weight:600; text-decoration:none;">打开新演示 →</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+        <p>技术栈：Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
+        <p style="margin-top:4px;">架构：洋葱 + DDD + CQRS/ES + Saga · 反应式宣言</p>
+    </div>
+
+</div>
+</body>
+</html>

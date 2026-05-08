@@ -36,6 +36,8 @@ GET     /api/saga/history/:transactionId          controllers.ShowcaseController
 GET     /architecture               controllers.DddGuideController.index()
 GET     /projection                 controllers.DddGuideController.projectionShowcase()
 GET     /dag                        controllers.DddGuideController.m2Demo()
+GET     /m25                        controllers.DddGuideController.m25Explore()
+GET     /m25-demo                   controllers.DddGuideController.m25Demo()
 GET     /api/projection/status      controllers.DddGuideController.getProjectionStatus()
 GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(ids: String)
 
