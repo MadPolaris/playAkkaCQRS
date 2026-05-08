@@ -132,6 +132,64 @@
         .num-purple { color: var(--purple); }
         .num-amber { color: var(--amber); }
 
+        /* ===== Section 7: Mapping Tables & Code Compare ===== */
+        .mapping-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .mapping-table th { background: var(--bg-alt); padding: 10px 14px; text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--fg-muted); }
+        .mapping-table td { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 0.76rem; vertical-align: top; }
+        .mapping-table tr:hover { background: rgba(255,255,255,0.02); }
+        .mapping-table td.mono { font-family: var(--mono); font-size: 0.69rem; }
+        .mapping-table .row-blue { border-left: 3px solid var(--accent); }
+        .mapping-table .row-amber { border-left: 3px solid var(--amber); }
+        .mapping-table .row-purple { border-left: 3px solid var(--purple); }
+
+        .status-done { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: rgba(63,185,80,0.12); color: var(--green); white-space: nowrap; }
+        .status-partial { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: rgba(245,158,11,0.12); color: var(--amber); white-space: nowrap; }
+        .status-pending { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: rgba(248,81,73,0.12); color: var(--red); white-space: nowrap; }
+
+        .layer-tag { display: inline-block; font-size: 0.58rem; font-weight: 700; padding: 2px 7px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+        .lt-blue { color: var(--accent); border: 1px solid rgba(88,166,255,0.25); background: rgba(88,166,255,0.06); }
+        .lt-amber { color: var(--amber); border: 1px solid rgba(245,158,11,0.25); background: rgba(245,158,11,0.06); }
+        .lt-purple { color: var(--purple); border: 1px solid rgba(168,85,247,0.25); background: rgba(168,85,247,0.06); }
+
+        .code-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+        .code-panel { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; }
+        .code-panel .code-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--fg-muted); margin-bottom: 8px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+        .code-panel .code-label.m2-l { color: var(--red); }
+        .code-panel .code-label.m25-l { color: var(--purple); }
+        .code-panel pre { font-family: var(--mono); font-size: 0.67rem; line-height: 1.55; color: var(--fg); margin: 0; white-space: pre-wrap; word-break: break-all; }
+        .code-panel pre .kw { color: #ff7b72; }
+        .code-panel pre .co { color: var(--fg-muted); }
+
+        .arch-callout { background: rgba(168,85,247,0.04); border-left: 3px solid var(--purple); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
+        .arch-callout strong { color: var(--fg); }
+        .arch-callout .deprecated-tag { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: rgba(248,81,73,0.12); color: var(--red); margin-left: 6px; }
+        .arch-callout .target-tag { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: rgba(63,185,80,0.12); color: var(--green); margin-left: 6px; }
+
+        .stat-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+        .stat-grid-4 .stat-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; padding: 14px 12px; text-align: center; }
+        .stat-grid-4 .stat-card .num { font-size: 1.3rem; font-weight: 800; }
+
+        .diff-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .diff-table th { background: var(--bg-alt); padding: 10px 14px; text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--fg-muted); }
+        .diff-table td { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 0.76rem; }
+        .diff-table td.mono { font-family: var(--mono); font-size: 0.69rem; }
+        .diff-table tr:hover { background: rgba(255,255,255,0.02); }
+        .diff-table .col-recharge { color: var(--amber); }
+        .diff-table .col-purchase { color: var(--purple); }
+        .diff-table .col-cfg { color: var(--accent); font-family: var(--mono); font-size: 0.68rem; }
+
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+        .info-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+        .info-card.deprecated { border-color: rgba(248,81,73,0.3); background: rgba(248,81,73,0.025); }
+        .info-card.target { border-color: rgba(63,185,80,0.3); background: rgba(63,185,80,0.025); }
+        .info-card h5 { font-size: 0.8rem; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        .info-card p { font-size: 0.73rem; color: var(--fg-muted); line-height: 1.65; margin: 0; }
+        .info-card .file-ref { font-family: var(--mono); font-size: 0.67rem; color: var(--fg-subtle); }
+        .badge-deprecated { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 2px 8px; border-radius: 3px; background: rgba(248,81,73,0.12); color: var(--red); }
+        .badge-target { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 2px 8px; border-radius: 3px; background: rgba(63,185,80,0.12); color: var(--green); }
+
+        .summary-code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.7; color: var(--fg); overflow-x: auto; white-space: pre; }
+
         /* Footer */
         .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
         .footer a { color: var(--accent); text-decoration: none; }
@@ -139,6 +197,7 @@
 
         @@media (max-width: 768px) {
             .phase-grid, .stat-row, .comp-grid { grid-template-columns: 1fr; }
+            .code-compare, .info-grid, .stat-grid-4 { grid-template-columns: 1fr; }
             header h1 { font-size: 1.5rem; }
             .arch-flow .flow-row { gap: 4px; }
         }
@@ -734,6 +793,636 @@
                 <a href="/m25-demo" style="color:var(--purple); font-weight:600; text-decoration:none;">Open New Demo →</a>
             </div>
         </div>
+    </section>
+
+    <!-- ==================== SECTION 7: BUSINESS PARAMETERIZATION MAPPING ==================== -->
+    <section>
+        <h2>7. Business Parameterization: Mapping M2 Production Code to M2.5+ Runtime Abstractions</h2>
+
+        <p style="font-size:0.85rem; color:var(--fg-muted); margin-bottom:24px;">
+            This section maps every M2 production-validated recharge/purchase message and event to its equivalent in the
+            M2.5+ runtime component engine. Every piece of information carried by an M2 message finds a one-to-one
+            equivalent in the M2.5+ abstraction — through pipeline stage return types, ErrorCodeMapping configuration,
+            or ReBatchPolicy routing rules.
+        </p>
+
+        <!-- ===== 7.1 Two Architectures ===== -->
+        <h3>7.1 First, Distinguish: M2.5 Templates vs M2.5+ Runtime</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            The <span style="font-family:var(--mono);">app/net/imadz/m25/</span> package contains two architectures.
+            <strong>All mappings below are based on the M2.5+ runtime approach.</strong>
+        </p>
+
+        <div class="info-grid">
+            <div class="info-card deprecated">
+                <h5><span class="badge-deprecated">DEPRECATED</span> M2.5 Template Generation</h5>
+                <p class="file-ref">template/ExternalTwoPhaseChain.scala · 563 lines</p>
+                <p style="margin-top:8px;">
+                    Approach: takes <span class="file-ref">Params(chainId, bindings, messages, rules)</span> →
+                    generates 6 FSMs via <strong>EventSourcedBehavior</strong>.<br/>
+                    Problem: still goes through Akka Persistence journal — 563 lines of template code merely
+                    replace M2 Java FSM duplication with Scala parameterization.<br/>
+                    Contains: <span class="file-ref">ExternalTwoPhaseChainTemplate</span> / <span class="file-ref">BatchOrchestratorTemplate</span> /
+                    <span class="file-ref">ResourceGuardTemplate</span> / <span class="file-ref">NotificationRelayTemplate</span>
+                </p>
+            </div>
+            <div class="info-card target">
+                <h5><span class="badge-target">TARGET</span> M2.5+ Runtime Component Engine</h5>
+                <p class="file-ref">component/ + pipeline/ + business/ + binding/ · 14 files</p>
+                <p style="margin-top:8px;">
+                    Approach: <span class="file-ref">SubBatchPipeline</span> defines 6 stage interfaces →
+                    <span class="file-ref">SubBatchProcessor</span> executes via <strong>Future</strong> pipeline,
+                    variation captured in <strong>pure configuration objects</strong>.<br/>
+                    Adding a new business chain requires ~20 lines of DSL config — no FSM generation.<br/>
+                    Core: <span class="file-ref">ErrorCodeMapping</span> / <span class="file-ref">ReBatchPolicy</span> /
+                    <span class="file-ref">PhysicalConstraints</span> / <span class="file-ref">ChainDsl</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- ===== 7.2 Compression Overview ===== -->
+        <h3>7.2 Compression Overview</h3>
+
+        <div class="stat-grid-4">
+            <div class="stat-card">
+                <div class="num num-red">14</div>
+                <div class="lbl">M2 Actors (7 recharge + 7 purchase)</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-amber">30+</div>
+                <div class="lbl">M2 Java files (hand-written FSMs)</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-purple">~50</div>
+                <div class="lbl">M2 command/event types</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-green">3</div>
+                <div class="lbl">M2.5+ config objects replace all variation</div>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>Core insight:</strong> In M2, recharge vs purchase requires two nearly-identical codebases (~2000 lines of Java).
+            In M2.5+, the difference is captured entirely in <span class="file-ref">ChainTemplates.recharge()</span> vs
+            <span class="file-ref">ChainTemplates.purchase()</span> parameter injection —
+            different <strong>ErrorCodeMapping</strong> failure codes, different <strong>ChainMessages</strong> SMS text, different <strong>ReBatchPolicy</strong> routing.
+        </div>
+
+        <!-- ===== 7.3 Sub-flow → Component Mapping ===== -->
+        <h3>7.3 M2 Sub-flow → M2.5+ Runtime Component Mapping</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            Each M2 sub-flow maps to one or more components in the M2.5+ runtime engine, belonging to one of the three layers.<br/>
+            The Purchase chain mapping is identical to the table below — only the parameter configuration differs (see 7.5).
+        </p>
+
+        <table class="mapping-table">
+            <thead>
+                <tr>
+                    <th style="width:14%">M2 Sub-flow</th>
+                    <th style="width:16%">M2 Actor</th>
+                    <th style="width:18%">M2.5+ Pipeline Stage</th>
+                    <th style="width:18%">M2.5+ Core Interface</th>
+                    <th style="width:20%">M2.5+ Implementation</th>
+                    <th style="width:14%">Layer</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="row-amber">
+                    <td>File Gen + SFTP Upload</td>
+                    <td class="mono">RechargeRequestActor</td>
+                    <td class="mono">fileGen → upload → waitAck</td>
+                    <td class="mono">FileGenerator · FileUploader · AckWaiter</td>
+                    <td class="mono">FileGenStage · SftpUploadStage</td>
+                    <td><span class="layer-tag lt-amber">TECH</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td>Response Poll + Parse</td>
+                    <td class="mono">RechargeResponseActor</td>
+                    <td class="mono">pollResp → parse</td>
+                    <td class="mono">ResponsePoller · ResponseParser</td>
+                    <td class="mono">SftpPollStage · EncodedResponseParser</td>
+                    <td><span class="layer-tag lt-amber">TECH</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td>Three-way Classification</td>
+                    <td class="mono">(inside ResponseActor)</td>
+                    <td class="mono">classify</td>
+                    <td class="mono">ResultClassifier</td>
+                    <td class="mono">ErrorCodeBasedClassifier + ErrorCodeMapping</td>
+                    <td><span class="layer-tag lt-purple">SCHED</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td>Suspicious Reconfirm</td>
+                    <td class="mono">RechargeReconfirmActor</td>
+                    <td class="mono">reconfirm</td>
+                    <td class="mono">ReconfirmHandler</td>
+                    <td class="mono">VerifyingReconfirmHandler</td>
+                    <td><span class="layer-tag lt-purple">SCHED</span></td>
+                </tr>
+                <tr class="row-blue">
+                    <td>Success + SMS</td>
+                    <td class="mono">RechargeSuccessActor</td>
+                    <td>(post: SMS notify)</td>
+                    <td class="mono">ChainMessages</td>
+                    <td class="mono">ChainMessages.RechargeSuccess</td>
+                    <td><span class="layer-tag lt-blue">BIZ</span></td>
+                </tr>
+                <tr class="row-blue">
+                    <td>Failure + Quota Release</td>
+                    <td class="mono">RechargeFailureActor</td>
+                    <td>(post: SMS + release)</td>
+                    <td class="mono">ChainMessages · ChainBusinessRules</td>
+                    <td class="mono">failureSmsBody · releaseQuotaOnFailure</td>
+                    <td><span class="layer-tag lt-blue">BIZ</span></td>
+                </tr>
+                <tr class="row-blue">
+                    <td>P2B Transaction Record</td>
+                    <td class="mono">RechargeP2BNotifyActor</td>
+                    <td>(post: platform notify)</td>
+                    <td class="mono">ChainExternalBindings · p2bFlowType</td>
+                    <td class="mono">GatewayRef.p2b.tell(P2BCommand)</td>
+                    <td><span class="layer-tag lt-blue">BIZ</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td>Failure Routing</td>
+                    <td class="mono">ReBatchActor</td>
+                    <td class="mono">router</td>
+                    <td class="mono">ReBatchRouter</td>
+                    <td class="mono">PolicyBasedReBatchRouter + ReBatchPolicy</td>
+                    <td><span class="layer-tag lt-purple">SCHED</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td>Batch Scheduling</td>
+                    <td>(implicit in BatchWorker)</td>
+                    <td class="mono">scheduler</td>
+                    <td class="mono">AreaScheduler</td>
+                    <td class="mono">WindowedAreaScheduler + PhysicalConstraints</td>
+                    <td><span class="layer-tag lt-purple">SCHED</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 7.4 Detailed Command/Event Mapping ===== -->
+        <h3>7.4 Detailed Command/Event Mapping</h3>
+
+        <div class="arch-callout">
+            <strong>Key: M2.5+ runtime does not generate FSM protocol types (Command/Event/State)</strong> — those exist only in the deprecated
+            <span class="file-ref">ExternalTwoPhaseChainTemplate</span>.
+            M2.5+ runtime replaces FSM state machines with <strong>Future pipelines + config objects</strong>.
+            Mapping form: <strong>M2 Command/Event → M2.5+ runtime call chain → equivalent data carrier</strong>.
+        </div>
+
+        <!-- 7.4.1 Request -->
+        <h4 style="margin-top:20px;">Recharge Request (File Generation + SFTP Upload) — 5 equivalent mappings</h4>
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:18%">M2 Command</th>
+                <th style="width:22%">M2 Event (data carried)</th>
+                <th style="width:30%">M2.5+ Runtime Equivalent</th>
+                <th style="width:30%">How Information is Carried</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-amber">
+                    <td class="mono">StartRechargeRequest</td>
+                    <td class="mono">RechargeRequestFileCreationRequested</td>
+                    <td class="mono">pipeline.fileGen.generate(items, ctx)</td>
+                    <td>items via <span class="mono">SubBatch.items</span>; batchId/jobId in <span class="mono">context: Map[String, Any]</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">FileGeneratedCompleted</td>
+                    <td class="mono">RechargeRequestFileGenerated (with path)</td>
+                    <td class="mono">FileGenStage.generate()</td>
+                    <td>Returns <span class="mono">GeneratedFile(localPath, fileName, byteSize, encoding)</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">RequestUploadFile</td>
+                    <td class="mono">RechargeFileUploadRequested + Uploaded</td>
+                    <td class="mono">pipeline.upload.upload(file, ctx)</td>
+                    <td>Returns <span class="mono">UploadReceipt(remotePath, bytesTransferred, timestamp)</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">RequestNotifyEams</td>
+                    <td class="mono">EamsNotifyCreated (EAMS confirmed)</td>
+                    <td class="mono">pipeline.waitAck.waitForAck(receipt, ctx)</td>
+                    <td>Returns <span class="mono">AckReceived | AckTimeout(ms) | AckRejected(reason)</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">RequestStop (timeout)</td>
+                    <td class="mono">RechargeRequestFailureRequested(reason)</td>
+                    <td class="mono">handleAck / handlePoll return Future.failed</td>
+                    <td>Failure reason via exception message or <span class="mono">FailureReason</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 7.4.2 Response -->
+        <h4 style="margin-top:20px;">Recharge Response (Poll + Parse + Classify) — 4 equivalent mappings</h4>
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:18%">M2 Command</th>
+                <th style="width:22%">M2 Event</th>
+                <th style="width:30%">M2.5+ Runtime Equivalent</th>
+                <th style="width:30%">How Information is Carried</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-amber">
+                    <td class="mono">RequestPollRechargeResponseFile</td>
+                    <td class="mono">RechargeResponsePollRequested</td>
+                    <td class="mono">pipeline.pollResp.poll(ctx)</td>
+                    <td>Returns <span class="mono">ResponseReady | PollTimeout | PollError</span>; SftpPollStage polls at pollInterval/maxAttempts</td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">SFTP FileFound</td>
+                    <td class="mono">RechargeResponseFileDownloaded</td>
+                    <td class="mono">sftpRef.listFiles → download → ResponseFile</td>
+                    <td>File contents as <span class="mono">Array[Byte]</span>, with localPath / fileName / byteSize</td>
+                </tr>
+                <tr class="row-purple">
+                    <td class="mono">RequestHandleFile(items)</td>
+                    <td class="mono">AwaitResultRequested(items) (parsed+classified)</td>
+                    <td class="mono">parse.parse(file, ctx) → classify.classify(rawResults, items)</td>
+                    <td>parse → <span class="mono">Seq[RawResult]</span>; classify → <span class="mono">Success | Failure(reason) | Suspicious(reason)</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td class="mono">RouteOutcome + Terminated</td>
+                    <td class="mono">RechargeResponseCompletionRequested</td>
+                    <td class="mono">SubBatchProcessor.process() returns SubBatchResult</td>
+                    <td>3-way results → <span class="mono">ReconfirmHandler + ReBatchRouter</span> continue</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 7.4.3 Reconfirm -->
+        <h4 style="margin-top:20px;">Recharge Reconfirm (Suspicious Verification) — 2 equivalent mappings</h4>
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:18%">M2 Command</th>
+                <th style="width:22%">M2 Event</th>
+                <th style="width:30%">M2.5+ Runtime Equivalent</th>
+                <th style="width:30%">How Information is Carried</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-purple">
+                    <td class="mono">StartRechargeReconfirm</td>
+                    <td class="mono">RechargeReconfirmRequested(items)</td>
+                    <td class="mono">reconfirmHandler.reconfirm(suspicious)</td>
+                    <td>Suspicious items carry <span class="mono">SuspiciousReason(code, message)</span> — equivalent to M2 result=99</td>
+                </tr>
+                <tr class="row-purple">
+                    <td class="mono">EAMS DefinitiveResult</td>
+                    <td class="mono">PartialRechargeResultReconfirmed(success, failed)</td>
+                    <td class="mono">VerifyingReconfirmHandler.verify() → VerifiedSuccess | VerifiedFailure</td>
+                    <td>Verification result mapped directly to Success or Failure; no intermediate state</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 7.4.4 Success/Failure/P2B -->
+        <h4 style="margin-top:20px;">Recharge Success · Failure · P2B Notify — Post-processing Mappings</h4>
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:10%">M2 Sub-flow</th>
+                <th style="width:22%">M2 Command/Event</th>
+                <th style="width:34%">M2.5+ Runtime Equivalent</th>
+                <th style="width:34%">Configuration Source</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-blue">
+                    <td>Success</td>
+                    <td class="mono">StartRechargeSuccessUpdate → RechargeSuccessUpdateCompleted</td>
+                    <td class="mono">ChainDefinition.processBatch()</td>
+                    <td>classify collects Success → <span class="mono">ChainMessages.RechargeSuccess</span> sends SMS</td>
+                </tr>
+                <tr class="row-blue">
+                    <td>Failure</td>
+                    <td class="mono">StartProcessRechargeFailure → SendFailureSms + UnReserveQuota</td>
+                    <td class="mono">classify outputs Failure → ReBatchRouter.route()</td>
+                    <td><span class="mono">errorCodeMapper</span> selects FailureCategory → <span class="mono">failureSmsBody</span>; <span class="mono">releaseQuotaOnFailure</span> flag</td>
+                </tr>
+                <tr class="row-blue">
+                    <td>P2B Notify</td>
+                    <td class="mono">StartRechargeRecordFlow → NotifyCompleted</td>
+                    <td class="mono">ChainExternalBindings.p2b.tell(P2BCommand)</td>
+                    <td><span class="mono">p2bFlowType = "RECHARGE"</span> marks transaction type</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 7.5 Purchase Diff Table ===== -->
+        <h3>7.5 Purchase vs Recharge: Differences as Configuration</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            The Purchase chain's runtime flow is identical to Recharge. Differences exist only in <strong>business parameter configuration</strong> —
+            this is the core value of M2.5+ parameterization.
+        </p>
+
+        <table class="diff-table">
+            <thead><tr>
+                <th style="width:16%">Difference</th>
+                <th style="width:28%">Recharge Parameter</th>
+                <th style="width:28%">Purchase Parameter</th>
+                <th style="width:28%">M2.5+ Config Location</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td>Failure Code</td>
+                    <td class="col-recharge mono">BALANCE_INSUFFICIENT → Scrap</td>
+                    <td class="col-purchase mono">QUOTA_EXCEEDED → Scrap</td>
+                    <td class="col-cfg">ErrorCodeMapping.failureCodes</td>
+                </tr>
+                <tr>
+                    <td>Suspicious Codes</td>
+                    <td class="col-recharge mono">TIMEOUT, NETWORK_ERROR</td>
+                    <td class="col-purchase mono">TIMEOUT, PARTIAL</td>
+                    <td class="col-cfg">ErrorCodeMapping.suspiciousCodes</td>
+                </tr>
+                <tr>
+                    <td>Success Code</td>
+                    <td class="col-recharge mono">OK</td>
+                    <td class="col-purchase mono">OK</td>
+                    <td class="col-cfg">ErrorCodeMapping.successCodes</td>
+                </tr>
+                <tr>
+                    <td>Success SMS</td>
+                    <td class="col-recharge">Card ending {cardNo} topped up {amount} CNY</td>
+                    <td class="col-purchase">Card ending {cardNo} purchased {amount} CNY</td>
+                    <td class="col-cfg">ChainMessages.RechargeSuccess vs PurchaseSuccess</td>
+                </tr>
+                <tr>
+                    <td>Failure SMS</td>
+                    <td class="col-recharge">Top-up failed: {reason}</td>
+                    <td class="col-purchase">Purchase failed: {reason}</td>
+                    <td class="col-cfg">ChainMessages.failureSmsBody</td>
+                </tr>
+                <tr>
+                    <td>SLA Threshold</td>
+                    <td class="col-recharge">10 minutes</td>
+                    <td class="col-purchase">15 minutes</td>
+                    <td class="col-cfg">ChainBusinessRules.slaThreshold</td>
+                </tr>
+                <tr>
+                    <td>P2B Flow Type</td>
+                    <td class="col-recharge mono">"RECHARGE"</td>
+                    <td class="col-purchase mono">"PURCHASE"</td>
+                    <td class="col-cfg">ChainBusinessRules.p2bFlowType</td>
+                </tr>
+                <tr>
+                    <td>Routing Policy</td>
+                    <td class="col-recharge mono">BALANCE_INSUFFICIENT→Scrap<br>TIMEOUT→RetrySameArea(5m)<br>NETWORK_ERROR→RetrySameArea(30s)</td>
+                    <td class="col-purchase mono">QUOTA_EXCEEDED→Scrap<br>TIMEOUT→RetrySameArea(5m)</td>
+                    <td class="col-cfg">ReBatchPolicy.actionMap</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>Key insight:</strong> What required two independent codebases in M2 (hand-written FSMs per actor, 30+ Java files)
+            collapses into the 8 rows of <strong>pure configuration differences</strong> above, defined in
+            <span class="file-ref">ChainTemplates.recharge()</span> and <span class="file-ref">ChainTemplates.purchase()</span> in ~20 lines each.
+        </div>
+
+        <!-- ===== 7.6 Concrete Message Examples ===== -->
+        <h3>7.6 Concrete Examples: M2 Business Messages in M2.5+ Equivalent Form</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            Three before/after comparisons showing how a complete M2 business flow's messages and events
+            are carried with <strong>equal information content</strong> in M2.5+.
+        </p>
+
+        <!-- Example 1 -->
+        <h4 style="margin-top:20px;">Ex 1: Starting a Recharge Request — From FSM Transitions to Pipeline Execution</h4>
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:10px;">
+            M2's <span class="mono">StartRechargeRequest → FileGenerating → FileGeneratedCompleted → FileUploading → ...</span>
+            is a full FSM transition chain. M2.5+ replaces it with a Future pipeline.
+        </p>
+
+        <div class="code-compare">
+            <div class="code-panel">
+                <div class="code-label m2-l">M2 Java — RechargeRequestActor (300+ line FSM)</div>
+                <pre><span class="co">// 300+ line FSM: query DB → generate CSV → compute MD5 → update status</span>
+case <span class="kw">New</span>:
+  on <span class="kw">StartRechargeRequest</span>:
+    List&lt;SalarySavingItem&gt; plans = db.queryValidItems(batchId);
+    generateRechargeFile(plans);          <span class="co">// write .txt + .md5</span>
+    updateBatchStatus(FileGenerating);
+    tell self <span class="kw">FileGeneratedCompleted</span>;     <span class="co">// trigger next state</span>
+    → state = <span class="kw">FileGenerating</span>
+
+<span class="co">// FileGenerating → FileUploading:</span>
+case <span class="kw">FileGenerating</span>:
+  on <span class="kw">FileGeneratedCompleted</span>:
+    updateBatchStatus(FileGenerated);
+    tell self <span class="kw">RequestUploadFile</span>;
+    → state = <span class="kw">FileUploading</span>
+
+<span class="co">// FileUploading → FileUploaded:</span>
+  tells SftpService <span class="kw">SftpCommand.UploadFile</span>(path, remotePath)
+  on <span class="kw">SftpCommand.FileUploadComplete</span>:
+    updateRemoteFilePath(remotePath);
+    → state = <span class="kw">FileUploaded</span>
+
+<span class="co">// ↑ each transition = command → event → side-effect → new state</span></pre>
+            </div>
+            <div class="code-panel">
+                <div class="code-label m25-l">M2.5+ Scala — SubBatchProcessor (0 FSMs)</div>
+                <pre><span class="co">// No FSM, no state transitions. Direct pipeline execution:</span>
+<span class="kw">val</span> processor = <span class="kw">new</span> SubBatchProcessor[Item, Raw](pipeline)
+
+<span class="co">// 6-stage Future chain:</span>
+<span class="kw">def</span> process(batch: SubBatch[Item]) =
+  <span class="kw">for</span> {
+    file  &lt;- pipeline.fileGen.generate(items, ctx)
+    <span class="co">// ≡ StartRechargeRequest → FileGenerating → FileGeneratedCompleted</span>
+    rcpt  &lt;- pipeline.upload.upload(file, ctx)
+    <span class="co">// ≡ RequestUploadFile → SftpCommand.UploadFile → FileUploadComplete</span>
+    ack   &lt;- pipeline.waitAck.waitForAck(rcpt, ctx)
+    <span class="co">// ≡ RequestNotifyEams → EamsNotifyCreated</span>
+    resp  &lt;- pipeline.pollResp.poll(ctx)
+    raw   &lt;- pipeline.parse.parse(resp, ctx)
+    cls   &lt;- pipeline.classify.classify(raw, batch.items)
+  } <span class="kw">yield</span> SubBatchResult(cls)
+
+<span class="co">// All "intermediate states" disappear — they're just types in a flatMap chain</span></pre>
+            </div>
+        </div>
+
+        <!-- Example 2 -->
+        <h4 style="margin-top:24px;">Ex 2: Result Classification — From Hard-coded if-else to Config-Driven Classifier</h4>
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:10px;">
+            M2's <span class="mono">RechargeResponseActor.rechargeResponseFile()</span> with
+            <span class="mono">AwaitResultRequested(items)</span> event containing classified results. M2.5+ uses <span class="mono">ErrorCodeMapping</span>.
+        </p>
+
+        <div class="code-compare">
+            <div class="code-panel">
+                <div class="code-label m2-l">M2 Java — RechargeResponseActor</div>
+                <pre><span class="co">// RechargeResponseActor.rechargeResponseFile():</span>
+<span class="kw">for</span> (RechargeResponseItem item : items) {
+  <span class="kw">if</span> (item.result == 1)
+    successItems.add(item);           <span class="co">// → RechargeSuccessActor</span>
+  <span class="kw">else if</span> (item.result == 2)
+    failureItems.add(item);           <span class="co">// → RechargeFailureActor</span>
+  <span class="kw">else if</span> (item.result == 99)
+    pendingItems.add(item);           <span class="co">// → RechargeReconfirmActor</span>
+  <span class="kw">else</span>
+    failureItems.add(item);           <span class="co">// unknown = failure</span>
+}
+
+<span class="co">// PurchaseResponseActor has the same logic:</span>
+<span class="co">// if (status == 0) success; else if (status == 1) failed; else pending;</span>
+<span class="co">// — only status codes differ, but needs a separate Actor file</span></pre>
+            </div>
+            <div class="code-panel">
+                <div class="code-label m25-l">M2.5+ Scala — ErrorCodeBasedClassifier</div>
+                <pre><span class="co">// Pure config-driven — no classifier code changes needed</span>
+<span class="co">// Only change ErrorCodeMapping to switch business domains</span>
+<span class="kw">val</span> mapping = ErrorCodeMapping(
+  successCodes    = <span class="kw">Set</span>(<span class="str">"OK"</span>),
+  <span class="co">// ≡ M2 result=1 (recharge) or status=0 (purchase)</span>
+
+  failureCodes    = <span class="kw">Map</span>(
+    <span class="str">"BALANCE_INSUFFICIENT"</span> → NextStep.Scrap
+  ),
+  <span class="co">// ≡ M2 result=2 (recharge) or status=1 (purchase)</span>
+
+  suspiciousCodes = <span class="kw">Set</span>(<span class="str">"TIMEOUT"</span>, <span class="str">"NETWORK_ERROR"</span>)
+  <span class="co">// ≡ M2 result=99 (recharge) or status=2 (purchase)</span>
+)
+
+<span class="co">// Classifier outputs unified Algebraic Data Type:</span>
+<span class="co">// Success(item, raw) | Failure(item, FailureReason(...))</span>
+<span class="co">// | Suspicious(item, SuspiciousReason(...))</span>
+<span class="co">// Recharge/purchase share the same ADT; only config differs</span></pre>
+            </div>
+        </div>
+
+        <!-- Example 3 -->
+        <h4 style="margin-top:24px;">Ex 3: Failure Routing — From Hard-coded Retry Logic to Policy Configuration</h4>
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:10px;">
+            M2's <span class="mono">ReBatchActor</span> + <span class="mono">BatchWorker</span> hard-codes retry logic. M2.5+ uses <span class="mono">ReBatchPolicy</span>.
+        </p>
+
+        <div class="code-compare">
+            <div class="code-panel">
+                <div class="code-label m2-l">M2 Java — ReBatchActor + BatchWorker</div>
+                <pre><span class="co">// ReBatchActor hard-coded retry:</span>
+<span class="kw">if</span> (retryCount > 3) {
+  sendManualInterventionAlert(item);   <span class="co">// manual intervention</span>
+} <span class="kw">else</span> {
+  scheduler.schedule(
+    () → worker.tell(<span class="kw">RetryItem</span>(item)),
+    5, TimeUnit.MINUTES
+  );                                   <span class="co">// retry after 5 min</span>
+}
+
+<span class="co">// Problems:</span>
+<span class="co">// 1. Retry count (3) & wait time (5min) are hard-coded</span>
+<span class="co">// 2. All failures retry uniformly; can't distinguish causes</span>
+<span class="co">// 3. Recharge/Purchase each have a ReBatchActor with nearly identical code</span></pre>
+            </div>
+            <div class="code-panel">
+                <div class="code-label m25-l">M2.5+ Scala — PolicyBasedReBatchRouter</div>
+                <pre><span class="co">// Policy configuration — replaceable at runtime without touching engine</span>
+<span class="kw">val</span> policy = ReBatchPolicy(
+  maxRetries = 3,
+  actionMap = <span class="kw">Map</span>(
+    <span class="str">"BALANCE_INSUFFICIENT"</span> → NextStep.Scrap,
+    <span class="str">"QUOTA_EXCEEDED"</span>       → NextStep.Scrap,
+    <span class="str">"TIMEOUT"</span>              → NextStep.RetrySameArea(5.minutes),
+    <span class="str">"NETWORK_ERROR"</span>        → NextStep.RetrySameArea(30.seconds)
+  ),
+  defaultCooldown = 5.minutes
+)
+
+<span class="kw">val</span> router = <span class="kw">new</span> PolicyBasedReBatchRouter[Item](policy)
+<span class="co">// router.route(failures, context)</span>
+<span class="co">// → RoutingDecision(item, nextStep, reason)</span>
+<span class="co">//   where nextStep ∈ { RetrySameArea, RouteToArea, Manual, Scrap }</span>
+
+<span class="co">// Recharge: BALANCE_INSUFFICIENT→Scrap, TIMEOUT→Retry</span>
+<span class="co">// Purchase: QUOTA_EXCEEDED→Scrap, TIMEOUT→Retry</span>
+<span class="co">// Difference = one line in ReBatchPolicy.actionMap</span></pre>
+            </div>
+        </div>
+
+        <!-- ===== 7.7 Coverage Matrix ===== -->
+        <h3>7.7 Runtime Component Coverage Verification Matrix</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            Verifying only <strong>M2.5+ runtime components</strong> (component/ + pipeline/ + business/ + binding/),
+            excluding the deprecated template/ package.
+        </p>
+
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:28%">Runtime Component</th>
+                <th style="width:8%">Status</th>
+                <th style="width:34%">Implementation File</th>
+                <th style="width:30%">Notes</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-amber"><td>SubBatchPipeline (6 stage interfaces)</td><td><span class="status-done">DONE</span></td><td class="mono">component/SubBatchPipeline.scala</td><td>FileGenerator · FileUploader · AckWaiter · ResponsePoller · ResponseParser · ResultClassifier</td></tr>
+                <tr class="row-amber"><td>SubBatchProcessor (engine)</td><td><span class="status-done">DONE</span></td><td class="mono">component/SubBatchProcessor.scala</td><td>for-comprehension serial 6-stage execution, with handleAck / handlePoll error handling</td></tr>
+                <tr class="row-amber"><td>FileGenStage</td><td><span class="status-done">DONE</span></td><td class="mono">pipeline/FileGenStage.scala</td><td>Includes TemplatedFileGenStage variant with {{batchId}}/{{timestamp}} placeholders</td></tr>
+                <tr class="row-amber"><td>SftpUploadStage</td><td><span class="status-done">DONE</span></td><td class="mono">pipeline/SftpUploadStage.scala</td><td>Includes AkkaSftpConnectorRef using ask pattern</td></tr>
+                <tr class="row-amber"><td>AckWaiter (external confirmation)</td><td><span class="status-partial">IFACE</span></td><td class="mono">component/SubBatchPipeline.scala</td><td>Interface defined (AckReceived/AckTimeout/AckRejected); no standalone impl yet</td></tr>
+                <tr class="row-amber"><td>SftpPollStage</td><td><span class="status-done">DONE</span></td><td class="mono">pipeline/ResponsePollStage.scala</td><td>Includes BackoffPollStage decorator (exponential backoff)</td></tr>
+                <tr class="row-amber"><td>ResponseParser (3 variants)</td><td><span class="status-done">DONE</span></td><td class="mono">pipeline/ResponseParseStage.scala</td><td>EncodedResponseParser / ValidatingResponseParser / XmlResponseParser</td></tr>
+                <tr class="row-purple"><td>ResultClassifier + ErrorCodeMapping</td><td><span class="status-done">DONE</span></td><td class="mono">component/ResultClassifier.scala</td><td>ErrorCodeBasedClassifier abstract class + ErrorCodeMapping pure config case class</td></tr>
+                <tr class="row-purple"><td>ReconfirmHandler</td><td><span class="status-done">DONE</span></td><td class="mono">component/ReconfirmHandler.scala</td><td>VerifyingReconfirmHandler template method (VerifiedSuccess/Failure/Uncertain)</td></tr>
+                <tr class="row-purple"><td>ReBatchRouter + ReBatchPolicy</td><td><span class="status-done">DONE</span></td><td class="mono">component/ReBatchRouter.scala</td><td>Includes salarySavingDefault preset; supports maxRetries/actionMap/cooldown</td></tr>
+                <tr class="row-purple"><td>AreaScheduler + PhysicalConstraints</td><td><span class="status-done">DONE</span></td><td class="mono">component/AreaScheduler.scala</td><td>WindowedAreaScheduler + FIFO time window + carrierCapacity constraints</td></tr>
+                <tr class="row-blue"><td>ChainDsl (DSL)</td><td><span class="status-done">DONE</span></td><td class="mono">business/ChainDsl.scala</td><td>ChainBuilder + FailureRouterBuilder + SchedulingBuilder + ChainDefinition</td></tr>
+                <tr class="row-blue"><td>ChainTemplates (pre-built)</td><td><span class="status-done">DONE</span></td><td class="mono">business/ChainTemplates.scala</td><td>recharge() / purchase() / equipmentArea() — three pre-built chains</td></tr>
+                <tr class="row-blue"><td>ChainBindings (parameters)</td><td><span class="status-done">DONE</span></td><td class="mono">binding/ChainBindings.scala</td><td>ExternalBindings · ChainMessages(RechargeSuccess/PurchaseSuccess) · BusinessRules · FailureCategory</td></tr>
+                <tr class="row-blue"><td>GatewayRef (ACL)</td><td><span class="status-done">DONE</span></td><td class="mono">binding/GatewayRef.scala</td><td>GatewayRef[T] trait + ActorGatewayRef[T]</td></tr>
+            </tbody>
+        </table>
+
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-top:8px;">
+            <strong>Total: 15 runtime components, 14 fully implemented, 1 (AckWaiter) interface defined but no standalone implementation yet.</strong>
+            All 50+ M2 message types across recharge and purchase can be equivalently represented through these components'
+            method calls, return types, and configuration parameters.
+        </p>
+
+        <!-- ===== 7.8 Information Equivalence Summary ===== -->
+        <h3>7.8 Information Equivalence Summary</h3>
+
+        <div class="code-compare">
+            <div class="code-panel">
+                <div class="code-label m2-l">M2 Information Carriers (recharge example)</div>
+                <pre><span class="co">Command</span>  × ~35 (per chain ~17 command types)
+<span class="co">Event</span>    × ~40 (per chain ~20 event types)
+<span class="co">State</span>    × ~35 state values
+<span class="co">Data</span>     × 12 Data classes (~60 fields total)
+<span class="co">Files</span>    × 30+ Java files (7 sub-flows × 5 file types)
+
+<span class="co">Each business rule difference = write a new Actor</span>
+<span class="co">Each new chain = copy 7 Actors (~2000 lines)</span></pre>
+            </div>
+            <div class="code-panel">
+                <div class="code-label m25-l">M2.5+ Runtime Equivalent Carriers</div>
+                <pre><span class="co">Interface layer</span> 6 Pipeline traits + 5 impl classes
+<span class="co">Config layer</span>   ErrorCodeMapping (3 Sets/Maps)
+               ReBatchPolicy (3 fields)
+               PhysicalConstraints (6 fields)
+               ChainMessages (4 fields)
+               ChainBusinessRules (4 fields)
+<span class="co">Orchestration</span>   SubBatchProcessor (1 class)
+               ChainDefinition + ChainDsl (2 classes)
+
+<span class="co">Equivalence:</span>
+  M2 command        ≈ 1 Pipeline stage method call
+  M2 event          ≈ 1 stage return type
+  M2 state transition ≈ 1 step in Future flatMap chain
+  M2 business rule diff ≈ 1 config entry
+  M2 new chain(2000 lines) ≈ M2.5+ copy 1 method (~20 lines)</pre>
+            </div>
+        </div>
+
     </section>
 
     <!-- ==================== FOOTER ==================== -->

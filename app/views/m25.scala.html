@@ -132,6 +132,64 @@
         .num-purple { color: var(--purple); }
         .num-amber { color: var(--amber); }
 
+        /* ===== Section 7: Mapping Tables & Code Compare ===== */
+        .mapping-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .mapping-table th { background: var(--bg-alt); padding: 10px 14px; text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--fg-muted); }
+        .mapping-table td { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 0.76rem; vertical-align: top; }
+        .mapping-table tr:hover { background: rgba(255,255,255,0.02); }
+        .mapping-table td.mono { font-family: var(--mono); font-size: 0.69rem; }
+        .mapping-table .row-blue { border-left: 3px solid var(--accent); }
+        .mapping-table .row-amber { border-left: 3px solid var(--amber); }
+        .mapping-table .row-purple { border-left: 3px solid var(--purple); }
+
+        .status-done { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: rgba(63,185,80,0.12); color: var(--green); white-space: nowrap; }
+        .status-partial { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: rgba(245,158,11,0.12); color: var(--amber); white-space: nowrap; }
+        .status-pending { display: inline-block; font-size: 0.62rem; font-weight: 700; padding: 1px 7px; border-radius: 3px; background: rgba(248,81,73,0.12); color: var(--red); white-space: nowrap; }
+
+        .layer-tag { display: inline-block; font-size: 0.58rem; font-weight: 700; padding: 2px 7px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
+        .lt-blue { color: var(--accent); border: 1px solid rgba(88,166,255,0.25); background: rgba(88,166,255,0.06); }
+        .lt-amber { color: var(--amber); border: 1px solid rgba(245,158,11,0.25); background: rgba(245,158,11,0.06); }
+        .lt-purple { color: var(--purple); border: 1px solid rgba(168,85,247,0.25); background: rgba(168,85,247,0.06); }
+
+        .code-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+        .code-panel { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; }
+        .code-panel .code-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--fg-muted); margin-bottom: 8px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+        .code-panel .code-label.m2-l { color: var(--red); }
+        .code-panel .code-label.m25-l { color: var(--purple); }
+        .code-panel pre { font-family: var(--mono); font-size: 0.67rem; line-height: 1.55; color: var(--fg); margin: 0; white-space: pre-wrap; word-break: break-all; }
+        .code-panel pre .kw { color: #ff7b72; }
+        .code-panel pre .co { color: var(--fg-muted); }
+
+        .arch-callout { background: rgba(168,85,247,0.04); border-left: 3px solid var(--purple); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
+        .arch-callout strong { color: var(--fg); }
+        .arch-callout .deprecated-tag { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: rgba(248,81,73,0.12); color: var(--red); margin-left: 6px; }
+        .arch-callout .target-tag { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: rgba(63,185,80,0.12); color: var(--green); margin-left: 6px; }
+
+        .stat-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
+        .stat-grid-4 .stat-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; padding: 14px 12px; text-align: center; }
+        .stat-grid-4 .stat-card .num { font-size: 1.3rem; font-weight: 800; }
+
+        .diff-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .diff-table th { background: var(--bg-alt); padding: 10px 14px; text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--fg-muted); }
+        .diff-table td { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 0.76rem; }
+        .diff-table td.mono { font-family: var(--mono); font-size: 0.69rem; }
+        .diff-table tr:hover { background: rgba(255,255,255,0.02); }
+        .diff-table .col-recharge { color: var(--amber); }
+        .diff-table .col-purchase { color: var(--purple); }
+        .diff-table .col-cfg { color: var(--accent); font-family: var(--mono); font-size: 0.68rem; }
+
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+        .info-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 18px; }
+        .info-card.deprecated { border-color: rgba(248,81,73,0.3); background: rgba(248,81,73,0.025); }
+        .info-card.target { border-color: rgba(63,185,80,0.3); background: rgba(63,185,80,0.025); }
+        .info-card h5 { font-size: 0.8rem; font-weight: 700; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        .info-card p { font-size: 0.73rem; color: var(--fg-muted); line-height: 1.65; margin: 0; }
+        .info-card .file-ref { font-family: var(--mono); font-size: 0.67rem; color: var(--fg-subtle); }
+        .badge-deprecated { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 2px 8px; border-radius: 3px; background: rgba(248,81,73,0.12); color: var(--red); }
+        .badge-target { display: inline-block; font-size: 0.6rem; font-weight: 700; padding: 2px 8px; border-radius: 3px; background: rgba(63,185,80,0.12); color: var(--green); }
+
+        .summary-code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.7; color: var(--fg); overflow-x: auto; white-space: pre; }
+
         /* Footer */
         .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
         .footer a { color: var(--accent); text-decoration: none; }
@@ -139,6 +197,7 @@
 
         @@media (max-width: 768px) {
             .phase-grid, .stat-row, .comp-grid { grid-template-columns: 1fr; }
+            .code-compare, .info-grid, .stat-grid-4 { grid-template-columns: 1fr; }
             header h1 { font-size: 1.5rem; }
             .arch-flow .flow-row { gap: 4px; }
         }
@@ -734,6 +793,629 @@
                 <a href="/m25-demo" style="color:var(--purple); font-weight:600; text-decoration:none;">打开新演示 →</a>
             </div>
         </div>
+    </section>
+
+    <!-- ==================== SECTION 7: BUSINESS PARAMETERIZATION MAPPING ==================== -->
+    <section>
+        <h2>七、业务参数化映射：从 M2 生产代码到 M2.5+ 运行时抽象</h2>
+
+        <p style="font-size:0.85rem; color:var(--fg-muted); margin-bottom:24px;">
+            此章节将 M2 生产环境中经过验证的充值/申购链路消息与事件，逐条映射到 M2.5+ 运行时组件引擎的等价抽象。
+            每条 M2 消息携带的信息量，在 M2.5+ 中都能找到一一对应的承载方式——通过 Pipeline 阶段返回值、ErrorCodeMapping 配置项、或 ReBatchPolicy 路由规则。
+        </p>
+
+        <!-- ===== 7.1 两套架构区分 ===== -->
+        <h3>7.1 先辨明：M2.5 模板 vs M2.5+ 运行时</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            当前 <span style="font-family:var(--mono);">app/net/imadz/m25/</span> 包含两套架构。<strong>下面所有映射均基于 M2.5+ 运行时方法。</strong>
+        </p>
+
+        <div class="info-grid">
+            <div class="info-card deprecated">
+                <h5><span class="badge-deprecated">废弃参考</span> M2.5 模板化生成</h5>
+                <p class="file-ref">template/ExternalTwoPhaseChain.scala · 563 行</p>
+                <p style="margin-top:8px;">
+                    原理：接收 <span class="file-ref">Params(chainId, bindings, messages, rules)</span> →
+                    用 <strong>EventSourcedBehavior</strong> 动态生成 6 个 FSM。<br/>
+                    问题：仍走 Akka Persistence journal，563 行模板代码只是把 M2 的 Java FSM 重复换成 Scala 参数化。<br/>
+                    包含：<span class="file-ref">ExternalTwoPhaseChainTemplate</span> / <span class="file-ref">BatchOrchestratorTemplate</span> /
+                    <span class="file-ref">ResourceGuardTemplate</span> / <span class="file-ref">NotificationRelayTemplate</span>
+                </p>
+            </div>
+            <div class="info-card target">
+                <h5><span class="badge-target">目标架构</span> M2.5+ 运行时组件引擎</h5>
+                <p class="file-ref">component/ + pipeline/ + business/ + binding/ · 14 文件</p>
+                <p style="margin-top:8px;">
+                    原理：<span class="file-ref">SubBatchPipeline</span> 定义 6 阶段接口 →
+                    <span class="file-ref">SubBatchProcessor</span> 用 <strong>Future</strong> 直接执行流水线，
+                    差异存于 <strong>纯配置对象</strong> 中。<br/>
+                    新增一条业务链路只需 ~20 行 DSL 配置，不生成任何新 FSM。<br/>
+                    核心：<span class="file-ref">ErrorCodeMapping</span> / <span class="file-ref">ReBatchPolicy</span> /
+                    <span class="file-ref">PhysicalConstraints</span> / <span class="file-ref">ChainDsl</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- ===== 7.2 压缩比概览 ===== -->
+        <h3>7.2 压缩比概览</h3>
+
+        <div class="stat-grid-4">
+            <div class="stat-card">
+                <div class="num num-red">14</div>
+                <div class="lbl">M2 Actor（7 充值 + 7 申购）</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-amber">30+</div>
+                <div class="lbl">M2 Java 文件（手写 FSM）</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-purple">~50</div>
+                <div class="lbl">M2 命令/事件类型</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-green">3</div>
+                <div class="lbl">M2.5+ 纯配置对象替代所有差异</div>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>核心洞察：</strong>M2 中充值 vs 申购需要两份几乎完全相同的代码（共 ~2000 行 Java），
+            M2.5+ 中差异仅存在于 <span class="file-ref">ChainTemplates.recharge()</span> vs
+            <span class="file-ref">ChainTemplates.purchase()</span> 的参数注入——
+            <strong>ErrorCodeMapping</strong> 失败码不同、<strong>ChainMessages</strong> 短信文案不同、<strong>ReBatchPolicy</strong> 路由策略不同。
+        </div>
+
+        <!-- ===== 7.3 M2 子流程 → M2.5+ 运行时组件映射表 ===== -->
+        <h3>7.3 M2 子流程 → M2.5+ 运行时组件映射</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            每个 M2 子流程对应 M2.5+ 运行时引擎中的一个或多个组件，归属于三层维度之一。<br/>
+            申购链路（Purchase）的映射关系与下表完全一致——差异仅在后文 7.5 的参数配置中。
+        </p>
+
+        <table class="mapping-table">
+            <thead>
+                <tr>
+                    <th style="width:14%">M2 子流程</th>
+                    <th style="width:16%">M2 Actor</th>
+                    <th style="width:18%">M2.5+ Pipeline 阶段</th>
+                    <th style="width:18%">M2.5+ 核心接口</th>
+                    <th style="width:20%">M2.5+ 具体实现</th>
+                    <th style="width:14%">所属层</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="row-amber">
+                    <td>文件生成 + SFTP 上传</td>
+                    <td class="mono">RechargeRequestActor</td>
+                    <td class="mono">fileGen → upload → waitAck</td>
+                    <td class="mono">FileGenerator · FileUploader · AckWaiter</td>
+                    <td class="mono">FileGenStage · SftpUploadStage</td>
+                    <td><span class="layer-tag lt-amber">技术</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td>回盘轮询 + 解析</td>
+                    <td class="mono">RechargeResponseActor</td>
+                    <td class="mono">pollResp → parse</td>
+                    <td class="mono">ResponsePoller · ResponseParser</td>
+                    <td class="mono">SftpPollStage · EncodedResponseParser</td>
+                    <td><span class="layer-tag lt-amber">技术</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td>结果三分类</td>
+                    <td class="mono">(ResponseActor 内)</td>
+                    <td class="mono">classify</td>
+                    <td class="mono">ResultClassifier</td>
+                    <td class="mono">ErrorCodeBasedClassifier + ErrorCodeMapping</td>
+                    <td><span class="layer-tag lt-purple">调度</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td>可疑项查证</td>
+                    <td class="mono">RechargeReconfirmActor</td>
+                    <td class="mono">reconfirm</td>
+                    <td class="mono">ReconfirmHandler</td>
+                    <td class="mono">VerifyingReconfirmHandler</td>
+                    <td><span class="layer-tag lt-purple">调度</span></td>
+                </tr>
+                <tr class="row-blue">
+                    <td>成功处理 + 短信</td>
+                    <td class="mono">RechargeSuccessActor</td>
+                    <td>(后处理：SMS 通知)</td>
+                    <td class="mono">ChainMessages</td>
+                    <td class="mono">ChainMessages.RechargeSuccess</td>
+                    <td><span class="layer-tag lt-blue">业务</span></td>
+                </tr>
+                <tr class="row-blue">
+                    <td>失败处理 + 额度释放</td>
+                    <td class="mono">RechargeFailureActor</td>
+                    <td>(后处理：SMS + 释放)</td>
+                    <td class="mono">ChainMessages · ChainBusinessRules</td>
+                    <td class="mono">failureSmsBody · releaseQuotaOnFailure</td>
+                    <td><span class="layer-tag lt-blue">业务</span></td>
+                </tr>
+                <tr class="row-blue">
+                    <td>P2B 记账通知</td>
+                    <td class="mono">RechargeP2BNotifyActor</td>
+                    <td>(后处理：平台通知)</td>
+                    <td class="mono">ChainExternalBindings · p2bFlowType</td>
+                    <td class="mono">GatewayRef.p2b.tell(P2BCommand)</td>
+                    <td><span class="layer-tag lt-blue">业务</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td>失败项智能路由</td>
+                    <td class="mono">ReBatchActor</td>
+                    <td class="mono">router</td>
+                    <td class="mono">ReBatchRouter</td>
+                    <td class="mono">PolicyBasedReBatchRouter + ReBatchPolicy</td>
+                    <td><span class="layer-tag lt-purple">调度</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td>批次调度 + 缓冲区</td>
+                    <td>(M2 隐式在 BatchWorker)</td>
+                    <td class="mono">scheduler</td>
+                    <td class="mono">AreaScheduler</td>
+                    <td class="mono">WindowedAreaScheduler + PhysicalConstraints</td>
+                    <td><span class="layer-tag lt-purple">调度</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 7.4 命令/事件详细映射 ===== -->
+        <h3>7.4 命令/事件详细映射</h3>
+
+        <div class="arch-callout">
+            <strong>关键：M2.5+ 运行时方法不生成 FSM 协议类型（Command/Event/State）</strong>——这些只存在于已废弃的
+            <span class="file-ref">ExternalTwoPhaseChainTemplate</span> 中。
+            M2.5+ 运行时用 <strong>Future 流水线 + 配置对象</strong> 替代了 FSM 状态机。
+            映射形式：<strong>M2 命令/事件 → M2.5+ 运行时调用链 → 等价信息承载方式</strong>。
+        </div>
+
+        <!-- 7.4.1 Request -->
+        <h4 style="margin-top:20px;">充值 Request（文件生成 + SFTP 上传）— 5 个等价映射</h4>
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:18%">M2 Command</th>
+                <th style="width:22%">M2 Event（携带信息）</th>
+                <th style="width:30%">M2.5+ 运行时等价调用</th>
+                <th style="width:30%">信息承载方式</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-amber">
+                    <td class="mono">StartRechargeRequest</td>
+                    <td class="mono">RechargeRequestFileCreationRequested</td>
+                    <td class="mono">pipeline.fileGen.generate(items, ctx)</td>
+                    <td>items 从 <span class="mono">SubBatch.items</span> 传入；batchId/jobId 在 <span class="mono">context: Map[String, Any]</span> 中</td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">FileGeneratedCompleted</td>
+                    <td class="mono">RechargeRequestFileGenerated（文件已生成，含路径）</td>
+                    <td class="mono">FileGenStage.generate()</td>
+                    <td>返回 <span class="mono">GeneratedFile(localPath, fileName, byteSize, encoding)</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">RequestUploadFile</td>
+                    <td class="mono">RechargeFileUploadRequested + Uploaded</td>
+                    <td class="mono">pipeline.upload.upload(file, ctx)</td>
+                    <td>返回 <span class="mono">UploadReceipt(remotePath, bytesTransferred, timestamp)</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">RequestNotifyEams</td>
+                    <td class="mono">EamsNotifyCreated（EAMS 确认收到）</td>
+                    <td class="mono">pipeline.waitAck.waitForAck(receipt, ctx)</td>
+                    <td>返回 <span class="mono">AckReceived | AckTimeout(ms) | AckRejected(reason)</span></td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">RequestStop（超时）</td>
+                    <td class="mono">RechargeRequestFailureRequested(reason)</td>
+                    <td class="mono">handleAck / handlePoll 返回 Future.failed</td>
+                    <td>失败原因通过异常消息或 <span class="mono">FailureReason</span> 承载</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 7.4.2 Response -->
+        <h4 style="margin-top:20px;">充值 Response（回盘轮询 + 解析 + 分类）— 4 个等价映射</h4>
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:18%">M2 Command</th>
+                <th style="width:22%">M2 Event</th>
+                <th style="width:30%">M2.5+ 运行时等价调用</th>
+                <th style="width:30%">信息承载方式</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-amber">
+                    <td class="mono">RequestPollRechargeResponseFile</td>
+                    <td class="mono">RechargeResponsePollRequested</td>
+                    <td class="mono">pipeline.pollResp.poll(ctx)</td>
+                    <td>返回 <span class="mono">ResponseReady | PollTimeout | PollError</span>；SftpPollStage 按 pollInterval/maxAttempts 轮询</td>
+                </tr>
+                <tr class="row-amber">
+                    <td class="mono">SFTP FileFound</td>
+                    <td class="mono">RechargeResponseFileDownloaded</td>
+                    <td class="mono">sftpRef.listFiles → download → ResponseFile</td>
+                    <td>文件内容 <span class="mono">Array[Byte]</span>，含 localPath / fileName / byteSize</td>
+                </tr>
+                <tr class="row-purple">
+                    <td class="mono">RequestHandleFile(items)</td>
+                    <td class="mono">AwaitResultRequested(items)（解析+分类）</td>
+                    <td class="mono">parse.parse(file, ctx) → classify.classify(rawResults, items)</td>
+                    <td>parse → <span class="mono">Seq[RawResult]</span>；classify → <span class="mono">Success | Failure(reason) | Suspicious(reason)</span></td>
+                </tr>
+                <tr class="row-purple">
+                    <td class="mono">RouteOutcome + Terminated</td>
+                    <td class="mono">RechargeResponseCompletionRequested</td>
+                    <td class="mono">SubBatchProcessor.process() 返回 SubBatchResult</td>
+                    <td>三分类结果 → <span class="mono">ReconfirmHandler + ReBatchRouter</span> 继续处理</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 7.4.3 Reconfirm -->
+        <h4 style="margin-top:20px;">充值 Reconfirm（可疑项查证）— 2 个等价映射</h4>
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:18%">M2 Command</th>
+                <th style="width:22%">M2 Event</th>
+                <th style="width:30%">M2.5+ 运行时等价调用</th>
+                <th style="width:30%">信息承载方式</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-purple">
+                    <td class="mono">StartRechargeReconfirm</td>
+                    <td class="mono">RechargeReconfirmRequested(items)</td>
+                    <td class="mono">reconfirmHandler.reconfirm(suspicious)</td>
+                    <td>可疑项含 <span class="mono">SuspiciousReason(code, message)</span> — 等价于 M2 的 result=99</td>
+                </tr>
+                <tr class="row-purple">
+                    <td class="mono">EAMS DefinitiveResult</td>
+                    <td class="mono">PartialRechargeResultReconfirmed(success, failed)</td>
+                    <td class="mono">VerifyingReconfirmHandler.verify() → VerifiedSuccess | VerifiedFailure</td>
+                    <td>查证结果直接映射为 Success 或 Failure，不再有中间态</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 7.4.4 Success / Failure / P2B -->
+        <h4 style="margin-top:20px;">充值 Success · Failure · P2B Notify — 后处理映射</h4>
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:10%">M2 子流程</th>
+                <th style="width:22%">M2 Command/Event</th>
+                <th style="width:34%">M2.5+ 运行时等价</th>
+                <th style="width:34%">配置来源</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-blue">
+                    <td>Success</td>
+                    <td class="mono">StartRechargeSuccessUpdate → RechargeSuccessUpdateCompleted</td>
+                    <td class="mono">ChainDefinition.processBatch()</td>
+                    <td>classify 收集 Success → <span class="mono">ChainMessages.RechargeSuccess</span> 发 SMS</td>
+                </tr>
+                <tr class="row-blue">
+                    <td>Failure</td>
+                    <td class="mono">StartProcessRechargeFailure → SendFailureSms + UnReserveQuota</td>
+                    <td class="mono">classify 输出 Failure → ReBatchRouter.route()</td>
+                    <td><span class="mono">errorCodeMapper</span> 选 FailureCategory → <span class="mono">failureSmsBody</span>；<span class="mono">releaseQuotaOnFailure</span> 控制释放</td>
+                </tr>
+                <tr class="row-blue">
+                    <td>P2B Notify</td>
+                    <td class="mono">StartRechargeRecordFlow → NotifyCompleted</td>
+                    <td class="mono">ChainExternalBindings.p2b.tell(P2BCommand)</td>
+                    <td><span class="mono">p2bFlowType = "RECHARGE"</span> 标记流水类型</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 7.5 申购差异对照表 ===== -->
+        <h3>7.5 申购差异对照表</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            申购链路的运行时流程与充值完全一致，差异仅存在于<strong>业务参数配置</strong>——这是 M2.5+ 参数化的核心价值。
+        </p>
+
+        <table class="diff-table">
+            <thead><tr>
+                <th style="width:16%">差异维度</th>
+                <th style="width:28%">充值参数</th>
+                <th style="width:28%">申购参数</th>
+                <th style="width:28%">M2.5+ 配置位置</th>
+            </tr></thead>
+            <tbody>
+                <tr>
+                    <td>失败分类</td>
+                    <td class="col-recharge mono">BALANCE_INSUFFICIENT → Scrap</td>
+                    <td class="col-purchase mono">QUOTA_EXCEEDED → Scrap</td>
+                    <td class="col-cfg">ErrorCodeMapping.failureCodes</td>
+                </tr>
+                <tr>
+                    <td>可疑码集合</td>
+                    <td class="col-recharge mono">TIMEOUT, NETWORK_ERROR</td>
+                    <td class="col-purchase mono">TIMEOUT, PARTIAL</td>
+                    <td class="col-cfg">ErrorCodeMapping.suspiciousCodes</td>
+                </tr>
+                <tr>
+                    <td>成功码</td>
+                    <td class="col-recharge mono">OK</td>
+                    <td class="col-purchase mono">OK</td>
+                    <td class="col-cfg">ErrorCodeMapping.successCodes</td>
+                </tr>
+                <tr>
+                    <td>成功短信</td>
+                    <td class="col-recharge">尾号{cardNo}充值{amount}元已到账</td>
+                    <td class="col-purchase">尾号{cardNo}申购{amount}元已确认</td>
+                    <td class="col-cfg">ChainMessages.RechargeSuccess vs PurchaseSuccess</td>
+                </tr>
+                <tr>
+                    <td>失败短信</td>
+                    <td class="col-recharge">尾号{cardNo}充值失败：{reason}</td>
+                    <td class="col-purchase">尾号{cardNo}申购失败：{reason}</td>
+                    <td class="col-cfg">ChainMessages.failureSmsBody</td>
+                </tr>
+                <tr>
+                    <td>SLA 超时</td>
+                    <td class="col-recharge">10 分钟</td>
+                    <td class="col-purchase">15 分钟</td>
+                    <td class="col-cfg">ChainBusinessRules.slaThreshold</td>
+                </tr>
+                <tr>
+                    <td>P2B 流水类型</td>
+                    <td class="col-recharge mono">"RECHARGE"</td>
+                    <td class="col-purchase mono">"PURCHASE"</td>
+                    <td class="col-cfg">ChainBusinessRules.p2bFlowType</td>
+                </tr>
+                <tr>
+                    <td>路由策略</td>
+                    <td class="col-recharge mono">BALANCE_INSUFFICIENT→Scrap<br>TIMEOUT→RetrySameArea(5m)<br>NETWORK_ERROR→RetrySameArea(30s)</td>
+                    <td class="col-purchase mono">QUOTA_EXCEEDED→Scrap<br>TIMEOUT→RetrySameArea(5m)</td>
+                    <td class="col-cfg">ReBatchPolicy.actionMap</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>关键洞察：</strong>M2 中需要两份独立代码（每个 Actor 手写 FSM，共 30+ Java 文件）才能表达的充值/申购差异，
+            在 M2.5+ 中全部收敛为上表 8 行<strong>纯配置差异</strong>，配置定义在
+            <span class="file-ref">ChainTemplates.recharge()</span> 和 <span class="file-ref">ChainTemplates.purchase()</span> 中各 ~20 行。
+        </div>
+
+        <!-- ===== 7.6 具体消息例子 ===== -->
+        <h3>7.6 具体消息例子：M2 业务消息的 M2.5+ 等价形式</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            以下 3 组对比展示 M2 中一个完整业务流程的多个消息/事件如何在 M2.5+ 中被<strong>等量信息地</strong>承载。
+        </p>
+
+        <!-- Example 1 -->
+        <h4 style="margin-top:20px;">例 1：发起充值请求——从 FSM 状态迁移到 Pipeline 执行</h4>
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:10px;">
+            M2 的 <span class="mono">StartRechargeRequest → FileGenerating → FileGeneratedCompleted → FileUploading → RequestUploadFile → ...</span>
+            是一次完整的 FSM 状态迁移链条。M2.5+ 用 Pipeline 的 Future 链替代。
+        </p>
+
+        <div class="code-compare">
+            <div class="code-panel">
+                <div class="code-label m2-l">M2 Java — RechargeRequestActor（300+ 行 FSM）</div>
+                <pre><span class="co">// 300+ 行 FSM: query DB → generate CSV → compute MD5 → update status</span>
+case <span class="kw">New</span>:
+  on <span class="kw">StartRechargeRequest</span>:
+    List&lt;SalarySavingItem&gt; plans = db.queryValidItems(batchId);
+    generateRechargeFile(plans);          <span class="co">// 写 .txt + .md5</span>
+    updateBatchStatus(FileGenerating);
+    tell self <span class="kw">FileGeneratedCompleted</span>;     <span class="co">// 触发下一状态</span>
+    → state = <span class="kw">FileGenerating</span>
+
+<span class="co">// FileGenerating → FileUploading:</span>
+case <span class="kw">FileGenerating</span>:
+  on <span class="kw">FileGeneratedCompleted</span>:
+    updateBatchStatus(FileGenerated);
+    tell self <span class="kw">RequestUploadFile</span>;
+    → state = <span class="kw">FileUploading</span>
+
+<span class="co">// FileUploading → FileUploaded:</span>
+  tells SftpService <span class="kw">SftpCommand.UploadFile</span>(path, remotePath)
+  on <span class="kw">SftpCommand.FileUploadComplete</span>:
+    updateRemoteFilePath(remotePath);
+    → state = <span class="kw">FileUploaded</span>
+
+<span class="co">// ↑ 每个状态迁移 = 命令 → 事件 → 副作用 → 新状态</span></pre>
+            </div>
+            <div class="code-panel">
+                <div class="code-label m25-l">M2.5+ Scala — SubBatchProcessor（0 个 FSM）</div>
+                <pre><span class="co">// 无 FSM，无状态迁移。Pipeline 直接执行：</span>
+<span class="kw">val</span> processor = <span class="kw">new</span> SubBatchProcessor[Item, Raw](pipeline)
+
+<span class="co">// 6 阶段 Future 链：</span>
+<span class="kw">def</span> process(batch: SubBatch[Item]) =
+  <span class="kw">for</span> {
+    file  &lt;- pipeline.fileGen.generate(items, ctx)
+    <span class="co">// ↑ 等价于: StartRechargeRequest → FileGenerating → FileGeneratedCompleted</span>
+    rcpt  &lt;- pipeline.upload.upload(file, ctx)
+    <span class="co">// ↑ 等价于: RequestUploadFile → SftpCommand.UploadFile → FileUploadComplete</span>
+    ack   &lt;- pipeline.waitAck.waitForAck(rcpt, ctx)
+    <span class="co">// ↑ 等价于: RequestNotifyEams → EamsNotifyCreated</span>
+    resp  &lt;- pipeline.pollResp.poll(ctx)
+    raw   &lt;- pipeline.parse.parse(resp, ctx)
+    cls   &lt;- pipeline.classify.classify(raw, batch.items)
+  } <span class="kw">yield</span> SubBatchResult(cls)
+
+<span class="co">// 所有 "中间状态" 消失了——它们只是 flatMap 链中的类型变化</span></pre>
+            </div>
+        </div>
+
+        <!-- Example 2 -->
+        <h4 style="margin-top:24px;">例 2：结果分类——从硬编码 if-else 到配置驱动的三分类器</h4>
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:10px;">
+            M2 的 <span class="mono">RechargeResponseActor.rechargeResponseFile()</span> 方法中
+            <span class="mono">AwaitResultRequested(items)</span> 包含分类结果。M2.5+ 用 <span class="mono">ErrorCodeMapping</span> 配置驱动。
+        </p>
+
+        <div class="code-compare">
+            <div class="code-panel">
+                <div class="code-label m2-l">M2 Java — RechargeResponseActor</div>
+                <pre><span class="co">// RechargeResponseActor.rechargeResponseFile():</span>
+<span class="kw">for</span> (RechargeResponseItem item : items) {
+  <span class="kw">if</span> (item.result == 1)
+    successItems.add(item);           <span class="co">// → RechargeSuccessActor</span>
+  <span class="kw">else if</span> (item.result == 2)
+    failureItems.add(item);           <span class="co">// → RechargeFailureActor</span>
+  <span class="kw">else if</span> (item.result == 99)
+    pendingItems.add(item);           <span class="co">// → RechargeReconfirmActor</span>
+  <span class="kw">else</span>
+    failureItems.add(item);           <span class="co">// 未知=失败</span>
+}
+
+<span class="co">// 申购的 PurchaseResponseActor 同样的逻辑：</span>
+<span class="co">// if (status == 0) success; else if (status == 1) failed; else pending;</span>
+<span class="co">// ——只是状态码不同，但需要单独一个 Actor 文件</span></pre>
+            </div>
+            <div class="code-panel">
+                <div class="code-label m25-l">M2.5+ Scala — ErrorCodeBasedClassifier</div>
+                <pre><span class="co">// 纯配置驱动——无需修改分类器代码</span>
+<span class="co">// 只改 ErrorCodeMapping 即可切换业务</span>
+<span class="kw">val</span> mapping = ErrorCodeMapping(
+  successCodes    = <span class="kw">Set</span>(<span class="str">"OK"</span>),
+  <span class="co">// 等价于 M2 result=1 (充值) 或 status=0 (申购)</span>
+
+  failureCodes    = <span class="kw">Map</span>(
+    <span class="str">"BALANCE_INSUFFICIENT"</span> → NextStep.Scrap
+  ),
+  <span class="co">// 等价于 M2 result=2 (充值) 或 status=1 (申购)</span>
+
+  suspiciousCodes = <span class="kw">Set</span>(<span class="str">"TIMEOUT"</span>, <span class="str">"NETWORK_ERROR"</span>)
+  <span class="co">// 等价于 M2 result=99 (充值) 或 status=2 (申购)</span>
+)
+
+<span class="co">// 分类器输出统一的 Algebraic Data Type：</span>
+<span class="co">// Success(item, raw) | Failure(item, FailureReason(...))</span>
+<span class="co">// | Suspicious(item, SuspiciousReason(...))</span>
+<span class="co">// 充值/申购共用同一套 ADT，差异只在配置</span></pre>
+            </div>
+        </div>
+
+        <!-- Example 3 -->
+        <h4 style="margin-top:24px;">例 3：失败项路由——从硬编码重试逻辑到策略配置</h4>
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-bottom:10px;">
+            M2 的 <span class="mono">ReBatchActor</span> + <span class="mono">BatchWorker</span> 硬编码了重试逻辑。M2.5+ 用 <span class="mono">ReBatchPolicy</span> 策略驱动。
+        </p>
+
+        <div class="code-compare">
+            <div class="code-panel">
+                <div class="code-label m2-l">M2 Java — ReBatchActor + BatchWorker</div>
+                <pre><span class="co">// ReBatchActor 中硬编码：</span>
+<span class="kw">if</span> (retryCount > 3) {
+  sendManualInterventionAlert(item);   <span class="co">// 人工介入</span>
+} <span class="kw">else</span> {
+  scheduler.schedule(
+    () → worker.tell(<span class="kw">RetryItem</span>(item)),
+    5, TimeUnit.MINUTES
+  );                                   <span class="co">// 5 分钟后重试</span>
+}
+
+<span class="co">// 问题：</span>
+<span class="co">// 1. 重试次数(3)、等待时间(5min) 硬编码</span>
+<span class="co">// 2. 所有失败原因统一重试，无法区分余额不足 vs 超时</span>
+<span class="co">// 3. 充值/申购各有一个 ReBatchActor，逻辑几乎相同</span></pre>
+            </div>
+            <div class="code-panel">
+                <div class="code-label m25-l">M2.5+ Scala — PolicyBasedReBatchRouter</div>
+                <pre><span class="co">// 策略配置——可运行时替换，不碰引擎代码</span>
+<span class="kw">val</span> policy = ReBatchPolicy(
+  maxRetries = 3,
+  actionMap = <span class="kw">Map</span>(
+    <span class="str">"BALANCE_INSUFFICIENT"</span> → NextStep.Scrap,
+    <span class="str">"QUOTA_EXCEEDED"</span>       → NextStep.Scrap,
+    <span class="str">"TIMEOUT"</span>              → NextStep.RetrySameArea(5.minutes),
+    <span class="str">"NETWORK_ERROR"</span>        → NextStep.RetrySameArea(30.seconds)
+  ),
+  defaultCooldown = 5.minutes
+)
+
+<span class="kw">val</span> router = <span class="kw">new</span> PolicyBasedReBatchRouter[Item](policy)
+<span class="co">// router.route(failures, context)</span>
+<span class="co">// → RoutingDecision(item, nextStep, reason)</span>
+<span class="co">//   where nextStep ∈ { RetrySameArea, RouteToArea, Manual, Scrap }</span>
+
+<span class="co">// 充值用：BALANCE_INSUFFICIENT→Scrap, TIMEOUT→Retry</span>
+<span class="co">// 申购用：QUOTA_EXCEEDED→Scrap, TIMEOUT→Retry</span>
+<span class="co">// 差异 = ReBatchPolicy.actionMap 中的一行</span></pre>
+            </div>
+        </div>
+
+        <!-- ===== 7.7 运行时组件覆盖验证矩阵 ===== -->
+        <h3>7.7 运行时组件覆盖验证矩阵</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            只验证 <strong>M2.5+ 运行时方法</strong>（component/ + pipeline/ + business/ + binding/），
+            不含已废弃的 template/ 包。
+        </p>
+
+        <table class="mapping-table">
+            <thead><tr>
+                <th style="width:28%">运行时组件</th>
+                <th style="width:8%">状态</th>
+                <th style="width:34%">实现文件</th>
+                <th style="width:30%">备注</th>
+            </tr></thead>
+            <tbody>
+                <tr class="row-amber"><td>SubBatchPipeline（6 阶段接口）</td><td><span class="status-done">完整</span></td><td class="mono">component/SubBatchPipeline.scala</td><td>FileGenerator · FileUploader · AckWaiter · ResponsePoller · ResponseParser · ResultClassifier</td></tr>
+                <tr class="row-amber"><td>SubBatchProcessor（引擎）</td><td><span class="status-done">完整</span></td><td class="mono">component/SubBatchProcessor.scala</td><td>for-comprehension 串行执行 6 阶段，含 handleAck / handlePoll 错误处理</td></tr>
+                <tr class="row-amber"><td>FileGenStage（文件生成）</td><td><span class="status-done">完整</span></td><td class="mono">pipeline/FileGenStage.scala</td><td>含 TemplatedFileGenStage 变体，支持 {{batchId}}/{{timestamp}} 占位</td></tr>
+                <tr class="row-amber"><td>SftpUploadStage（上传）</td><td><span class="status-done">完整</span></td><td class="mono">pipeline/SftpUploadStage.scala</td><td>含 AkkaSftpConnectorRef 实现，通过 ask pattern 调用 Actor</td></tr>
+                <tr class="row-amber"><td>AckWaiter（外部确认）</td><td><span class="status-partial">接口</span></td><td class="mono">component/SubBatchPipeline.scala</td><td>接口已定义（AckReceived/AckTimeout/AckRejected），暂无独立实现</td></tr>
+                <tr class="row-amber"><td>SftpPollStage（轮询）</td><td><span class="status-done">完整</span></td><td class="mono">pipeline/ResponsePollStage.scala</td><td>含 BackoffPollStage 装饰器（指数退避）</td></tr>
+                <tr class="row-amber"><td>ResponseParser（解析）</td><td><span class="status-done">完整</span></td><td class="mono">pipeline/ResponseParseStage.scala</td><td>3 种：EncodedResponseParser / ValidatingResponseParser / XmlResponseParser</td></tr>
+                <tr class="row-purple"><td>ResultClassifier + ErrorCodeMapping</td><td><span class="status-done">完整</span></td><td class="mono">component/ResultClassifier.scala</td><td>ErrorCodeBasedClassifier 抽象类 + ErrorCodeMapping 纯配置 case class</td></tr>
+                <tr class="row-purple"><td>ReconfirmHandler</td><td><span class="status-done">完整</span></td><td class="mono">component/ReconfirmHandler.scala</td><td>VerifyingReconfirmHandler 模板方法模式（VerifiedSuccess/Failure/Uncertain）</td></tr>
+                <tr class="row-purple"><td>ReBatchRouter + ReBatchPolicy</td><td><span class="status-done">完整</span></td><td class="mono">component/ReBatchRouter.scala</td><td>含 salarySavingDefault 预设，支持 maxRetries/actionMap/cooldown</td></tr>
+                <tr class="row-purple"><td>AreaScheduler + PhysicalConstraints</td><td><span class="status-done">完整</span></td><td class="mono">component/AreaScheduler.scala</td><td>WindowedAreaScheduler + FIFO 时间窗口 + carrierCapacity 约束</td></tr>
+                <tr class="row-blue"><td>ChainDsl（DSL）</td><td><span class="status-done">完整</span></td><td class="mono">business/ChainDsl.scala</td><td>ChainBuilder + FailureRouterBuilder + SchedulingBuilder + ChainDefinition</td></tr>
+                <tr class="row-blue"><td>ChainTemplates（预定义）</td><td><span class="status-done">完整</span></td><td class="mono">business/ChainTemplates.scala</td><td>recharge() / purchase() / equipmentArea() 三条预定义链路</td></tr>
+                <tr class="row-blue"><td>ChainBindings（参数）</td><td><span class="status-done">完整</span></td><td class="mono">binding/ChainBindings.scala</td><td>ExternalBindings · ChainMessages(RechargeSuccess/PurchaseSuccess) · BusinessRules · FailureCategory</td></tr>
+                <tr class="row-blue"><td>GatewayRef（防腐层）</td><td><span class="status-done">完整</span></td><td class="mono">binding/GatewayRef.scala</td><td>GatewayRef[T] trait + ActorGatewayRef[T]</td></tr>
+            </tbody>
+        </table>
+
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-top:8px;">
+            <strong>总计：15 个运行时组件，14 个完整实现，1 个（AckWaiter）接口已定义但暂无独立实现文件。</strong>
+            所有 M2 充值+申购的 50+ 消息类型，均可通过上述组件的方法调用、返回值类型、配置参数得到等价信息承载。
+        </p>
+
+        <!-- ===== 7.8 信息量等价性总结 ===== -->
+        <h3>7.8 信息量等价性总结</h3>
+
+        <div class="code-compare">
+            <div class="code-panel">
+                <div class="code-label m2-l">M2 信息载体（充值为例）</div>
+                <pre><span class="co">Command</span>  × ~35 个（每链路 ~17 个命令类型）
+<span class="co">Event</span>    × ~40 个（每链路 ~20 个事件类型）
+<span class="co">State</span>    × ~35 个状态值
+<span class="co">Data</span>     × 12 个 Data 类（共 ~60 个字段）
+<span class="co">文件数</span>   × 30+ Java 文件（每链路 7 子流程 × 5 类文件）
+
+<span class="co">每条业务规则差异 = 手写一份新 Actor</span>
+<span class="co">每新增一条链路 = 复制 7 个 Actor（~2000 行）</span></pre>
+            </div>
+            <div class="code-panel">
+                <div class="code-label m25-l">M2.5+ 运行时等价信息载体</div>
+                <pre><span class="co">接口层</span> 6 个 Pipeline trait + 5 个实现类
+<span class="co">配置层</span> ErrorCodeMapping（3 个 Set/Map）
+        ReBatchPolicy（3 字段）
+        PhysicalConstraints（6 字段）
+        ChainMessages（4 字段）
+        ChainBusinessRules（4 字段）
+<span class="co">编排层</span> SubBatchProcessor（1 类）
+        ChainDefinition + ChainDsl（2 类）
+
+<span class="co">等价关系：</span>
+  M2 的 1 个命令          ≈ 1 个 Pipeline 阶段方法调用
+  M2 的 1 个事件          ≈ 1 个阶段返回值类型
+  M2 的 1 个状态迁移      ≈ Future flatMap 链中的一步
+  M2 的 1 条业务规则差异  ≈ 1 行配置项
+  M2 新增 1 条链路(2000行) ≈ M2.5+ 复制 1 个方法(~20行)</pre>
+            </div>
+        </div>
+
     </section>
 
     <!-- ==================== FOOTER ==================== -->
