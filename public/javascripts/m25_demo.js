@@ -370,11 +370,20 @@
       var p = document.createElementNS('http://www.w3.org/2000/svg','polygon');
       p.setAttribute('points','0,0 5,2 0,4');p.setAttribute('fill',a.fill);m.appendChild(p);defs.appendChild(m);
     });
+    // Glow filter for event particles
+    var glowF = document.createElementNS('http://www.w3.org/2000/svg','filter');
+    glowF.setAttribute('id','eventGlow');glowF.setAttribute('x','-50%');glowF.setAttribute('y','-50%');glowF.setAttribute('width','200%');glowF.setAttribute('height','200%');
+    var blur = document.createElementNS('http://www.w3.org/2000/svg','feGaussianBlur');blur.setAttribute('stdDeviation','2.5');blur.setAttribute('result','b');
+    var merge = document.createElementNS('http://www.w3.org/2000/svg','feMerge');
+    var mn1 = document.createElementNS('http://www.w3.org/2000/svg','feMergeNode');mn1.setAttribute('in','b');
+    var mn2 = document.createElementNS('http://www.w3.org/2000/svg','feMergeNode');mn2.setAttribute('in','SourceGraphic');
+    merge.appendChild(mn1);merge.appendChild(mn2);glowF.appendChild(blur);glowF.appendChild(merge);defs.appendChild(glowF);
     canvas.appendChild(defs);
     templateRegionEls={};svgNodeGroups={};svgEdgeEls={};
     renderTemplateRegions();renderLevelLabels();renderConnectors();renderGatewayContainers();
     renderEdges();renderInternalNodes();renderGatewayEntries();renderIsomorphismAnnotation();updateEdgePaths();
     Object.keys(svgEdgeEls).forEach(function(k){var e=svgEdgeEls[k];if(e&&e.connectorEl)canvas.appendChild(e.connectorEl);});
+    startEventAnimation();
   }
 
   function renderTemplateRegions() {
@@ -629,7 +638,123 @@
     btnGwToggle.style.background=gwHighlighted?'rgba(240,136,62,0.15)':'rgba(240,136,62,0.06)';btnGwToggle.style.borderColor=gwHighlighted?'rgba(240,136,62,0.7)':'rgba(240,136,62,0.35)';btnGwToggle.style.color=gwHighlighted?'#f0883e':'';btnGwToggle.childNodes[1].textContent=gwHighlighted?'外部系统网关 · 已点亮':'点亮外部系统网关';
   });}
 
-  // ======================== FSM MODAL ========================
+  // ======================== EVENT FLOW ANIMATION ========================
+  var eventAnimActive = true;
+  var eventParticles = [];
+  var animCycleStart = 0; // reference time for cycle phase
+
+  // Flow sequences — how domain events propagate through the DAG
+  var EVENT_FLOWS = [
+    // Orchestration layer: cron trigger → batch dispatch
+    { keys: ['cron|job-actor','job-actor|pre-batch','pre-batch|batch-master','batch-master|batch-worker'],
+      color: '#14b8a6', count: 3, stagger: 180, delay: 0, dur: 1.0 },
+    // Pipeline dispatch: batch-worker → both pipelines
+    { keys: ['batch-worker|recharge-pipeline','batch-worker|purchase-pipeline'],
+      color: '#3b82f6', count: 2, stagger: 220, delay: 1600, dur: 0.9 },
+    // Cross-zone: pipelines → connectors
+    { keys: ['recharge-pipeline|conn-sftp','recharge-pipeline|conn-http-xml','purchase-pipeline|conn-sftp','purchase-pipeline|conn-http-xml'],
+      color: '#f0883e', count: 2, stagger: 200, delay: 2600, dur: 1.1 },
+    // External: connectors → gateway systems
+    { keys: ['conn-sftp|gw-sftp','conn-http-xml|gw-core'],
+      color: '#f59e0b', count: 2, stagger: 200, delay: 3600, dur: 1.0 },
+    // SMS notification: pipelines → notification
+    { keys: ['recharge-pipeline|sms-success','recharge-pipeline|sms-failure','purchase-pipeline|sms-success','purchase-pipeline|sms-failure'],
+      color: '#a855f7', count: 2, stagger: 200, delay: 3200, dur: 0.8 },
+    // Resource unlock: failure → quota release cascade
+    { keys: ['sms-failure|quota-release','quota-release|quota-cascade'],
+      color: '#f59e0b', count: 2, stagger: 200, delay: 4400, dur: 0.9 },
+    // Compensation loop: re-batch → worker (feedback, always running at low opacity)
+    { keys: ['re-batch|batch-worker'],
+      color: '#f85149', count: 1, stagger: 0, delay: 800, dur: 2.0 }
+  ];
+
+  var CYCLE_TOTAL = 5800; // ms — one full event propagation cycle, then repeat
+
+  function makeParticle(color) {
+    var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    c.setAttribute('r','3.5');c.setAttribute('fill',color);c.setAttribute('opacity','0.88');
+    c.setAttribute('style','filter:url(#eventGlow)');c.setAttribute('display','none');
+    return c;
+  }
+
+  function makeAnimMotion(pathD, dur, begin) {
+    var a = document.createElementNS('http://www.w3.org/2000/svg','animateMotion');
+    a.setAttribute('dur',dur+'s');a.setAttribute('repeatCount','indefinite');
+    a.setAttribute('begin',(begin/1000).toFixed(1)+'s');a.setAttribute('path',pathD);
+    return a;
+  }
+
+  function startEventAnimation() {
+    stopEventAnimation();
+    eventAnimActive = true;
+    animCycleStart = Date.now();
+    EVENT_FLOWS.forEach(function(flow) {
+      flow.keys.forEach(function(edgeKey) {
+        var edgeEl = svgEdgeEls[edgeKey];
+        if (!edgeEl || !edgeEl.path) return;
+        var d = edgeEl.path.getAttribute('d');
+        if (!d) return;
+        for (var i = 0; i < flow.count; i++) {
+          var p = makeParticle(flow.color);
+          var anim = makeAnimMotion(d, flow.dur + i * 0.15, flow.delay + i * flow.stagger);
+          p.appendChild(anim);
+          canvas.appendChild(p);
+          eventParticles.push(p);
+          var showStart = flow.delay + i * flow.stagger;
+          var showEnd = flow.delay + i * flow.stagger + (flow.count * flow.stagger) + flow.dur * 1200;
+          scheduleVisibility(p, showStart, showEnd);
+        }
+      });
+    });
+    updateEventAnimButton();
+  }
+
+  function stopEventAnimation() {
+    eventAnimActive = false;
+    eventParticles.forEach(function(p) {
+      if (p._visInterval) clearInterval(p._visInterval);
+      if (p.parentNode) p.parentNode.removeChild(p);
+    });
+    eventParticles = [];
+    updateEventAnimButton();
+  }
+
+  function scheduleVisibility(particle, showStart, showEnd) {
+    var lastVisible = false;
+    particle._visInterval = setInterval(function() {
+      var t = (Date.now() - animCycleStart) % CYCLE_TOTAL;
+      var show0 = showStart % CYCLE_TOTAL;
+      var show1 = showEnd % CYCLE_TOTAL;
+      var visible;
+      if (show0 <= show1) visible = t >= show0 && t <= show1;
+      else visible = t >= show0 || t <= show1;
+      if (visible !== lastVisible) {
+        particle.setAttribute('display', visible ? '' : 'none');
+        lastVisible = visible;
+      }
+    }, 200);
+  }
+
+  function toggleEventAnimation() {
+    if (eventAnimActive) stopEventAnimation();
+    else startEventAnimation();
+  }
+
+  function updateEventAnimButton() {
+    var btn = document.getElementById('btnEventAnim');
+    var lbl = document.getElementById('btnEventAnimLabel');
+    if (!btn || !lbl) return;
+    if (eventAnimActive) {
+      btn.style.background = 'rgba(88,166,255,0.15)'; btn.style.borderColor = 'rgba(88,166,255,0.5)'; btn.style.color = '#58a6ff';
+      lbl.textContent = '暂停事件流';
+    } else {
+      btn.style.background = 'rgba(88,166,255,0.06)'; btn.style.borderColor = 'rgba(88,166,255,0.25)'; btn.style.color = '';
+      lbl.textContent = '播放事件流';
+    }
+  }
+
+  var btnEventAnim = document.getElementById('btnEventAnim');
+  if (btnEventAnim) btnEventAnim.addEventListener('click', toggleEventAnimation);
   function showFsmModal(node){
     var tpl=node.template?(TEMPLATES[node.template]?TEMPLATES[node.template].name:''):'';
     fsmModalTitle.textContent=node.label;fsmModalSubtitle.textContent=(tpl?'所属层: '+tpl+' | ':'')+'EntityKey: '+node.id+' | Level: '+(node.level||'Conn');
@@ -671,6 +796,6 @@
   function showToast(msg){toast.textContent=msg;toast.classList.add('show');clearTimeout(toast._timeout);toast._timeout=setTimeout(function(){toast.classList.remove('show');},2000);}
 
   function init(){renderAll();setTimeout(function(){showToast('点击左侧层卡片查看详情与代码');},800);}
-  var resizeTimeout;window.addEventListener('resize',function(){clearTimeout(resizeTimeout);resizeTimeout=setTimeout(function(){var was=activeTemplate;activeTemplate=null;renderAll();if(was)setTimeout(function(){selectTemplate(was);},50);},250);});
+  var resizeTimeout;window.addEventListener('resize',function(){clearTimeout(resizeTimeout);resizeTimeout=setTimeout(function(){var was=activeTemplate,wasAnim=eventAnimActive;activeTemplate=null;renderAll();if(!wasAnim)stopEventAnimation();if(was)setTimeout(function(){selectTemplate(was);},50);},250);});
   init();
 })();
