@@ -190,6 +190,43 @@
 
         .summary-code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.7; color: var(--fg); overflow-x: auto; white-space: pre; }
 
+        /* ===== Section 8: Stability & Resilience ===== */
+        .stability-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+        .stability-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+        .stability-card .sc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .stability-card .sc-header h5 { font-size: 0.8rem; font-weight: 700; margin: 0; }
+        .stability-card .sc-tag { font-size: 0.55rem; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .sc-tag-app { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .sc-tag-jvm { background: rgba(63,185,80,0.12); color: var(--green); }
+        .sc-tag-infra { background: rgba(245,158,11,0.12); color: var(--amber); }
+        .sc-tag-hw { background: rgba(168,85,247,0.12); color: var(--purple); }
+        .sc-tag-storage { background: rgba(20,184,166,0.12); color: var(--teal); }
+        .sc-tag-ops { background: rgba(248,81,73,0.12); color: var(--red); }
+        .stability-card ul { list-style: none; padding: 0; margin: 0; }
+        .stability-card ul li { font-size: 0.7rem; color: var(--fg-muted); padding: 3px 0; line-height: 1.5; display: flex; align-items: baseline; gap: 6px; }
+        .stability-card ul li::before { content: "·"; color: var(--fg-subtle); font-weight: 700; }
+
+        .recovery-timeline { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin: 14px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.75; color: var(--fg); overflow-x: auto; white-space: pre; }
+        .recovery-timeline .evt { color: var(--green); }
+        .recovery-timeline .crash { color: var(--red); font-weight: 700; }
+        .recovery-timeline .resume { color: var(--amber); }
+        .recovery-timeline .done { color: var(--purple); }
+        .recovery-timeline .co { color: var(--fg-muted); }
+
+        .checklist-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .checklist-table th { background: var(--bg-alt); padding: 10px 14px; text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--fg-muted); }
+        .checklist-table td { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 0.76rem; }
+        .checklist-table td.mono { font-family: var(--mono); font-size: 0.69rem; }
+        .checklist-table tr:hover { background: rgba(255,255,255,0.02); }
+        .checklist-table .chk-yes { color: var(--green); font-weight: 700; }
+
+        .event-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 14px 0; font-family: var(--mono); font-size: 0.68rem; }
+        .event-flow .event-node { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; white-space: nowrap; }
+        .event-flow .event-arrow { color: var(--fg-subtle); font-weight: 700; }
+        .event-node.ev-start { border-color: rgba(63,185,80,0.3); color: var(--green); }
+        .event-node.ev-phase { border-color: rgba(88,166,255,0.3); color: var(--accent); }
+        .event-node.ev-done { border-color: rgba(168,85,247,0.3); color: var(--purple); }
+
         /* Footer */
         .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
         .footer a { color: var(--accent); text-decoration: none; }
@@ -197,7 +234,7 @@
 
         @@media (max-width: 768px) {
             .phase-grid, .stat-row, .comp-grid { grid-template-columns: 1fr; }
-            .code-compare, .info-grid, .stat-grid-4 { grid-template-columns: 1fr; }
+            .code-compare, .info-grid, .stat-grid-4, .stability-grid { grid-template-columns: 1fr; }
             header h1 { font-size: 1.5rem; }
             .arch-flow .flow-row { gap: 4px; }
         }
@@ -1421,6 +1458,237 @@ case <span class="kw">FileGenerating</span>:
   M2 business rule diff ≈ 1 config entry
   M2 new chain(2000 lines) ≈ M2.5+ copy 1 method (~20 lines)</pre>
             </div>
+        </div>
+
+    </section>
+
+    <!-- ==================== SECTION 8: STABILITY & RESILIENCE ==================== -->
+    <section>
+        <h2>8. Resilience Blueprint: From Event Sourcing to Six Nines</h2>
+
+        <p style="font-size:0.85rem; color:var(--fg-muted); margin-bottom:24px;">
+            M2.5+ is not just about business parameterization — it inherits all of M2's Akka infrastructure capabilities.
+            The <strong>ChainExecutionActor</strong> reconnects the runtime pipeline to Akka Persistence, ensuring
+            Event Sourcing, Self-Healing, Horizontal Scaling, and Responsive system properties are preserved.
+            Below, we inspect the stability guarantees layer by layer — from application code through hardware.
+        </p>
+
+        <!-- ===== 8.1 Event Sourcing ===== -->
+        <h3>8.1 ChainExecutionActor: Event Sourcing Returns</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            <span class="file-ref">ChainExecutionActor</span> (new, 342 lines) wraps SubBatchProcessor's Future pipeline
+            in a lightweight <strong>EventSourcedBehavior</strong>. When each pipeline stage completes, the
+            <span class="file-ref">onPhaseComplete</span> callback sends a <span class="file-ref">PhaseCompleted</span>
+            message back to the actor, triggering event persistence.
+        </p>
+
+        <div class="event-flow">
+            <span class="event-node ev-start">Started</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(file-gen)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(upload)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(wait-ack)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(poll)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(parse)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(classify)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-done">AllCompleted</span>
+        </div>
+
+        <div class="arch-callout">
+            <strong>Key difference from M2:</strong> M2 has ~40 business-specific event types (one per FSM transition).
+            M2.5+ has only <strong>4 generic event types</strong> (Started / PhaseDone / AllCompleted / ExecutionFailed).
+            No information is lost — M2's "RechargeRequestFileGenerated" is equivalent to M2.5+'
+            <span class="file-ref">PhaseDone("file-gen", metadata={...})</span> where metadata carries path, size, and encoding.
+            Recharge/Purchase/Equipment-Area all share the same event types — business variation lives in configuration alone.
+        </div>
+
+        <!-- ===== 8.2 Self-Healing ===== -->
+        <h3>8.2 Self-Healing Walkthrough: Full Cluster Outage Recovery</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            The worst-case scenario — the entire Akka Cluster (all 3 nodes) loses power — and how it recovers, step by step.
+        </p>
+
+        <div class="recovery-timeline"><span class="co">// === Before crash, persisted in Journal ===</span>
+<span class="evt">Started</span>("recharge", "batch-001", itemCount=500)
+<span class="evt">PhaseDone</span>("file-gen",  t=1000, {localPath:"/tmp/batch-001.xml", byteSize:"4096"})
+<span class="evt">PhaseDone</span>("upload",   t=2000, {remotePath:"/remote/batch-001.xml", bytesTransferred:"4096"})
+<span class="evt">PhaseDone</span>("wait-ack", t=3000, {ackResult:"AckReceived"})
+<span class="crash">← Entire cluster goes down (poll was waiting for SFTP response file)</span>
+
+<span class="co">// === Recovery ===</span>
+<span class="co">t=0s</span>  Akka Cluster reforms (gossip convergence, 3 nodes discover each other)
+<span class="co">t=2s</span>  ShardCoordinator leader elected; assigns shard-7 → node-3
+<span class="co">t=3s</span>  ChainExecutionActor starts; MongoDB journal replays 4 events
+<span class="resume">       state = Executing("batch-001", phases=["file-gen","upload","wait-ack"])</span>
+<span class="co">t=4s</span>  RecoveryCompleted → itemLoader("batch-001") reloads 500 items from MySQL
+<span class="co">t=5s</span>  processor.process(batch) re-executes full pipeline:
+<span class="co">         file-gen:</span> overwrites temp file (idempotent)
+<span class="co">         upload:  </span>overwrites SFTP upload (same MD5, idempotent)
+<span class="co">         wait-ack:</span> re-notifies EAMS (EAMS dedup — returns success for already-seen batch)
+<span class="co">         poll:   </span>re-polls SFTP (response file already generated by EAMS, available immediately)
+<span class="co">         parse:  </span>re-parses XML response (idempotent)
+<span class="co">         classify:</span> re-classifies results (idempotent)
+<span class="co">t=8s</span>  SMS/P2B notify phase: checks MySQL read-side
+<span class="resume">       → batch-001 has no notify record yet → sends SMS + P2B notification</span>
+<span class="co">t=9s</span>  <span class="done">persist AllCompleted("batch-001", success=498, failure=2)</span>
+<span class="done">       → Actor stops. Recovery complete.</span></div>
+
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-top:8px;">
+            <strong>Recovery time: ~9 seconds</strong> (excluding MongoDB cluster startup). If the cluster crashes again
+            mid-recovery, the process is fully replayable — AllCompleted hasn't been persisted yet, so
+            RecoveryCompleted will trigger again and everything executes idempotently from the start.
+        </p>
+
+        <!-- ===== 8.3 Cluster Sharding ===== -->
+        <h3>8.3 Horizontal Scaling: Akka Cluster Sharding</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            Each business chain instance registers via <span class="file-ref">EntityTypeKey("m25-chain-executor")</span>.
+            entityId = <span class="file-ref">"recharge-batch-001"</span>; shards are auto-assigned by the ShardCoordinator.
+        </p>
+
+        <table class="mapping-table">
+            <thead><tr><th style="width:25%">Scaling Scenario</th><th style="width:37%">ClusterSharding Behavior</th><th style="width:38%">Business Impact</th></tr></thead>
+            <tbody>
+                <tr class="row-blue"><td>Add node (3 → 5)</td><td class="mono">ShardCoordinator triggers rebalance; shards migrate to new nodes</td><td>New batches land on idle nodes; existing batches continue on current nodes</td></tr>
+                <tr class="row-blue"><td>Node crash</td><td class="mono">ShardCoordinator detects node-down; migrates shards to healthy nodes</td><td>Crashed-node batches recover from journal on new node via RecoveryCompleted</td></tr>
+                <tr class="row-blue"><td>Peak load (month-end payroll)</td><td class="mono">New batches create new entities; auto-distributed across all nodes</td><td>500 batches evenly spread across 5 nodes, ~100 entities per node</td></tr>
+                <tr class="row-blue"><td>Rolling upgrade</td><td class="mono">Per-node drain → update → rejoin; shards auto-migrate</td><td>Zero downtime; entities resume on updated node after recovery</td></tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 8.4 Responsive ===== -->
+        <h3>8.4 Responsive: How Each Reactive Trait is Achieved</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            The four Reactive Manifesto traits, mapped to M2.5+ implementations.
+        </p>
+
+        <table class="mapping-table">
+            <thead><tr><th style="width:15%">Trait</th><th style="width:28%">M2.5+ Implementation</th><th style="width:28%">Mechanism</th><th style="width:29%">Config / Location</th></tr></thead>
+            <tbody>
+                <tr class="row-amber"><td>Async & Non-blocking</td><td class="mono">Future pipeline + Akka async message passing</td><td>All I/O returns Future; threads never block waiting</td><td>SubBatchProcessor · implicit ExecutionContext</td></tr>
+                <tr class="row-amber"><td>Backpressure</td><td class="mono">Akka Streams + mailbox size limit</td><td>Upstream slows when downstream is congested</td><td>akka.actor.default-mailbox.mailbox-capacity</td></tr>
+                <tr class="row-purple"><td>Timeouts</td><td class="mono">PhaseDone timestamps + SLA config</td><td>Each phase has a timestamp for latency calculation and alerting</td><td>ChainBusinessRules.slaThreshold</td></tr>
+                <tr class="row-purple"><td>Resilience</td><td class="mono">ReBatchPolicy: auto retry / degrade / manual</td><td>Failures routed per policy: RetrySameArea, RouteToArea, Scrap, ManualIntervention</td><td>ReBatchPolicy.actionMap</td></tr>
+                <tr class="row-blue"><td>Isolation</td><td class="mono">Per-batch entity; failures don't cascade</td><td>batch-001 failure does not affect batch-002 execution</td><td>EntityTypeKey per-batch entity</td></tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 8.5 6-Nines Stability ===== -->
+        <h3>8.5 Six Nines Stability Blueprint (99.9999%)</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            Six dimensions of stability — from application code to hardware networking.
+            <strong>Target: annual downtime ≤ 31.5 seconds.</strong>
+        </p>
+
+        <div class="stability-grid">
+            <!-- App Layer -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-app">App</span><h5>Application · Akka</h5></div>
+                <ul>
+                    <li>Circuit Breaker: external calls protected · SftpConnector / HttpConnector</li>
+                    <li>Retry with Backoff: ReBatchPolicy exponential backoff (maxRetries=3)</li>
+                    <li>Bulkhead: per-chain shard entity, resource isolation</li>
+                    <li>Timeout: SLA config (10min/15min per chain)</li>
+                    <li>Dead Letter: failure events persisted to MongoDB journal, fully traceable</li>
+                </ul>
+            </div>
+            <!-- JVM Layer -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-jvm">JVM</span><h5>Runtime · JVM</h5></div>
+                <ul>
+                    <li>GC: G1GC, -Xms4g -Xmx8g, MaxGCPauseMillis=200</li>
+                    <li>Thread Pool: Akka Dispatcher fork-join-pool, parallelism-min=8, max=64</li>
+                    <li>Memory: -XX:+HeapDumpOnOutOfMemoryError, MaxMetaspaceSize=512m</li>
+                    <li>JIT: Tiered Compilation, ReservedCodeCacheSize=256m</li>
+                    <li>JMX: MBean exposes actor metrics + GC metrics</li>
+                </ul>
+            </div>
+            <!-- Infra Layer -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-infra">Infra</span><h5>Infrastructure · Cluster</h5></div>
+                <ul>
+                    <li>Cluster: min 3 nodes (tolerates 1 failure), recommend 5 (tolerates 2)</li>
+                    <li>Sharding: ShardCoordinator singleton (auto failover)</li>
+                    <li>Persistence: MongoDB 3-node replica set, writeConcern=majority</li>
+                    <li>Split Brain: keep-majority strategy (minority self-downs)</li>
+                    <li>Membership: akka.cluster.downing-provider-class = SBR</li>
+                </ul>
+            </div>
+            <!-- HW / Network -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-hw">HW</span><h5>Hardware / Network</h5></div>
+                <ul>
+                    <li>Multi-AZ: 3 availability zones (≥ 1 node per AZ)</li>
+                    <li>Compute: 8-16 vCPU, 16-32GB RAM per node</li>
+                    <li>Network: 10GbE · jumbo frames (MTU 9000) · low latency</li>
+                    <li>Load Balancer: HAProxy/Nginx TCP mode · health check /health</li>
+                    <li>DNS: multi-IP round-robin (TTL=60s) · auto failover</li>
+                </ul>
+            </div>
+            <!-- Storage -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-storage">Storage</span><h5>Storage Layer</h5></div>
+                <ul>
+                    <li>MongoDB (write): 3-node replica set · journal w: "majority"</li>
+                    <li>MySQL (read): primary-replica replication · read replica for queries + dedup</li>
+                    <li>Backup: MongoDB daily snapshot + oplog incremental (RPO &lt; 1h)</li>
+                    <li>Retention: event journal 30 days · snapshot every 100 events</li>
+                    <li>Disk: SSD · 30% headroom reserved</li>
+                </ul>
+            </div>
+            <!-- Ops -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-ops">Ops</span><h5>Operations</h5></div>
+                <ul>
+                    <li>Health Check: /health endpoint (Akka Management) · readiness + liveness</li>
+                    <li>Metrics: Prometheus scrape akka-actor-metrics + jvm-metrics · Grafana dashboard</li>
+                    <li>Alerting: PagerDuty (SLA breach / shard imbalance / GC pause &gt; 500ms)</li>
+                    <li>Graceful Shutdown: CoordinatedShutdown (Akka Management) · drain → stop → leave</li>
+                    <li>Logging: SLF4J + Logback · JSON format · centralized ELK</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ===== 8.6 Checklist ===== -->
+        <h3>8.6 Production Readiness Checklist</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            A quick assessment for architects — does your M2.5+ deployment cover all stability dimensions?
+        </p>
+
+        <table class="checklist-table">
+            <thead><tr><th style="width:25%">Check Item</th><th style="width:10%">Covered</th><th style="width:65%">Implementation</th></tr></thead>
+            <tbody>
+                <tr><td>Crash Recovery</td><td class="chk-yes">✅</td><td class="mono">ChainExecutionActor + MongoDB journal replay</td></tr>
+                <tr><td>Circuit Breaker</td><td class="chk-yes">✅</td><td class="mono">infrastructure/connector/SftpConnector · HttpConnector</td></tr>
+                <tr><td>Failure Retry</td><td class="chk-yes">✅</td><td class="mono">ReBatchPolicy + PolicyBasedReBatchRouter (maxRetries=3, backoff)</td></tr>
+                <tr><td>Horizontal Scale</td><td class="chk-yes">✅</td><td class="mono">ClusterSharding + EntityTypeKey("m25-chain-executor")</td></tr>
+                <tr><td>Audit Trail</td><td class="chk-yes">✅</td><td class="mono">PhaseDone events fully recorded to MongoDB journal (with metadata)</td></tr>
+                <tr><td>Idempotent Notify</td><td class="chk-yes">✅</td><td class="mono">MySQL read-side dedup (SMS/P2B never duplicated)</td></tr>
+                <tr><td>Rolling Upgrade</td><td class="chk-yes">✅</td><td class="mono">Akka Cluster Rolling Update + CoordinatedShutdown</td></tr>
+                <tr><td>Metrics</td><td class="chk-yes">✅</td><td class="mono">Prometheus + akka-actor-metrics + jvm-metrics</td></tr>
+                <tr><td>Alerting</td><td class="chk-yes">✅</td><td class="mono">PagerDuty: SLA breach / shard imbalance / GC pause &gt; 500ms</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>Architectural Completeness:</strong> M2.5+ runtime component engine (component/ + pipeline/ + business/)
+            + ChainExecutionActor (Event Sourcing + Self-Healing + Sharding) + existing infrastructure
+            (circuit breakers / metrics / rolling upgrades) = <strong>a complete Reactive System</strong>.
+            Business parameterization (ErrorCodeMapping + ReBatchPolicy + ChainDsl) is the "flex layer" —
+            product managers configure business rules; Akka Persistence + ClusterSharding is the "rigid layer" —
+            guaranteeing no event loss, crash recovery, and elastic scaling.
         </div>
 
     </section>

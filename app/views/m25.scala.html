@@ -190,6 +190,43 @@
 
         .summary-code { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.7; color: var(--fg); overflow-x: auto; white-space: pre; }
 
+        /* ===== Section 8: Stability & Resilience ===== */
+        .stability-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 16px 0; }
+        .stability-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+        .stability-card .sc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+        .stability-card .sc-header h5 { font-size: 0.8rem; font-weight: 700; margin: 0; }
+        .stability-card .sc-tag { font-size: 0.55rem; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .sc-tag-app { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .sc-tag-jvm { background: rgba(63,185,80,0.12); color: var(--green); }
+        .sc-tag-infra { background: rgba(245,158,11,0.12); color: var(--amber); }
+        .sc-tag-hw { background: rgba(168,85,247,0.12); color: var(--purple); }
+        .sc-tag-storage { background: rgba(20,184,166,0.12); color: var(--teal); }
+        .sc-tag-ops { background: rgba(248,81,73,0.12); color: var(--red); }
+        .stability-card ul { list-style: none; padding: 0; margin: 0; }
+        .stability-card ul li { font-size: 0.7rem; color: var(--fg-muted); padding: 3px 0; line-height: 1.5; display: flex; align-items: baseline; gap: 6px; }
+        .stability-card ul li::before { content: "·"; color: var(--fg-subtle); font-weight: 700; }
+
+        .recovery-timeline { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin: 14px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.75; color: var(--fg); overflow-x: auto; white-space: pre; }
+        .recovery-timeline .evt { color: var(--green); }
+        .recovery-timeline .crash { color: var(--red); font-weight: 700; }
+        .recovery-timeline .resume { color: var(--amber); }
+        .recovery-timeline .done { color: var(--purple); }
+        .recovery-timeline .co { color: var(--fg-muted); }
+
+        .checklist-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .checklist-table th { background: var(--bg-alt); padding: 10px 14px; text-align: left; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.6px; color: var(--fg-muted); }
+        .checklist-table td { padding: 8px 14px; border-top: 1px solid var(--border); font-size: 0.76rem; }
+        .checklist-table td.mono { font-family: var(--mono); font-size: 0.69rem; }
+        .checklist-table tr:hover { background: rgba(255,255,255,0.02); }
+        .checklist-table .chk-yes { color: var(--green); font-weight: 700; }
+
+        .event-flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 14px 0; font-family: var(--mono); font-size: 0.68rem; }
+        .event-flow .event-node { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; white-space: nowrap; }
+        .event-flow .event-arrow { color: var(--fg-subtle); font-weight: 700; }
+        .event-node.ev-start { border-color: rgba(63,185,80,0.3); color: var(--green); }
+        .event-node.ev-phase { border-color: rgba(88,166,255,0.3); color: var(--accent); }
+        .event-node.ev-done { border-color: rgba(168,85,247,0.3); color: var(--purple); }
+
         /* Footer */
         .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
         .footer a { color: var(--accent); text-decoration: none; }
@@ -197,7 +234,7 @@
 
         @@media (max-width: 768px) {
             .phase-grid, .stat-row, .comp-grid { grid-template-columns: 1fr; }
-            .code-compare, .info-grid, .stat-grid-4 { grid-template-columns: 1fr; }
+            .code-compare, .info-grid, .stat-grid-4, .stability-grid { grid-template-columns: 1fr; }
             header h1 { font-size: 1.5rem; }
             .arch-flow .flow-row { gap: 4px; }
         }
@@ -1414,6 +1451,232 @@ case <span class="kw">FileGenerating</span>:
   M2 的 1 条业务规则差异  ≈ 1 行配置项
   M2 新增 1 条链路(2000行) ≈ M2.5+ 复制 1 个方法(~20行)</pre>
             </div>
+        </div>
+
+    </section>
+
+    <!-- ==================== SECTION 8: STABILITY & RESILIENCE ==================== -->
+    <section>
+        <h2>八、运行保障全景：从事件溯源到 6 个 9 稳定性</h2>
+
+        <p style="font-size:0.85rem; color:var(--fg-muted); margin-bottom:24px;">
+            M2.5+ 不只是业务参数化的抽象——它继承了 M2 的全部 Akka 基础设施能力。
+            <strong>ChainExecutionActor</strong> 将运行时流水线重新接入 Akka Persistence，确保事件溯源、自愈恢复、水平扩展、响应式四大架构目标完整保留。
+            以下从软件层到硬件层，逐层展示系统的稳定性保障。
+        </p>
+
+        <!-- ===== 8.1 Event Sourcing ===== -->
+        <h3>8.1 ChainExecutionActor：事件溯源回来了</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            <span class="file-ref">ChainExecutionActor</span>（新增 342 行）用一个轻量 <strong>EventSourcedBehavior</strong> 包装了
+            SubBatchProcessor 的 Future 流水线。每个流水线阶段完成时，通过 <span class="file-ref">onPhaseComplete</span>
+            回调向 Actor 自身发送 <span class="file-ref">PhaseCompleted</span> 消息，触发事件持久化。
+        </p>
+
+        <div class="event-flow">
+            <span class="event-node ev-start">Started</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(file-gen)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(upload)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(wait-ack)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(poll)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(parse)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-phase">PhaseDone(classify)</span>
+            <span class="event-arrow">→</span>
+            <span class="event-node ev-done">AllCompleted</span>
+        </div>
+
+        <div class="arch-callout">
+            <strong>与 M2 的关键区别：</strong>M2 有 ~40 个业务专用事件类型（每个 FSM 状态迁移一个），
+            M2.5+ 只有 <strong>4 个通用事件类型</strong>（Started / PhaseDone / AllCompleted / ExecutionFailed）。
+            信息量没有丢失——M2 的 "RechargeRequestFileGenerated" 等价于 M2.5+ 的
+            <span class="file-ref">PhaseDone("file-gen", metadata={...})</span>，metadata 承载了文件路径、大小等细节。
+            充值/申购/设备区复用同一套事件类型，业务差异完全在配置中。
+        </div>
+
+        <!-- ===== 8.2 Self-Healing ===== -->
+        <h3>8.2 自愈推演：集群全部宕机后如何恢复</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            以下展示最坏场景——整个 Akka Cluster 全部宕机（所有 3 个节点断电），然后逐步恢复。
+        </p>
+
+        <div class="recovery-timeline"><span class="co">// === 宕机前，Journal 中已持久化 ===</span>
+<span class="evt">Started</span>("recharge", "batch-001", itemCount=500)
+<span class="evt">PhaseDone</span>("file-gen",  t=1000, {localPath:"/tmp/batch-001.xml", byteSize:"4096"})
+<span class="evt">PhaseDone</span>("upload",   t=2000, {remotePath:"/remote/batch-001.xml", bytesTransferred:"4096"})
+<span class="evt">PhaseDone</span>("wait-ack", t=3000, {ackResult:"AckReceived"})
+<span class="crash">← 集群全部宕机（poll 正在等待 SFTP 响应文件）</span>
+
+<span class="co">// === 恢复过程 ===</span>
+<span class="co">t=0s</span>  Akka Cluster 重新形成（gossip convergence，3 节点互相发现）
+<span class="co">t=2s</span>  ShardCoordinator 选主完成，分配 shard-7 → node-3
+<span class="co">t=3s</span>  ChainExecutionActor 启动，MongoDB journal 回放 4 个事件
+<span class="resume">       state = Executing("batch-001", phases=["file-gen","upload","wait-ack"])</span>
+<span class="co">t=4s</span>  RecoveryCompleted → itemLoader("batch-001") 从 MySQL 重新加载 500 条 items
+<span class="co">t=5s</span>  processor.process(batch) 重新执行完整流水线：
+<span class="co">         file-gen:</span> 覆盖 temp file（幂等）
+<span class="co">         upload:  </span>覆盖 SFTP upload（相同 MD5，幂等）
+<span class="co">         wait-ack:</span> 重新通知 EAMS（EAMS 去重——已处理过的 batch 返回 success）
+<span class="co">         poll:   </span>重新轮询 SFTP（响应文件已由 EAMS 生成，立即可下载）
+<span class="co">         parse:  </span>重新解析 XML 响应（幂等）
+<span class="co">         classify:</span> 重新分类结果（幂等）
+<span class="co">t=8s</span>  SMS/P2B notify 阶段：检查 MySQL read-side
+<span class="resume">       → batch-001 尚无 notify 记录 → 发送 SMS + P2B 通知</span>
+<span class="co">t=9s</span>  <span class="done">persist AllCompleted("batch-001", success=498, failure=2)</span>
+<span class="done">       → Actor stop。恢复完成。</span></div>
+
+        <p style="font-size:0.78rem; color:var(--fg-muted); margin-top:8px;">
+            <strong>恢复耗时：~9 秒</strong>（不含 MongoDB cluster 启动时间）。如果中途再次宕机，流程完全可重放——
+            AllCompleted 尚未持久化，RecoveryCompleted 将再次触发恢复，一切从头幂等执行。
+        </p>
+
+        <!-- ===== 8.3 Cluster Sharding ===== -->
+        <h3>8.3 水平扩展：Akka Cluster Sharding</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            每个业务链路实例通过 <span class="file-ref">EntityTypeKey("m25-chain-executor")</span> 注册到 ClusterSharding。
+            entityId = <span class="file-ref">"recharge-batch-001"</span>，shard 由 ShardCoordinator 自动分配。
+        </p>
+
+        <table class="mapping-table">
+            <thead><tr><th style="width:25%">扩展场景</th><th style="width:37%">ClusterSharding 行为</th><th style="width:38%">对业务的影响</th></tr></thead>
+            <tbody>
+                <tr class="row-blue"><td>新增节点（3 → 5）</td><td class="mono">ShardCoordinator 触发 rebalance，shard 自动迁移到新节点</td><td>新 batch 自动分配到空闲节点；已有 batch 继续在原节点执行</td></tr>
+                <tr class="row-blue"><td>节点宕机</td><td class="mono">ShardCoordinator 检测 node-down，将该节点 shard 迁移到健康节点</td><td>宕机节点的 batch 在 RecoveryCompleted 后从 journal 恢复执行</td></tr>
+                <tr class="row-blue"><td>峰值流量（月底批量代扣）</td><td class="mono">新 batch 创建新 entity，自动分布到所有节点</td><td>500 个 batch 均匀分布到 5 个节点，每节点 ~100 entity</td></tr>
+                <tr class="row-blue"><td>滚动升级</td><td class="mono">逐个节点 drain → update → rejoin，shard 自动迁移</td><td>零停机，entity 在新节点恢复后继续执行</td></tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 8.4 Responsive ===== -->
+        <h3>8.4 Responsive 达成路径</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            Reactive Manifesto 的四大特质，M2.5+ 在每一层都有对应实现。
+        </p>
+
+        <table class="mapping-table">
+            <thead><tr><th style="width:15%">特质</th><th style="width:28%">M2.5+ 实现</th><th style="width:28%">支撑机制</th><th style="width:29%">配置/位置</th></tr></thead>
+            <tbody>
+                <tr class="row-amber"><td>异步非阻塞</td><td class="mono">Future 流水线 + Akka async message passing</td><td>所有 I/O 操作返回 Future，线程不阻塞等待</td><td>SubBatchProcessor · implicit ExecutionContext</td></tr>
+                <tr class="row-amber"><td>背压</td><td class="mono">Akka Streams + mailbox size limit</td><td>下游处理慢时，上游自动降速</td><td>akka.actor.default-mailbox.mailbox-capacity</td></tr>
+                <tr class="row-purple"><td>超时</td><td class="mono">PhaseDone 带 timestamp + SLA 配置</td><td>每个阶段有时间戳，可计算耗时和告警</td><td>ChainBusinessRules.slaThreshold</td></tr>
+                <tr class="row-purple"><td>弹性</td><td class="mono">ReBatchPolicy 自动重试/降级/人工介入</td><td>失败项按策略重试（RetrySameArea）、换区（RouteToArea）、报废（Scrap）、人工（ManualIntervention）</td><td>ReBatchPolicy.actionMap</td></tr>
+                <tr class="row-blue"><td>隔离</td><td class="mono">每个 batch 独立 entity，故障不扩散</td><td>batch-001 的失败不影响 batch-002 的执行</td><td>EntityTypeKey per-batch entity</td></tr>
+            </tbody>
+        </table>
+
+        <!-- ===== 8.5 6-Nines Stability ===== -->
+        <h3>8.5 6 个 9 稳定性全景（99.9999%）</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            以下从 6 个维度逐层展示稳定性保障——从应用代码到硬件网络。
+            <strong>目标：全年宕机时间 ≤ 31.5 秒。</strong>
+        </p>
+
+        <div class="stability-grid">
+            <!-- App Layer -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-app">App</span><h5>应用层 · Akka</h5></div>
+                <ul>
+                    <li>Circuit Breaker：外部系统调用熔断 · SftpConnector / HttpConnector</li>
+                    <li>Retry with Backoff：ReBatchPolicy 指数退避 (maxRetries=3)</li>
+                    <li>Bulkhead：每个 chain 独立 shard entity，资源隔离</li>
+                    <li>Timeout：SLA 配置 (10min/15min per chain)</li>
+                    <li>Dead Letter：失败事件持久化到 MongoDB journal，可追溯</li>
+                </ul>
+            </div>
+            <!-- JVM Layer -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-jvm">JVM</span><h5>运行时层 · JVM</h5></div>
+                <ul>
+                    <li>GC：G1GC, -Xms4g -Xmx8g, MaxGCPauseMillis=200</li>
+                    <li>Thread Pool：Akka Dispatcher fork-join-pool, parallelism-min=8, max=64</li>
+                    <li>Memory：-XX:+HeapDumpOnOutOfMemoryError, MaxMetaspaceSize=512m</li>
+                    <li>JIT：Tiered Compilation, ReservedCodeCacheSize=256m</li>
+                    <li>JMX：MBean 暴露 actor metrics + GC metrics</li>
+                </ul>
+            </div>
+            <!-- Infra Layer -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-infra">Infra</span><h5>基础设施层 · Cluster</h5></div>
+                <ul>
+                    <li>Cluster：最小 3 节点 (容忍 1 节点故障)，建议 5 节点 (容忍 2)</li>
+                    <li>Sharding：ShardCoordinator 单例 (自动 failover)</li>
+                    <li>Persistence：MongoDB 3 节点 replica set, writeConcern=majority</li>
+                    <li>Split Brain：keep-majority 策略 (脑裂时少数派自我下线)</li>
+                    <li>Membership：akka.cluster.downing-provider-class = akka.cluster.sbr.SplitBrainResolverProvider</li>
+                </ul>
+            </div>
+            <!-- HW / Network -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-hw">HW</span><h5>硬件/网络层</h5></div>
+                <ul>
+                    <li>Multi-AZ：3 个可用区部署 (每个 AZ ≥ 1 节点)</li>
+                    <li>计算：8-16 vCPU, 16-32GB RAM per node</li>
+                    <li>网络：万兆网卡 · jumbo frames (MTU 9000) · 低延迟</li>
+                    <li>负载均衡：HAProxy/Nginx TCP mode · health check /health</li>
+                    <li>DNS：多 IP 轮询 (TTL=60s) · failover 自动切换</li>
+                </ul>
+            </div>
+            <!-- Storage -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-storage">Storage</span><h5>存储层</h5></div>
+                <ul>
+                    <li>MongoDB (write)：3 节点 replica set · journal 写入 majority · w: "majority"</li>
+                    <li>MySQL (read)：主从复制 · read replica 用于查询+去重</li>
+                    <li>备份：MongoDB 每日快照 + oplog 增量备份 (RPO &lt; 1h)</li>
+                    <li>Retention：event journal 保留 30 天 · snapshot 每 100 事件</li>
+                    <li>磁盘：SSD · 预留 30% 空间防止写满</li>
+                </ul>
+            </div>
+            <!-- Ops -->
+            <div class="stability-card">
+                <div class="sc-header"><span class="sc-tag sc-tag-ops">Ops</span><h5>运维层</h5></div>
+                <ul>
+                    <li>Health Check：/health 端点 (Akka Management) · readiness + liveness</li>
+                    <li>Metrics：Prometheus scrape akka-actor-metrics + jvm-metrics · Grafana dashboard</li>
+                    <li>Alerting：PagerDuty 集成 (SLA 超时 / shard 不平衡 / GC 暂停 &gt; 500ms)</li>
+                    <li>Graceful Shutdown：CoordinatedShutdown (Akka Management) · drain traffic → stop actors → leave cluster</li>
+                    <li>Logging：SLF4J + Logback · JSON 格式 · 集中式 ELK</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- ===== 8.6 Checklist ===== -->
+        <h3>8.6 生产就绪检查清单</h3>
+
+        <p style="font-size:0.82rem; color:var(--fg-muted);">
+            面向架构师的快速评估——您的 M2.5+ 部署是否覆盖了所有稳定性维度。
+        </p>
+
+        <table class="checklist-table">
+            <thead><tr><th style="width:25%">检查项</th><th style="width:10%">覆盖</th><th style="width:65%">实现位置</th></tr></thead>
+            <tbody>
+                <tr><td>崩溃恢复 (Crash Recovery)</td><td class="chk-yes">✅</td><td class="mono">ChainExecutionActor + MongoDB journal replay</td></tr>
+                <tr><td>外部系统熔断 (Circuit Breaker)</td><td class="chk-yes">✅</td><td class="mono">infrastructure/connector/SftpConnector · HttpConnector</td></tr>
+                <tr><td>失败重试 (Retry)</td><td class="chk-yes">✅</td><td class="mono">ReBatchPolicy + PolicyBasedReBatchRouter (maxRetries=3, backoff)</td></tr>
+                <tr><td>水平扩展 (Horizontal Scale)</td><td class="chk-yes">✅</td><td class="mono">ClusterSharding + EntityTypeKey("m25-chain-executor")</td></tr>
+                <tr><td>审计追踪 (Audit Trail)</td><td class="chk-yes">✅</td><td class="mono">PhaseDone 事件完整记录到 MongoDB journal (含 metadata)</td></tr>
+                <tr><td>幂等通知 (Idempotent Notify)</td><td class="chk-yes">✅</td><td class="mono">MySQL read-side 去重 (SMS/P2B 不重复发送)</td></tr>
+                <tr><td>滚动升级 (Rolling Update)</td><td class="chk-yes">✅</td><td class="mono">Akka Cluster Rolling Update + CoordinatedShutdown</td></tr>
+                <tr><td>指标监控 (Metrics)</td><td class="chk-yes">✅</td><td class="mono">Prometheus + akka-actor-metrics + jvm-metrics</td></tr>
+                <tr><td>告警 (Alerting)</td><td class="chk-yes">✅</td><td class="mono">PagerDuty: SLA 超时 / shard 不平衡 / GC 暂停 &gt; 500ms</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>架构完整性：</strong>M2.5+ 的运行时组件引擎（component/ + pipeline/ + business/）+ ChainExecutionActor
+            （事件溯源 + 自愈 + 分片）+ 现有基础设施（熔断/监控/滚动升级）= <strong>完整的 Reactive 系统</strong>。
+            业务参数化（ErrorCodeMapping + ReBatchPolicy + ChainDsl）是「柔性层」，让产品经理能配置业务规则；
+            Akka Persistence + ClusterSharding 是「刚性层」，保证事件不丢、宕机能恢复、流量能扩展。
         </div>
 
     </section>
