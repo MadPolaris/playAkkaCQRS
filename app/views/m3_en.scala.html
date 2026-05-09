@@ -1,0 +1,364 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3 · Dynamic Process Orchestration — Same M2.5+ Components, Fab Semiconductor Execution</title>
+    <meta name="description" content="M3 reuses every layer of the M2.5+ three-dimension architecture for dynamic semiconductor Fab process orchestration. 9+1 equipment areas, ProductRouting, BatchMergeManager, reentry tracking. Incremental evolution, not a rewrite.">
+    <meta name="keywords" content="M3, Fab, semiconductor, dynamic process orchestration, ProductRouting, BatchMergeManager, Reentry, Akka, DAG, MES">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6;
+            --code-bg: #0f172a;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.7; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center; padding: 80px 0 50px;
+            border-bottom: 1px solid var(--border); margin-bottom: 50px;
+        }
+        header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 12px; }
+        header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+        header h1 .m3 { color: var(--amber); }
+        header h1 .m25 { color: var(--purple); }
+        header h1 .arrow { color: var(--fg-subtle); margin: 0 6px; }
+        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 700px; margin-left: auto; margin-right: auto; }
+        header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+        .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .badge-prototype { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-future { background: rgba(168,85,247,0.15); color: var(--purple); }
+        .badge-live { background: rgba(63,185,80,0.15); color: var(--green); }
+
+        .nav-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; font-size: 0.82rem; align-items: center; flex-wrap: wrap; }
+        .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links > a:hover { text-decoration: underline; }
+        .nav-links > a.primary { background: var(--amber); color: #000; padding: 6px 16px; border-radius: 6px; font-weight: 700; }
+        .nav-links > a.primary:hover { background: #d97706; text-decoration: none; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn { color: var(--accent); font-size: 0.82rem; font-weight: 500; cursor: pointer; background: transparent; border: none; font-family: var(--font); display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .nav-dropdown-btn:hover { text-decoration: underline; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; min-width: 220px; padding: 4px; display: none; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.8rem; font-weight: 500; transition: all 0.1s; }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-m3 { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .mm-active { background: rgba(255,255,255,0.05); }
+
+        section { margin-bottom: 60px; }
+        h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: var(--fg); }
+
+        .ps-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .ps-table th { background: var(--bg-alt); padding: 14px 18px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
+        .ps-table td { padding: 14px 18px; border-top: 1px solid var(--border); }
+        .ps-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 20px 0; }
+        .comp-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; transition: border-color 0.2s; }
+        .comp-card:hover { border-color: var(--fg-muted); }
+        .comp-card .comp-icon { font-size: 1.5rem; margin-bottom: 10px; }
+        .comp-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+        .comp-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.6; }
+
+        .arch-callout { background: rgba(245,158,11,0.04); border-left: 3px solid var(--amber); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
+        .arch-callout strong { color: var(--fg); }
+        .file-ref { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted); }
+
+        .capability-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 20px 0; }
+        .cap-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; }
+        .cap-card:hover { border-color: var(--amber); }
+        .cap-card .cap-icon { font-size: 1.6rem; margin-bottom: 10px; }
+        .cap-card h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 8px; }
+        .cap-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.65; }
+        .cap-card .code-ref { font-family: var(--mono); font-size: 0.67rem; color: var(--fg-subtle); margin-top: 8px; display: block; }
+
+        .code-block { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.7; color: var(--fg); overflow-x: auto; white-space: pre; }
+        .code-block .co { color: var(--fg-muted); }
+        .code-block .kw { color: #ff7b72; }
+        .code-block .ty { color: #79c0ff; }
+        .code-block .str { color: #a5d6ff; }
+
+        blockquote { border-left: 3px solid var(--amber); padding: 12px 18px; margin: 16px 0; background: rgba(245,158,11,0.04); font-size: 0.82rem; color: var(--fg-muted); border-radius: 0 6px 6px 0; }
+        blockquote strong { color: var(--fg); }
+
+        .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+        .stat-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 18px; text-align: center; }
+        .stat-card .num { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
+        .stat-card .lbl { font-size: 0.7rem; color: var(--fg-muted); margin-top: 4px; }
+        .num-amber { color: var(--amber); }
+        .num-purple { color: var(--purple); }
+        .num-green { color: var(--green); }
+
+        @@media (max-width: 768px) {
+            .phase-grid, .stat-row, .comp-grid, .capability-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ==================== HERO ==================== -->
+    <header>
+        <div class="kicker">M3 · Dynamic Fab Process Orchestration</div>
+        <h1>
+            <span class="m25">M2.5+ Components</span>
+            <span class="arrow">→</span>
+            <span class="m3">M3 Dynamic Orchestration</span>
+        </h1>
+        <p class="tagline">
+            Every layer of the M2.5+ <strong>three-dimension architecture</strong> — business step chains, technical component stacks, scheduling routers — remains unchanged.
+            M3 deploys them directly for dynamic process orchestration across <strong>9 equipment areas + logistics command</strong> in the Fab.
+            The only difference: the step sequence is loaded at runtime from a <strong>product routing database</strong> instead of being hard-coded.
+        </p>
+        <div class="badge-row">
+            <span class="badge badge-live">M2.5+ Components · Implemented</span>
+            <span class="badge badge-prototype">M3 Fab Orchestration · Prototype</span>
+            <span class="badge badge-future">Incremental Evolution · Layer by Layer</span>
+        </div>
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/m3" class="primary">中文</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Distributed TX</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
+                    <a href="/en/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>Component Library</a>
+                    <a href="/en/m3" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>Dynamic Orchestration</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD Practice <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection Pipeline</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>Architecture Radar</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ==================== SECTION 1: THE FAB PROBLEM ==================== -->
+    <section>
+        <h2>1. The Fab Challenge: Why the Salary-Savings Architecture Applies Directly</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            The salary-savings business chain (file gen → SFTP upload → poll response → parse → classify → route) is fundamentally a
+            <strong>cross-system process orchestration</strong> problem. Semiconductor Fab manufacturing is the same —
+            only the "external system" changes from a bank to <strong>equipment and MES</strong>,
+            and the "file" becomes a <strong>FOUP/Lot</strong>.
+        </p>
+
+        <div class="stat-row">
+            <div class="stat-card">
+                <div class="num num-amber">10</div>
+                <div class="lbl">Equipment Areas + Logistics</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-purple">11-13</div>
+                <div class="lbl">Typical process steps (with reentry)</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-green">25 wafers</div>
+                <div class="lbl">FOUP/Lot physical carrier capacity</div>
+            </div>
+        </div>
+
+        <table class="ps-table" style="margin-top:20px;">
+            <thead><tr><th style="width:20%">Dimension</th><th style="width:40%">Salary-Savings (M2/M2.5+)</th><th style="width:40%">Fab (M3)</th></tr></thead>
+            <tbody>
+                <tr><td>Business Steps</td><td>5-step chain: lock quota → recharge → purchase → notify → unlock</td><td>11-13 steps loaded at runtime from ProductRouting DB, with reentry loops</td></tr>
+                <tr><td>External Systems</td><td>Bank (SFTP/HTTP) + EAMS + P2B</td><td>Equipment (HTTP/SECS/GEM) + MES + logistics system</td></tr>
+                <tr><td>"File" Transfer</td><td>XML batch file + MD5 checksum</td><td>FOUP physical transport + wafer-level tracking</td></tr>
+                <tr><td>Result Classification</td><td>3-way split by bank error codes (OK/BALANCE_INSUFFICIENT/TIMEOUT)</td><td>3-way split by <strong>metrology value ranges</strong> (pass/fail/borderline)</td></tr>
+                <tr><td>Failure Handling</td><td>RetrySameArea / Scrap / ManualIntervention</td><td>Rework / switch area / switch recipe / scrap / manual</td></tr>
+                <tr><td>Batch Constraints</td><td>Time window (10 minutes)</td><td><strong>Physical constraints</strong> (FOUP 25-wafer capacity / recipe compatibility / cleanroom class)</td></tr>
+                <tr><td>Protocol</td><td>XML over SFTP/HTTP</td><td>JSON / SECS-II over HTTP/TCP, circuit breaker protected</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>Architecture reuse rate:</strong> M2.5+'s business step chains, technical component stacks, and scheduling routers
+            <strong>require zero modification</strong>. M3's change is in the <strong>source</strong> of step sequences — from compile-time
+            static configuration to runtime-loaded dynamic routing. Only three capabilities are added: ProductRouting (data model),
+            BatchMergeManager (Fab physical constraints), and FabFlowEngine (dynamic assembly).
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 2: EQUIPMENT AREAS ==================== -->
+    <section>
+        <h2>2. 9+1 Equipment Areas</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            Each equipment area maps to a M2.5+ ChainDefinition with its own SubBatchPipeline and ErrorCodeMapping.
+            10 areas = 10 chain configs — each ~20 lines of DSL, not 10 hand-written Actors.
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card"><div class="comp-icon">🧹</div><h4>WetClean</h4><p>Wafer pretreatment, removes surface contaminants and native oxide</p></div>
+            <div class="comp-card"><div class="comp-icon">🔥</div><h4>Diffusion/Oxidation</h4><p>High-temperature furnace process, oxide growth or dopant diffusion</p></div>
+            <div class="comp-card"><div class="comp-icon">💡</div><h4>Lithography</h4><p>Pattern transfer to photoresist; <strong>most re-visited</strong> area (multi-patterning)</p></div>
+            <div class="comp-card"><div class="comp-icon">🔪</div><h4>Etch</h4><p>Dry/wet material removal; <strong>cycles with Deposition</strong> in 3D NAND</p></div>
+            <div class="comp-card"><div class="comp-icon">⚡</div><h4>Ion Implant</h4><p>Precise dopant concentration and depth control</p></div>
+            <div class="comp-card"><div class="comp-icon">💨</div><h4>Deposition</h4><p>CVD/PVD/ALD processes, multi-layer film stacking</p></div>
+            <div class="comp-card"><div class="comp-icon">🪞</div><h4>CMP</h4><p>Global planarization for next-layer lithography depth-of-focus window</p></div>
+            <div class="comp-card"><div class="comp-icon">📏</div><h4>Metrology</h4><p>In-line CD/film/defect inspection; <strong>triggers borderline re-measurement</strong></p></div>
+            <div class="comp-card"><div class="comp-icon">🌬️</div><h4>Drying</h4><p>Final clean and dry, pre-stock preparation</p></div>
+            <div class="comp-card"><div class="comp-icon">🚛</div><h4>Logistics Command</h4><p>FOUP transport scheduling; connects physical flow across all areas</p></div>
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 3: MAPPING ==================== -->
+    <section>
+        <h2>3. M2.5+ Component → M3 Mapping</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            The seven M2.5+ components below are reused directly in the Fab — same interface, different configuration.
+        </p>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:22%">M2.5+ Component</th><th style="width:10%">Layer</th><th style="width:34%">Salary-Savings</th><th style="width:34%">Fab M3</th></tr></thead>
+            <tbody>
+                <tr><td>ChainDefinition · BatchMaster</td><td><span style="color:#60a5fa">Biz</span></td><td>5-step chain: lock → recharge → purchase → notify → unlock</td><td>11-13 steps from ProductRouting DB (with Litho reentry, Dep/Etch cycles)</td></tr>
+                <tr><td>ResultClassifier + ErrorCodeMapping</td><td><span style="color:#a855f7">Sched</span></td><td>3-way by bank error codes (OK / BALANCE_INSUFFICIENT / TIMEOUT)</td><td>3-way by <strong>metrology value ranges</strong> (pass / fail / borderline)</td></tr>
+                <tr><td>ReconfirmHandler</td><td><span style="color:#a855f7">Sched</span></td><td>Verify suspicious transactions via Core API</td><td>Re-measure via <strong>higher-precision tool or manual review</strong></td></tr>
+                <tr><td>ReBatchRouter + ReBatchPolicy</td><td><span style="color:#a855f7">Sched</span></td><td>Decide retry / scrap (RetrySameArea / Scrap)</td><td>Decide <strong>rework / switch area / switch recipe / scrap / manual</strong></td></tr>
+                <tr><td>AreaScheduler + PhysicalConstraints</td><td><span style="color:#f59e0b">Tech</span></td><td>Re-batch by time window (10 min)</td><td>Re-batch by <strong>physical constraints</strong> (FOUP 25 / recipe compat / cleanroom class)</td></tr>
+                <tr><td>SftpConnector / CircuitBreaker</td><td><span style="color:#f59e0b">Tech</span></td><td>SFTP/HTTP to bank, circuit breaker</td><td>HTTP/SECS/GEM to <strong>equipment</strong>, circuit breaker</td></tr>
+                <tr><td>EncodingStrategy / ResponseParser</td><td><span style="color:#f59e0b">Tech</span></td><td>XML bank message ⇄ internal model</td><td>JSON/SECS-II equipment comm ⇄ internal model</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ==================== SECTION 4: THREE NEW CAPABILITIES ==================== -->
+    <section>
+        <h2>4. M3-Specific: Three New Capabilities</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            These three capabilities handle Fab-specific <strong>physical constraints and dynamic routing</strong>.
+            Each is an <strong>incremental addition</strong> on top of existing components — no existing code is modified.
+        </p>
+
+        <div class="capability-grid">
+            <div class="cap-card" style="border-color: rgba(245,158,11,0.25);">
+                <div class="cap-icon">🗺️</div>
+                <h4>ProductRouting · Dynamic Process Routes</h4>
+                <p>Step sequences are <strong>loaded from a database</strong>, not hard-coded. LOGIC-28NM-A uses an 11-step route (with Lithography reentry × 2); NAND-96L-A uses 13 steps (with Deposition/Etch cycles × 4). Process changes require a <strong>database update only</strong> — zero code changes.</p>
+                <span class="code-ref">fab/model/ProductRouting.scala · RoutingStep + ProductRouting</span>
+            </div>
+            <div class="cap-card" style="border-color: rgba(63,185,80,0.25);">
+                <div class="cap-icon">📦</div>
+                <h4>BatchMergeManager · Lot Merge at Stock</h4>
+                <p>A Lot (25 wafers) may be split during processing — some wafers rework to another area, some are scrapped. At stock-in, the system <strong>tracks original Lot ownership</strong> and auto-triggers merge when all surviving wafers complete. This physical constraint doesn't exist in salary-savings.</p>
+                <span class="code-ref">fab/orchestration/BatchMergeManager.scala · WaitForOthers / ReadyToMerge / PartialMerge</span>
+            </div>
+            <div class="cap-card" style="border-color: rgba(59,130,246,0.25);">
+                <div class="cap-icon">🔄</div>
+                <h4>Reentry Tracking</h4>
+                <p>An equipment area can be visited multiple times (Litho multi-patterning, 3D NAND Dep/Etch cycles). <strong>reentryIndex</strong> tracks the visit count, ensuring the correct recipe and equipment state for each visit. This is the core distinction from unidirectional flows.</p>
+                <span class="code-ref">fab/model/EquipmentArea.scala · reentryIndex calculation</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 5: FabFlowEngine ==================== -->
+    <section>
+        <h2>5. FabFlowEngine: The Dynamic Assembly Engine</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            FabFlowEngine is the M3 core orchestrator — it reads ProductRouting, dynamically assembles a SubBatchPipeline
+            for each step, batches by PhysicalConstraints, processes, classifies results, routes failures, and advances
+            successes to the next step.
+        </p>
+
+        <div class="code-block"><span class="co">// FabFlowEngine core loop (simplified)</span>
+<span class="kw">def</span> executeStep(lot: LotContext, step: RoutingStep): Future[LotContext] = {
+  <span class="kw">for</span> {
+    <span class="co">// 1. Dynamically assemble Pipeline for current equipment area</span>
+    pipeline  <- resolvePipeline(step.areaId, lot.recipeId)
+    <span class="co">// 2. Batch by physical constraints (FOUP 25, recipe-compatible)</span>
+    batches   <- areaScheduler(step.areaId).schedule(lot.wafers)
+    <span class="co">// 3. Process each sub-batch through SubBatchProcessor</span>
+    results   <- Future.traverse(batches)(processor.process)
+    <span class="co">// 4. Metrology 3-way split + borderline reconfirm</span>
+    resolved  <- classifyAndReconfirm(results, step.areaId)
+    <span class="co">// 5. Route failures: rework / switch area / scrap</span>
+    _         <- routeFailures(resolved.failures, lot.context)
+    <span class="co">// 6. Advance successes to next step (with reentryIndex increment)</span>
+    advanced  <- advanceToNextStep(resolved.successes, lot.routing)
+  } <span class="kw">yield</span> advanced
+}</div>
+
+        <div class="arch-callout">
+            <strong>Proof of incremental evolution:</strong> In the code above, <span class="file-ref">resolvePipeline</span> calls M2.5+'s ChainTemplates.equipmentArea(),
+            <span class="file-ref">processor.process</span> is M2.5+'s SubBatchProcessor,
+            <span class="file-ref">classifyAndReconfirm</span> is M2.5+'s ResultClassifier + ReconfirmHandler,
+            <span class="file-ref">routeFailures</span> is M2.5+'s ReBatchRouter.
+            No M2.5+ component is modified — they are simply called in <strong>new sequences and conditions</strong> by FabFlowEngine.
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 6: CODE REFERENCE ==================== -->
+    <section>
+        <h2>6. Code Reference</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            The M3 prototype code lives under <span class="file-ref">app/net/imadz/fab/</span>, fully reusing M2.5+ runtime components.
+        </p>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:28%">File</th><th style="width:10%">Layer</th><th style="width:62%">Responsibility</th></tr></thead>
+            <tbody>
+                <tr><td class="file-ref">fab/model/EquipmentArea.scala</td><td>Model</td><td>10 equipment area sealed trait + reentryIndex calculator</td></tr>
+                <tr><td class="file-ref">fab/model/ProductRouting.scala</td><td>Model</td><td>RoutingStep + ProductRouting, includes LOGIC-28NM-A demo route (11 steps)</td></tr>
+                <tr><td class="file-ref">fab/model/LotContext.scala</td><td>Model</td><td>Lot (25 wafers) + Wafer tracking: step index, scrapped count, merge flag</td></tr>
+                <tr><td class="file-ref">fab/orchestration/FabFlowEngine.scala</td><td>Orch</td><td>Recursive step execution: batch → process → classify → reconfirm → route → advance</td></tr>
+                <tr><td class="file-ref">fab/orchestration/BatchMergeManager.scala</td><td>Orch</td><td>Track wafer origin, trigger merge on all-wafers-complete (WaitForOthers/ReadyToMerge/PartialMerge)</td></tr>
+                <tr><td class="file-ref">fab/repository/RoutingRepository.scala</td><td>Data</td><td>Routing storage trait + InMemory impl + Demo data (LOGIC-28NM-A / NAND-96L-A)</td></tr>
+                <tr><td class="file-ref">fab/demo/FabDemo.scala</td><td>Demo</td><td>Full demo: create area pipelines → execute LOGIC + NAND routes → show reentry + merge</td></tr>
+            </tbody>
+        </table>
+
+        <blockquote>
+            <strong>Architect's perspective — why no new execution engine is needed.</strong>
+            M2.5+'s business step chains, technical component stacks, and scheduling routers already cover the complete lifecycle
+            of process execution. M3 changes only the <strong>source</strong> of step sequences — from compile-time static configuration
+            to runtime-loaded dynamic routing. SagaTransactionCoordinator needs no changes; StepExecutor's circuit breaker / retry / timeout need no changes; Connector needs no changes.
+            <strong>The only additions are ProductRouting (data model) + BatchMergeManager (Fab physical constraints) + FabFlowEngine (dynamic assembly).</strong>
+            All new code is ~500 lines — compared to M2's 23 FSMs (~6000 lines of Java), that's a 12:1 compression ratio,
+            while gaining dynamic process orchestration.
+        </blockquote>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+        <p>Tech Stack: Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
+        <p style="margin-top:4px;">
+            <a href="/en/m25">M2.5+ Component Library</a> · Architecture: Onion + DDD + CQRS/ES + Saga · Reactive Manifesto
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

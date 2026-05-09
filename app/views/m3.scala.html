@@ -1,0 +1,358 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3 · 动态工序编排 — 同一套 M2.5+ 组件，Fab 半导体制造执行</title>
+    <meta name="description" content="M3 复用 M2.5+ 三层分离架构的每一层组件，面向半导体 Fab 的动态工序编排。9+1 设备区、ProductRouting 动态工艺路线、BatchMergeManager 合批入库、重入追踪。渐进演进，不是推倒重来。">
+    <meta name="keywords" content="M3, Fab, 半导体, 动态工序编排, ProductRouting, BatchMergeManager, Reentry, Akka, DAG, MES">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6;
+            --code-bg: #0f172a;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.7; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center; padding: 80px 0 50px;
+            border-bottom: 1px solid var(--border); margin-bottom: 50px;
+        }
+        header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 12px; }
+        header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+        header h1 .m3 { color: var(--amber); }
+        header h1 .m25 { color: var(--purple); }
+        header h1 .arrow { color: var(--fg-subtle); margin: 0 6px; }
+        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 700px; margin-left: auto; margin-right: auto; }
+        header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+        .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .badge-prototype { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-future { background: rgba(168,85,247,0.15); color: var(--purple); }
+        .badge-live { background: rgba(63,185,80,0.15); color: var(--green); }
+
+        .nav-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; font-size: 0.82rem; align-items: center; flex-wrap: wrap; }
+        .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links > a:hover { text-decoration: underline; }
+        .nav-links > a.primary { background: var(--amber); color: #000; padding: 6px 16px; border-radius: 6px; font-weight: 700; }
+        .nav-links > a.primary:hover { background: #d97706; text-decoration: none; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn { color: var(--accent); font-size: 0.82rem; font-weight: 500; cursor: pointer; background: transparent; border: none; font-family: var(--font); display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .nav-dropdown-btn:hover { text-decoration: underline; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; min-width: 220px; padding: 4px; display: none; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.8rem; font-weight: 500; transition: all 0.1s; }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-m3 { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .mm-active { background: rgba(255,255,255,0.05); }
+
+        section { margin-bottom: 60px; }
+        h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: var(--fg); }
+
+        .ps-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .ps-table th { background: var(--bg-alt); padding: 14px 18px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
+        .ps-table td { padding: 14px 18px; border-top: 1px solid var(--border); }
+        .ps-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 20px 0; }
+        .comp-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; transition: border-color 0.2s; }
+        .comp-card:hover { border-color: var(--fg-muted); }
+        .comp-card .comp-icon { font-size: 1.5rem; margin-bottom: 10px; }
+        .comp-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+        .comp-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.6; }
+
+        .arch-callout { background: rgba(245,158,11,0.04); border-left: 3px solid var(--amber); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
+        .arch-callout strong { color: var(--fg); }
+        .file-ref { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted); }
+
+        .capability-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 20px 0; }
+        .cap-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; }
+        .cap-card:hover { border-color: var(--amber); }
+        .cap-card .cap-icon { font-size: 1.6rem; margin-bottom: 10px; }
+        .cap-card h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 8px; }
+        .cap-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.65; }
+        .cap-card .code-ref { font-family: var(--mono); font-size: 0.67rem; color: var(--fg-subtle); margin-top: 8px; display: block; }
+
+        .code-block { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.7; color: var(--fg); overflow-x: auto; white-space: pre; }
+        .code-block .co { color: var(--fg-muted); }
+        .code-block .kw { color: #ff7b72; }
+        .code-block .ty { color: #79c0ff; }
+        .code-block .str { color: #a5d6ff; }
+
+        blockquote { border-left: 3px solid var(--amber); padding: 12px 18px; margin: 16px 0; background: rgba(245,158,11,0.04); font-size: 0.82rem; color: var(--fg-muted); border-radius: 0 6px 6px 0; }
+        blockquote strong { color: var(--fg); }
+
+        .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+        .stat-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 18px; text-align: center; }
+        .stat-card .num { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
+        .stat-card .lbl { font-size: 0.7rem; color: var(--fg-muted); margin-top: 4px; }
+        .num-amber { color: var(--amber); }
+        .num-purple { color: var(--purple); }
+        .num-green { color: var(--green); }
+
+        @@media (max-width: 768px) {
+            .phase-grid, .stat-row, .comp-grid, .capability-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ==================== HERO ==================== -->
+    <header>
+        <div class="kicker">M3 · Dynamic Fab Process Orchestration</div>
+        <h1>
+            <span class="m25">M2.5+ 标准组件</span>
+            <span class="arrow">→</span>
+            <span class="m3">M3 动态工序编排</span>
+        </h1>
+        <p class="tagline">
+            同一套 M2.5+ <strong>三层分离架构</strong>的每一层组件——业务步骤链、技术组件栈、调度分流器——无需改动。
+            M3 将它们直接用于 Fab <strong>9 个设备区 + 物流指挥系统</strong>的动态工序编排。
+            唯一的区别：工序序列不是静态代码，而是从<strong>产品工艺路线数据库</strong>在运行时加载。
+        </p>
+        <div class="badge-row">
+            <span class="badge badge-live">M2.5+ 组件库 · 已实现</span>
+            <span class="badge badge-prototype">M3 Fab 编排 · 原型设计</span>
+            <span class="badge badge-future">渐进演进 · 增量叠加</span>
+        </div>
+        <nav class="nav-links">
+            <a href="/">首页</a>
+            <a href="/en/m3" style="color:#f59e0b; font-weight:700;">EN</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
+                    <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
+                    <a href="/m3" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD 架构实践 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection 管道</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>架构雷达</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ==================== SECTION 1: THE FAB PROBLEM ==================== -->
+    <section>
+        <h2>一、Fab 的挑战：为什么薪资存入的架构可以直接用</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            薪资存入系统处理的业务链路（文件生成 → SFTP 上传 → 轮询回盘 → 解析 → 分类 → 分流）本质上是一个<strong>跨系统工序编排</strong>问题。
+            Fab 半导体制造也是——只是"外部系统"从银行换成了<strong>机台和 MES</strong>，"文件"换成了<strong>FOUP/Lot</strong>。
+        </p>
+
+        <div class="stat-row">
+            <div class="stat-card">
+                <div class="num num-amber">10</div>
+                <div class="lbl">设备区 + 物流</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-purple">11-13</div>
+                <div class="lbl">典型工艺步骤（含重入）</div>
+            </div>
+            <div class="stat-card">
+                <div class="num num-green">25 片</div>
+                <div class="lbl">FOUP/Lot 物理载体容量</div>
+            </div>
+        </div>
+
+        <table class="ps-table" style="margin-top:20px;">
+            <thead><tr><th style="width:20%">维度</th><th style="width:40%">薪资存入（M2/M2.5+）</th><th style="width:40%">Fab（M3）</th></tr></thead>
+            <tbody>
+                <tr><td>业务步骤链</td><td>5 步：额度锁定 → 充值 → 申购 → 通知 → 解锁</td><td>11-13 步：从产品工艺路线 DB 运行时加载，含重入循环</td></tr>
+                <tr><td>外部系统</td><td>银行（SFTP/HTTP）+ EAMS + P2B</td><td>机台（HTTP/SECS/GEM）+ MES + 物流系统</td></tr>
+                <tr><td>"文件"传输</td><td>XML 批量报文 + MD5 校验</td><td>FOUP 物理搬运 + wafer 级追踪</td></tr>
+                <tr><td>结果分类</td><td>按银行错误码三路分流（OK/BALANCE_INSUFFICIENT/TIMEOUT）</td><td>按<strong>量测值范围</strong>三路分流（pass/fail/borderline）</td></tr>
+                <tr><td>失败处理</td><td>RetrySameArea / Scrap / ManualIntervention</td><td>Rework / 换设备区 / 换 Recipe / 报废 / 人工介入</td></tr>
+                <tr><td>批次约束</td><td>时间窗口（10 分钟）</td><td><strong>物理约束</strong>（FOUP 容量 25 片 / recipe 兼容性 / 洁净室等级）</td></tr>
+                <tr><td>通信协议</td><td>XML over SFTP/HTTP</td><td>JSON / SECS-II over HTTP/TCP，断路器保护</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>架构复用率：</strong>M2.5+ 的业务步骤链、技术组件栈、调度分流器<strong>全部无需改动</strong>。
+            M3 的变化在工序序列的<strong>来源</strong>——从编译时确定的静态配置变为运行时加载的动态工艺路线。
+            新增能力只有三个：ProductRouting（数据模型）、BatchMergeManager（Fab 物理约束）、FabFlowEngine（动态组装）。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 2: EQUIPMENT AREAS ==================== -->
+    <section>
+        <h2>二、9+1 设备区</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            每个设备区在 M2.5+ 中对应一条独立的业务链路（ChainDefinition），拥有自己的 SubBatchPipeline 和 ErrorCodeMapping。
+            10 个设备区 = 10 条链路配置——每条 ~20 行 DSL，而非 10 个手写 Actor。
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card"><div class="comp-icon">🧹</div><h4>WetClean 湿法清洗</h4><p>晶圆预处理，去除表面污染物和自然氧化层</p></div>
+            <div class="comp-card"><div class="comp-icon">🔥</div><h4>Diffusion 扩散/氧化</h4><p>高温炉管工艺，生长氧化层或掺杂扩散</p></div>
+            <div class="comp-card"><div class="comp-icon">💡</div><h4>Lithography 光刻</h4><p>图形转移到光刻胶，<strong>最常重入</strong>的设备区（多重曝光）</p></div>
+            <div class="comp-card"><div class="comp-icon">🔪</div><h4>Etch 刻蚀</h4><p>干法/湿法去除材料，3D NAND 中<strong>与沉积循环重入</strong></p></div>
+            <div class="comp-card"><div class="comp-icon">⚡</div><h4>Implant 离子注入</h4><p>精确控制掺杂浓度和深度</p></div>
+            <div class="comp-card"><div class="comp-icon">💨</div><h4>Deposition 薄膜沉积</h4><p>CVD/PVD/ALD 工艺，多层膜堆叠</p></div>
+            <div class="comp-card"><div class="comp-icon">🪞</div><h4>CMP 化学机械抛光</h4><p>全局平坦化，保证下一层光刻的焦深窗口</p></div>
+            <div class="comp-card"><div class="comp-icon">📏</div><h4>Metrology 量测</h4><p>在线尺寸/膜厚/缺陷检测，<strong>可疑值复核的触发源</strong></p></div>
+            <div class="comp-card"><div class="comp-icon">🌬️</div><h4>Drying 干燥</h4><p>最终清洗干燥，入库前准备</p></div>
+            <div class="comp-card"><div class="comp-icon">🚛</div><h4>Logistics 物流指挥</h4><p>FOUP 搬运调度，连接所有设备区的物理流转</p></div>
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 3: MAPPING ==================== -->
+    <section>
+        <h2>三、M2.5+ 组件 → M3 的映射关系</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            下面 7 个 M2.5+ 组件在 Fab 场景下的直接复用——接口不变，仅配置不同。
+        </p>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:22%">M2.5+ 组件</th><th style="width:10%">维度</th><th style="width:34%">薪资存入场景</th><th style="width:34%">Fab M3 场景</th></tr></thead>
+            <tbody>
+                <tr><td>业务步骤链 · BatchMaster</td><td><span style="color:#60a5fa">业务</span></td><td>5 步骤链：额度锁定 → 充值 → 申购 → 通知 → 解锁</td><td>从 ProductRouting DB 加载 11-13 步（含 Litho 重入、Dep/Etch 循环）</td></tr>
+                <tr><td>ResultClassifier + ErrorCodeMapping</td><td><span style="color:#a855f7">调度</span></td><td>按银行错误码三路分流（OK / BALANCE_INSUFFICIENT / TIMEOUT）</td><td>按<strong>量测值范围</strong>三路分流（pass / fail / borderline）</td></tr>
+                <tr><td>ReconfirmHandler</td><td><span style="color:#a855f7">调度</span></td><td>通过 Core API 核验可疑交易</td><td>通过<strong>更高精度量测或人工复核</strong>确定边界值</td></tr>
+                <tr><td>ReBatchRouter + ReBatchPolicy</td><td><span style="color:#a855f7">调度</span></td><td>决定重试 / 报废（RetrySameArea / Scrap）</td><td>决定 <strong>rework / 换设备区 / 换 recipe / 报废 / 人工介入</strong></td></tr>
+                <tr><td>AreaScheduler + PhysicalConstraints</td><td><span style="color:#f59e0b">技术</span></td><td>按时间窗口（10 分钟）重新成批</td><td>按<strong>物理约束</strong>（FOUP 25 片 / recipe 兼容 / 洁净室等级）成批</td></tr>
+                <tr><td>SftpConnector / CircuitBreaker</td><td><span style="color:#f59e0b">技术</span></td><td>SFTP / HTTP to 银行，断路器保护</td><td>HTTP / SECS/GEM to <strong>机台</strong>，断路器保护</td></tr>
+                <tr><td>EncodingStrategy / ResponseParser</td><td><span style="color:#f59e0b">技术</span></td><td>XML 银行报文 ⇄ 内部模型</td><td>JSON / SECS-II 机台通信 ⇄ 内部模型</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ==================== SECTION 4: THREE NEW CAPABILITIES ==================== -->
+    <section>
+        <h2>四、M3 特有：三个新增能力</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            这三个能力是 M2.5+ 没有的——它们处理 Fab 特有的<strong>物理约束和动态路由</strong>。每个都是<strong>增量叠加</strong>到现有组件之上，不修改已有代码。
+        </p>
+
+        <div class="capability-grid">
+            <div class="cap-card" style="border-color: rgba(245,158,11,0.25);">
+                <div class="cap-icon">🗺️</div>
+                <h4>ProductRouting · 动态工艺路线</h4>
+                <p>工序序列从<strong>数据库加载</strong>，而非硬编码在代码中。产品 LOGIC-28NM-A 走 11 道工序（含 Lithography 重入 2 次），NAND-96L-A 走 13 道（含 Deposition/Etch 4 次循环）。工艺变更时<strong>更新数据库即可</strong>，不需要改代码。</p>
+                <span class="code-ref">fab/model/ProductRouting.scala · RoutingStep + ProductRouting</span>
+            </div>
+            <div class="cap-card" style="border-color: rgba(63,185,80,0.25);">
+                <div class="cap-icon">📦</div>
+                <h4>BatchMergeManager · 合批入库</h4>
+                <p>原始 Lot（25 片）在加工过程中可能被拆散——部分片 rework 去了别的设备区、部分片报废。入库时，<strong>追踪原始 Lot 归属</strong>，所有合格片完成后自动触发合批。这是薪资存入系统不存在的<strong>物理约束</strong>。</p>
+                <span class="code-ref">fab/orchestration/BatchMergeManager.scala · WaitForOthers / ReadyToMerge / PartialMerge</span>
+            </div>
+            <div class="cap-card" style="border-color: rgba(59,130,246,0.25);">
+                <div class="cap-icon">🔄</div>
+                <h4>Reentry Tracking · 重入追踪</h4>
+                <p>同一设备区可能被访问多次（光刻的多重曝光、3D NAND 的沉积刻蚀循环）。<strong>reentryIndex</strong> 追踪第几次访问，确保每次使用正确的 recipe 和设备状态。这是 Fab 区别于单向流程的核心特征。</p>
+                <span class="code-ref">fab/model/EquipmentArea.scala · reentryIndex 计算</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 5: FabFlowEngine ==================== -->
+    <section>
+        <h2>五、FabFlowEngine：动态组装执行引擎</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            FabFlowEngine 是 M3 的核心编排器——它读取 ProductRouting，为每一步动态组装 SubBatchPipeline，
+            按 PhysicalConstraints 成批，执行处理，分类结果，分流失败项，推进成功项到下一道工序。
+        </p>
+
+        <div class="code-block"><span class="co">// FabFlowEngine 的核心循环（简化）</span>
+<span class="kw">def</span> executeStep(lot: LotContext, step: RoutingStep): Future[LotContext] = {
+  <span class="kw">for</span> {
+    <span class="co">// 1. 为当前设备区动态组装 Pipeline</span>
+    pipeline  <- resolvePipeline(step.areaId, lot.recipeId)
+    <span class="co">// 2. 按物理约束成批（FOUP 25 片、同 recipe 兼容）</span>
+    batches   <- areaScheduler(step.areaId).schedule(lot.wafers)
+    <span class="co">// 3. 每个子批次通过 SubBatchProcessor 执行</span>
+    results   <- Future.traverse(batches)(processor.process)
+    <span class="co">// 4. 量测值三路分流 + 可疑值复核</span>
+    resolved  <- classifyAndReconfirm(results, step.areaId)
+    <span class="co">// 5. 失败项路由：rework / 换区 / 报废</span>
+    _         <- routeFailures(resolved.failures, lot.context)
+    <span class="co">// 6. 成功项推进到下一道工序（含重入索引递增）</span>
+    advanced  <- advanceToNextStep(resolved.successes, lot.routing)
+  } <span class="kw">yield</span> advanced
+}</div>
+
+        <div class="arch-callout">
+            <strong>渐进演进的核心证明：</strong>上面的代码中，<span class="file-ref">resolvePipeline</span> 调用的是 M2.5+ 的 ChainTemplates.equipmentArea()，
+            <span class="file-ref">processor.process</span> 是 M2.5+ 的 SubBatchProcessor，
+            <span class="file-ref">classifyAndReconfirm</span> 是 M2.5+ 的 ResultClassifier + ReconfirmHandler，
+            <span class="file-ref">routeFailures</span> 是 M2.5+ 的 ReBatchRouter。
+            没有任何一个 M2.5+ 组件被修改——它们只是被 FabFlowEngine 以<strong>新的顺序和条件</strong>调用。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 6: CODE REFERENCE ==================== -->
+    <section>
+        <h2>六、代码参考</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M3 原型代码位于 <span class="file-ref">app/net/imadz/fab/</span> 包下，全部复用 M2.5+ 运行时组件。
+        </p>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:28%">文件</th><th style="width:10%">层</th><th style="width:62%">职责</th></tr></thead>
+            <tbody>
+                <tr><td class="file-ref">fab/model/EquipmentArea.scala</td><td>模型</td><td>10 个设备区 sealed trait + reentryIndex 计算</td></tr>
+                <tr><td class="file-ref">fab/model/ProductRouting.scala</td><td>模型</td><td>RoutingStep + ProductRouting，含 LOGIC-28NM-A 示例路由（11 步）</td></tr>
+                <tr><td class="file-ref">fab/model/LotContext.scala</td><td>模型</td><td>Lot（25 片）+ Wafer 追踪，含步骤索引、报废计数、合批标记</td></tr>
+                <tr><td class="file-ref">fab/orchestration/FabFlowEngine.scala</td><td>编排</td><td>递归执行步骤：成批 → 处理 → 分类 → 复核 → 路由 → 推进</td></tr>
+                <tr><td class="file-ref">fab/orchestration/BatchMergeManager.scala</td><td>编排</td><td>追踪 wafer 来源，所有片完成后触发合批（WaitForOthers/ReadyToMerge/PartialMerge）</td></tr>
+                <tr><td class="file-ref">fab/repository/RoutingRepository.scala</td><td>数据</td><td>工艺路线存储 trait + InMemory 实现 + Demo 数据（LOGIC-28NM-A / NAND-96L-A）</td></tr>
+                <tr><td class="file-ref">fab/demo/FabDemo.scala</td><td>演示</td><td>完整 Demo：创建区域 pipeline → 执行 LOGIC + NAND 路由 → 展示重入 + 合批</td></tr>
+            </tbody>
+        </table>
+
+        <blockquote>
+            <strong>架构师视角——为什么不需要新的执行引擎。</strong>
+            M2.5+ 的业务步骤链、技术组件栈、调度分流器已经覆盖了"工序执行的完整生命周期"。
+            M3 的变化在<strong>工序序列的来源</strong>——从编译时确定的静态配置变为运行时加载的动态工艺路线。
+            SagaTransactionCoordinator 不需要改动；StepExecutor 的断路器/重试/超时不需要改动；Connector 不需要改动。
+            <strong>唯一新增的是 ProductRouting（数据模型）+ BatchMergeManager（Fab 物理约束）+ FabFlowEngine（动态组装）。</strong>
+            所有新增代码约 500 行——对比 M2 的 23 个 FSM（~6000 行 Java），这是 12:1 的代码压缩比，同时获得了动态工序编排能力。
+        </blockquote>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+        <p>技术栈：Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
+        <p style="margin-top:4px;">
+            <a href="/m25">M2.5+ 标准组件库</a> · 架构：洋葱 + DDD + CQRS/ES + Saga · 反应式宣言
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

@@ -38,6 +38,14 @@ class DddGuideController @Inject()(val controllerComponents: ControllerComponent
     Ok(views.html.m25Demo())
   }
 
+  def m3Explore() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.m3())
+  }
+
+  def m3En() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.m3_en())
+  }
+
   def getBalances(ids: String) = Action.async {
     val idList = ids.split(",").map(Id.of).toList
     Future.sequence(idList.map(id => getBalanceQuery.fetchFullBalanceByUserId(id).map(c => id.toString -> c)))

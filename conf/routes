@@ -39,6 +39,8 @@ GET     /dag                        controllers.DddGuideController.m2Demo()
 GET     /m25                        controllers.DddGuideController.m25Explore()
 GET     /en/m25                     controllers.DddGuideController.m25En()
 GET     /m25-demo                   controllers.DddGuideController.m25Demo()
+GET     /m3                         controllers.DddGuideController.m3Explore()
+GET     /en/m3                      controllers.DddGuideController.m3En()
 GET     /api/projection/status      controllers.DddGuideController.getProjectionStatus()
 GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(ids: String)
 

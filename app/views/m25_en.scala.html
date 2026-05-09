@@ -272,6 +272,7 @@
                     <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Distributed Tx</a>
                     <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Execution Engine</a>
                     <a href="/m25-demo" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m25">M2.5+</span>3D Architecture</a>
+                    <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Dynamic Orchestration</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -696,78 +697,9 @@
         </p>
     </section>
 
-    <!-- ==================== SECTION 4: M3 VISION ==================== -->
+    <!-- ==================== SECTION 4: EVOLUTION PATH ==================== -->
     <section>
-        <h2>4. M3 Vision: Same Components, Dynamic Process Orchestration</h2>
-
-        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
-            M3 targets semiconductor Fab <strong>dynamic process orchestration</strong>. 9 equipment areas + Logistics Command = 10 external systems to connect and control.
-            They <strong>all reuse M2.5+ three-dimension architecture</strong> — business step chain, tech component stack, and scheduling router need no changes.
-            The only difference: the process sequence is not static code but loaded at runtime from the <strong>product routing database</strong>.
-        </p>
-
-        <h3>9+1 Equipment Areas</h3>
-
-        <div class="comp-grid">
-            <div class="comp-card"><div class="comp-icon">🧹</div><h4>WetClean Wet Clean</h4><p>Wafer pre-treatment, removes surface contaminants and native oxide</p></div>
-            <div class="comp-card"><div class="comp-icon">🔥</div><h4>Diffusion Diffusion/Oxidation</h4><p>High-temp furnace process, grows oxide or dopant diffusion</p></div>
-            <div class="comp-card"><div class="comp-icon">💡</div><h4>Lithography Lithography</h4><p>Pattern transfer to photoresist, most re-entrant area (multi-patterning)</p></div>
-            <div class="comp-card"><div class="comp-icon">🔪</div><h4>Etch Etch</h4><p>Dry/wet material removal, cycles with deposition in 3D NAND</p></div>
-            <div class="comp-card"><div class="comp-icon">⚡</div><h4>Implant Ion Implant</h4><p>Precise doping concentration and depth control</p></div>
-            <div class="comp-card"><div class="comp-icon">💨</div><h4>Deposition Thin Film Deposition</h4><p>CVD/PVD/ALD processes, multi-layer film stacking</p></div>
-            <div class="comp-card"><div class="comp-icon">🪞</div><h4>CMP</h4><p>Global planarization, ensures DOF window for next Lithography</p></div>
-            <div class="comp-card"><div class="comp-icon">📏</div><h4>Metrology Metrology</h4><p>Inline CD/film/defect inspection, trigger source for borderline reconfirmation</p></div>
-            <div class="comp-card"><div class="comp-icon">🌬️</div><h4>Drying Drying</h4><p>Final clean and dry, pre-stocker preparation</p></div>
-            <div class="comp-card"><div class="comp-icon">🚛</div><h4>Logistics Logistics Command</h4><p>FOUP transport scheduling, connects physical flow across all equipment areas</p></div>
-        </div>
-
-        <h3>M2.5+ Components → M3 Mapping</h3>
-
-        <table class="ps-table">
-            <thead><tr><th>M2.5+ Component</th><th>Dimension</th><th>Salary Deposit Scenario</th><th>Fab M3 Scenario</th></tr></thead>
-            <tbody>
-                <tr><td>Per-Batch Process Seq Mgr + Business Step Chain</td><td><span style="color:#60a5fa">Business</span></td><td>5-step chain: Reserve→Deposit→Purchase→Notify→Release</td><td>Load step sequence from product routing DB (11-13 steps with reentry)</td></tr>
-                <tr><td>Batch Result Scatterer</td><td><span style="color:#a855f7">Scheduling</span></td><td>Three-way split by bank error code (success/failure/suspicious)</td><td>Three-way split by <strong>metrology value ranges</strong> (pass/fail/borderline)</td></tr>
-                <tr><td>Reconfirmation Component</td><td><span style="color:#a855f7">Scheduling</span></td><td>Verify suspicious transactions via Core API</td><td>Determine borderline via <strong>higher-precision metrology or manual review</strong></td></tr>
-                <tr><td>Exception Scheduler</td><td><span style="color:#a855f7">Scheduling</span></td><td>Decide retry / scrap, forward compensate to Batch Manager</td><td>Decide <strong>rework / change area / change recipe / scrap / manual intervention</strong></td></tr>
-                <tr><td>Outbound Buffer · Re-batch</td><td><span style="color:#f59e0b">Technical</span></td><td>Rebatch by time window (10 min)</td><td>Batch by <strong>physical constraints</strong> (FOUP capacity/recipe compatibility/cleanroom class)</td></tr>
-                <tr><td>Circuit Breaker + Protocol Stack</td><td><span style="color:#f59e0b">Technical</span></td><td>SFTP/HTTP to bank, CB protected</td><td>HTTP / SECS/GEM to <strong>tool</strong>, CB protected</td></tr>
-                <tr><td>Codec</td><td><span style="color:#f59e0b">Technical</span></td><td>XML banking message ⇄ internal model</td><td>JSON/SECS-II tool msg ⇄ internal model</td></tr>
-            </tbody>
-        </table>
-
-        <h3>M3 Exclusive: Three New Capabilities</h3>
-
-        <div class="comp-grid">
-            <div class="comp-card" style="border-color: rgba(245,158,11,0.2);">
-                <div class="comp-icon">🗺️</div>
-                <h4>ProductRouting · Dynamic Process Routing</h4>
-                <p>Process sequences <strong>loaded from database</strong>, not hard-coded. LOGIC-28NM-A may run 11 steps (with Lithography reentry), NAND-96L-A runs 13 (with Deposition/Etch 4 cycles). Process changes: <strong>update the database</strong>, no code changes needed.</p>
-            </div>
-            <div class="comp-card" style="border-color: rgba(63,185,80,0.2);">
-                <div class="comp-icon">📦</div>
-                <h4>BatchMergeManager · Batch Merge</h4>
-                <p>Original Lot (25 wafers) may be split during processing — some rework to other areas, some scrap. At stocker entry, <strong>track original Lot ownership</strong>, auto-trigger merge when all qualified wafers complete. This <strong>physical constraint</strong> differentiates Fab from salary deposit.</p>
-            </div>
-            <div class="comp-card" style="border-color: rgba(59,130,246,0.2);">
-                <div class="comp-icon">🔄</div>
-                <h4>Reentry Tracking</h4>
-                <p>Same equipment area may be visited multiple times (Lithography multi-patterning, 3D NAND dep-etch cycles). <strong>reentryIndex</strong> tracks visit count, ensures correct recipe and equipment state per visit.</p>
-            </div>
-        </div>
-
-        <blockquote>
-            <strong>Architect Perspective — Why no new execution engine is needed.</strong>
-            M2.5+ business step chain, tech component stack, and scheduling router already cover the "complete process execution lifecycle."
-            M3 change is in the <strong>source of process sequences</strong> — from compile-time static config to runtime-loaded dynamic routing.
-            SagaTransactionCoordinator: no change. StepExecutor CB/retry/timeout: no change. Connector: no change.
-            <strong>Only additions: ProductRouting (data model) + BatchMergeManager (Fab physical constraints) + FabFlowEngine (dynamic assembly).</strong>
-        </blockquote>
-    </section>
-
-    <!-- ==================== SECTION 5: EVOLUTION PATH ==================== -->
-    <section>
-        <h2>5. Incremental Evolution Roadmap</h2>
+        <h2>4. Incremental Evolution Roadmap</h2>
 
         <div class="phase-grid">
             <div class="phase-card m25">
@@ -794,7 +726,7 @@
             </div>
             <div class="phase-card m3">
                 <div class="phase-sub">2026 · Prototype</div>
-                <h4>M3 · Dynamic Orchestration</h4>
+                <h4>M3 · Dynamic Orchestration <a href="/en/m3" style="font-size:0.7rem; color:var(--amber); text-decoration:none; margin-left:8px;">→ Dedicated Page</a></h4>
                 <ul>
                     <li>10 Equipment Areas</li>
                     <li>Product routing driven</li>
@@ -807,14 +739,14 @@
 
         <p style="font-size:0.85rem; color:var(--fg-muted); margin-top:16px; text-align:center;">
             <strong>Each step reuses the previous step's components.</strong>
-            M2 Saga Coordinator → M2.5+ 3D architecture (Business Step Chain + Tech Component Stack + Scheduling Router) → M3 ProductRouting + FabFlowEngine.
+            M2 Saga Coordinator → M2.5+ 3D architecture (Business Step Chain + Tech Component Stack + Scheduling Router) → M3 ProductRouting + FabFlowEngine (<a href="/en/m3" style="color:var(--amber);">dedicated page</a>).
             No ground-up rewrites, only incremental layering.
         </p>
     </section>
 
     <!-- ==================== SECTION 6: LIVE DEMO ==================== -->
     <section>
-        <h2>6. Live Demos</h2>
+        <h2>5. Live Demos</h2>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">
             <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:12px; padding:24px;">
@@ -834,7 +766,7 @@
 
     <!-- ==================== SECTION 7: BUSINESS PARAMETERIZATION MAPPING ==================== -->
     <section>
-        <h2>7. Business Parameterization: Mapping M2 Production Code to M2.5+ Runtime Abstractions</h2>
+        <h2>6. Business Parameterization: Mapping M2 Production Code to M2.5+ Runtime Abstractions</h2>
 
         <p style="font-size:0.85rem; color:var(--fg-muted); margin-bottom:24px;">
             This section maps every M2 production-validated recharge/purchase message and event to its equivalent in the
@@ -1448,7 +1380,7 @@ case <span class="kw">FileGenerating</span>:
 
     <!-- ==================== SECTION 8: STABILITY & RESILIENCE ==================== -->
     <section>
-        <h2>8. Resilience Blueprint: From Event Sourcing to Six Nines</h2>
+        <h2>7. Resilience Blueprint: From Event Sourcing to Six Nines</h2>
 
         <p style="font-size:0.85rem; color:var(--fg-muted); margin-bottom:24px;">
             M2.5+ is not just about business parameterization — it inherits all of M2's Akka infrastructure capabilities.
