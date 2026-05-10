@@ -5,9 +5,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>M3 · Dynamic Process Orchestration — Same M2.5+ Components, Fab Semiconductor Execution</title>
-    <meta name="description" content="M3 reuses every layer of the M2.5+ three-dimension architecture for dynamic semiconductor Fab process orchestration. 9+1 equipment areas, ProductRouting, BatchMergeManager, reentry tracking. Incremental evolution, not a rewrite.">
-    <meta name="keywords" content="M3, Fab, semiconductor, dynamic process orchestration, ProductRouting, BatchMergeManager, Reentry, Akka, DAG, MES">
+    <title>M3 · Fact-Driven Reactive Kernel with MU Lifecycle Management</title>
+    <meta name="description" content="M3 is a reactive kernel for semiconductor manufacturing. Built on Manufacture Unit (MU) accounting, dynamic route weaving, and Saga fact-conservation protocols, it transforms production logic from rail transit to autonomous driving. M2.5+ serves as the runtime execution muscle.">
+    <meta name="keywords" content="M3, Fab, semiconductor, MES, reactive kernel, MU lifecycle, dynamic process routing, Saga, Akka Persistence, event sourcing, CIMs">
     <style>
         :root {
             --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
@@ -29,14 +29,12 @@
         header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 12px; }
         header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
         header h1 .m3 { color: var(--amber); }
-        header h1 .m25 { color: var(--purple); }
-        header h1 .arrow { color: var(--fg-subtle); margin: 0 6px; }
-        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 700px; margin-left: auto; margin-right: auto; }
+        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 720px; margin-left: auto; margin-right: auto; }
         header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
         .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
-        .badge-prototype { background: rgba(245,158,11,0.15); color: var(--amber); }
-        .badge-future { background: rgba(168,85,247,0.15); color: var(--purple); }
-        .badge-live { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-arch { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-engine { background: rgba(168,85,247,0.15); color: var(--purple); }
+        .badge-open { background: rgba(63,185,80,0.15); color: var(--green); }
 
         .nav-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; font-size: 0.82rem; align-items: center; flex-wrap: wrap; }
         .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
@@ -64,6 +62,7 @@
         section { margin-bottom: 60px; }
         h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
         h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: var(--fg); }
+        h4 { font-size: 0.92rem; font-weight: 700; margin: 20px 0 8px; color: var(--fg); }
 
         .ps-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
         .ps-table th { background: var(--bg-alt); padding: 14px 18px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
@@ -79,7 +78,13 @@
 
         .arch-callout { background: rgba(245,158,11,0.04); border-left: 3px solid var(--amber); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
         .arch-callout strong { color: var(--fg); }
+        .arch-callout.blue { border-left-color: var(--accent); background: rgba(88,166,255,0.04); }
+        .arch-callout.red { border-left-color: var(--red); background: rgba(248,81,73,0.04); }
+        .arch-callout.purple { border-left-color: var(--purple); background: rgba(168,85,247,0.04); }
         .file-ref { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted); }
+
+        .arch-svg-wrap { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 20px 12px 10px; margin: 20px 0; text-align: center; overflow-x: auto; }
+        .arch-svg { width: 100%; max-width: 1060px; }
 
         .capability-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 20px 0; }
         .cap-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; }
@@ -97,6 +102,7 @@
 
         blockquote { border-left: 3px solid var(--amber); padding: 12px 18px; margin: 16px 0; background: rgba(245,158,11,0.04); font-size: 0.82rem; color: var(--fg-muted); border-radius: 0 6px 6px 0; }
         blockquote strong { color: var(--fg); }
+        blockquote.motto { border-left-color: var(--teal); background: rgba(20,184,166,0.04); text-align: center; font-size: 0.9rem; padding: 20px 24px; }
 
         .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
         .footer a { color: var(--accent); text-decoration: none; }
@@ -105,10 +111,22 @@
         .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
         .stat-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 18px; text-align: center; }
         .stat-card .num { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
-        .stat-card .lbl { font-size: 0.7rem; color: var(--fg-muted); margin-top: 4px; }
+        .stat-card .lbl { font-size: 0.7rem; color: var(--fg-muted); margin-top: 4px; line-height: 1.5; }
         .num-amber { color: var(--amber); }
         .num-purple { color: var(--purple); }
         .num-green { color: var(--green); }
+        .num-teal { color: var(--teal); }
+
+        .lifecycle-flow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: 24px 0; font-size: 0.78rem; }
+        .lifecycle-node { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; text-align: center; min-width: 120px; }
+        .lifecycle-node .lc-icon { font-size: 1.3rem; margin-bottom: 4px; }
+        .lifecycle-node .lc-title { font-weight: 700; font-size: 0.82rem; }
+        .lifecycle-node .lc-sub { font-size: 0.65rem; color: var(--fg-muted); margin-top: 2px; }
+        .lifecycle-arrow { color: var(--fg-subtle); font-size: 1.2rem; font-weight: 700; }
+        .lifecycle-node.lc-perception { border-color: rgba(88,166,255,0.4); }
+        .lifecycle-node.lc-logging { border-color: rgba(63,185,80,0.4); }
+        .lifecycle-node.lc-inference { border-color: rgba(245,158,11,0.4); }
+        .lifecycle-node.lc-action { border-color: rgba(168,85,247,0.4); }
 
         @@media (max-width: 768px) {
             .phase-grid, .stat-row, .comp-grid, .capability-grid { grid-template-columns: 1fr; }
@@ -121,21 +139,20 @@
 
     <!-- ==================== HERO ==================== -->
     <header>
-        <div class="kicker">M3 · Dynamic Fab Process Orchestration</div>
+        <div class="kicker">M3 · Reactive Semiconductor Manufacturing Kernel</div>
         <h1>
-            <span class="m25">M2.5+ Components</span>
-            <span class="arrow">→</span>
-            <span class="m3">M3 Dynamic Orchestration</span>
+            A <span class="m3">Fact-Driven</span> Reactive Kernel with <span class="m3">MU Lifecycle</span> Management
         </h1>
         <p class="tagline">
-            Every layer of the M2.5+ <strong>three-dimension architecture</strong> — business step chains, technical component stacks, scheduling routers — remains unchanged.
-            M3 deploys them directly for dynamic process orchestration across <strong>9 equipment areas + logistics command</strong> in the Fab.
-            The only difference: the step sequence is loaded at runtime from a <strong>product routing database</strong> instead of being hard-coded.
+            Let the physical world determine the facts. Let the logical world manage consistency. Let dynamic routing drive the future.
+            M3 redefines next-generation MES through the lens of <strong>information theory</strong>—every wafer is an account guarded by Saga,
+            every process route is a ChainDSL woven dynamically from real-time facts,
+            every FOUP docking and door-open is a sacred physical asset transaction, witnessed by a distributed digital ledger.
         </p>
         <div class="badge-row">
-            <span class="badge badge-live">M2.5+ Components · Implemented</span>
-            <span class="badge badge-prototype">M3 Fab Orchestration · Prototype</span>
-            <span class="badge badge-future">Incremental Evolution · Layer by Layer</span>
+            <span class="badge badge-arch">Architecture Design</span>
+            <span class="badge badge-engine">Powered by M2.5+ Engine</span>
+            <span class="badge badge-open">Open Collaboration</span>
         </div>
         <nav class="nav-links">
             <a href="/">Home</a>
@@ -159,169 +176,658 @@
         </nav>
     </header>
 
-    <!-- ==================== SECTION 1: THE FAB PROBLEM ==================== -->
+    <!-- ==================== SECTION 1: Rail Transit to Autonomous Driving ==================== -->
     <section>
-        <h2>1. The Fab Challenge: Why the Salary-Savings Architecture Applies Directly</h2>
+        <h2>1. From "Rail Transit" to "Autonomous Driving"</h2>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
-            The salary-savings business chain (file gen → SFTP upload → poll response → parse → classify → route) is fundamentally a
-            <strong>cross-system process orchestration</strong> problem. Semiconductor Fab manufacturing is the same —
-            only the "external system" changes from a bank to <strong>equipment and MES</strong>,
-            and the "file" becomes a <strong>FOUP/Lot</strong>.
+            Traditional MES (the M2 era) resembles <strong>rail transit</strong>: process routes are dead rails laid out in advance.
+            When the physical world deviates (e.g., Wafer 5 exceeds granularity spec), the system stalls, waiting for a human to throw the switch.
+            <strong>M3 architecture</strong> transforms production logic into <strong>autonomous driving</strong>—with the Manufacture Unit (MU) at its core,
+            treating every processing step as a "transaction," using dynamic routing and distributed transaction protocols to achieve a perfect mapping of physical facts into the digital world.
         </p>
 
-        <div class="stat-row">
-            <div class="stat-card">
-                <div class="num num-amber">10</div>
-                <div class="lbl">Equipment Areas + Logistics</div>
+        <table class="ps-table" style="margin-top:20px;">
+            <thead><tr><th style="width:18%">Dimension</th><th style="width:41%">M2 Era (Rail Transit)</th><th style="width:41%">M3 Era (Autonomous Driving)</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Process Route</strong></td><td>Static List[Step], determined at compile time</td><td>Step Generator—<strong>dynamically computes the next DSL segment</strong> based on LotContext facts after each step completes</td></tr>
+                <tr><td><strong>Entity Model</strong></td><td>Lot is a file batch, Wafer is a row record</td><td>MU Account Matrix—Lot/Wafer/Die three-level granularity, <strong>horizontal timeline + vertical drill-down</strong></td></tr>
+                <tr><td><strong>Exception Handling</strong></td><td>Stop the line, wait for human intervention</td><td>Result Classifier four-way split → <strong>physical compensation (rework DSL)</strong> or logical rollback (Saga)</td></tr>
+                <tr><td><strong>Split / Merge</strong></td><td>Manual split, manual merge</td><td><strong>Cross-account transfer</strong>—Saga guarantees atomic parent debit and child creation</td></tr>
+                <tr><td><strong>State Consistency</strong></td><td>Database transactions + foreign key constraints</td><td><strong>Information-theoretic</strong>—monotonically increasing fact log; replay Event Log to restore physical-world-aligned state</td></tr>
+                <tr><td><strong>Route Source</strong></td><td>Process engineers pre-draw routes</td><td><strong>Dynamic Flow Assembler</strong>—weaves paths in real-time based on Result Classifier feedback</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>The core paradigm shift:</strong> M3's essence is preserving "the projection of physical facts in the information system without distortion."
+            No matter how many splits and merges occur, the total MU asset count in the system must remain conserved. This consistency is not a simple database constraint—it's an <strong>information-theoretic, monotonically increasing fact repository</strong>.
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 2: MU Account Matrix ==================== -->
+    <section>
+        <h2>2. The Account-Based Manufacture Unit (MU) Matrix</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            In M3, wafers are no longer passive objects—they are abstracted as "account-side participants."
+            M3 decouples manufacturing objects by granularity, forming nested lifecycle management.
+            The MU Matrix is viewed along two axes: the <strong>horizontal axis records all events on the timeline</strong>,
+            the <strong>vertical axis drills through three granularity levels</strong>.
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(88,166,255,0.3);">
+                <div class="comp-icon">📦</div>
+                <h4>Lot (Container Layer / FOUP)</h4>
+                <p>The logical orchestration unit. Manages carrier position, physical transport, and WIP accounting.
+                Every batching, split, and merge is recorded as an <strong>event</strong> on the horizontal timeline.
+                Physically corresponds to a FOUP (25-wafer carrier)—the "logical container" for all Wafers.</p>
             </div>
-            <div class="stat-card">
-                <div class="num num-purple">11-13</div>
-                <div class="lbl">Typical process steps (with reentry)</div>
+            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
+                <div class="comp-icon">💎</div>
+                <h4>Wafer (Atomic Layer / Substrate)</h4>
+                <p>The core fact carrier. Manages quality parameters, metrology facts, and yield tracking.
+                Records every wafer's measurements, scratches, and which chamber it was processed in.
+                <strong>Split is triggered by "fact anomaly"</strong>—Wafer 5 exceeds granularity spec → the system spawns two parallel timelines.</p>
             </div>
-            <div class="stat-card">
-                <div class="num num-green">25 wafers</div>
-                <div class="lbl">FOUP/Lot physical carrier capacity</div>
+            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
+                <div class="comp-icon">🎯</div>
+                <h4>Die (Derived Layer / Chip)</h4>
+                <p>The ultimate output value point. Exists as a Wafer attribute, recording the final Map facts.
+                Data concentrates and erupts during <strong>CP (Chip Probe)</strong> and <strong>FT (Final Test)</strong> phases—
+                each Die's electrical parameters, Bin classification, and yield decisions are recorded as critical facts at these stages.</p>
+            </div>
+        </div>
+
+        <h3>The MU Matrix: Dual-Axis Structure</h3>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;">
+            <div style="background:var(--bg-alt); border:1px solid rgba(88,166,255,0.3); border-radius:10px; padding:20px;">
+                <h4 style="color:var(--accent); margin-bottom:10px;">→ Horizontal: Timeline</h4>
+                <p style="font-size:0.8rem; color:var(--fg-muted); line-height:1.7;">
+                    Records all <strong>PhaseDone events</strong> from start to output.
+                    Every step completion, metrology result, split, and merge appends immutable fact records to the timeline.
+                    There isn't just one timeline—after a split, <strong>multiple parallel timelines grow simultaneously</strong> in the MU Matrix.
+                    At merge, BMM acts as a Barrier to align the timelines back into one.
+                </p>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:20px;">
+                <h4 style="color:var(--amber); margin-bottom:10px;">↓ Vertical: Granularity Drill-Down</h4>
+                <p style="font-size:0.8rem; color:var(--fg-muted); line-height:1.7;">
+                    <strong>Lot Level</strong>—records FOUP transport, furnace batching records.<br/>
+                    <strong>Wafer Level</strong>—records per-wafer measurements, scratches, chamber processing history.<br/>
+                    <strong>Die Level</strong>—electrical Map facts during CP/FT test phases.<br/>
+                    The relationship between levels is not foreign keys—it's an <strong>event sourcing projection</strong>. Any query at any level is a spatiotemporal slice of the Event Log.
+                </p>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>Information-theoretic consistency:</strong> Saga in M3 evolves into the "guardian of fact conservation." It no longer manages fixed steps—it manages the <strong>atomicity</strong> of operations.
+            Split is a cross-account transfer—ensuring parent debit and child creation happen <strong>atomically</strong>. Merge is a Barrier—only when each MU's progress is logically aligned, or forced into reconciliation via compensation protocol, does BMM sign the merge fact.
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 3: Three-Layer Architecture ==================== -->
+    <section>
+        <h2>3. Three-Layer Architecture: Decision × Execution × Physical</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M3 architecture completely decouples business logic from physical equipment through <strong>three-layer separation</strong>.
+            The Decision Layer (M3 brain) figures out "what to do next," the Runtime Layer (M2.5+ muscle) "dispatches instructions with high throughput,"
+            and the Physical Execution Layer (Fab reality) performs "actual physical movement."
+            The core objective: handle the extreme <strong>dynamism</strong> and <strong>uncertainty</strong> inherent in wafer fabrication.
+        </p>
+
+        <div class="arch-svg-wrap">
+            <div style="font-size:0.75rem; color:var(--fg-subtle); margin-bottom:10px;">
+                POR → Dynamic Flow Assembler (Step Generator) → Saga/LotContext → ChainExecutionActor → StepExecutors → Equipment → ResultClassifier → Fact Logging Feedback Loop
+            </div>
+            <svg class="arch-svg" viewBox="0 0 1110 1220" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <marker id="ahBlue" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#58a6ff"/>
+                    </marker>
+                    <marker id="ahMuted" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#8b949e"/>
+                    </marker>
+                    <marker id="ahGreen" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#4ade80"/>
+                    </marker>
+                    <marker id="ahAmber" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f59e0b"/>
+                    </marker>
+                    <marker id="ahRed" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f87171"/>
+                    </marker>
+                    <marker id="ahPurple" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#a855f7"/>
+                    </marker>
+                    <marker id="ahOrange" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f08c3e"/>
+                    </marker>
+                    <marker id="ahTeal" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#2dd4bf"/>
+                    </marker>
+                    <filter id="nodeShadow" x="-10%" y="-20%" width="130%" height="150%">
+                        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
+                    </filter>
+                    <linearGradient id="gTeal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(45,212,191,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(45,212,191,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(96,165,250,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(96,165,250,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gAmber" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(251,191,36,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(251,191,36,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gPurple" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(192,132,252,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(192,132,252,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(248,113,113,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(248,113,113,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(74,222,128,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(74,222,128,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gOrange" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(240,140,62,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(240,140,62,0.05)"/>
+                    </linearGradient>
+                </defs>
+
+                <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif">
+
+                <!-- ============================================================ -->
+                <!-- LAYER 1: Decision Layer                                        -->
+                <!-- ============================================================ -->
+                <rect x="30" y="10" width="1000" height="445" rx="12" fill="rgba(59,130,246,0.025)" stroke="rgba(59,130,246,0.2)" stroke-width="1.5"/>
+                <rect x="30" y="10" width="5" height="445" rx="2" fill="#60a5fa" fill-opacity="0.5"/>
+                <text x="50" y="35" fill="#60a5fa" font-size="13" font-weight="700" letter-spacing="1.3">Decision Layer (M3 Heart — The Brain)</text>
+                <text x="50" y="52" fill="#8b949e" font-size="8" font-weight="500">POR Repository · Dynamic Flow Assembler (Step Generator) · Saga Fact Conservation · Lot Context (MU Matrix) · Akka Persistence</text>
+
+                <!-- POR Repository -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="70" width="180" height="62" rx="8" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.35" stroke-width="1.5"/>
+                    <rect x="55" y="70" width="4" height="62" rx="2" fill="#60a5fa"/>
+                </g>
+                <text x="145" y="94" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">POR Repository</text>
+                <text x="145" y="110" fill="#8b949e" font-size="8" font-weight="500" text-anchor="middle">Route Library · Main Route</text>
+                <text x="145" y="124" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Rework Templates · Exp.Branches</text>
+
+                <!-- Arrow: POR → Assembler -->
+                <path d="M 235 101 L 275 101" fill="none" stroke="#58a6ff" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ahBlue)"/>
+                <text x="255" y="95" fill="#58a6ff" font-size="7" font-weight="600" text-anchor="middle">Fetch Snippets</text>
+
+                <!-- Dynamic Flow Assembler -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="280" y="70" width="230" height="62" rx="8" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.45" stroke-width="1.8"/>
+                    <rect x="280" y="70" width="5" height="62" rx="2" fill="#f59e0b"/>
+                </g>
+                <text x="395" y="94" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Dynamic Flow Assembler</text>
+                <text x="395" y="110" fill="#f59e0b" font-size="8.5" font-weight="600" text-anchor="middle">Step Generator (not static List[Step])</text>
+                <text x="395" y="124" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Fact-Driven · Dynamic ChainDSL Weaving</text>
+
+                <!-- Arrow: Assembler → Saga -->
+                <path d="M 395 132 L 395 170" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" marker-end="url(#ahAmber)"/>
+                <text x="408" y="154" fill="#f59e0b" font-size="8" font-weight="700" text-anchor="start">Inject ChainDSL</text>
+
+                <!-- Saga Coordinator -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="178" width="280" height="130" rx="10" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.45" stroke-width="1.5"/>
+                    <rect x="55" y="178" width="5" height="130" rx="2" fill="#2dd4bf"/>
+                </g>
+                <text x="195" y="200" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Saga Transaction Coordinator</text>
+                <text x="195" y="216" fill="#8b949e" font-size="8" font-weight="500" text-anchor="middle">Guardian of Fact Conservation</text>
+
+                <!-- BMM inside Saga -->
+                <rect x="65" y="226" width="260" height="50" rx="6" fill="rgba(45,212,191,0.08)" stroke="rgba(45,212,191,0.25)" stroke-width="1"/>
+                <text x="195" y="244" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Batch &amp; Merge Manager (BMM)</text>
+                <text x="195" y="258" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Split: Cross-Account Transfer · Merge: Barrier Alignment</text>
+                <text x="195" y="272" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Compensate Failure → SUSPENDED → ManualFix</text>
+
+                <!-- Double arrow: Saga ↔ Lot Context -->
+                <path d="M 335 243 L 365 243" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" marker-end="url(#ahTeal)"/>
+                <path d="M 365 253 L 335 253" fill="none" stroke="#2dd4bf" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahTeal)"/>
+                <text x="350" y="237" fill="#2dd4bf" font-size="7" font-weight="600" text-anchor="middle">Events</text>
+                <text x="350" y="270" fill="#2dd4bf" font-size="7" font-weight="600" text-anchor="middle">Commands</text>
+
+                <!-- Lot Context (Aggregate Root) -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="370" y="178" width="280" height="130" rx="10" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.45" stroke-width="1.5"/>
+                    <rect x="370" y="178" width="5" height="130" rx="2" fill="#2dd4bf"/>
+                </g>
+                <text x="510" y="200" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Lot Context (Aggregate Root)</text>
+                <text x="510" y="216" fill="#8b949e" font-size="8" font-weight="500" text-anchor="middle">MU Matrix · Batch Aggregate</text>
+
+                <!-- MU Tree inside Lot Context -->
+                <rect x="380" y="226" width="260" height="50" rx="6" fill="rgba(45,212,191,0.1)" stroke="rgba(45,212,191,0.3)" stroke-width="1"/>
+                <rect x="390" y="234" width="70" height="32" rx="4" fill="rgba(88,166,255,0.12)" stroke="rgba(88,166,255,0.3)" stroke-width="1"/>
+                <text x="425" y="254" fill="#e6edf3" font-size="8.5" font-weight="700" text-anchor="middle">Lot</text>
+                <line x1="460" y1="250" x2="478" y2="250" stroke="#8b949e" stroke-width="1" stroke-opacity="0.5"/>
+                <line x1="478" y1="250" x2="478" y2="238" stroke="#8b949e" stroke-width="1" stroke-opacity="0.5"/>
+                <line x1="478" y1="250" x2="478" y2="262" stroke="#8b949e" stroke-width="1" stroke-opacity="0.5"/>
+                <rect x="482" y="230" width="72" height="16" rx="3" fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.25)" stroke-width="1"/>
+                <text x="518" y="242" fill="#f59e0b" font-size="7" font-weight="700" text-anchor="middle">Wafer 1</text>
+                <rect x="482" y="254" width="72" height="16" rx="3" fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.25)" stroke-width="1"/>
+                <text x="518" y="266" fill="#f59e0b" font-size="7" font-weight="700" text-anchor="middle">Wafer 2..25</text>
+                <rect x="560" y="238" width="68" height="12" rx="3" fill="rgba(168,85,247,0.1)" stroke="rgba(168,85,247,0.2)" stroke-width="0.8" stroke-dasharray="2 2"/>
+                <text x="594" y="247" fill="#a855f7" font-size="6" font-weight="600" text-anchor="middle">Die 1..N</text>
+                <line x1="554" y1="242" x2="560" y2="244" stroke="#a855f7" stroke-width="0.8" stroke-opacity="0.4"/>
+
+                <!-- MU Timeline -->
+                <rect x="690" y="185" width="160" height="22" rx="6" fill="rgba(88,166,255,0.06)" stroke="rgba(88,166,255,0.15)" stroke-width="1"/>
+                <text x="770" y="199" fill="#8b949e" font-size="7.5" font-weight="600" text-anchor="middle">Timeline: PhaseDone Event Chain</text>
+
+                <!-- Arrows to Persistence -->
+                <path d="M 195 308 L 195 335" fill="none" stroke="#8b949e" stroke-width="2" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+                <path d="M 510 308 L 510 335" fill="none" stroke="#8b949e" stroke-width="2" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <!-- Akka Persistence -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="342" width="940" height="48" rx="8" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="55" y="342" width="5" height="48" rx="2" fill="#3fb950"/>
+                </g>
+                <text x="525" y="364" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Akka Persistence · Event Log (Event Sourcing Foundation)</text>
+                <text x="525" y="380" fill="#6e7681" font-size="8" font-weight="500" text-anchor="middle">All physical facts written as immutable DomainEvents to Journal → replay to restore physical-world-aligned state after crash</text>
+
+                <!-- Arrow: Decision → Runtime -->
+                <path d="M 395 395 L 395 428" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="6 3" marker-end="url(#ahAmber)"/>
+                <text x="408" y="415" fill="#f59e0b" font-size="8" font-weight="700" text-anchor="start">ChainDSL</text>
+
+                <!-- ============================================================ -->
+                <!-- LAYER 2: Runtime Execution                                      -->
+                <!-- ============================================================ -->
+                <rect x="30" y="462" width="1000" height="195" rx="12" fill="rgba(168,85,247,0.025)" stroke="rgba(168,85,247,0.2)" stroke-width="1.5"/>
+                <rect x="30" y="462" width="5" height="195" rx="2" fill="#a855f7" fill-opacity="0.5"/>
+                <text x="50" y="487" fill="#a855f7" font-size="13" font-weight="700" letter-spacing="1.3">Runtime Execution Layer (M2.5+ Core — The Muscle)</text>
+                <text x="50" y="504" fill="#8b949e" font-size="8" font-weight="500">Inherited from M2.5+ · Receives ChainDSL from Above · EventSourcedBehavior · Self-Healing · ClusterSharding Scale-Out</text>
+
+                <!-- ChainExecutionActor -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="518" width="230" height="62" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="55" y="518" width="4" height="62" rx="2" fill="#a855f7"/>
+                </g>
+                <text x="170" y="542" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">Chain Execution Actor</text>
+                <text x="170" y="557" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">EventSourcedBehavior</text>
+                <text x="170" y="572" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Parse ChainDSL → Parallel Steps</text>
+
+                <path d="M 285 549 L 325 549" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" marker-end="url(#ahPurple)"/>
+
+                <!-- Step Executor Actors -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="330" y="518" width="250" height="62" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.35" stroke-width="1.2"/>
+                </g>
+                <text x="455" y="542" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">Step Executor Actors × N</text>
+                <text x="455" y="557" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">SubBatchPipeline (6-stage Future chain)</text>
+                <text x="455" y="572" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Circuit Breaker · Retry · Codec · Protocol Stack</text>
+
+                <path d="M 580 549 L 620 549" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" marker-end="url(#ahPurple)"/>
+
+                <!-- ReBatch Router / Exception Handler -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="625" y="518" width="250" height="62" rx="8" fill="url(#gRed)" stroke="#f87171" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="625" y="518" width="4" height="62" rx="2" fill="#f87171"/>
+                </g>
+                <text x="750" y="542" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">ReBatch Router</text>
+                <text x="750" y="557" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Exception Handler</text>
+                <text x="750" y="572" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">RetrySameArea / RouteToArea / Scrap</text>
+
+                <text x="525" y="610" fill="#a855f7" font-size="8" font-weight="600" text-anchor="middle">M2.5+ Three-Dimension Architecture (Business/Tech/Scheduling) — see M2.5+ page</text>
+                <text x="525" y="624" fill="#a855f7" font-size="8" font-weight="600" text-anchor="middle">ChainExecutionActor: 4 generic events (Started/PhaseDone/AllCompleted/ExecutionFailed) cover all business chains</text>
+                <text x="525" y="638" fill="#6e7681" font-size="7.5" font-weight="500" text-anchor="middle">← Success → Advance to next DSL | ← Failure → ReBatch route | ← Exception → Escalate to Saga</text>
+
+                <!-- Arrow: Runtime → Physical -->
+                <path d="M 525 650 L 525 685" fill="none" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="6 3" marker-end="url(#ahPurple)"/>
+                <text x="538" y="672" fill="#a855f7" font-size="8" font-weight="700" text-anchor="start">Equip.Cmds</text>
+
+                <!-- ============================================================ -->
+                <!-- LAYER 3: Physical Execution                                    -->
+                <!-- ============================================================ -->
+                <rect x="30" y="692" width="1000" height="485" rx="12" fill="rgba(20,184,166,0.025)" stroke="rgba(20,184,166,0.22)" stroke-width="1.5"/>
+                <rect x="30" y="692" width="5" height="485" rx="2" fill="#2dd4bf" fill-opacity="0.5"/>
+                <text x="50" y="717" fill="#2dd4bf" font-size="13" font-weight="700" letter-spacing="1.3">Physical Execution Layer (Fab Level — The Real World)</text>
+                <text x="50" y="734" fill="#8b949e" font-size="8" font-weight="500">Processing Funnel (Lot → Wafer → Die) · Sub-Batch Processor (Equipment Actor) · Result Classifier · Equipment EAP</text>
+
+                <!-- Processing Funnel -->
+                <rect x="55" y="748" width="940" height="65" rx="8" fill="rgba(240,140,62,0.03)" stroke="rgba(240,140,62,0.2)" stroke-width="1" stroke-dasharray="4 2"/>
+                <text x="70" y="766" fill="#f08c3e" font-size="9" font-weight="700">Processing Funnel (Lot → Wafer → Die)</text>
+
+                <rect x="80" y="778" width="140" height="28" rx="5" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="150" y="796" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">Lot 25 Wafers · FOUP</text>
+                <path d="M 220 792 L 245 792" fill="none" stroke="#f08c3e" stroke-width="1.3" stroke-opacity="0.6" marker-end="url(#ahOrange)"/>
+                <rect x="250" y="778" width="170" height="28" rx="5" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="335" y="796" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">Batch Tool · Merge 100 Wafers</text>
+                <path d="M 420 792 L 445 792" fill="none" stroke="#f08c3e" stroke-width="1.3" stroke-opacity="0.6" marker-end="url(#ahOrange)"/>
+                <rect x="450" y="778" width="140" height="28" rx="5" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="520" y="796" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">Decompose to Lots</text>
+                <path d="M 590 792 L 615 792" fill="none" stroke="#f08c3e" stroke-width="1.3" stroke-opacity="0.6" marker-end="url(#ahOrange)"/>
+                <rect x="620" y="778" width="200" height="28" rx="5" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="720" y="796" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">Single-Wafer · Litho 1-by-1</text>
+
+                <path d="M 525 813 L 525 835" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" marker-end="url(#ahTeal)"/>
+
+                <text x="50" y="852" fill="#2dd4bf" font-size="9" font-weight="700">Sub-Batch Processor (Equipment Actor)</text>
+
+                <!-- Equipment: Diffusion Furnace -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="862" width="270" height="62" rx="8" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.35" stroke-width="1.2"/>
+                    <rect x="55" y="862" width="4" height="62" rx="2" fill="#2dd4bf"/>
+                </g>
+                <text x="190" y="886" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Diffusion Furnace</text>
+                <text x="190" y="902" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Batch Tool · 4Lot/100 Wafers</text>
+                <text x="190" y="916" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Recipe Match Batching</text>
+
+                <!-- Equipment: Lithography Track -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="365" y="862" width="270" height="62" rx="8" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="365" y="862" width="4" height="62" rx="2" fill="#f59e0b"/>
+                </g>
+                <text x="500" y="886" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Lithography Track</text>
+                <text x="500" y="902" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Single-Wafer Tool · Multi-Patterning ♻</text>
+                <text x="500" y="916" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Single-Wafer Handling</text>
+                <text x="627" y="882" fill="#f59e0b" font-size="10" font-weight="700">♻</text>
+
+                <!-- Equipment: Metrology Station -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="675" y="862" width="270" height="62" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.4" stroke-width="1.2"/>
+                    <rect x="675" y="862" width="4" height="62" rx="2" fill="#a855f7"/>
+                </g>
+                <text x="810" y="886" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Metrology Station</text>
+                <text x="810" y="902" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Inspection Tool · CD/Film/Defect</text>
+                <text x="810" y="916" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Borderline Trigger Source △</text>
+                <text x="937" y="882" fill="#a855f7" font-size="9" font-weight="700">△</text>
+
+                <path d="M 325 893 L 375 893" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+                <path d="M 635 893 L 665 893" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+                <path d="M 500 924 L 500 995" fill="none" stroke="#8b949e" stroke-width="2" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <!-- Result Classifier (4-way) — shifted down +55 -->
+                <rect x="180" y="1001" width="660" height="55" rx="8" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.1)" stroke-width="1.2"/>
+                <text x="510" y="1020" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Result Classifier · Four-Way Classification</text>
+
+                <rect x="195" y="1030" width="115" height="20" rx="4" fill="rgba(74,222,128,0.08)" stroke="#4ade80" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="252" y="1044" fill="#4ade80" font-size="9" font-weight="700" text-anchor="middle">PASS → Continue</text>
+
+                <rect x="325" y="1030" width="140" height="20" rx="4" fill="rgba(245,158,11,0.08)" stroke="#f59e0b" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="395" y="1044" fill="#f59e0b" font-size="9" font-weight="700" text-anchor="middle">BORDERLINE → Hold</text>
+
+                <rect x="480" y="1030" width="140" height="20" rx="4" fill="rgba(248,113,113,0.08)" stroke="#f87171" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="550" y="1044" fill="#f87171" font-size="9" font-weight="700" text-anchor="middle">FAIL → Trigger Rework</text>
+
+                <rect x="635" y="1030" width="130" height="20" rx="4" fill="rgba(248,113,113,0.12)" stroke="#f87171" stroke-opacity="0.6" stroke-width="1.3"/>
+                <text x="700" y="1044" fill="#f87171" font-size="9" font-weight="700" text-anchor="middle">SCRAP → Write-Off</text>
+
+                <!-- Equipment EAP Layer -->
+                <rect x="55" y="1087" width="940" height="36" rx="6" fill="rgba(168,85,247,0.04)" stroke="rgba(168,85,247,0.2)" stroke-width="1"/>
+                <text x="525" y="1109" fill="#a855f7" font-size="9" font-weight="700" text-anchor="middle">Equipment EAP Layer · SECS/GEM · HTTP/TCP · Circuit Breaker · Physical Signal ⇄ Digital Event</text>
+
+                <!-- ========== CROSS-LAYER DATA FLOWS ========== -->
+
+                <!-- Fact Logging (BLACK solid): Result Classifier PASS → left outside → Saga left side -->
+                <path d="M 195 1040 L 40 1040 L 40 243 L 55 243" fill="none" stroke="#8b949e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ahMuted)"/>
+                <text x="28" y="640" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle" transform="rotate(-90, 28, 640)">Fact Logging (PASS)</text>
+
+                <!-- FAIL → Saga → Assembler (RED DASHED) — exit below, down first, route right past SCRAP, enter Assembler right -->
+                <path d="M 550 1050 L 550 1075 L 1070 1075 L 1070 101 L 510 101" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8 4" marker-end="url(#ahRed)"/>
+                <text x="1058" y="590" fill="#f87171" font-size="8.5" font-weight="700" text-anchor="start" transform="rotate(-90, 1058, 590)">FAIL → Saga Intercept → Assembler Re-weaves Rework DSL</text>
+
+                <!-- SCRAP → Lot Context (RED BOLD) — exit right, route outside right, enter Lot Context right side -->
+                <path d="M 765 1040 L 1040 1040 L 1040 243 L 650 243" fill="none" stroke="#f87171" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ahRed)"/>
+                <text x="1028" y="640" fill="#f87171" font-size="8.5" font-weight="700" text-anchor="start" transform="rotate(-90, 1028, 640)">SCRAP → Lot Context Write-Off</text>
+
+                <!-- BORDERLINE → Hold → Diffusion Furnace (AMBER) — exit top, route above Result Classifier, enter Diffusion from below -->
+                <path d="M 395 1030 L 395 990 L 190 990 L 190 924" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 3" marker-end="url(#ahAmber)"/>
+                <text x="180" y="980" fill="#f59e0b" font-size="7.5" font-weight="600" text-anchor="end">Borderline Hold → Furnace</text>
+
+                <!-- PASS → Assembler advance (GREEN) — exit below, left turn, route outside left, enter Assembler left -->
+                <path d="M 252 1050 L 252 1070 L 15 1070 L 15 101 L 274 101" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 3" marker-end="url(#ahGreen)"/>
+                <text x="5" y="585" fill="#4ade80" font-size="8" font-weight="600" text-anchor="middle" transform="rotate(-90, 5, 585)">PASS → Assembler Next DSL</text>
+
+                <!-- ReBatch → ChainExec loop -->
+                <path d="M 625 564 L 300 564" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3" marker-end="url(#ahPurple)"/>
+                <text x="462" y="556" fill="#a855f7" font-size="7" font-weight="600" text-anchor="middle">Retry/Switch</text>
+
+                <!-- FOOTER -->
+                <text x="530" y="1165" fill="#8b949e" font-size="8.5" font-weight="600" text-anchor="middle">M3 Three-Layer Architecture: Decision (M3 Heart) + Runtime Execution (M2.5+ Core) + Physical Execution (Fab Level) — Perception→Logging→Inference→Action Closed Loop</text>
+
+                </g>
+            </svg>
+        </div>
+
+        <h3>Layer Responsibilities at a Glance</h3>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:16%">Layer</th><th style="width:20%">Core Role</th><th style="width:34%">Components</th><th style="width:30%">Information Source / Destination</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><strong style="color:#60a5fa">Decision</strong></td>
+                    <td>M3 Brain—"what to do next"</td>
+                    <td>POR Repository · Dynamic Flow Assembler · Saga Coordinator · Lot Context (MU Matrix) · BMM · Akka Persistence</td>
+                    <td>POR static routes → Assembler dynamic weaving → Saga executes ChainDSL → facts written to Persistence</td>
+                </tr>
+                <tr>
+                    <td><strong style="color:#a855f7">Runtime</strong></td>
+                    <td>M2.5+ Muscle—"high-throughput dispatch"</td>
+                    <td>ChainExecutionActor · StepExecutor Actors · SubBatchPipeline (6-stage) · ReBatch Router · Exception Handler</td>
+                    <td>Receives ChainDSL from above → parses into parallel Steps → executes → routes exceptions<br/>All inherited from M2.5+, zero modification</td>
+                </tr>
+                <tr>
+                    <td><strong style="color:#2dd4bf">Physical</strong></td>
+                    <td>Fab Reality—"physical movement"</td>
+                    <td>Processing Funnel · Sub-Batch Processor (Equipment Actors) · Result Classifier · Equipment EAP</td>
+                    <td>Equipment comm (SECS/GEM) → physical feedback → Result Classifier → fact logging back to Decision Layer</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout blue">
+            <strong>The core value of three-layer separation:</strong> The Decision Layer only cares about "facts" and "protocols"—what happened in the physical world, what to do next.
+            The Runtime Layer only cares about "execution"—how to reliably deliver commands to equipment and collect results with high throughput.
+            The Physical Execution Layer only cares about "communication and precision"—how to translate SECS/GEM messages into domain events.
+            Changes in any layer do not penetrate other layers—equipment upgrades don't affect business logic; process changes don't touch the execution engine.
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 4: Fact-Driven Lifecycle ==================== -->
+    <section>
+        <h2>4. The Fact-Driven Lifecycle: Perception → Logging → Inference → Action</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M3's lifecycle is not hard-coded—it dynamically "grows" through this four-step cycle.
+            This is not a pipeline; it's a <strong>continuously running feedback loop</strong>—every physical fact drives a digital decision.
+        </p>
+
+        <div class="lifecycle-flow">
+            <div class="lifecycle-node lc-perception">
+                <div class="lc-icon">📡</div>
+                <div class="lc-title">1. Perception</div>
+                <div class="lc-sub">EAP reports physical event</div>
+                <div class="lc-sub">Wafer 5 film anomaly / furnace done</div>
+            </div>
+            <span class="lifecycle-arrow">→</span>
+            <div class="lifecycle-node lc-logging">
+                <div class="lc-icon">📝</div>
+                <div class="lc-title">2. Logging</div>
+                <div class="lc-sub">Fact mounted to WaferContext</div>
+                <div class="lc-sub">Akka Persistence permanent record</div>
+            </div>
+            <span class="lifecycle-arrow">→</span>
+            <div class="lifecycle-node lc-inference">
+                <div class="lc-icon">🧠</div>
+                <div class="lc-title">3. Inference</div>
+                <div class="lc-sub">Assembler detects deviation</div>
+                <div class="lc-sub">Weaves new ChainDSL in real-time</div>
+            </div>
+            <span class="lifecycle-arrow">→</span>
+            <div class="lifecycle-node lc-action">
+                <div class="lc-icon">⚡</div>
+                <div class="lc-title">4. Action</div>
+                <div class="lc-sub">New DSL injected into engine</div>
+                <div class="lc-sub">MU enters next lifecycle segment</div>
             </div>
         </div>
 
         <table class="ps-table" style="margin-top:20px;">
-            <thead><tr><th style="width:20%">Dimension</th><th style="width:40%">Salary-Savings (M2/M2.5+)</th><th style="width:40%">Fab (M3)</th></tr></thead>
+            <thead><tr><th style="width:12%">Phase</th><th style="width:20%">Trigger Source</th><th style="width:34%">M3 Processing Logic</th><th style="width:34%">Key Technology</th></tr></thead>
             <tbody>
-                <tr><td>Business Steps</td><td>5-step chain: lock quota → recharge → purchase → notify → unlock</td><td>11-13 steps loaded at runtime from ProductRouting DB, with reentry loops</td></tr>
-                <tr><td>External Systems</td><td>Bank (SFTP/HTTP) + EAMS + P2B</td><td>Equipment (HTTP/SECS/GEM) + MES + logistics system</td></tr>
-                <tr><td>"File" Transfer</td><td>XML batch file + MD5 checksum</td><td>FOUP physical transport + wafer-level tracking</td></tr>
-                <tr><td>Result Classification</td><td>3-way split by bank error codes (OK/BALANCE_INSUFFICIENT/TIMEOUT)</td><td>3-way split by <strong>metrology value ranges</strong> (pass/fail/borderline)</td></tr>
-                <tr><td>Failure Handling</td><td>RetrySameArea / Scrap / ManualIntervention</td><td>Rework / switch area / switch recipe / scrap / manual</td></tr>
-                <tr><td>Batch Constraints</td><td>Time window (10 minutes)</td><td><strong>Physical constraints</strong> (FOUP 25-wafer capacity / recipe compatibility / cleanroom class)</td></tr>
-                <tr><td>Protocol</td><td>XML over SFTP/HTTP</td><td>JSON / SECS-II over HTTP/TCP, circuit breaker protected</td></tr>
+                <tr>
+                    <td><strong>Perception</strong></td>
+                    <td>Equipment EAP (SECS/GEM) reports physical event</td>
+                    <td>EAP layer translates equipment signals into domain events via Result Classifier four-way split</td>
+                    <td><span class="file-ref">Equipment EAP · SECS-II Parser</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Logging</strong></td>
+                    <td>Result Classifier outputs classification</td>
+                    <td>Fact precisely mounted to the corresponding WaferContext account; Saga guarantees atomic write</td>
+                    <td><span class="file-ref">Akka Persistence · EventSourcedBehavior</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Inference</strong></td>
+                    <td>LotContext detects fact deviation (e.g., Wafer 5 granularity exceeds spec)</td>
+                    <td>Dynamic Flow Assembler fetches snippets from POR, weaves new route DSL in real-time—<strong>Split</strong> is triggered by "fact anomaly," result is "two parallel timelines"</td>
+                    <td><span class="file-ref">Dynamic Flow Assembler · ProductRouting</span></td>
+                </tr>
+                <tr>
+                    <td><strong>Action</strong></td>
+                    <td>Assembler outputs new ChainDSL</td>
+                    <td>DSL injected into M2.5+ ChainExecutionActor, drives MU into next lifecycle segment. Equipment receives commands via EAP</td>
+                    <td><span class="file-ref">ChainExecutionActor · SubBatchPipeline</span></td>
+                </tr>
             </tbody>
         </table>
 
         <div class="arch-callout">
-            <strong>Architecture reuse rate:</strong> M2.5+'s business step chains, technical component stacks, and scheduling routers
-            <strong>require zero modification</strong>. M3's change is in the <strong>source</strong> of step sequences — from compile-time
-            static configuration to runtime-loaded dynamic routing. Only three capabilities are added: ProductRouting (data model),
-            BatchMergeManager (Fab physical constraints), and FabFlowEngine (dynamic assembly).
+            <strong>The essence of the closed loop:</strong> This is not a one-way pipeline. Every "Action" completion generates new physical facts via EAP, re-entering "Perception"—a continuously running feedback loop.
+            The system does not predefine all steps—it responds to Result Classifier feedback in real time. This is what fundamentally distinguishes M3 from traditional MES.
         </div>
     </section>
 
-    <!-- ==================== SECTION 2: EQUIPMENT AREAS ==================== -->
+    <!-- ==================== SECTION 5: Saga as Guardian ==================== -->
     <section>
-        <h2>2. 9+1 Equipment Areas</h2>
+        <h2>5. Saga: Guardian of Fact Conservation</h2>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
-            Each equipment area maps to a M2.5+ ChainDefinition with its own SubBatchPipeline and ErrorCodeMapping.
-            10 areas = 10 chain configs — each ~20 lines of DSL, not 10 hand-written Actors.
+            Saga undergoes a conceptual leap in M3—from M1's "distributed transaction coordinator" to <strong>"guardian of fact conservation."</strong>
+            It no longer manages fixed step sequences, but the <strong>atomicity</strong> of operations and the <strong>conservation</strong> of information.
         </p>
 
         <div class="comp-grid">
-            <div class="comp-card"><div class="comp-icon">🧹</div><h4>WetClean</h4><p>Wafer pretreatment, removes surface contaminants and native oxide</p></div>
-            <div class="comp-card"><div class="comp-icon">🔥</div><h4>Diffusion/Oxidation</h4><p>High-temperature furnace process, oxide growth or dopant diffusion</p></div>
-            <div class="comp-card"><div class="comp-icon">💡</div><h4>Lithography</h4><p>Pattern transfer to photoresist; <strong>most re-visited</strong> area (multi-patterning)</p></div>
-            <div class="comp-card"><div class="comp-icon">🔪</div><h4>Etch</h4><p>Dry/wet material removal; <strong>cycles with Deposition</strong> in 3D NAND</p></div>
-            <div class="comp-card"><div class="comp-icon">⚡</div><h4>Ion Implant</h4><p>Precise dopant concentration and depth control</p></div>
-            <div class="comp-card"><div class="comp-icon">💨</div><h4>Deposition</h4><p>CVD/PVD/ALD processes, multi-layer film stacking</p></div>
-            <div class="comp-card"><div class="comp-icon">🪞</div><h4>CMP</h4><p>Global planarization for next-layer lithography depth-of-focus window</p></div>
-            <div class="comp-card"><div class="comp-icon">📏</div><h4>Metrology</h4><p>In-line CD/film/defect inspection; <strong>triggers borderline re-measurement</strong></p></div>
-            <div class="comp-card"><div class="comp-icon">🌬️</div><h4>Drying</h4><p>Final clean and dry, pre-stock preparation</p></div>
-            <div class="comp-card"><div class="comp-icon">🚛</div><h4>Logistics Command</h4><p>FOUP transport scheduling; connects physical flow across all areas</p></div>
+            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
+                <div class="comp-icon">✂️</div>
+                <h4>Split: Cross-Account Transfer</h4>
+                <p>Split is essentially a <strong>cross-account transfer</strong>: parent Lot A debits Wafer 5–8, child Lot A' is created and receives these 4 wafers.
+                Saga guarantees both steps happen <strong>atomically</strong>—either both succeed, or both roll back.
+                The <strong>total MU asset count is always conserved</strong>: Lot A.count + Lot A'.count = original 25 wafers.</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(63,185,80,0.3);">
+                <div class="comp-icon">🔗</div>
+                <h4>Merge: The Barrier</h4>
+                <p>Merge is <strong>timeline unification</strong>. BMM watches parallel timelines—only when each MU's progress is logically <strong>aligned</strong> (all Wafers complete current process segment),
+                or forced into reconciliation via <strong>compensation protocol</strong> (Scrap / Skip-to-merge-point), is the merge fact signed.
+                <strong>Merge is not a physical operation—it's a logical barrier.</strong></p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(248,81,73,0.3);">
+                <div class="comp-icon">🛡️</div>
+                <h4>Failure Recovery: SUSPENDED + ManualFix</h4>
+                <p>When Compensate fails, Saga enters <strong>SUSPENDED</strong> state rather than deadlocking.
+                Operators restore via <strong>ManualFixStep + RetryCurrentPhase</strong>.
+                All intermediate states are written to Akka Persistence—no guessing "where we were stuck" during recovery.</p>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>Key difference from M1 Saga:</strong> M1's Saga manages fixed "Prepare/Commit/Compensate three-phase." M3's Saga manages <strong>"dynamically woven ChainDSL segments"</strong>—each DSL segment is self-contained with Prepare/Commit/Compensate semantics.
+            Saga doesn't care what's inside a segment—it only cares whether the <strong>atomic boundary</strong> of the segment is guaranteed.
         </div>
     </section>
 
-    <!-- ==================== SECTION 3: MAPPING ==================== -->
+    <!-- ==================== SECTION 6: Exception Handling ==================== -->
     <section>
-        <h2>3. M2.5+ Component → M3 Mapping</h2>
+        <h2>6. Exception Handling &amp; Non-Linear Rollback</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            Given that wafer processing is <strong>physically irreversible</strong> (etched material doesn't grow back), M3 redefines "rollback."
+            It's not a database ROLLBACK—the physical world has no CTRL+Z.
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(88,166,255,0.3);">
+                <div class="comp-icon">🔧</div>
+                <h4>Physical Compensation: Inject Rework DSL</h4>
+                <p>Non-conforming wafers aren't "rolled back"—they are <strong>rolled forward</strong>. The Dynamic Flow Assembler weaves a rework DSL and injects it into the execution engine.
+                Example: litho pattern shift → strip resist → re-litho. Every step is a new physical operation consuming new resources.</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
+                <div class="comp-icon">📋</div>
+                <h4>Logical Rollback: Saga Book Reconciliation</h4>
+                <p>At the account operation level (e.g., split interrupted mid-way—parent debited but child not yet created), Saga performs <strong>logical rollback</strong>.
+                Compensate reverse operations restore MU account balances, ensuring <strong>book data does not drift</strong>.</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(248,81,73,0.3);">
+                <div class="comp-icon">⚠️</div>
+                <h4>Forced Merge: Entropy Convergence</h4>
+                <p>In the normal state of "misalignment" (some Wafers scrapped, some still in rework), BMM uses strategies like <strong>forced scrap</strong> or <strong>skip-to-merge-point</strong>
+                to achieve forced convergence from high-entropy state to low-entropy consistency.</p>
+            </div>
+        </div>
+
+        <div class="arch-callout red">
+            <strong>Key insight:</strong> M3's exception handling is not try-catch—it's a <strong>protocol</strong>. Physical compensation looks forward—"since something went wrong, what can I do to fix it."
+            Logical rollback looks backward—"book data must align with physical facts." These two work in concert to form M3's <strong>self-healing capability</strong>.
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 7: M2.5+ as Execution Muscle ==================== -->
+    <section>
+        <h2>7. M2.5+ Execution Engine: M3's Muscle Layer</h2>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
-            The seven M2.5+ components below are reused directly in the Fab — same interface, different configuration.
+            M3's Decision Layer (brain) relies on M2.5+'s runtime components (muscle) to execute physical commands.
+            M2.5+'s three-dimension architecture—Business Dimension (step chains), Technical Dimension (communication/fault-tolerance/codec), Scheduling Dimension (routing/compensation)—is used <strong>without modification</strong>
+            as M3's standard runtime component library.
         </p>
 
         <table class="ps-table">
-            <thead><tr><th style="width:22%">M2.5+ Component</th><th style="width:10%">Layer</th><th style="width:34%">Salary-Savings</th><th style="width:34%">Fab M3</th></tr></thead>
+            <thead><tr><th style="width:24%">M2.5+ Component</th><th style="width:12%">Dim.</th><th style="width:32%">Role in M3</th><th style="width:32%">M3-Specific Parameterization</th></tr></thead>
             <tbody>
-                <tr><td>ChainDefinition · BatchMaster</td><td><span style="color:#60a5fa">Biz</span></td><td>5-step chain: lock → recharge → purchase → notify → unlock</td><td>11-13 steps from ProductRouting DB (with Litho reentry, Dep/Etch cycles)</td></tr>
-                <tr><td>ResultClassifier + ErrorCodeMapping</td><td><span style="color:#a855f7">Sched</span></td><td>3-way by bank error codes (OK / BALANCE_INSUFFICIENT / TIMEOUT)</td><td>3-way by <strong>metrology value ranges</strong> (pass / fail / borderline)</td></tr>
-                <tr><td>ReconfirmHandler</td><td><span style="color:#a855f7">Sched</span></td><td>Verify suspicious transactions via Core API</td><td>Re-measure via <strong>higher-precision tool or manual review</strong></td></tr>
-                <tr><td>ReBatchRouter + ReBatchPolicy</td><td><span style="color:#a855f7">Sched</span></td><td>Decide retry / scrap (RetrySameArea / Scrap)</td><td>Decide <strong>rework / switch area / switch recipe / scrap / manual</strong></td></tr>
-                <tr><td>AreaScheduler + PhysicalConstraints</td><td><span style="color:#f59e0b">Tech</span></td><td>Re-batch by time window (10 min)</td><td>Re-batch by <strong>physical constraints</strong> (FOUP 25 / recipe compat / cleanroom class)</td></tr>
-                <tr><td>SftpConnector / CircuitBreaker</td><td><span style="color:#f59e0b">Tech</span></td><td>SFTP/HTTP to bank, circuit breaker</td><td>HTTP/SECS/GEM to <strong>equipment</strong>, circuit breaker</td></tr>
-                <tr><td>EncodingStrategy / ResponseParser</td><td><span style="color:#f59e0b">Tech</span></td><td>XML bank message ⇄ internal model</td><td>JSON/SECS-II equipment comm ⇄ internal model</td></tr>
+                <tr><td><strong>ChainExecutionActor</strong></td><td><span style="color:#a855f7">Runtime</span></td><td>Receives ChainDSL from Dynamic Flow Assembler, parses into parallel Steps</td><td>4 generic event types cover all Fab business chains</td></tr>
+                <tr><td><strong>SubBatchPipeline (6-stage)</strong></td><td><span style="color:#f59e0b">Tech</span></td><td>File gen/upload/poll/parse/classify → replaces with Fab equipment comm</td><td>Connector: SFTP → SECS/GEM · Codec: XML → JSON/SECS-II</td></tr>
+                <tr><td><strong>ResultClassifier</strong></td><td><span style="color:#a855f7">Sched</span></td><td>Bank error code 3-way → <strong>metrology value 4-way</strong> (Pass/Borderline/Fail/Scrap)</td><td>ErrorCodeMapping → MeasurementThresholdMapping</td></tr>
+                <tr><td><strong>ReBatchRouter</strong></td><td><span style="color:#a855f7">Sched</span></td><td>Adds RouteToArea / Split &amp; Rework to existing routing options</td><td>ReBatchPolicy.actionMap extended with Fab-specific routes</td></tr>
+                <tr><td><strong>AreaScheduler</strong></td><td><span style="color:#f59e0b">Tech</span></td><td>Time-window batching → <strong>physical constraint batching</strong> (FOUP 25 / recipe compat / cleanroom)</td><td>PhysicalConstraints: carrierCapacity + recipeMatchRules</td></tr>
+                <tr><td><strong>CircuitBreaker</strong></td><td><span style="color:#f59e0b">Tech</span></td><td>External system circuit breaker—used unchanged for equipment comm</td><td>Zero modification—breaker is a generic technical component</td></tr>
             </tbody>
         </table>
-    </section>
 
-    <!-- ==================== SECTION 4: THREE NEW CAPABILITIES ==================== -->
-    <section>
-        <h2>4. M3-Specific: Three New Capabilities</h2>
-
-        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
-            These three capabilities handle Fab-specific <strong>physical constraints and dynamic routing</strong>.
-            Each is an <strong>incremental addition</strong> on top of existing components — no existing code is modified.
-        </p>
-
-        <div class="capability-grid">
-            <div class="cap-card" style="border-color: rgba(245,158,11,0.25);">
-                <div class="cap-icon">🗺️</div>
-                <h4>ProductRouting · Dynamic Process Routes</h4>
-                <p>Step sequences are <strong>loaded from a database</strong>, not hard-coded. LOGIC-28NM-A uses an 11-step route (with Lithography reentry × 2); NAND-96L-A uses 13 steps (with Deposition/Etch cycles × 4). Process changes require a <strong>database update only</strong> — zero code changes.</p>
-                <span class="code-ref">fab/model/ProductRouting.scala · RoutingStep + ProductRouting</span>
-            </div>
-            <div class="cap-card" style="border-color: rgba(63,185,80,0.25);">
-                <div class="cap-icon">📦</div>
-                <h4>BatchMergeManager · Lot Merge at Stock</h4>
-                <p>A Lot (25 wafers) may be split during processing — some wafers rework to another area, some are scrapped. At stock-in, the system <strong>tracks original Lot ownership</strong> and auto-triggers merge when all surviving wafers complete. This physical constraint doesn't exist in salary-savings.</p>
-                <span class="code-ref">fab/orchestration/BatchMergeManager.scala · WaitForOthers / ReadyToMerge / PartialMerge</span>
-            </div>
-            <div class="cap-card" style="border-color: rgba(59,130,246,0.25);">
-                <div class="cap-icon">🔄</div>
-                <h4>Reentry Tracking</h4>
-                <p>An equipment area can be visited multiple times (Litho multi-patterning, 3D NAND Dep/Etch cycles). <strong>reentryIndex</strong> tracks the visit count, ensuring the correct recipe and equipment state for each visit. This is the core distinction from unidirectional flows.</p>
-                <span class="code-ref">fab/model/EquipmentArea.scala · reentryIndex calculation</span>
-            </div>
+        <div class="arch-callout purple">
+            <strong>Proof of incremental evolution:</strong> Not a single line of M2.5+ code is modified. M3's additions are entirely in the Decision Layer—Dynamic Flow Assembler,
+            Lot Context (MU Matrix), BMM, four-way Result Classifier. The Runtime Layer is simply called in <strong>new sequences and conditions</strong>.
+            See <a href="/en/m25" style="color:var(--purple);">M2.5+ Component Library</a>.
         </div>
     </section>
 
-    <!-- ==================== SECTION 5: FabFlowEngine ==================== -->
+    <!-- ==================== SECTION 8: Motto + Code Reference ==================== -->
     <section>
-        <h2>5. FabFlowEngine: The Dynamic Assembly Engine</h2>
+        <h2>8. Architecture Motto &amp; Code Reference</h2>
 
-        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
-            FabFlowEngine is the M3 core orchestrator — it reads ProductRouting, dynamically assembles a SubBatchPipeline
-            for each step, batches by PhysicalConstraints, processes, classifies results, routes failures, and advances
-            successes to the next step.
+        <blockquote class="motto">
+            <strong>Architecture Motto:</strong> "Let the physical world determine the facts. Let the logical world manage consistency. Let dynamic routing drive the future."
+        </blockquote>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin: 20px 0 16px;">
+            M3 architecture builds a self-healing reactive kernel by <strong>account-izing Manufacture Units</strong>, <strong>protocol-izing Saga</strong>,
+            and <strong>dynamizing process routes</strong>. It doesn't just answer "where am I" and "what did I do"—it solves "logical collapse caused by physical anomalies"
+            at the foundational protocol level. Under M3, every FOUP docking and door-open is a sacred physical asset transaction, permanently witnessed by a distributed digital ledger.
         </p>
-
-        <div class="code-block"><span class="co">// FabFlowEngine core loop (simplified)</span>
-<span class="kw">def</span> executeStep(lot: LotContext, step: RoutingStep): Future[LotContext] = {
-  <span class="kw">for</span> {
-    <span class="co">// 1. Dynamically assemble Pipeline for current equipment area</span>
-    pipeline  <- resolvePipeline(step.areaId, lot.recipeId)
-    <span class="co">// 2. Batch by physical constraints (FOUP 25, recipe-compatible)</span>
-    batches   <- areaScheduler(step.areaId).schedule(lot.wafers)
-    <span class="co">// 3. Process each sub-batch through SubBatchProcessor</span>
-    results   <- Future.traverse(batches)(processor.process)
-    <span class="co">// 4. Metrology 3-way split + borderline reconfirm</span>
-    resolved  <- classifyAndReconfirm(results, step.areaId)
-    <span class="co">// 5. Route failures: rework / switch area / scrap</span>
-    _         <- routeFailures(resolved.failures, lot.context)
-    <span class="co">// 6. Advance successes to next step (with reentryIndex increment)</span>
-    advanced  <- advanceToNextStep(resolved.successes, lot.routing)
-  } <span class="kw">yield</span> advanced
-}</div>
-
-        <div class="arch-callout">
-            <strong>Proof of incremental evolution:</strong> In the code above, <span class="file-ref">resolvePipeline</span> calls M2.5+'s ChainTemplates.equipmentArea(),
-            <span class="file-ref">processor.process</span> is M2.5+'s SubBatchProcessor,
-            <span class="file-ref">classifyAndReconfirm</span> is M2.5+'s ResultClassifier + ReconfirmHandler,
-            <span class="file-ref">routeFailures</span> is M2.5+'s ReBatchRouter.
-            No M2.5+ component is modified — they are simply called in <strong>new sequences and conditions</strong> by FabFlowEngine.
-        </div>
-    </section>
-
-    <!-- ==================== SECTION 6: CODE REFERENCE ==================== -->
-    <section>
-        <h2>6. Code Reference</h2>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
             The M3 prototype code lives under <span class="file-ref">app/net/imadz/fab/</span>, fully reusing M2.5+ runtime components.
@@ -331,23 +837,23 @@
             <thead><tr><th style="width:28%">File</th><th style="width:10%">Layer</th><th style="width:62%">Responsibility</th></tr></thead>
             <tbody>
                 <tr><td class="file-ref">fab/model/EquipmentArea.scala</td><td>Model</td><td>10 equipment area sealed trait + reentryIndex calculator</td></tr>
-                <tr><td class="file-ref">fab/model/ProductRouting.scala</td><td>Model</td><td>RoutingStep + ProductRouting, includes LOGIC-28NM-A demo route (11 steps)</td></tr>
-                <tr><td class="file-ref">fab/model/LotContext.scala</td><td>Model</td><td>Lot (25 wafers) + Wafer tracking: step index, scrapped count, merge flag</td></tr>
-                <tr><td class="file-ref">fab/orchestration/FabFlowEngine.scala</td><td>Orch</td><td>Recursive step execution: batch → process → classify → reconfirm → route → advance</td></tr>
-                <tr><td class="file-ref">fab/orchestration/BatchMergeManager.scala</td><td>Orch</td><td>Track wafer origin, trigger merge on all-wafers-complete (WaitForOthers/ReadyToMerge/PartialMerge)</td></tr>
-                <tr><td class="file-ref">fab/repository/RoutingRepository.scala</td><td>Data</td><td>Routing storage trait + InMemory impl + Demo data (LOGIC-28NM-A / NAND-96L-A)</td></tr>
-                <tr><td class="file-ref">fab/demo/FabDemo.scala</td><td>Demo</td><td>Full demo: create area pipelines → execute LOGIC + NAND routes → show reentry + merge</td></tr>
+                <tr><td class="file-ref">fab/model/ProductRouting.scala</td><td>Decision</td><td>RoutingStep + ProductRouting—route as <strong>data</strong>, includes LOGIC-28NM-A demo (11 steps)</td></tr>
+                <tr><td class="file-ref">fab/model/LotContext.scala</td><td>Decision</td><td>Lot + Wafer tracking—MU Matrix core: step index, scrap count, merge flags</td></tr>
+                <tr><td class="file-ref">fab/orchestration/FabFlowEngine.scala</td><td>Decision</td><td>Dynamic assembly engine: batch → process → classify → reconfirm → route → advance</td></tr>
+                <tr><td class="file-ref">fab/orchestration/BatchMergeManager.scala</td><td>Decision</td><td>Wafer origin tracking + merge triggers (WaitForOthers / ReadyToMerge / PartialMerge)</td></tr>
+                <tr><td class="file-ref">fab/repository/RoutingRepository.scala</td><td>Data</td><td>Routing storage trait + InMemory impl + Demo data</td></tr>
+                <tr><td class="file-ref">fab/demo/FabDemo.scala</td><td>Demo</td><td>Full demo: create area pipelines → execute LOGIC + NAND → show reentry + merge</td></tr>
             </tbody>
         </table>
 
         <blockquote>
-            <strong>Architect's perspective — why no new execution engine is needed.</strong>
-            M2.5+'s business step chains, technical component stacks, and scheduling routers already cover the complete lifecycle
-            of process execution. M3 changes only the <strong>source</strong> of step sequences — from compile-time static configuration
-            to runtime-loaded dynamic routing. SagaTransactionCoordinator needs no changes; StepExecutor's circuit breaker / retry / timeout need no changes; Connector needs no changes.
-            <strong>The only additions are ProductRouting (data model) + BatchMergeManager (Fab physical constraints) + FabFlowEngine (dynamic assembly).</strong>
-            All new code is ~500 lines — compared to M2's 23 FSMs (~6000 lines of Java), that's a 12:1 compression ratio,
-            while gaining dynamic process orchestration.
+            <strong>Architect's perspective—why M3 is not a new engine.</strong>
+            M3 doesn't start from scratch outside M2.5+. It adds a decision capability <strong>on top of</strong> M2.5+.
+            Dynamic Flow Assembler doesn't replace ChainExecutionActor—it <strong>injects commands into</strong> ChainExecutionActor.
+            Lot Context doesn't replace Saga—it enables Saga to <strong>manage more complex entity relationships</strong>.
+            It's like an autonomous driving system not replacing the engine—it just tells the engine <strong>where to go</strong>.
+            Code compression: M2's 23 FSMs (~6000 lines Java) → M2.5+'s 16 runtime components (~2000 lines Scala) → M3 adds Decision Layer (~500 lines),
+            while gaining dynamic process orchestration capability.
         </blockquote>
     </section>
 
@@ -355,7 +861,9 @@
     <div class="footer">
         <p>Tech Stack: Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
         <p style="margin-top:4px;">
-            <a href="/en/m25">M2.5+ Component Library</a> · Architecture: Onion + DDD + CQRS/ES + Saga · Reactive Manifesto
+            <a href="/en/m25">M2.5+ Component Library (Execution Engine)</a> ·
+            <a href="/architecture">Architecture Radar</a> ·
+            Architecture: Onion + DDD + CQRS/ES + Saga · Reactive Manifesto
         </p>
     </div>
 
