@@ -1,0 +1,560 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M1 · Saga 分布式事务协调器 — TCC 模式 + 事件溯源</title>
+    <meta name="description" content="M1 Saga 分布式事务协调器：TCC 三阶段模式 + Backward Recovery 补偿机制 + Akka Persistence 事件溯源。将 158 万行巨型事务拆分为独立步骤，只锁定当前需要的数据。">
+    <meta name="keywords" content="Saga, TCC, 分布式事务, 补偿, Backward Recovery, Akka Persistence, Event Sourcing, CQRS, 反应式">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6;
+            --code-bg: #0f172a;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.7; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center; padding: 80px 0 50px;
+            border-bottom: 1px solid var(--border); margin-bottom: 50px;
+        }
+        header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 12px; }
+        header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+        header h1 .m1 { color: var(--green); }
+        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 720px; margin-left: auto; margin-right: auto; }
+        header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+        .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .badge-tcc { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-es { background: rgba(88,166,255,0.15); color: var(--accent); }
+        .badge-prod { background: rgba(63,185,80,0.15); color: var(--green); }
+
+        .nav-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; font-size: 0.82rem; align-items: center; flex-wrap: wrap; }
+        .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links > a:hover { text-decoration: underline; }
+        .nav-links > a.primary { background: var(--green); color: #000; padding: 6px 16px; border-radius: 6px; font-weight: 700; }
+        .nav-links > a.primary:hover { background: #2daa3a; text-decoration: none; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn { color: var(--accent); font-size: 0.82rem; font-weight: 500; cursor: pointer; background: transparent; border: none; font-family: var(--font); display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .nav-dropdown-btn:hover { text-decoration: underline; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; min-width: 220px; padding: 4px; display: none; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.8rem; font-weight: 500; transition: all 0.1s; }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-m3 { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .mm-active { background: rgba(255,255,255,0.05); }
+
+        section { margin-bottom: 60px; }
+        h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: var(--fg); }
+        h4 { font-size: 0.92rem; font-weight: 700; margin: 20px 0 8px; color: var(--fg); }
+
+        .ps-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .ps-table th { background: var(--bg-alt); padding: 14px 18px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
+        .ps-table td { padding: 14px 18px; border-top: 1px solid var(--border); }
+        .ps-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 20px 0; }
+        .comp-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; transition: border-color 0.2s; }
+        .comp-card:hover { border-color: var(--fg-muted); }
+        .comp-card .comp-icon { font-size: 1.5rem; margin-bottom: 10px; }
+        .comp-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+        .comp-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.6; }
+
+        .arch-callout { background: rgba(63,185,80,0.04); border-left: 3px solid var(--green); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
+        .arch-callout strong { color: var(--fg); }
+        .arch-callout.blue { border-left-color: var(--accent); background: rgba(88,166,255,0.04); }
+        .arch-callout.red { border-left-color: var(--red); background: rgba(248,81,73,0.04); }
+        .file-ref { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted); }
+
+        .arch-svg-wrap { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 20px 12px 10px; margin: 20px 0; text-align: center; overflow-x: auto; }
+        .arch-svg { width: 100%; max-width: 960px; }
+
+        .state-flow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: 24px 0; font-size: 0.78rem; }
+        .state-node { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; text-align: center; min-width: 100px; }
+        .state-node .st-icon { font-size: 1.3rem; margin-bottom: 4px; }
+        .state-node .st-title { font-weight: 700; font-size: 0.82rem; }
+        .state-node .st-sub { font-size: 0.65rem; color: var(--fg-muted); margin-top: 2px; }
+        .state-arrow { color: var(--fg-subtle); font-size: 1.2rem; font-weight: 700; }
+        .state-node.st-created { border-color: rgba(88,166,255,0.4); }
+        .state-node.st-progress { border-color: rgba(245,158,11,0.4); }
+        .state-node.st-done { border-color: rgba(63,185,80,0.4); }
+        .state-node.st-compensating { border-color: rgba(248,81,73,0.4); }
+        .state-node.st-suspended { border-color: rgba(168,85,247,0.4); }
+
+        blockquote { border-left: 3px solid var(--green); padding: 12px 18px; margin: 16px 0; background: rgba(63,185,80,0.04); font-size: 0.82rem; color: var(--fg-muted); border-radius: 0 6px 6px 0; }
+        blockquote strong { color: var(--fg); }
+
+        .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        @@media (max-width: 768px) {
+            .comp-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.5rem; }
+            .state-flow { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ==================== HERO ==================== -->
+    <header>
+        <div class="kicker">M1 · 反应式分布式事务基础设施</div>
+        <h1>
+            <span class="m1">Saga 分布式事务协调器</span>
+        </h1>
+        <p class="tagline">
+            将巨型事务拆分为独立的 Try-Confirm/Cancel 步骤。只锁定<strong>当前</strong>需要的数据。
+            失败自动补偿。挂起事务支持人工介入。这是回应西门子 158 万行存储过程的第一块基石——
+            <strong>Saga 把一致性边界从"整个数据库事务"缩小到"每个步骤"</strong>。
+        </p>
+        <div class="badge-row">
+            <span class="badge badge-tcc">TCC 三阶段</span>
+            <span class="badge badge-es">事件溯源</span>
+            <span class="badge badge-prod">线上质量 · 已完成</span>
+        </div>
+        <nav class="nav-links">
+            <a href="/">首页</a>
+            <a href="/saga" style="color:#3fb950; font-weight:700;">在线演示</a>
+            <a href="/en/m1" style="color:#3fb950; font-weight:700;">EN</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/m1" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
+                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
+                    <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
+                    <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD 架构实践 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection 管道</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>架构雷达</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ==================== SECTION 1: 问题背景 ==================== -->
+    <section>
+        <h2>一、为什么需要 Saga</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            在微服务和 CQRS/ES 架构中，数据分散在多个聚合根和外部系统之间。传统的 2PC（两阶段提交）
+            依赖数据库锁和事务管理器，在分布式场景下存在致命缺陷：<strong>锁定时间长、单点故障、
+            不兼容异构数据源</strong>。Saga 通过将全局事务拆分为一系列本地事务，每个步骤独立执行与补偿，
+            实现了<strong>无锁的分布式一致性</strong>。
+        </p>
+
+        <table class="ps-table" style="margin-top:20px;">
+            <thead><tr><th style="width:22%">维度</th><th style="width:39%">2PC / 存储过程</th><th style="width:39%">Saga (M1)</th></tr></thead>
+            <tbody>
+                <tr><td><strong>一致性保证</strong></td><td>数据库锁 + 全局事务管理器</td><td>每个步骤独立提交，失败则<strong>向后补偿</strong></td></tr>
+                <tr><td><strong>锁定范围</strong></td><td>整个事务期间锁定所有涉及的行</td><td>每个步骤只在<strong>执行期间</strong>锁定本地资源</td></tr>
+                <tr><td><strong>失败恢复</strong></td><td>数据库自动回滚整个事务</td><td>Saga 自动补偿已成功步骤；补偿失败 → <strong>SUSPENDED 人工介入</strong></td></tr>
+                <tr><td><strong>异构数据源</strong></td><td>必须同一个数据库实例</td><td>每个步骤可以操作不同的数据库、API、消息队列</td></tr>
+                <tr><td><strong>可观测性</strong></td><td>事务内部状态不可见</td><td>每一步都作为<strong>事件</strong>持久化——完整审计追踪</td></tr>
+                <tr><td><strong>水平扩展</strong></td><td>受限于单库事务吞吐量</td><td>Akka Cluster Sharding 按事务 ID 分片，水平扩展</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>核心洞察：</strong>在 Fab 场景中，一个 Lot Start 涉及的 158 万行记录中绝大多数是下游数据（历史快照、审计追踪、交叉引用）。
+            Saga 不必等到"所有东西都写完"才提交——当前操作先完成，下游数据通过事件异步写入。
+            一致性边界从"整个操作"缩小到"当前步骤"，这是吞吐量提升的根源。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 2: 架构全景 ==================== -->
+    <section>
+        <h2>二、架构全景：三层编排模型</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M1 Saga 采用<strong>编排器驱动（Orchestrator-Driven）</strong>模式。Saga 不再是抽象概念，
+            而是一个独立的基础设施层（saga-core），业务层只需实现 Participant 接口。
+        </p>
+
+        <div class="arch-svg-wrap">
+            <div style="font-size:0.75rem; color:var(--fg-subtle); margin-bottom:10px;">
+                业务层（Facade + Participant）→ 编排引擎层（Coordinator + StepExecutor）→ 基础设施层（Persistence + Sharding）
+            </div>
+            <svg class="arch-svg" viewBox="0 0 960 620" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <marker id="ahGreen" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#3fb950"/></marker>
+                    <marker id="ahBlue" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#58a6ff"/></marker>
+                    <marker id="ahMuted" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#8b949e"/></marker>
+                    <marker id="ahRed" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f87171"/></marker>
+                    <marker id="ahPurple" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#a855f7"/></marker>
+                    <filter id="nodeShadow" x="-10%" y="-20%" width="130%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/></filter>
+                    <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(63,185,80,0.18)"/><stop offset="100%" stop-color="rgba(63,185,80,0.05)"/></linearGradient>
+                    <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(96,165,250,0.18)"/><stop offset="100%" stop-color="rgba(96,165,250,0.05)"/></linearGradient>
+                    <linearGradient id="gTeal" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(45,212,191,0.18)"/><stop offset="100%" stop-color="rgba(45,212,191,0.05)"/></linearGradient>
+                    <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(248,113,113,0.18)"/><stop offset="100%" stop-color="rgba(248,113,113,0.05)"/></linearGradient>
+                    <linearGradient id="gPurple" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(168,85,247,0.18)"/><stop offset="100%" stop-color="rgba(168,85,247,0.05)"/></linearGradient>
+                </defs>
+
+                <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif">
+
+                <!-- ====== LAYER 1: 业务层 ====== -->
+                <rect x="30" y="10" width="900" height="130" rx="12" fill="rgba(59,130,246,0.025)" stroke="rgba(59,130,246,0.2)" stroke-width="1.5"/>
+                <rect x="30" y="10" width="5" height="130" rx="2" fill="#60a5fa" fill-opacity="0.5"/>
+                <text x="50" y="35" fill="#60a5fa" font-size="13" font-weight="700" letter-spacing="1.3">业务层 · Application Layer</text>
+                <text x="50" y="52" fill="#8b949e" font-size="8" font-weight="500">SagaTransactor (Facade) · SagaParticipant 实现 (FromAccount / ToAccount / 未来 Fab 扩展)</text>
+
+                <!-- Transactor -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="68" width="200" height="52" rx="8" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.35" stroke-width="1.5"/>
+                    <rect x="55" y="68" width="4" height="52" rx="2" fill="#60a5fa"/>
+                </g>
+                <text x="155" y="90" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">SagaTransactor</text>
+                <text x="155" y="108" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">业务门面 · 组装步骤 · 发起</text>
+
+                <!-- Arrow: Transactor → Participants -->
+                <path d="M 255 94 L 295 94" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" marker-end="url(#ahBlue)"/>
+
+                <!-- Participants -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="300" y="68" width="250" height="52" rx="8" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.3" stroke-width="1.2"/>
+                </g>
+                <text x="425" y="90" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">SagaParticipant[E, R, C] × N</text>
+                <text x="425" y="108" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">doPrepare / doCommit / doCompensate</text>
+
+                <!-- Arrow: Transactor → Coordinator -->
+                <path d="M 155 120 L 155 158" fill="none" stroke="#3fb950" stroke-width="2.5" stroke-linecap="round" marker-end="url(#ahGreen)"/>
+                <text x="168" y="142" fill="#3fb950" font-size="8" font-weight="700" text-anchor="start">StartTransaction</text>
+
+                <!-- ====== LAYER 2: 编排引擎层 ====== -->
+                <rect x="30" y="150" width="900" height="215" rx="12" fill="rgba(63,185,80,0.025)" stroke="rgba(63,185,80,0.2)" stroke-width="1.5"/>
+                <rect x="30" y="150" width="5" height="215" rx="2" fill="#3fb950" fill-opacity="0.5"/>
+                <text x="50" y="175" fill="#3fb950" font-size="13" font-weight="700" letter-spacing="1.3">编排引擎层 · Saga Core (独立库 saga-core/)</text>
+                <text x="50" y="192" fill="#8b949e" font-size="8" font-weight="500">SagaTransactionCoordinator (Aggregate Root) · StepExecutor · ExecutionPlan · 全局超时 · 指数退避重试</text>
+
+                <!-- SagaTransactionCoordinator -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="208" width="290" height="90" rx="10" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.45" stroke-width="1.8"/>
+                    <rect x="55" y="208" width="5" height="90" rx="2" fill="#3fb950"/>
+                </g>
+                <text x="200" y="232" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">SagaTransactionCoordinator</text>
+                <text x="200" y="248" fill="#8b949e" font-size="8" font-weight="500" text-anchor="middle">EventSourcedBehavior · 状态机</text>
+                <text x="200" y="264" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Created → InProgress → Completed</text>
+                <text x="200" y="280" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">InProgress → Compensating → Failed/Suspended</text>
+                <text x="200" y="294" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">ExecutionPlan · 分组并行 · 全局超时 5min</text>
+
+                <!-- Arrow: Coordinator → StepExecutor -->
+                <path d="M 345 253 L 385 253" fill="none" stroke="#3fb950" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ahGreen)"/>
+                <text x="365" y="245" fill="#3fb950" font-size="7" font-weight="600" text-anchor="middle">spawn</text>
+
+                <!-- StepExecutor -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="390" y="208" width="280" height="90" rx="10" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="390" y="208" width="5" height="90" rx="2" fill="#3fb950"/>
+                </g>
+                <text x="530" y="232" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">StepExecutor × N</text>
+                <text x="530" y="248" fill="#8b949e" font-size="8" font-weight="500" text-anchor="middle">每个步骤对应一个子 Actor</text>
+                <text x="530" y="264" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Prepare / Commit / Compensate · 幂等</text>
+                <text x="530" y="280" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">重试 5 次 · 指数退避 · 断路器保护</text>
+                <text x="530" y="294" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Succeed 状态下重启 → 返回缓存结果</text>
+
+                <!-- Arrow: StepExecutor → Participant (up) -->
+                <path d="M 530 208 L 530 120" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" stroke-dasharray="5 3" marker-end="url(#ahBlue)"/>
+                <text x="543" y="170" fill="#58a6ff" font-size="7.5" font-weight="600" text-anchor="start">delegate</text>
+
+                <!-- Arrow: Coordinator → Persistence -->
+                <path d="M 145 298 L 145 383" fill="none" stroke="#8b949e" stroke-width="2" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+                <path d="M 585 298 L 585 383" fill="none" stroke="#8b949e" stroke-width="2" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <!-- ====== LAYER 3: 基础设施层 ====== -->
+                <rect x="30" y="385" width="900" height="105" rx="12" fill="rgba(168,85,247,0.025)" stroke="rgba(168,85,247,0.2)" stroke-width="1.5"/>
+                <rect x="30" y="385" width="5" height="105" rx="2" fill="#a855f7" fill-opacity="0.5"/>
+                <text x="50" y="407" fill="#a855f7" font-size="13" font-weight="700" letter-spacing="1.3">基础设施层 · Infrastructure</text>
+                <text x="50" y="424" fill="#8b949e" font-size="8" font-weight="500">Akka Persistence (MongoDB Journal) · Protobuf 序列化 (ScalaPB) · ClusterSharding · 快照 (100 events/3 保留)</text>
+
+                <!-- Persistence + Sharding boxes -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="435" width="250" height="42" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.35" stroke-width="1.2"/>
+                </g>
+                <text x="180" y="454" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Akka Persistence · Journal</text>
+                <text x="180" y="469" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">MongoDB · Event Log 不可篡改</text>
+
+                <g filter="url(#nodeShadow)">
+                    <rect x="330" y="435" width="250" height="42" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.35" stroke-width="1.2"/>
+                </g>
+                <text x="455" y="454" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Cluster Sharding</text>
+                <text x="455" y="469" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">按 transactionId 分片 · 水平扩展</text>
+
+                <g filter="url(#nodeShadow)">
+                    <rect x="605" y="435" width="250" height="42" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.35" stroke-width="1.2"/>
+                </g>
+                <text x="730" y="454" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Protobuf (ScalaPB)</text>
+                <text x="730" y="469" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">saga_v2.proto · 三件套规则</text>
+
+                <!-- ====== SUSPENDED / ManualFix FLOW ====== -->
+                <path d="M 200 298 L 200 335 L 530 335 L 530 298" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 3" marker-end="url(#ahPurple)"/>
+                <text x="365" y="328" fill="#a855f7" font-size="8.5" font-weight="700" text-anchor="middle">Compensate 失败 → SUSPENDED → ManualFixStep → RetryCurrentPhase</text>
+
+                <!-- Footer text -->
+                <text x="490" y="545" fill="#8b949e" font-size="8.5" font-weight="600" text-anchor="middle">M1 Saga 三层架构：业务层 + 编排引擎层 (saga-core) + 基础设施层 — TCC 模式 + Backward Recovery + Event Sourcing</text>
+
+                </g>
+            </svg>
+        </div>
+
+        <h3>层级职责速览</h3>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:16%">层级</th><th style="width:20%">核心角色</th><th style="width:34%">包含组件</th><th style="width:30%">关键机制</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><strong style="color:#60a5fa">业务层</strong></td>
+                    <td>定义"做什么"</td>
+                    <td>SagaTransactor · SagaParticipant[E, R, C] · Step 组装 · 错误分类 (Retryable / NonRetryable)</td>
+                    <td>参与者接口：doPrepare / doCommit / doCompensate</td>
+                </tr>
+                <tr>
+                    <td><strong style="color:#3fb950">编排引擎层</strong></td>
+                    <td>决定"怎么做"</td>
+                    <td>SagaTransactionCoordinator · StepExecutor · ExecutionPlan · SagaPhase · SagaState</td>
+                    <td>Event Sourcing 状态机 · 全局超时 · 指数退避 · 断路器 · 幂等执行</td>
+                </tr>
+                <tr>
+                    <td><strong style="color:#a855f7">基础设施层</strong></td>
+                    <td>保证"可靠地做"</td>
+                    <td>Akka Persistence (MongoDB) · Protobuf Serialization · ClusterSharding · Snapshot</td>
+                    <td>事件日志不可篡改 · 快照加速恢复 · 水平分片</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout blue">
+            <strong>模块独立性：</strong>Saga 编排引擎是独立库（saga-core/），零业务依赖。业务层（app/）通过依赖注入绑定 Participant 实现。
+            这意味着一套 Saga 引擎可以驱动<strong>任何</strong>分布式事务场景——转账、Fab Lot Start、跨系统数据对齐——
+            只需要提供不同的 Participant 实现。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 3: TCC 三阶段 ==================== -->
+    <section>
+        <h2>三、TCC 三阶段模型</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            M1 Saga 采用 <strong>Try-Confirm/Cancel (TCC)</strong> 模式。每个步骤不直接执行操作，而是分三阶段进行。
+            步骤可分组并行执行（同一 group 内的步骤并发）。
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(88,166,255,0.3);">
+                <div class="comp-icon">🔒</div>
+                <h4>Prepare（预留）</h4>
+                <p>检查前置条件，预留资源，但<strong>不提交</strong>。例如：检查余额是否充足、锁定 FOUP 槽位。
+                如果任何步骤 Prepare 失败 → 触发<strong>向后补偿</strong>，只补偿已 Prepare 成功的步骤。
+                Prepare 阶段对应<strong>可回滚</strong>的操作。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(63,185,80,0.3);">
+                <div class="comp-icon">✅</div>
+                <h4>Commit（确认）</h4>
+                <p>确认执行操作，数据<strong>真正持久化</strong>。例如：实际扣款、写入状态表。
+                所有步骤 Prepare 成功后，进入 Commit 阶段。Commit 失败同样触发补偿——
+                <strong>只有 Commit 成功的步骤需要补偿</strong>。Commit 对应<strong>不可回滚但可补偿</strong>的操作。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(248,81,73,0.3);">
+                <div class="comp-icon">↩️</div>
+                <h4>Compensate（补偿）</h4>
+                <p>撤销已完成步骤的<strong>业务影响</strong>，不是数据库 ROLLBACK。例如：退款、释放锁定槽位。
+                补偿本身可能失败——此时 Saga 不是死锁，而是进入 <strong>SUSPENDED</strong> 状态，
+                等待人工介入：ManualFixStep + RetryCurrentPhase。</p>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>分组并行：</strong>相同 group（stepGroup）的步骤并发执行，不同 group 串行。
+            一个组内所有步骤 Prepare 成功后，统一进入 Commit 阶段。
+            这保证了<strong>组内并行、组间有序</strong>的执行语义。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 4: 状态机 ==================== -->
+    <section>
+        <h2>四、状态机与生命周期</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            SagaTransactionCoordinator 是 EventSourcedBehavior，状态完全由事件驱动。
+            每个状态转换都对应一个持久化事件，宕机后通过回放事件恢复。
+        </p>
+
+        <div class="state-flow">
+            <div class="state-node st-created">
+                <div class="st-icon">🆕</div>
+                <div class="st-title">Created</div>
+                <div class="st-sub">初始状态</div>
+            </div>
+            <span class="state-arrow">→</span>
+            <div class="state-node st-progress">
+                <div class="st-icon">⚙️</div>
+                <div class="st-title">InProgress</div>
+                <div class="st-sub">Prepare → Commit</div>
+            </div>
+            <span class="state-arrow">→</span>
+            <div class="state-node st-done">
+                <div class="st-icon">✅</div>
+                <div class="st-title">Completed</div>
+                <div class="st-sub">全部 Commit 成功</div>
+            </div>
+        </div>
+
+        <div class="state-flow" style="margin-top:8px;">
+            <div class="state-node st-progress">
+                <div class="st-icon">⚙️</div>
+                <div class="st-title">InProgress</div>
+                <div class="st-sub">Prepare/Commit 失败</div>
+            </div>
+            <span class="state-arrow">→</span>
+            <div class="state-node st-compensating">
+                <div class="st-icon">↩️</div>
+                <div class="st-title">Compensating</div>
+                <div class="st-sub">向后补偿中</div>
+            </div>
+            <span class="state-arrow">→</span>
+            <div class="state-node st-suspended">
+                <div class="st-icon">⏸️</div>
+                <div class="st-title">SUSPENDED</div>
+                <div class="st-sub">补偿失败 · 等待人工</div>
+            </div>
+        </div>
+
+        <table class="ps-table" style="margin-top:24px;">
+            <thead><tr><th style="width:18%">触发事件</th><th style="width:18%">当前状态</th><th style="width:18%">目标状态</th><th style="width:46%">说明</th></tr></thead>
+            <tbody>
+                <tr><td>TransactionStarted</td><td>Created</td><td>InProgress</td><td>开始执行 Prepare 阶段</td></tr>
+                <tr><td>PhaseSucceeded (Prepare)</td><td>InProgress</td><td>InProgress (CommitPhase)</td><td>切换到 Commit 阶段</td></tr>
+                <tr><td>PhaseSucceeded (Commit)</td><td>InProgress</td><td>Completed</td><td>事务成功完成</td></tr>
+                <tr><td>PhaseFailed (Prepare)</td><td>InProgress</td><td>Compensating</td><td>只补偿已 Prepare 成功的步骤</td></tr>
+                <tr><td>PhaseFailed (Commit)</td><td>InProgress</td><td>Compensating</td><td>只补偿已 Commit 成功的步骤</td></tr>
+                <tr><td>PhaseFailed (Compensate)</td><td>Compensating</td><td>SUSPENDED</td><td>补偿失败，需人工介入</td></tr>
+                <tr><td>TransactionResolved</td><td>SUSPENDED</td><td>Failed</td><td>人工确认放弃</td></tr>
+                <tr><td>TransactionRetried</td><td>SUSPENDED/InProgress</td><td>InProgress</td><td>人工触发重试</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout red">
+            <strong>SUSPENDED 不是死锁：</strong>当补偿失败时（例如退款 API 不可达），Saga 进入 SUSPENDED 状态，
+            但所有中间状态已写入 Akka Persistence。操作员通过紧急修复面板查看挂起的事务，
+            发送 ManualFixStep(stepId, phase) → RetryCurrentPhase 恢复执行。系统不会丢失任何状态。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 5: Backward Recovery ==================== -->
+    <section>
+        <h2>五、Backward Recovery 机制</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            当 Prepare 或 Commit 阶段有步骤失败时，Saga 不往前推进，而是<strong>向后补偿</strong>——
+            只补偿<strong>已经成功完成当前阶段</strong>的步骤。这种方式保证了：
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(63,185,80,0.3);">
+                <div class="comp-icon">🎯</div>
+                <h4>精确补偿范围</h4>
+                <p>Coordinator 维护 <strong>successfulSteps</strong> 集合——只跟踪在当前阶段（Prepare/Commit/Compensate）成功的步骤。
+                补偿只针对这个集合中的步骤，不会重复补偿或遗漏补偿。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
+                <div class="comp-icon">⚡</div>
+                <h4>并发执行与停止</h4>
+                <p>Coordinator 发现失败后，先<strong>停止所有尚未完成的子 StepExecutor</strong>，
+                然后对 successfulSteps 中的步骤逐一发起 Compensate。补偿过程可以并行。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
+                <div class="comp-icon">🔄</div>
+                <h4>幂等恢复</h4>
+                <p>StepExecutor 在 Succeed 状态下收到 Start 命令时，直接返回<strong>缓存的执行结果</strong>，
+                不重新执行——避免了重复扣款、重复发货等问题。这项保证在节点重启恢复时同样有效。</p>
+            </div>
+        </div>
+
+        <blockquote>
+            <strong>Backward Recovery 的核心逻辑：</strong>只补偿已成功的步骤，补偿失败则挂起（SUSPENDED），
+            直到人工确认或系统恢复。这与数据库的 ROLLBACK 不同——Saga 的补偿是一次<strong>新的业务操作</strong>，
+            它本身也可能失败，因此需要 SUSPENDED 机制兜底。
+        </blockquote>
+    </section>
+
+    <!-- ==================== SECTION 6: 代码参考 ==================== -->
+    <section>
+        <h2>六、模块结构与代码参考</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M1 Saga 代码分布在两个模块：saga-core（独立引擎库）和 app（业务集成）。
+        </p>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:32%">文件</th><th style="width:10%">模块</th><th style="width:58%">职责</th></tr></thead>
+            <tbody>
+                <tr><td class="file-ref">saga-core/.../SagaTransactionCoordinator.scala</td><td>引擎</td><td>核心编排器——EventSourcedBehavior，管理完整 Saga 生命周期</td></tr>
+                <tr><td class="file-ref">saga-core/.../StepExecutor.scala</td><td>引擎</td><td>步骤执行器——每个步骤对应一个子 Actor，处理 Prepare/Commit/Compensate</td></tr>
+                <tr><td class="file-ref">saga-core/.../SagaParticipant.scala</td><td>引擎</td><td>参与者接口——doPrepare / doCommit / doCompensate + 错误分类</td></tr>
+                <tr><td class="file-ref">saga-core/.../ExecutionPlan.scala</td><td>引擎</td><td>执行计划——预计算阶段分组，按 group 组织并行/串行</td></tr>
+                <tr><td class="file-ref">saga-core/.../SagaPhase.scala</td><td>引擎</td><td>阶段枚举——PreparePhase / CommitPhase / CompensatePhase</td></tr>
+                <tr><td class="file-ref">app/protobuf/saga_v2.proto</td><td>序列化</td><td>Saga 核心协议定义——Coordinator + StepExecutor 事件</td></tr>
+                <tr><td class="file-ref">app/protobuf/saga_participant.proto</td><td>序列化</td><td>业务参与者协议——FromAccount / ToAccount 事件</td></tr>
+                <tr><td class="file-ref">app/.../application/sagas/CreateMoneyTransferSaga.scala</td><td>业务</td><td>转账 Saga 示例——组装 6 个步骤 (reserve/commit/compensate × 2)</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>Protobuf 三件套规则：</strong>修改 Saga 相关的任何数据结构时，必须同步更新 (1) Scala Case Class、(2) .proto 文件、(3) Proto Converter (toProto/fromProto)。三者不一致会导致序列化失败。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 7: 在线演示 ==================== -->
+    <section>
+        <h2>七、在线演示</h2>
+
+        <div class="comp-card" style="border-color: rgba(63,185,80,0.4); margin-top:16px;">
+            <div class="comp-icon">🔄</div>
+            <h4>Saga TCC 交互演示</h4>
+            <p>一个分布式转账流程在 Saga 状态机中执行。观察 Prepare → Commit → Compensate 的完整生命周期。
+            在任意步骤注入故障，实时观察自动重试、向后补偿和挂起事务的恢复过程。
+            WebSocket 实时推送每一个状态转换事件。</p>
+            <p class="file-ref" style="margin-top:8px;">路由: /saga · WebSocket: /ws/saga/events · 场景: 8 种预定义 + 自定义</p>
+            <p style="margin-top:12px;">
+                <a href="/saga" style="color:var(--green); font-weight:700; font-size:1rem; text-decoration:none;">打开演示 →</a>
+            </p>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+        <p>技术栈：Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
+        <p style="margin-top:4px;">
+            <a href="/m2">M2 DAG 执行引擎</a> ·
+            <a href="/m25">M2.5+ 标准组件库</a> ·
+            <a href="/m3">M3 动态工序编排</a> ·
+            <a href="/architecture">架构雷达</a>
+        </p>
+        <p style="margin-top:4px; color: var(--fg-subtle);">
+            架构：洋葱 + DDD + CQRS/ES + Saga · 反应式宣言
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

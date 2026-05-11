@@ -46,6 +46,26 @@ class DddGuideController @Inject()(val controllerComponents: ControllerComponent
     Ok(views.html.m3_en())
   }
 
+  def m3Demo() = Action {
+    Ok(views.html.m3Demo())
+  }
+
+  def sagaExplore() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.saga())
+  }
+
+  def sagaEn() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.saga_en())
+  }
+
+  def m2Explore() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.m2())
+  }
+
+  def m2En() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.m2_en())
+  }
+
   def getBalances(ids: String) = Action.async {
     val idList = ids.split(",").map(Id.of).toList
     Future.sequence(idList.map(id => getBalanceQuery.fetchFullBalanceByUserId(id).map(c => id.toString -> c)))

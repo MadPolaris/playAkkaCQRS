@@ -292,9 +292,9 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
-                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
-                    <a href="/m25-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>Component Library</a>
+                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Distributed TX</a>
+                    <a href="/en/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
+                    <a href="/en/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>Component Library</a>
                     <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Dynamic Orchestration</a>
                 </div>
             </div>
@@ -340,7 +340,7 @@
         Event sourcing instead of giant transactions. Sagas instead of stored procedures.
         A streaming DAG execution engine that orchestrates across systems.
         <br><br>
-        Milestones 1 &amp; 2 are live. Milestones 3 &amp; 4 — we want to define them
+        Milestones 1 &amp; 2 are live. M3 architecture and prototype are live. M4 — we want to define it
         <em>with</em> the Fab industry.
     </p>
     <div class="hero-actions">
@@ -482,16 +482,16 @@
             <div class="roadmap-marker next">M3</div>
             <div class="roadmap-body">
                 <span class="badge badge-explore">Exploring — Collaborate With Us</span>
-                <h4>Manufacturing CIMs iPaaS — Abstraction Layer over M2</h4>
-                <p>Generalize M2 into a configurable integration platform for Computer Integrated Manufacturing. Orchestrate multiple DAG execution engines across heterogeneous systems — MES, EAP, RMS, SPC, WMS, RTD. Think iPaaS, but purpose-built for the cybernetics domain in manufacturing. <a href="/en/m3" style="color:var(--accent);font-weight:600;">Explore M3 →</a></p>
+                <h4>M3 · Fact-Driven Fab Decision Kernel — Dynamic Process Weaving + MU Lifecycle</h4>
+                <p>Not a static integration platform. A decision layer on top of M2.5+ that adds intelligence to the factory floor. POR Repository holds the baseline process routes. Dynamic Flow Assembler weaves ChainDSL in real-time based on facts — PASS advances, FAIL triggers rework DSL, BORDERLINE re-verifies. Saga + LotContext (MU Account Matrix) guarantee atomicity of every dynamically woven segment. The closed loop (Perception→Logging→Inference→Action) means the system responds to what is happening <em>right now</em>, not what was planned hours ago. All 6 M2.5+ standard components reused without modification. Prototype code runs in FabDemo. <a href="/en/m3" style="color:var(--accent);font-weight:600;">Explore M3 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
             <div class="roadmap-marker next">M4</div>
             <div class="roadmap-body">
                 <span class="badge badge-explore">Exploring — Collaborate With Us</span>
-                <h4>Instant Feedback Loop — Adaptive DAG Engine</h4>
-                <p>Close the cybernetic loop. DAG rules evolve dynamically based on real-time metrology data and process state. The engine adapts routing, recipes, and scheduling in response to what is happening <em>right now</em> on the factory floor — not what was planned hours ago.</p>
+                <h4>Fab Intelligent Digital MES — Simulation-Driven Manufacturing Platform</h4>
+                <p>A MES-centric intelligent digital manufacturing platform that powers continuous improvement across the Fab. Digital twin simulation for process and recipe optimization. Predictive analytics on production parameters — feed-forward and feed-backward control that anticipates defects before they occur. The goal: higher yield, shorter cycle time, lower cost. Built on the M1–M3 kernel (Saga + DAG engine + fact-driven decision layer) as the real-time execution foundation.</p>
             </div>
         </div>
     </div>
@@ -542,10 +542,10 @@
     <div class="card-grid-2" style="margin-top: 24px;">
         <div class="card">
             <div class="card-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">🏭</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">iPaaS</span><span class="tag">CIMs</span><span class="tag">Dynamic Orchestration</span></div>
-            <h3>M3 Manufacturing CIMs iPaaS</h3>
-            <p>Dynamic process orchestration for Fab environments. Generalize M2 into a configurable integration platform. Orchestrate multiple DAG engines across MES, EAP, RMS, SPC, WMS, RTD. Reuse all 6 M2.5+ standard components directly.</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Dynamic recipe routing across heterogeneous equipment in real time</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">Decision Layer</span><span class="tag">Dynamic Weaving</span><span class="tag">MU Matrix</span></div>
+            <h3>M3 Fact-Driven Fab Decision Kernel</h3>
+            <p>Decision layer for Fab environments. POR → Dynamic Flow Assembler → Saga/LotContext → ChainDSL injection into M2.5+. Dynamically weaves process routes based on real-time facts from the factory floor. MU Account Matrix (Lot/Wafer/Die) tracks every manufacturing unit as an event-sourcing projection. Zero modification to M2.5+ execution engine.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: POR→Assembler→Saga/LotContext→ChainDSL; fact-driven closed loop</p>
             <br>
             <a href="/en/m3" class="card-link">Explore M3 →</a>
         </div>
@@ -579,15 +579,17 @@
 <!-- ==================== CTA: INVITATION ==================== -->
 <section class="section" id="collaborate">
     <div class="cta-section">
-        <h2>M3 and M4 — Define Them With Us</h2>
+        <h2>M4 — Define the Intelligent Digital Factory With Us</h2>
         <p>
-            M1, M2, and M2.5+ are running in production-quality code. But the real questions for M3 and M4
-            can only be answered by people who live the Fab floor every day.
+            M1, M2, M2.5+, and M3 are running in production-quality code.
+            M4 — the intelligent digital manufacturing platform with simulation and predictive optimization —
+            is where Fab domain expertise matters most.
             <br><br>
             If you're a Fab engineer, an automation architect, or a manufacturing systems expert —
-            we want to hear about the cross-system orchestration problems that actually keep you up at night.
-            What integrations are brittle? What batch-to-batch variations need real-time response?
-            What would you build if you could define the next layer?
+            we want to hear about the simulation scenarios, yield optimization challenges,
+            and predictive control loops that matter most on your factory floor.
+            What process parameters would you optimize first? What digital twin models would
+            give you the biggest return?
         </p>
         <div class="cta-links">
             <a href="https://github.com/MadPolaris/playAkkaCQRS/discussions" class="btn btn-primary">GitHub Discussions</a>
@@ -689,6 +691,9 @@
     </p>
     <p style="margin-top:6px;">
         Event Journal: MongoDB &nbsp;|&nbsp; Read Model: MySQL &nbsp;|&nbsp; Serialization: Protobuf (ScalaPB)
+    </p>
+    <p style="margin-top:6px;">
+        Contact: <a href="mailto:dev.polaris.metadata@@gmail.com">dev.polaris.metadata@@gmail.com</a>
     </p>
 </footer>
 

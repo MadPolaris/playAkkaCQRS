@@ -275,9 +275,9 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
-                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
-                    <a href="/m25-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
+                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
+                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
+                    <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
                     <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
                 </div>
             </div>
@@ -322,7 +322,7 @@
         用事件溯源取代巨型事务，用 Saga 取代存储过程，
         用流批一体的 DAG 执行引擎编排跨系统流程。
         <br><br>
-        里程碑 1 和 2 已完成上线。里程碑 3 和 4——我们希望<em>与 Fab 行业的人一起定义</em>。
+        里程碑 1 和 2 已完成上线。M3 架构与原型代码已就绪。M4——我们希望<em>与 Fab 行业的人一起定义</em>。
     </p>
     <div class="hero-actions">
         <a href="#problem" class="btn btn-primary">了解问题</a>
@@ -460,16 +460,16 @@
             <div class="roadmap-marker next">M3</div>
             <div class="roadmap-body">
                 <span class="badge badge-explore">探索中 — 共同定义</span>
-                <h4>面向制造业控制论的 CIMs iPaaS · M2 抽象层</h4>
-                <p>将 M2 抽象为一个可配置的计算机集成制造系统集成平台。跨 MES、EAP、RMS、SPC、WMS、RTD 等异构制造系统，编排多个 DAG 执行引擎。类似于 iPaaS，但专为制造业控制论范畴构建。 <a href="/m3" style="color:var(--accent);font-weight:600;">了解 M3 →</a></p>
+                <h4>M3 · 事实驱动的 Fab 决策内核 — 动态工艺织造 + MU 生命周期</h4>
+                <p>不是一个静态集成平台，而是叠加在 M2.5+ 之上的决策层。POR 工艺路线库存放静态基准。Dynamic Flow Assembler 根据产线实时事实动态织造 ChainDSL——PASS 则继续推进、FAIL 则织造 Rework DSL、BORDERLINE 则复验。Saga + LotContext（MU 账户矩阵）保障每一段动态 DSL 的原子性。感知→入账→决策→位移 闭环让系统响应<em>此刻正在发生</em>的事实，而非数小时前的计划。M2.5+ 全部 6 个标准组件零修改复用。原型代码在 FabDemo 中可运行。 <a href="/m3" style="color:var(--accent);font-weight:600;">了解 M3 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
             <div class="roadmap-marker next">M4</div>
             <div class="roadmap-body">
                 <span class="badge badge-explore">探索中 — 共同定义</span>
-                <h4>即时反馈闭环 · 自适应 DAG 引擎</h4>
-                <p>闭合控制论环路。DAG 规则基于实时量测数据与过程状态动态演进。引擎根据工厂现场<em>此刻正在发生</em>的情况自适应调整路由、配方和排程——而不是几小时前的计划。</p>
+                <h4>Fab 智能数字工厂 MES — 仿真驱动的智能制造平台</h4>
+                <p>以 MES 为核心的智能数字制造平台，支撑 Fab 工厂的持续改进。数字孪生仿真实现在制品参数与工艺配方的优化。基于生产数据的预测分析——前馈与反馈控制闭环在缺陷产生之前就做出预判。目标：提升良率、缩短工期、降低成本。以 M1–M3 内核（Saga + DAG 引擎 + 事实驱动决策层）作为实时执行基础。</p>
             </div>
         </div>
     </div>
@@ -520,10 +520,10 @@
     <div class="card-grid-2" style="margin-top: 24px;">
         <div class="card">
             <div class="card-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">🏭</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">iPaaS</span><span class="tag">CIMs</span><span class="tag">动态编排</span></div>
-            <h3>M3 面向制造业控制论的 CIMs iPaaS</h3>
-            <p>面向 Fab 晶圆厂的动态工序编排。将 M2 抽象为可配置的集成平台。跨 MES、EAP、RMS、SPC、WMS、RTD 等异构系统编排多个 DAG 引擎。直接复用全部 6 个 M2.5+ 标准组件。</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：跨异构设备的实时动态配方路由</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">决策层</span><span class="tag">动态织造</span><span class="tag">MU 矩阵</span></div>
+            <h3>M3 事实驱动的 Fab 决策内核</h3>
+            <p>面向 Fab 的决策层。POR → Dynamic Flow Assembler → Saga/LotContext → ChainDSL 注入 M2.5+。根据产线实时事实动态织造工艺路线。MU 账户矩阵（Lot/Wafer/Die）以事件溯源投影追踪每个制造单元。M2.5+ 执行引擎零修改。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：POR→Assembler→Saga/LotContext→ChainDSL；事实驱动闭环</p>
             <br>
             <a href="/m3" class="card-link">了解 M3 →</a>
         </div>
@@ -557,15 +557,15 @@
 <!-- ==================== CTA：邀请协作 ==================== -->
 <section class="section" id="collaborate">
     <div class="cta-section">
-        <h2>M3 和 M4 — 与我们一起定义</h2>
+        <h2>M4 — 与我们一起定义智能数字工厂</h2>
         <p>
-            M1、M2 和 M2.5+ 已经以线上质量运行。但 M3 和 M4 真正的业务场景，
-            只有每天在 Fab 现场的人才知道答案。
+            M1、M2、M2.5+ 和 M3 已经以线上质量运行。
+            M4——融合仿真模拟与预测优化的智能数字制造平台——
+            是最需要 Fab 领域专家深度参与的里程碑。
             <br><br>
             如果你是 Fab 工程师、自动化架构师或制造系统专家——
-            我们希望听到那些真正让你夜不能寐的跨系统协同问题。
-            哪些集成点最脆弱？哪些批次间的变异需要实时响应？
-            如果可以定义下一层，你会构建什么？
+            我们希望听到那些在你的工厂现场最重要的仿真场景、良率优化挑战和预测控制需求。
+            你会优先优化哪些工艺参数？哪些数字孪生模型能给你最大的回报？
         </p>
         <div class="cta-links">
             <a href="https://github.com/MadPolaris/playAkkaCQRS/discussions" class="btn btn-primary">GitHub 讨论区</a>
@@ -665,6 +665,9 @@
     </p>
     <p style="margin-top:6px;">
         事件日志：MongoDB &nbsp;|&nbsp; 读模型：MySQL &nbsp;|&nbsp; 序列化：Protobuf (ScalaPB)
+    </p>
+    <p style="margin-top:6px;">
+        联系：<a href="mailto:dev.polaris.metadata@@gmail.com">dev.polaris.metadata@@gmail.com</a>
     </p>
 </footer>
 

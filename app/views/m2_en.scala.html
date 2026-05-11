@@ -1,0 +1,457 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M2 · Stream-Batch Unified Multi-Level DAG Execution Engine</title>
+    <meta name="description" content="M2 Stream-Batch Unified Multi-Level DAG Execution Engine — 23 Akka Persistent FSMs collaborate across 5 levels, with 4 built-in resilience patterns. Unified pipeline for both streaming and batch workloads.">
+    <meta name="keywords" content="DAG, execution engine, Akka, FSM, stream-batch unified, Saga, compensation, self-healing, fault tolerance">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6;
+            --code-bg: #0f172a;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.7; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center; padding: 80px 0 50px;
+            border-bottom: 1px solid var(--border); margin-bottom: 50px;
+        }
+        header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 12px; }
+        header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+        header h1 .m2 { color: var(--accent); }
+        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 720px; margin-left: auto; margin-right: auto; }
+        header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+        .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .badge-dag { background: rgba(88,166,255,0.15); color: var(--accent); }
+        .badge-fsm { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-prod { background: rgba(63,185,80,0.15); color: var(--green); }
+
+        .nav-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; font-size: 0.82rem; align-items: center; flex-wrap: wrap; }
+        .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links > a:hover { text-decoration: underline; }
+        .nav-links > a.primary { background: var(--accent); color: #000; padding: 6px 16px; border-radius: 6px; font-weight: 700; }
+        .nav-links > a.primary:hover { background: #3b82f6; text-decoration: none; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn { color: var(--accent); font-size: 0.82rem; font-weight: 500; cursor: pointer; background: transparent; border: none; font-family: var(--font); display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .nav-dropdown-btn:hover { text-decoration: underline; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; min-width: 220px; padding: 4px; display: none; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.8rem; font-weight: 500; transition: all 0.1s; }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-m3 { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .mm-active { background: rgba(255,255,255,0.05); }
+
+        section { margin-bottom: 60px; }
+        h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: var(--fg); }
+        h4 { font-size: 0.92rem; font-weight: 700; margin: 20px 0 8px; color: var(--fg); }
+
+        .ps-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .ps-table th { background: var(--bg-alt); padding: 14px 18px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
+        .ps-table td { padding: 14px 18px; border-top: 1px solid var(--border); }
+        .ps-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+        .comp-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; transition: border-color 0.2s; }
+        .comp-card:hover { border-color: var(--fg-muted); }
+        .comp-card .comp-icon { font-size: 1.5rem; margin-bottom: 10px; }
+        .comp-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+        .comp-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.6; }
+
+        .arch-callout { background: rgba(88,166,255,0.04); border-left: 3px solid var(--accent); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
+        .arch-callout strong { color: var(--fg); }
+        .arch-callout.red { border-left-color: var(--red); background: rgba(248,81,73,0.04); }
+        .arch-callout.purple { border-left-color: var(--purple); background: rgba(168,85,247,0.04); }
+        .file-ref { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted); }
+
+        .arch-svg-wrap { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 20px 12px 10px; margin: 20px 0; text-align: center; overflow-x: auto; }
+        .arch-svg { width: 100%; max-width: 1000px; }
+
+        blockquote { border-left: 3px solid var(--accent); padding: 12px 18px; margin: 16px 0; background: rgba(88,166,255,0.04); font-size: 0.82rem; color: var(--fg-muted); border-radius: 0 6px 6px 0; }
+        blockquote strong { color: var(--fg); }
+
+        .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        @@media (max-width: 768px) {
+            .comp-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ==================== HERO ==================== -->
+    <header>
+        <div class="kicker">M2 · Reactive Cross-System Orchestration Engine</div>
+        <h1>
+            <span class="m2">Stream-Batch Unified Multi-Level DAG Execution Engine</span>
+        </h1>
+        <p class="tagline">
+            23 Akka Persistent FSMs collaborate across 5 levels with 4 built-in resilience patterns.
+            A unified pipeline handles both <strong>streaming</strong> and <strong>batch</strong> workloads.
+            The communication layer encapsulates heterogeneous external systems — each node is independently versioned, tested, and deployed.
+            This is the second step: from single-system transactions to cross-system orchestration.
+        </p>
+        <div class="badge-row">
+            <span class="badge badge-dag">Multi-Level DAG</span>
+            <span class="badge badge-fsm">23 Persistent FSMs</span>
+            <span class="badge badge-prod">Production Quality · Complete</span>
+        </div>
+        <nav class="nav-links">
+            <a href="/">Home</a>
+            <a href="/dag" style="color:#58a6ff; font-weight:700;">Live Demo</a>
+            <a href="/m2" class="primary">中文</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Distributed TX</a>
+                    <a href="/en/m2" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
+                    <a href="/en/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>Component Library</a>
+                    <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Dynamic Orchestration</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD Practice <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection Pipeline</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>Architecture Radar</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ==================== SECTION 1: Why DAG Execution Engine ==================== -->
+    <section>
+        <h2>1. Why a DAG Execution Engine</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M1 Saga solved the atomicity problem of <strong>a single distributed transaction</strong>. But real business
+            scenarios involve <strong>long-chain orchestration</strong> across multiple external systems — cron triggers,
+            file generation, SFTP uploads, response polling, classification, exception routing, downstream notifications —
+            this is not something a simple request-response can cover. M2 DAG Execution Engine models cross-system
+            workflows as <strong>Directed Acyclic Graphs (DAGs)</strong>, where each node is an independent Persistent FSM
+            and edges represent data flow and dependencies.
+        </p>
+
+        <table class="ps-table" style="margin-top:20px;">
+            <thead><tr><th style="width:22%">Dimension</th><th style="width:39%">Traditional Stored Procedure Orchestration</th><th style="width:39%">M2 DAG Execution Engine</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Workflow Definition</strong></td><td>JSON → stored procedure call chain, invisible at runtime</td><td><strong>Explicit DAG</strong> — nodes and edges declared in code, compile-time checked</td></tr>
+                <tr><td><strong>Node Independence</strong></td><td>Implicit dependencies between procedures; one failure = global rollback</td><td>Each FSM independently persisted, tested, deployed — <strong>blast radius limited to a single node</strong></td></tr>
+                <tr><td><strong>External Integration</strong></td><td>DB Link, batch ETL, polling</td><td>Unified communication layer — SFTP/HTTP/message queues encapsulated within retryable async boundaries</td></tr>
+                <tr><td><strong>Resilience Patterns</strong></td><td>None — manual recovery</td><td>4 built-in patterns: Supervision + auto-restart, timeout protection, compensating recovery, eventual consistency</td></tr>
+                <tr><td><strong>Stream + Batch</strong></td><td>Two separate systems, duplicated logic</td><td>Same DAG pipeline handles real-time events and batch files</td></tr>
+                <tr><td><strong>Observability</strong></td><td>grep log files</td><td>Every FSM state transition persisted as an event — click → drill → debug</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>Salary Deposit Scenario:</strong> M2's demonstrator is a payday salary auto-deposit workflow — cron trigger →
+            data preprocessing (file generation / SFTP upload / poll response / parse / classify) → quota reservation →
+            concurrent execution (recharge + purchase — two parallel chains) → compensation and release.
+            Involves 4 external systems (Bank SFTP, Core Account API, Fund Purchase Platform P2B, SMS Gateway), 23 FSMs collaborating.
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 2: 5-Level Architecture ==================== -->
+    <section>
+        <h2>2. 5-Level DAG Architecture</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M2 decomposes cross-system orchestration into 5 vertical levels, each with clear responsibility boundaries.
+            Data flow between levels is unidirectional — upper levels pass instructions down, lower levels feed results up.
+            Exceptions flow back to upper levels via compensation loops.
+        </p>
+
+        <div class="arch-svg-wrap">
+            <div style="font-size:0.75rem; color:var(--fg-subtle); margin-bottom:10px;">
+                L0 Trigger → L1 Orchestration → L2 Execution & Resources → L3 Business Chain → L4 Communication → L5 Compensation & Release
+            </div>
+            <svg class="arch-svg" viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <marker id="ahBlue" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#58a6ff"/></marker>
+                    <marker id="ahMuted" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#8b949e"/></marker>
+                    <marker id="ahAmber" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f59e0b"/></marker>
+                    <marker id="ahRed" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f87171"/></marker>
+                    <marker id="ahGreen" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#3fb950"/></marker>
+                    <marker id="ahPurple" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#a855f7"/></marker>
+                    <filter id="nodeShadow" x="-10%" y="-20%" width="130%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/></filter>
+                    <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(96,165,250,0.18)"/><stop offset="100%" stop-color="rgba(96,165,250,0.05)"/></linearGradient>
+                    <linearGradient id="gAmber" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(251,191,36,0.18)"/><stop offset="100%" stop-color="rgba(251,191,36,0.05)"/></linearGradient>
+                    <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(248,113,113,0.18)"/><stop offset="100%" stop-color="rgba(248,113,113,0.05)"/></linearGradient>
+                    <linearGradient id="gPurple" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(168,85,247,0.18)"/><stop offset="100%" stop-color="rgba(168,85,247,0.05)"/></linearGradient>
+                    <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(74,222,128,0.18)"/><stop offset="100%" stop-color="rgba(74,222,128,0.05)"/></linearGradient>
+                </defs>
+
+                <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif">
+
+                <!-- L0: Trigger -->
+                <rect x="30" y="10" width="940" height="70" rx="10" fill="rgba(59,130,246,0.03)" stroke="rgba(59,130,246,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="10" width="5" height="70" rx="2" fill="#38bdf8" fill-opacity="0.5"/>
+                <text x="50" y="33" fill="#38bdf8" font-size="12" font-weight="700" letter-spacing="1">L0 · Trigger Layer</text>
+                <rect x="55" y="44" width="180" height="28" rx="5" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.35" stroke-width="1.2"/>
+                <text x="145" y="62" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Quartz Cron Scheduler</text>
+                <text x="255" y="62" fill="#8b949e" font-size="8" font-weight="500">Declarative entry — DAG activated by events</text>
+                <path d="M 250 58 L 280 58" fill="none" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#ahBlue)"/>
+
+                <!-- L1: Orchestration -->
+                <rect x="30" y="90" width="940" height="100" rx="10" fill="rgba(245,158,11,0.03)" stroke="rgba(245,158,11,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="90" width="5" height="100" rx="2" fill="#f59e0b" fill-opacity="0.5"/>
+                <text x="50" y="113" fill="#f59e0b" font-size="12" font-weight="700" letter-spacing="1">L1 · Orchestration</text>
+                <rect x="55" y="126" width="180" height="50" rx="6" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.35" stroke-width="1.2"/>
+                <text x="145" y="148" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">JobActor (Orchestrator)</text>
+                <text x="145" y="166" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Job split · Batch mgmt</text>
+                <path d="M 235 151 L 265 151" fill="none" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#ahAmber)"/>
+                <rect x="270" y="126" width="180" height="50" rx="6" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.35" stroke-width="1.2"/>
+                <text x="360" y="148" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">PreBatchActor (Orchestrator)</text>
+                <text x="360" y="166" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Data preprocessing dispatch</text>
+                <path d="M 450 151 L 480 151" fill="none" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#ahAmber)"/>
+                <rect x="485" y="126" width="180" height="50" rx="6" fill="url(#gRed)" stroke="#f87171" stroke-opacity="0.35" stroke-width="1.2"/>
+                <text x="575" y="148" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">ReBatchActor (Compensator)</text>
+                <text x="575" y="166" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Infinite retry until success</text>
+                <path d="M 575 176 L 575 210" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ahMuted)"/>
+
+                <!-- L2: Execution & Resources -->
+                <rect x="30" y="200" width="940" height="115" rx="10" fill="rgba(63,185,80,0.03)" stroke="rgba(63,185,80,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="200" width="5" height="115" rx="2" fill="#3fb950" fill-opacity="0.5"/>
+                <text x="50" y="223" fill="#3fb950" font-size="12" font-weight="700" letter-spacing="1">L2 · Execution &amp; Resources</text>
+                <rect x="55" y="238" width="150" height="36" rx="5" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.35" stroke-width="1"/>
+                <text x="130" y="260" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">BatchMaster</text>
+                <rect x="220" y="238" width="170" height="36" rx="5" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.35" stroke-width="1"/>
+                <text x="305" y="260" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">BatchItemCreationActor</text>
+                <rect x="405" y="238" width="150" height="36" rx="5" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.35" stroke-width="1"/>
+                <text x="480" y="260" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">BatchWorker × N</text>
+                <rect x="55" y="278" width="250" height="28" rx="5" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="180" y="296" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">UserQuotaReservation (Protector)</text>
+                <rect x="320" y="278" width="250" height="28" rx="5" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="445" y="296" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">QuotaRelease × 2 (Protector)</text>
+                <text x="590" y="296" fill="#8b949e" font-size="7.5" font-weight="500">Auto-release on timeout</text>
+                <path d="M 500 310 L 500 340" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ahMuted)"/>
+
+                <!-- L3: Business Chain -->
+                <rect x="30" y="325" width="940" height="110" rx="10" fill="rgba(168,85,247,0.03)" stroke="rgba(168,85,247,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="325" width="5" height="110" rx="2" fill="#a855f7" fill-opacity="0.5"/>
+                <text x="50" y="348" fill="#a855f7" font-size="12" font-weight="700" letter-spacing="1">L3 · Business Chain — Recharge ♻ Purchase (2 parallel chains)</text>
+                <rect x="55" y="362" width="370" height="28" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="240" y="380" fill="#e6edf3" font-size="8.5" font-weight="700" text-anchor="middle">Recharge: Request → Response → Reconfirm → Success/Failure → NotifyP2B</text>
+                <rect x="440" y="362" width="370" height="28" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="625" y="380" fill="#e6edf3" font-size="8.5" font-weight="700" text-anchor="middle">Purchase: Request → Response → Reconfirm → Success/Failure → NotifyP2B</text>
+                <rect x="55" y="396" width="800" height="28" rx="5" fill="rgba(168,85,247,0.04)" stroke="#a855f7" stroke-opacity="0.15" stroke-width="1"/>
+                <text x="455" y="414" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Each chain: 6 FSMs — Request · Response · Reconfirm · Success · Failure · Reminder (SMS)</text>
+                <path d="M 500 435 L 500 470" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ahMuted)"/>
+
+                <!-- L4: Communication -->
+                <rect x="30" y="450" width="940" height="75" rx="10" fill="rgba(20,184,166,0.03)" stroke="rgba(20,184,166,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="450" width="5" height="75" rx="2" fill="#14b8a6" fill-opacity="0.5"/>
+                <text x="50" y="473" fill="#14b8a6" font-size="12" font-weight="700" letter-spacing="1">L4 · Communication — Unified External System Gateways</text>
+                <rect x="55" y="486" width="200" height="30" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="155" y="505" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">SftpService (Bank SFTP)</text>
+                <rect x="270" y="486" width="200" height="30" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="370" y="505" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">CoreAccountAPI</text>
+                <rect x="485" y="486" width="200" height="30" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="585" y="505" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">P2B Platform (Fund Purchase)</text>
+                <rect x="700" y="486" width="160" height="30" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="780" y="505" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">SMS Gateway</text>
+                <path d="M 500 520 L 500 550" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ahMuted)"/>
+
+                <!-- L5: Compensation & Release -->
+                <rect x="30" y="535" width="940" height="65" rx="10" fill="rgba(248,81,73,0.03)" stroke="rgba(248,81,73,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="535" width="5" height="65" rx="2" fill="#f87171" fill-opacity="0.5"/>
+                <text x="50" y="558" fill="#f87171" font-size="12" font-weight="700" letter-spacing="1">L5 · Compensation &amp; Release</text>
+                <rect x="55" y="568" width="250" height="24" rx="5" fill="url(#gRed)" stroke="#f87171" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="180" y="585" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">User Quota Release + Total Quota Release (Protector)</text>
+                <text x="320" y="585" fill="#8b949e" font-size="7.5" font-weight="500">Guaranteed eventual release — no stuck locks</text>
+
+                <text x="490" y="620" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">4 Resilience Patterns: Orchestrator · Protector · Communicator · Compensator</text>
+                <text x="490" y="638" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">23 Akka Persistent FSMs · 131 DAG edges · 4 External System Gateways · 5-Level Unidirectional Data Flow</text>
+
+                </g>
+            </svg>
+        </div>
+
+        <h3>Layer Responsibilities</h3>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:12%">Layer</th><th style="width:18%">Resilience Role</th><th style="width:38%">Actors</th><th style="width:32%">Core Responsibility</th></tr></thead>
+            <tbody>
+                <tr><td><strong style="color:#38bdf8">L0 Trigger</strong></td><td>Orchestrator</td><td>Quartz Cron Scheduler (1)</td><td>Scheduled job trigger — DAG activated by events, not a stored procedure call chain</td></tr>
+                <tr><td><strong style="color:#f59e0b">L1 Orchestration</strong></td><td>Orchestrator + Compensator</td><td>JobActor · PreBatchActor · ReBatchActor (3)</td><td>Job splitting, batch management, failure compensation — ReBatchActor retries infinitely until success</td></tr>
+                <tr><td><strong style="color:#3fb950">L2 Execution & Resources</strong></td><td>Orchestrator + Protector</td><td>BatchMaster · BatchItemCreationActor · BatchWorker×N · UserQuotaReservation · QuotaRelease×2 (6)</td><td>Batch creation, concurrent execution, quota locks — Protector declares invariants, engine enforces them</td></tr>
+                <tr><td><strong style="color:#a855f7">L3 Business Chain</strong></td><td>Communicator</td><td>Recharge chain + Purchase chain (6 FSMs each, 12 total)</td><td>Request → Response → Reconfirm → Success/Failure → Notify — dual chains in parallel</td></tr>
+                <tr><td><strong style="color:#14b8a6">L4 Communication</strong></td><td>Communicator + Support</td><td>SftpService · CoreAccountAPI · P2B Platform · SMS Gateway (4 gateways)</td><td>Heterogeneous external system encapsulation — SFTP/HTTP/SMS within retryable async boundaries</td></tr>
+                <tr><td><strong style="color:#f87171">L5 Compensation & Release</strong></td><td>Protector</td><td>User Quota Release + Total Quota Release (2)</td><td>Regardless of success or failure, guarantee eventual resource release — no stuck locks</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ==================== SECTION 3: 4 Resilience Patterns ==================== -->
+    <section>
+        <h2>3. Four Resilience Patterns</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            M2's 23 FSMs have 4 built-in resilience patterns. These aren't afterthought try-catch blocks —
+            each FSM's type <strong>is itself a resilience strategy</strong>.
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(59,130,246,0.3);">
+                <div class="comp-icon">🎯</div>
+                <h4>Orchestrator</h4>
+                <p>Handles job splitting, batch management, and phase advancement. After each phase completes,
+                continuously checks preconditions for the next phase. If a child node fails, the Orchestrator
+                decides whether to retry or initiate the compensation chain. Actors: JobActor, PreBatchActor, BatchMaster.</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
+                <div class="comp-icon">🛡️</div>
+                <h4>Protector</h4>
+                <p>Declares system invariants, enforced by the engine. Example: <strong>"Lock auto-releases after 30 seconds"</strong> —
+                even if the node crashes, the timer triggers release after recovery. A Protector is not a try-finally —
+                it's a persistent guardian of invariants. Actors: UserQuotaReservation, QuotaRelease.</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
+                <div class="comp-icon">📡</div>
+                <h4>Communicator</h4>
+                <p>Encapsulates all interactions with external systems. Models SFTP uploads, HTTP requests,
+                and response polling <strong>uniformly as asynchronous messages</strong>. External uncertainty
+                is isolated within retryable boundaries. Circuit breakers protect downstream systems.
+                Actors: All 12 L3 business chain FSMs + all L4 gateways.</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(248,81,73,0.3);">
+                <div class="comp-icon">↩️</div>
+                <h4>Compensator</h4>
+                <p>The final safety net. As long as the Compensator is running, no failure is missed.
+                ReBatchActor ensures eventual success through <strong>infinite retry</strong> —
+                automatically requeues after each failure. The compensation and release layer guarantees
+                that all locked resources are eventually freed.</p>
+            </div>
+        </div>
+
+        <blockquote>
+            <strong>Why 4 patterns are enough:</strong> Every participant in cross-system orchestration can be classified
+            into one of these 4 roles. Orchestrator "advances," Protector "guards," Communicator "talks," Compensator "catches."
+            The combination of these 4 patterns covers the complete loop from scheduled trigger to final resource release.
+        </blockquote>
+    </section>
+
+    <!-- ==================== SECTION 4: Stream-Batch Unified ==================== -->
+    <section>
+        <h2>4. Stream-Batch Unified Pipeline</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            In traditional architectures, streaming (real-time messages) and batch (file transfers) require two separate
+            processing systems — different triggers, different execution paths, different error handling. M2 unifies both
+            through a single DAG pipeline.
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(88,166,255,0.3);">
+                <div class="comp-icon">📂</div>
+                <h4>Batch Path</h4>
+                <p>Cron trigger → generate files → SFTP upload → poll response files → parse + classify →
+                create sub-batches → concurrent processing → aggregate results. Used for payday batch deposits
+                and reconciliation file processing.</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(63,185,80,0.3);">
+                <div class="comp-icon">⚡</div>
+                <h4>Streaming Path</h4>
+                <p>Skip file generation and SFTP — receive events directly from message queue/HTTP → parse + classify →
+                create sub-batches → concurrent processing → aggregate results. Used for real-time transactions
+                and instant notifications.</p>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>Shared core:</strong> Whether batch or streaming entry, the execution pipeline from L2 downward is completely
+            identical — BatchWorker's concurrent processing, the business chain's request-response-reconfirm-notify pattern,
+            the compensation release layer's resource reclamation — all reused, zero duplicated code.
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 5: Evolution to M2.5+ ==================== -->
+    <section>
+        <h2>5. From M2 to M2.5+: From Hand-Written FSMs to Standard Components</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            M2 proved the feasibility of the "cross-system DAG orchestration engine" — 23 Persistent FSMs successfully
+            completed the salary deposit scenario. But it also revealed a core limitation: <strong>each business scenario
+            requires writing 23 FSMs from scratch</strong>. From salary deposit to Fab equipment communication,
+            although the flow structure is highly similar (file gen → upload → poll → parse → classify → route),
+            every scenario required rewriting all FSMs. M2.5+ abstracts these patterns into 6 <strong>standard components</strong> —
+            fix once, apply everywhere.
+        </p>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:24%">M2 Hand-Written FSM</th><th style="width:24%">M2.5+ Standard Component</th><th style="width:52%">Improvement</th></tr></thead>
+            <tbody>
+                <tr><td>PreBatchActor + BatchMaster + BatchItemCreationActor (Orchestrator)</td><td><strong>AreaScheduler</strong> (Process Manager)</td><td>Physical constraint batching · Time windows · Configuration-driven, not code-driven</td></tr>
+                <tr><td>BatchWorker + 6 protocol FSMs (Communicator)</td><td><strong>SubBatchProcessor</strong> (6-stage Future chain)</td><td>fileGen→upload→waitAck→poll→parse→classify — pluggable traits</td></tr>
+                <tr><td>3 hard-coded error classifications</td><td><strong>ResultClassifier</strong> (ErrorCodeMapping)</td><td>Configurable error code→classification mapping — PASS/BORDERLINE/FAIL/SCRAP</td></tr>
+                <tr><td>ReBatchActor (Compensator)</td><td><strong>ReBatchRouter</strong> (PolicyBased)</td><td>RetrySameArea / RouteToArea / Scrap / ManualIntervention</td></tr>
+                <tr><td>SftpService / CoreAccountAPI / P2B / SMS</td><td><strong>Connector + Codec</strong> (Pluggable)</td><td>SFTP→SECS/GEM · XML→JSON/SECS-II — just swap connectors</td></tr>
+                <tr><td>QuotaReservation + QuotaRelease (Protector)</td><td><strong>ChainExecutionActor</strong> (EventSourced)</td><td>4 generic events cover all business chains · Self-healing · Idempotent</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout purple">
+            <strong>Proof of evolution:</strong> M2.5+ replaces M2's 23 hand-written FSMs (~6000 lines Java) with 16 runtime
+            components (~2000 lines Scala), while gaining <strong>cross-scenario reuse</strong> capability. Recharge,
+            purchase, SMS notification, Fab equipment communication — same components, just different configuration.
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 6: Live Demo ==================== -->
+    <section>
+        <h2>6. Live Demo</h2>
+
+        <div class="comp-card" style="border-color: rgba(88,166,255,0.4); margin-top:16px;">
+            <div class="comp-icon">⚙️</div>
+            <h4>DAG Execution Engine Interactive Demo</h4>
+            <p>23 Akka Persistent FSMs collaborate across 5 levels to orchestrate a complete salary deposit scenario.
+            Step through 5 phases, watch 4 resilience patterns — Orchestrator, Protector, Communicator, Compensator —
+            in real time. Click any DAG node to drill into its state machine — view happy path,
+            failure path, and timeout path. Supports fault injection, auto-play, and single-step execution.</p>
+            <p class="file-ref" style="margin-top:8px;">Route: /dag · 23 FSMs · 4 External Systems · 131 DAG Edges · FSM Viewer</p>
+            <p style="margin-top:12px;">
+                <a href="/dag" style="color:var(--accent); font-weight:700; font-size:1rem; text-decoration:none;">Open Demo →</a>
+            </p>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+        <p>Tech Stack: Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
+        <p style="margin-top:4px;">
+            <a href="/en/m1">M1 Saga Distributed TX</a> ·
+            <a href="/en/m25">M2.5+ Component Library</a> ·
+            <a href="/en/m3">M3 Dynamic Orchestration</a> ·
+            <a href="/architecture">Architecture Radar</a>
+        </p>
+        <p style="margin-top:4px; color: var(--fg-subtle);">
+            Architecture: Onion + DDD + CQRS/ES + Saga · Reactive Manifesto
+        </p>
+    </div>
+
+</div>
+</body>
+</html>
