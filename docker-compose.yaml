@@ -48,11 +48,13 @@ services:
     restart: unless-stopped
 
   app:
-    image: minimal-cqrs:latest
+    image: zhongdj/minimal-cqrs:latest
     ports:
       - "80:9000"
     environment:
-      PLAY_SECRET: changeme
+      PLAY_HTTP_SECRET_KEY: "L4PSb0cxSlvekLFmErLOofFzfMpcNqutjwwoCimb4NKDie+f7NzsbvV7LFe/hf4V"
+    volumes:
+      - ./logs:/opt/docker/logs
     depends_on:
       mongodb:
         condition: service_healthy

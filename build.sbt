@@ -114,8 +114,12 @@ lazy val root = (project in file("."))
     dockerBaseImage := "eclipse-temurin:11-jre",
     dockerExposedPorts := Seq(9000),
     Docker / daemonUser := "daemon",
+    dockerEntrypoint := Seq("sh", "-c", "mkdir -p /opt/docker/logs && exec bin/minimal-cqrs"),
     dockerUpdateLatest := true,
     bashScriptExtraDefines += """addJava "-Dconfig.resource=docker.conf"""",
+    Universal / mappings := (Universal / mappings).value.filterNot {
+      case (_, name) => name.contains("logback-test.xml")
+    },
     dockerUsername := sys.props.get("docker.username"),
     dockerRepository := sys.props.get("docker.registry"),
     ThisBuild / dynverSeparator := "-",
