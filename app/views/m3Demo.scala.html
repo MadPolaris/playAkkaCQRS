@@ -1,0 +1,220 @@
+@()
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3 三层架构 · 交互式演示</title>
+    <meta name="description" content="M3 决策层 × 运行时层 × 物理执行层 三层架构交互式演示，含成批/拆批/合批动画、四路结果分类、闭环反馈回路、MU 生命周期可视化">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6; --orange: #f08c3e;
+            --code-bg: #0f172a;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.6; overflow-x: hidden; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 16px; }
+
+        /* ====== Header ====== */
+        header {
+            text-align: center; padding: 40px 0 20px;
+            border-bottom: 1px solid var(--border); margin-bottom: 20px;
+        }
+        header .kicker { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 8px; }
+        header h1 { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
+        header h1 .m3 { color: var(--amber); }
+        header .subtitle { font-size: 0.85rem; color: var(--fg-muted); margin-top: 8px; }
+
+        .nav-links { display: flex; gap: 14px; justify-content: center; margin-top: 16px; font-size: 0.8rem; align-items: center; flex-wrap: wrap; }
+        .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links > a:hover { text-decoration: underline; }
+        .nav-links > a.active { background: var(--teal); color: #000; padding: 5px 14px; border-radius: 6px; font-weight: 700; }
+        .nav-links > a.active:hover { background: #0d9488; text-decoration: none; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn { color: var(--accent); font-size: 0.8rem; font-weight: 500; cursor: pointer; background: transparent; border: none; font-family: var(--font); display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .nav-dropdown-btn:hover { text-decoration: underline; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; min-width: 220px; padding: 4px; display: none; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.8rem; font-weight: 500; transition: all 0.1s; }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-m3 { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+
+        /* ====== Control Bar ====== */
+        #controlBar {
+            display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: center;
+            padding: 10px 0; margin-bottom: 8px; border-bottom: 1px solid var(--border);
+        }
+        .ctrl-btn {
+            font-family: var(--font); font-size: 0.75rem; font-weight: 600;
+            padding: 6px 14px; border-radius: 6px; cursor: pointer; border: 1px solid var(--border);
+            background: var(--bg-alt); color: var(--fg); transition: all 0.15s;
+        }
+        .ctrl-btn:hover { border-color: var(--fg-muted); }
+        .ctrl-btn.on { border-color: var(--teal); color: var(--teal); background: rgba(20,184,166,0.08); }
+        .ctrl-btn.amber { border-color: var(--amber); color: var(--amber); }
+        .ctrl-btn.amber:hover { background: rgba(245,158,11,0.08); }
+        .ctrl-btn.purple { border-color: var(--purple); color: var(--purple); }
+        .ctrl-btn.purple:hover { background: rgba(168,85,247,0.08); }
+        .ctrl-btn.orange { border-color: var(--orange); color: var(--orange); }
+        .ctrl-btn.orange:hover { background: rgba(240,140,62,0.08); }
+        .ctrl-btn.teal { border-color: var(--teal); color: var(--teal); }
+        .ctrl-btn.teal:hover { background: rgba(20,184,166,0.08); }
+        .ctrl-btn.green { border-color: var(--green); color: var(--green); }
+        .ctrl-btn.green:hover { background: rgba(63,185,80,0.08); }
+
+        .ctrl-sep { width: 1px; height: 22px; background: var(--border); }
+
+        .speed-slider { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; color: var(--fg-muted); }
+        .speed-slider input[type=range] { width: 80px; accent-color: var(--teal); }
+
+        .layer-chips { display: flex; gap: 6px; }
+        .layer-chip {
+            font-family: var(--font); font-size: 0.7rem; font-weight: 700; padding: 4px 10px;
+            border-radius: 14px; cursor: pointer; border: 1px solid var(--border);
+            background: var(--bg-alt); color: var(--fg-muted); transition: all 0.15s;
+        }
+        .layer-chip.decision { border-color: rgba(96,165,250,0.4); }
+        .layer-chip.decision.active { background: rgba(96,165,250,0.15); color: #60a5fa; border-color: #60a5fa; }
+        .layer-chip.runtime { border-color: rgba(168,85,247,0.4); }
+        .layer-chip.runtime.active { background: rgba(168,85,247,0.15); color: #a855f7; border-color: #a855f7; }
+        .layer-chip.physical { border-color: rgba(45,212,191,0.4); }
+        .layer-chip.physical.active { background: rgba(45,212,191,0.15); color: #2dd4bf; border-color: #2dd4bf; }
+
+        /* ====== SVG Canvas ====== */
+        #vizWrap { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
+        #m3Canvas { display: block; width: 100%; }
+
+        /* ====== FSM Modal ====== */
+        #fsmOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; justify-content: center; align-items: center; }
+        #fsmOverlay.show { display: flex; }
+        #fsmModal { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 14px; max-width: 760px; width: 90vw; max-height: 85vh; overflow-y: auto; padding: 28px; position: relative; }
+        #fsmModal .close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: var(--fg-muted); font-size: 1.4rem; cursor: pointer; }
+        #fsmModal h3 { font-size: 1.1rem; margin-bottom: 6px; }
+        #fsmModal .node-sub { font-size: 0.78rem; color: var(--fg-muted); margin-bottom: 16px; }
+        #fsmModal .fsm-svg-wrap { text-align: center; margin: 12px 0; }
+        #fsmModal .fsm-info { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.78rem; color: var(--fg-muted); margin-top: 12px; }
+        #fsmModal .fsm-info .label { font-weight: 700; color: var(--fg); }
+        #fsmModal .code-ref { font-family: var(--mono); font-size: 0.7rem; color: var(--fg-subtle); background: var(--code-bg); padding: 10px 14px; border-radius: 6px; margin-top: 12px; white-space: pre-wrap; }
+
+        /* ====== Toast ====== */
+        #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; padding: 10px 20px; font-size: 0.8rem; color: var(--fg); z-index: 300; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+        #toast.show { opacity: 1; }
+
+        /* ====== Legend ====== */
+        #legend { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; padding: 8px 0; font-size: 0.7rem; color: var(--fg-muted); }
+        .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+        /* ====== Footer ====== */
+        .footer { border-top: 1px solid var(--border); margin-top: 20px; padding: 20px 0; text-align: center; font-size: 0.75rem; color: var(--fg-muted); }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ==================== HEADER ==================== -->
+    <header>
+        <div class="kicker">M3 · 交互式架构演示</div>
+        <h1>三层架构 <span class="m3">Live Demo</span></h1>
+        <p class="subtitle">决策层 (Brain) × 运行时执行层 (Muscle) × 物理执行层 (Reality) — 事实驱动的闭环反馈系统</p>
+        <nav class="nav-links">
+            <a href="/">首页</a>
+            <a href="/m3">M3 架构文档</a>
+            <a href="/en/m3" style="color:#f59e0b; font-weight:700;">EN</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
+                    <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
+                    <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ==================== CONTROL BAR ==================== -->
+    <div id="controlBar">
+        <div class="layer-chips">
+            <button class="layer-chip decision active" data-layer="decision">决策层</button>
+            <button class="layer-chip runtime active" data-layer="runtime">运行时层</button>
+            <button class="layer-chip physical active" data-layer="physical">物理执行层</button>
+        </div>
+        <span class="ctrl-sep"></span>
+        <button id="btnPlay" class="ctrl-btn on">⏯ 播放中</button>
+        <button id="btnFeedback" class="ctrl-btn teal">↻ 反馈回路</button>
+        <span class="ctrl-sep"></span>
+        <button id="btnBatch" class="ctrl-btn orange">⇉ 成批</button>
+        <button id="btnSplit" class="ctrl-btn amber">⇋ 拆批</button>
+        <button id="btnMerge" class="ctrl-btn green">⇌ 合批</button>
+        <span class="ctrl-sep"></span>
+        <div class="speed-slider">
+            <span>速度</span>
+            <input type="range" id="speedSlider" min="0.5" max="2" step="0.25" value="1">
+            <span id="speedLabel">1×</span>
+        </div>
+    </div>
+
+    <!-- ==================== SVG CANVAS ==================== -->
+    <div id="vizWrap">
+        <svg id="m3Canvas" viewBox="0 0 1200 1450" xmlns="http://www.w3.org/2000/svg"></svg>
+    </div>
+
+    <!-- ==================== LEGEND ==================== -->
+    <div id="legend">
+        <span><span class="legend-dot" style="background:#58a6ff"></span> 主流程序列</span>
+        <span><span class="legend-dot" style="background:#f08c3e"></span> 成批 Batch</span>
+        <span><span class="legend-dot" style="background:#2dd4bf"></span> 拆批 Split</span>
+        <span><span class="legend-dot" style="background:#3fb950"></span> 合批 Merge</span>
+        <span><span class="legend-dot" style="background:#4ade80"></span> PASS 前进</span>
+        <span><span class="legend-dot" style="background:#f87171"></span> FAIL / SCRAP</span>
+        <span><span class="legend-dot" style="background:#f59e0b"></span> BORDERLINE / 重工</span>
+        <span><span class="legend-dot" style="background:#a855f7"></span> 运行时/重试</span>
+        <span><span class="legend-dot" style="background:#8b949e"></span> 事实入账</span>
+    </div>
+
+    <!-- ==================== FSM MODAL ==================== -->
+    <div id="fsmOverlay">
+        <div id="fsmModal">
+            <button class="close-btn" onclick="document.getElementById('fsmOverlay').classList.remove('show')">✕</button>
+            <h3 id="fsmTitle"></h3>
+            <div class="node-sub" id="fsmSub"></div>
+            <div class="fsm-svg-wrap"><svg id="fsmSvg" viewBox="0 0 500 260" style="max-width:100%; height:auto;"></svg></div>
+            <div class="fsm-info" id="fsmInfo"></div>
+            <div class="code-ref" id="fsmCode"></div>
+        </div>
+    </div>
+
+    <!-- ==================== TOAST ==================== -->
+    <div id="toast"></div>
+
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+        <p>技术栈：Scala 2.13 · Akka 2.6 · Play Framework 2.8 · SVG animateMotion</p>
+        <p style="margin-top:4px;">
+            <a href="/m3">M3 架构文档</a> ·
+            <a href="/m25">M2.5+ 标准组件库</a> ·
+            <a href="/m25-demo">M2.5+ 交互演示</a>
+        </p>
+    </div>
+
+</div>
+
+<script src="/assets/javascripts/m3_demo.js"></script>
+</body>
+</html>
