@@ -832,9 +832,14 @@
         </p>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
-            The M3 prototype code lives under <span class="file-ref">app/net/imadz/fab/</span>, fully reusing M2.5+ runtime components.
+            M3 code spans two layers: the <strong>Decision Layer prototype</strong> lives under <span class="file-ref">app/net/imadz/fab/</span>;
+            the <strong>production-quality Lot Context Saga</strong> follows the standard DDD package structure
+            (<span class="file-ref">domain/entities/</span>, <span class="file-ref">application/aggregates/</span>, <span class="file-ref">infrastructure/</span>)
+            and uses event sourcing with Akka Persistence — the same <code>InvariantRule + CommandHelper + SagaParticipant</code> pattern
+            proven in M1 CreditBalance/MoneyTransfer.
         </p>
 
+        <h4>Decision Layer Prototype (fab/)</h4>
         <table class="ps-table">
             <thead><tr><th style="width:28%">File</th><th style="width:10%">Layer</th><th style="width:62%">Responsibility</th></tr></thead>
             <tbody>
@@ -848,13 +853,33 @@
             </tbody>
         </table>
 
+        <h4 style="margin-top:24px;">Lot Context Saga — Production Quality (Event Sourcing)</h4>
+        <table class="ps-table">
+            <thead><tr><th style="width:30%">File</th><th style="width:10%">Layer</th><th style="width:60%">Responsibility</th></tr></thead>
+            <tbody>
+                <tr><td class="file-ref">domain/entities/LotEntity.scala</td><td>Domain</td><td>LotState (waferIds + reservedWafers + incomingWafers), LotEvent ADT, LotPhase FSM (Empty→Active→Sealed→Completed)</td></tr>
+                <tr><td class="file-ref">domain/entities/WaferEntity.scala</td><td>Domain</td><td>WaferState (lotId + status + reservedTransfer), WaferEvent ADT, WaferStatus (Created/Active/OnHold/Scrapped/Skipped)</td></tr>
+                <tr><td class="file-ref">domain/invariants/LotInvariants.scala</td><td>Domain</td><td>9 InvariantRule: CreateLot, Reserve/Commit/Release wafer removal, Reserve/Commit/Cancel wafer addition, SealLot. FOUP 25 capacity guard · idempotency · phase gating</td></tr>
+                <tr><td class="file-ref">domain/invariants/WaferInvariants.scala</td><td>Domain</td><td>6 InvariantRule: CreateWafer, Reserve/Commit/Release transfer, ScrapWafer, ChangeStatus</td></tr>
+                <tr><td class="file-ref">application/aggregates/LotProtocol.scala</td><td>App</td><td>LotCommand/LotReply ADT — TCC three-phase commands: ReserveWaferRemoval, CommitWaferRemoval, ReleaseReservedWafer ↔ ReserveAddWafer, CommitAddWafer, CancelAddWafer</td></tr>
+                <tr><td class="file-ref">application/aggregates/WaferProtocol.scala</td><td>App</td><td>WaferCommand/WaferReply ADT — ownership transfer TCC: ReserveTransfer, CommitTransfer, ReleaseTransfer</td></tr>
+                <tr><td class="file-ref">application/services/transactor/SourceLotParticipant.scala</td><td>Saga</td><td>SagaParticipant wrapping source Lot Reserve/Commit/Release commands</td></tr>
+                <tr><td class="file-ref">application/services/transactor/TargetLotParticipant.scala</td><td>Saga</td><td>SagaParticipant wrapping target Lot ReserveAdd/CommitAdd/CancelAdd commands</td></tr>
+                <tr><td class="file-ref">application/services/transactor/WaferTransferParticipant.scala</td><td>Saga</td><td>SagaParticipant wrapping Wafer Reserve/Commit/Release transfer commands</td></tr>
+                <tr><td class="file-ref">application/services/transactor/behaviors/FabSagaTransactorBehaviors.scala</td><td>Saga</td><td>EventSourcedBehavior orchestrating Split/Merge/Transfer sagas — generates TCC step groups with parallel wafer-level steps</td></tr>
+                <tr><td class="file-ref">infrastructure/persistence/converters/LotProtoConverters.scala</td><td>Infra</td><td>Proto↔Domain converters for all Lot events &amp; state (Map[Id, Set[Id]] ↔ WaferIdSet)</td></tr>
+                <tr><td class="file-ref">application/services/FabSagaService.scala</td><td>API</td><td>Public API: splitLot(source, target, wafers) · mergeLots(sources, target, wafers) · transferWafers(source, target, wafers)</td></tr>
+            </tbody>
+        </table>
+
         <blockquote>
             <strong>Architect's perspective—why M3 is not a new engine.</strong>
             M3 doesn't start from scratch outside M2.5+. It adds a decision capability <strong>on top of</strong> M2.5+.
             Dynamic Flow Assembler doesn't replace ChainExecutionActor—it <strong>injects commands into</strong> ChainExecutionActor.
             Lot Context doesn't replace Saga—it enables Saga to <strong>manage more complex entity relationships</strong>.
             It's like an autonomous driving system not replacing the engine—it just tells the engine <strong>where to go</strong>.
-            Code compression: M2's 23 FSMs (~6000 lines Java) → M2.5+'s 16 runtime components (~2000 lines Scala) → M3 adds Decision Layer (~500 lines),
+            Code compression: M2's 23 FSMs (~6000 lines Java) → M2.5+'s 16 runtime components (~2000 lines Scala) → M3 Decision Layer
+            (~500 lines prototype + ~2500 lines production-quality Lot Context Saga with event sourcing and TCC distributed transactions),
             while gaining dynamic process orchestration capability.
         </blockquote>
     </section>

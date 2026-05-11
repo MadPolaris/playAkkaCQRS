@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package net.imadz.infrastructure.proto;
+
+option java_multiple_files = true;
+
+// --- Helper messages for Map[Id, Set[Id]] ---
+
+message WaferIdSet {
+  repeated string wafer_ids = 1;
+}
+
+// --- Events ---
+
+message LotCreatedPO {
+  string product_id = 1;
+  repeated string wafer_ids = 2;
+}
+
+message WaferRemovalReservedPO {
+  string transfer_id = 1;
+  repeated string wafer_ids = 2;
+}
+
+message WaferRemovalCommittedPO {
+  string transfer_id = 1;
+}
+
+message WaferRemovalReleasedPO {
+  string transfer_id = 1;
+}
+
+message WaferAdditionReservedPO {
+  string transfer_id = 1;
+  repeated string wafer_ids = 2;
+}
+
+message WaferAdditionCommittedPO {
+  string transfer_id = 1;
+}
+
+message WaferAdditionCanceledPO {
+  string transfer_id = 1;
+}
+
+message PhaseStartedPO {
+  string phase_id = 1;
+}
+
+message PhaseCompletedPO {
+  string phase_id = 1;
+}
+
+message LotSealedPO {
+}
+
+// --- Event Union ---
+
+message LotEventPO {
+  oneof event {
+    LotCreatedPO lotCreated = 1;
+    WaferRemovalReservedPO waferRemovalReserved = 2;
+    WaferRemovalCommittedPO waferRemovalCommitted = 3;
+    WaferRemovalReleasedPO waferRemovalReleased = 4;
+    WaferAdditionReservedPO waferAdditionReserved = 5;
+    WaferAdditionCommittedPO waferAdditionCommitted = 6;
+    WaferAdditionCanceledPO waferAdditionCanceled = 7;
+    PhaseStartedPO phaseStarted = 8;
+    PhaseCompletedPO phaseCompleted = 9;
+    LotSealedPO lotSealed = 10;
+  }
+}
+
+// --- State Snapshot ---
+
+message LotStatePO {
+  string lot_id = 1;
+  string product_id = 2;
+  repeated string wafer_ids = 3;
+  map<string, WaferIdSet> reserved_wafers = 4;
+  map<string, WaferIdSet> incoming_wafers = 5;
+  string phase = 6;
+}

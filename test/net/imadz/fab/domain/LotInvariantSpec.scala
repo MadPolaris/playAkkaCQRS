@@ -1,0 +1,123 @@
+package net.imadz.fab.domain
+
+import net.imadz.common.CommonTypes.iMadzError
+import net.imadz.domain.entities.LotEntity
+import net.imadz.domain.entities.LotEntity._
+import net.imadz.domain.invariants.LotInvariants
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+import java.util.UUID
+
+class LotInvariantSpec extends AnyWordSpec with Matchers {
+
+  val lotId = UUID.randomUUID()
+  val wafer1 = UUID.randomUUID()
+  val wafer2 = UUID.randomUUID()
+  val activeState = LotState(lotId, "PROD-A", Set(wafer1, wafer2), Map.empty, Map.empty, Active)
+
+  // --- CreateLot Rule ---
+  "CreateLotRule" should {
+    "accept valid create request" in {
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Set(wafer1)))
+      result.map(_.head) shouldBe Right(LotCreated("PROD-A", Set(wafer1)))
+    }
+
+    "reject empty productId" in {
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("", Set(wafer1)))
+      result shouldBe Left(iMadzError("LOT_002", "Product ID must not be empty"))
+    }
+
+    "reject if lot already created" in {
+      val result = LotInvariants.CreateLotRule(activeState, ("PROD-B", Set(wafer1)))
+      result shouldBe Left(iMadzError("LOT_001", s"Lot $lotId already created, cannot create again"))
+    }
+
+    "reject empty wafer list" in {
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Set.empty))
+      result shouldBe Left(iMadzError("LOT_003", "Lot must have at least 1 wafer"))
+    }
+
+    "reject > 25 wafers" in {
+      val tooMany = (1 to 26).map(_ => UUID.randomUUID()).toSet
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", tooMany))
+      result.isLeft shouldBe true
+      result.left.get.code shouldBe "LOT_004"
+    }
+  }
+
+  // --- ReserveWaferRemoval Rule ---
+  "ReserveWaferRemovalRule" should {
+    "reserve wafers that belong to the lot" in {
+      val transferId = UUID.randomUUID()
+      val result = LotInvariants.ReserveWaferRemovalRule(activeState, (transferId, Set(wafer1)))
+      result shouldBe Right(List(WaferRemovalReserved(transferId, Set(wafer1))))
+    }
+
+    "be idempotent on same transferId" in {
+      val transferId = UUID.randomUUID()
+      val state = activeState.copy(reservedWafers = Map(transferId -> Set(wafer1)))
+      val result = LotInvariants.ReserveWaferRemovalRule(state, (transferId, Set(wafer1)))
+      result shouldBe Right(Nil)
+    }
+
+    "reject wafers not in lot" in {
+      val transferId = UUID.randomUUID()
+      val unknownWafer = UUID.randomUUID()
+      val result = LotInvariants.ReserveWaferRemovalRule(activeState, (transferId, Set(unknownWafer)))
+      result.isLeft shouldBe true
+      result.left.get.code shouldBe "LOT_011"
+    }
+
+    "reject if lot not active" in {
+      val transferId = UUID.randomUUID()
+      val emptyState = LotEntity.empty(lotId)
+      val result = LotInvariants.ReserveWaferRemovalRule(emptyState, (transferId, Set(wafer1)))
+      result.isLeft shouldBe true
+      result.left.get.code shouldBe "LOT_010"
+    }
+
+    "reject double reservation from different transfers" in {
+      val t1 = UUID.randomUUID()
+      val t2 = UUID.randomUUID()
+      val state = activeState.copy(reservedWafers = Map(t1 -> Set(wafer1)))
+      val result = LotInvariants.ReserveWaferRemovalRule(state, (t2, Set(wafer1)))
+      result.isLeft shouldBe true
+      result.left.get.code shouldBe "LOT_012"
+    }
+  }
+
+  // --- ReserveAddWafer Rule ---
+  "ReserveAddWaferRule" should {
+    "accept incoming wafer for active lot" in {
+      val transferId = UUID.randomUUID()
+      val newWafer = UUID.randomUUID()
+      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, Set(newWafer)))
+      result shouldBe Right(List(WaferAdditionReserved(transferId, Set(newWafer))))
+    }
+
+    "reject when FOUP would exceed 25" in {
+      val transferId = UUID.randomUUID()
+      val manyWafers = (1 to 24).map(_ => UUID.randomUUID()).toSet
+      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, manyWafers))
+      result.isLeft shouldBe true
+      result.left.get.code shouldBe "LOT_021"
+    }
+
+    "be idempotent on same transferId" in {
+      val transferId = UUID.randomUUID()
+      val newWafer = UUID.randomUUID()
+      val state = activeState.copy(incomingWafers = Map(transferId -> Set(newWafer)))
+      val result = LotInvariants.ReserveAddWaferRule(state, (transferId, Set(newWafer)))
+      result shouldBe Right(Nil)
+    }
+
+    "reject wafers already present in lot" in {
+      val transferId = UUID.randomUUID()
+      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, Set(wafer1)))
+      result.isLeft shouldBe true
+      result.left.get.code shouldBe "LOT_022"
+    }
+  }
+
+}

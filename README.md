@@ -8,7 +8,7 @@ Reactive MES kernel for semiconductor wafer fabs. Event Sourcing replaces giant 
 |---|---|
 | M1 — Saga Distributed Transaction Coordinator | Production quality |
 | M2 — Stream-Batch Multi-Level DAG Execution Engine | Production quality |
-| M3 — Manufacturing Cybernetics CIMs iPaaS | Exploring |
+| M3 — Manufacturing Cybernetics CIMs iPaaS | Building: Lot Context Saga ← Production Quality |
 | M4 — Instant Feedback Loop + Adaptive DAG Engine | Exploring |
 
 See the project homepage: `/` (EN) and `/zh` (Chinese).
@@ -91,9 +91,11 @@ Read the details: [`knowledge_base/architecture/saga.md`](knowledge_base/archite
 
 Includes M2.5+ runtime component engine with business DSL for Fab M3 integration.
 
-## M3 — Manufacturing Cybernetics CIMs iPaaS (in exploration)
+## M3 — Manufacturing Cybernetics CIMs iPaaS (building)
 
 Decision layer on top of M2.5+: POR Repository → Dynamic Flow Assembler → Saga/LotContext distributed transaction → ChainDSL injection. MU Account Matrix for multi-dimensional accountability. Fact-driven closed loop — zero modification to M2.5+ engine.
+
+**Lot Context Saga (production quality):** Event-sourced `LotEntity` + `WaferEntity` aggregates with TCC Saga participants (`SourceLotParticipant`, `TargetLotParticipant`, `WaferTransferParticipant`). Lot Split / Merge / Wafer Transfer as distributed transactions with FOUP capacity invariants and backward recovery. Follows the identical `InvariantRule` + `CommandHelper` + `SagaParticipant` pattern used by M1 CreditBalance/MoneyTransfer.
 
 ## Tech Stack
 

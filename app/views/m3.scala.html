@@ -855,9 +855,14 @@
         </p>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
-            M3 原型代码位于 <span class="file-ref">app/net/imadz/fab/</span> 包下，全部复用 M2.5+ 运行时组件。
+            M3 代码分布在两个层面：<strong>决策层原型</strong>位于 <span class="file-ref">app/net/imadz/fab/</span> 包；
+            <strong>生产级 Lot Context Saga</strong> 遵循标准 DDD 包结构
+            （<span class="file-ref">domain/entities/</span>、<span class="file-ref">application/aggregates/</span>、<span class="file-ref">infrastructure/</span>），
+            使用 Akka Persistence 事件溯源——与 M1 CreditBalance/MoneyTransfer 采用完全相同的
+            <code>InvariantRule + CommandHelper + SagaParticipant</code> 模式。
         </p>
 
+        <h4>决策层原型 (fab/)</h4>
         <table class="ps-table">
             <thead><tr><th style="width:28%">文件</th><th style="width:10%">层</th><th style="width:62%">职责</th></tr></thead>
             <tbody>
@@ -871,13 +876,33 @@
             </tbody>
         </table>
 
+        <h4 style="margin-top:24px;">Lot Context Saga — 生产级（事件溯源）</h4>
+        <table class="ps-table">
+            <thead><tr><th style="width:30%">文件</th><th style="width:10%">层</th><th style="width:60%">职责</th></tr></thead>
+            <tbody>
+                <tr><td class="file-ref">domain/entities/LotEntity.scala</td><td>Domain</td><td>LotState（waferIds + reservedWafers + incomingWafers）、LotEvent ADT、LotPhase 状态机（Empty→Active→Sealed→Completed）</td></tr>
+                <tr><td class="file-ref">domain/entities/WaferEntity.scala</td><td>Domain</td><td>WaferState（lotId + status + reservedTransfer）、WaferEvent ADT、WaferStatus（Created/Active/OnHold/Scrapped/Skipped）</td></tr>
+                <tr><td class="file-ref">domain/invariants/LotInvariants.scala</td><td>Domain</td><td>9 个 InvariantRule：创建批次、预留/提交/释放转出、预留/提交/取消转入、封批。含 FOUP 25 片容量守卫 · 幂等检查 · 阶段门控</td></tr>
+                <tr><td class="file-ref">domain/invariants/WaferInvariants.scala</td><td>Domain</td><td>6 个 InvariantRule：创建晶圆、预留/提交/释放转移、报废晶圆、状态变更</td></tr>
+                <tr><td class="file-ref">application/aggregates/LotProtocol.scala</td><td>App</td><td>LotCommand/LotReply ADT — TCC 三阶段命令：ReserveWaferRemoval、CommitWaferRemoval、ReleaseReservedWafer ↔ ReserveAddWafer、CommitAddWafer、CancelAddWafer</td></tr>
+                <tr><td class="file-ref">application/aggregates/WaferProtocol.scala</td><td>App</td><td>WaferCommand/WaferReply ADT — 所有权转移 TCC：ReserveTransfer、CommitTransfer、ReleaseTransfer</td></tr>
+                <tr><td class="file-ref">application/services/transactor/SourceLotParticipant.scala</td><td>Saga</td><td>SagaParticipant 封装源批次 Reserve/Commit/Release 命令</td></tr>
+                <tr><td class="file-ref">application/services/transactor/TargetLotParticipant.scala</td><td>Saga</td><td>SagaParticipant 封装目标批次 ReserveAdd/CommitAdd/CancelAdd 命令</td></tr>
+                <tr><td class="file-ref">application/services/transactor/WaferTransferParticipant.scala</td><td>Saga</td><td>SagaParticipant 封装晶圆 Reserve/Commit/Release 所有权转移命令</td></tr>
+                <tr><td class="file-ref">application/services/transactor/behaviors/FabSagaTransactorBehaviors.scala</td><td>Saga</td><td>EventSourcedBehavior 编排拆批/合批/转移 Saga——生成 TCC 步骤组，晶圆级步骤并行执行</td></tr>
+                <tr><td class="file-ref">infrastructure/persistence/converters/LotProtoConverters.scala</td><td>Infra</td><td>Proto↔Domain 转换器，覆盖所有 Lot 事件和状态（Map[Id, Set[Id]] ↔ WaferIdSet）</td></tr>
+                <tr><td class="file-ref">application/services/FabSagaService.scala</td><td>API</td><td>公开 API：splitLot(源批, 目标批, 晶圆) · mergeLots(源批列表, 目标批, 晶圆) · transferWafers(源批, 目标批, 晶圆)</td></tr>
+            </tbody>
+        </table>
+
         <blockquote>
             <strong>架构师视角——M3 为什么不是一个新引擎。</strong>
             M3 不是在 M2.5+ 之外另起炉灶。它是在 M2.5+ <strong>之上</strong>增加了一层决策能力。
             Dynamic Flow Assembler 不替代 ChainExecutionActor——它向 ChainExecutionActor <strong>注入指令</strong>。
             Lot Context 不替代 Saga——它让 Saga <strong>管理更复杂的实体关系</strong>。
             这就像自动驾驶系统不替代发动机——它只是让发动机知道<strong>该往哪开</strong>。
-            代码压缩比：M2 的 23 个 FSM（~6000 行 Java）→ M2.5+ 的 16 个运行时组件（~2000 行 Scala）→ M3 新增决策层（~500 行），
+            代码压缩比：M2 的 23 个 FSM（~6000 行 Java）→ M2.5+ 的 16 个运行时组件（~2000 行 Scala）→ M3 决策层
+            （~500 行原型 + ~2500 行生产级 Lot Context Saga，含事件溯源和 TCC 分布式事务），
             同时获得了动态工序编排能力。
         </blockquote>
     </section>

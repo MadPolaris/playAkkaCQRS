@@ -4,9 +4,9 @@ import akka.actor.ExtendedActorSystem
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
+import net.imadz.application.aggregates.repository.{CreditBalanceRepository, LotRepository, WaferRepository}
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
-import net.imadz.application.services.MoneyTransferService
+import net.imadz.application.services.{FabSagaService, MoneyTransferService}
 import net.imadz.application.services.transactor.MoneyTransferContext
 import net.imadz.common.serialization.SerializationExtension
 import net.imadz.infrastructure.persistence.strategies.TransactionSerializationStrategies
@@ -25,11 +25,14 @@ class ApplicationBootstrap @Inject()(
                                       sharding: ClusterSharding,
                                       // 注入各个 Bootstrap 所需的 Repository
                                       creditBalanceRepository: CreditBalanceRepository,
-                                      monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository
+                                      monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
+                                      lotRepository: LotRepository,
+                                      waferRepository: WaferRepository
                                     ) extends CreditBalanceBootstrap
   with TransactionBootstrap
   with SagaTransactionCoordinatorBootstrap
-  with MonthlyIncomeAndExpenseBootstrap {
+  with MonthlyIncomeAndExpenseBootstrap
+  with FabBootstrap {
 
   // 转换为 Typed ActorSystem
   private implicit val system: ActorSystem[Nothing] = classicSystem.toTyped
@@ -39,15 +42,17 @@ class ApplicationBootstrap @Inject()(
   serializationExtension.registerStrategy(TransactionSerializationStrategies.FromAccountStrategy(creditBalanceRepository))
   serializationExtension.registerStrategy(TransactionSerializationStrategies.ToAccountStrategy(creditBalanceRepository))
   serializationExtension.registerStrategy(net.imadz.application.services.transactor.ShowcaseStrategy)
+
+  // 注册 Fab Saga 序列化策略
+  registerFabSerializationStrategies(serializationExtension, lotRepository, waferRepository)
+
   serializationExtension.validateStrategies()
 
 
   // --- 1. 初始化标准聚合根 (CreditBalance) ---
-  // 来自 CreditBalanceBootstrap
   initCreditBalanceAggregate(sharding)
 
-  // --- 2. 初始化 Saga 引擎 (Coordinator) ---
-  // 来自 SagaTransactionCoordinatorBootstrap
+  // --- 2. 初始化 Saga 引擎 (Coordinator) for Banking ---
   initSagaTransactionCoordinatorAggregate[MoneyTransferContext](
     sharding = sharding,
     context = MoneyTransferContext(creditBalanceRepository),
@@ -55,14 +60,31 @@ class ApplicationBootstrap @Inject()(
     system = classicSystem.asInstanceOf[ExtendedActorSystem])
 
   // --- 3. 初始化 Saga 业务聚合根 (MoneyTransferTransaction) ---
-  // 来自 TransactionBootstrap
   initTransactionAggregate(
     coordinatorEntityKey = MoneyTransferService.moneyTransferCoordinatorKey,
     sharding = sharding,
     repository = creditBalanceRepository)
 
-  // --- 4. 初始化投影 (Projection) ---
-  // 来自 MonthlyIncomeAndExpenseBootstrap
+  // --- 4. 初始化 Fab Lot / Wafer 聚合根 ---
+  initLotAggregate(sharding)
+  initWaferAggregate(sharding)
+
+  // --- 5. 初始化 Fab Saga Coordinator + Transactor ---
+  initFabSagaCoordinator(
+    sharding = sharding,
+    lotRepository = lotRepository,
+    waferRepository = waferRepository,
+    system = classicSystem.asInstanceOf[ExtendedActorSystem],
+    sagaTransactionCoordinatorBootstrap = this
+  )
+  initFabSagaTransactor(
+    coordinatorEntityKey = FabSagaService.fabSagaCoordinatorKey,
+    sharding = sharding,
+    lotRepository = lotRepository,
+    waferRepository = waferRepository
+  )
+
+  // --- 6. 初始化投影 (Projection) ---
   initMonthlySummaryProjection(system, sharding, monthlyRepository)
 
   println("🚀 [ApplicationBootstrap] All CQRS components initialized successfully.")
