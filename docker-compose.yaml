@@ -48,9 +48,9 @@ services:
     restart: unless-stopped
 
   app:
-    build: .
+    image: minimal-cqrs:latest
     ports:
-      - "9000:9000"
+      - "80:9000"
     environment:
       PLAY_SECRET: changeme
     depends_on:

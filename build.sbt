@@ -115,6 +115,7 @@ lazy val root = (project in file("."))
     dockerExposedPorts := Seq(9000),
     Docker / daemonUser := "daemon",
     dockerUpdateLatest := true,
+    bashScriptExtraDefines += """addJava "-Dconfig.resource=docker.conf"""",
     dockerUsername := sys.props.get("docker.username"),
     dockerRepository := sys.props.get("docker.registry"),
     ThisBuild / dynverSeparator := "-",
