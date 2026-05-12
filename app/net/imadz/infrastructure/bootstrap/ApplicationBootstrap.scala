@@ -65,9 +65,10 @@ class ApplicationBootstrap @Inject()(
     sharding = sharding,
     repository = creditBalanceRepository)
 
-  // --- 4. 初始化 Fab Lot / Wafer 聚合根 ---
+  // --- 4. 初始化 Fab Lot / Wafer / Process 聚合根 ---
   initLotAggregate(sharding)
   initWaferAggregate(sharding)
+  initFabProcessAggregate(sharding)
 
   // --- 5. 初始化 Fab Saga Coordinator + Transactor ---
   initFabSagaCoordinator(
