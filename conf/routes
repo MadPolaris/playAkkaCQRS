@@ -54,3 +54,9 @@ GET     /m3-demo                    controllers.DddGuideController.m3Demo()
 GET     /api/projection/status      controllers.DddGuideController.getProjectionStatus()
 GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(ids: String)
 
+# Fab Demo
+GET     /fab-demo                               controllers.FabDemoController.index()
+GET     /ws/fab-demo/events                     controllers.FabDemoController.socket
+POST    /api/fab-demo/start/:scenarioId          controllers.FabDemoController.startDemo(scenarioId: String)
+GET     /api/fab-demo/scenarios                  controllers.FabDemoController.getScenarios
+
