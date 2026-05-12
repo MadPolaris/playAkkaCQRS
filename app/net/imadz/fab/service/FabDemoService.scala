@@ -9,12 +9,14 @@ import net.imadz.application.aggregates.WaferAggregate.WaferEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.aggregates.WaferProtocol._
 import net.imadz.application.aggregates.process.FabProcessAggregate
+import net.imadz.application.aggregates.process.FabProcessProtocol.ProcessConfirmation
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
+import net.imadz.fab.chain.FabChainExecutor
+import net.imadz.fab.chain.FabChainExecutor.{ChainResult, StartChain}
+import net.imadz.fab.chain.FabDemoPipeline.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.events.FabSimulationEvent
-import net.imadz.fab.orchestration.FabSimulationCoordinator
-import net.imadz.fab.orchestration.FabSimulationCoordinator.{SimResult, StartScenario}
 import net.imadz.fab.protocol.ActorEquipmentAdapter
 import net.imadz.fab.scenario.StandardScenarios
 
@@ -35,16 +37,17 @@ class FabDemoService @Inject()(
   private implicit val timeout: Timeout = 10.seconds
 
   /**
-   * Start a demo scenario. Now creates real EventSourced Lot + Wafer aggregates
-   * and wires the FabSagaService for TCC split/merge transactions.
+   * Start a demo scenario using M2.5+ Chain-aligned FabChainExecutor.
+   * Creates EventSourced Lot + Wafer aggregates, wires FabSagaService for TCC split/merge,
+   * then runs the 11-stage pipeline via FabChainExecutor (EventSourcedBehavior).
    */
-  def startDemo(scenarioId: String, publisher: FabSimulationEvent => Unit): Future[SimResult] = {
+  def startDemo(scenarioId: String, publisher: FabSimulationEvent => Unit): Future[ChainResult] = {
     val scenario = scenarioId match {
       case "photo-cell-5wafer" => StandardScenarios.photoCell5Wafer
       case _ => StandardScenarios.photoCell5Wafer
     }
 
-    // Generate unique UUIDs for this run (deterministic from run key avoids cross-run collision)
+    // Generate unique UUIDs for this run
     val runKey = UUID.randomUUID().toString.take(8)
     val waferUUIDs: Map[String, Id] = scenario.waferIds.map { wid =>
       wid -> UUID.nameUUIDFromBytes(s"$runKey-$wid".getBytes)
@@ -57,66 +60,126 @@ class FabDemoService @Inject()(
     val waferRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[WaferCommand]] =
       waferUUIDs.map { case (wid, uuid) => wid -> sharding.entityRefFor(WaferEntityTypeKey, uuid.toString) }
 
-    // Saga TCC callback — uses transferWafers for both split and merge operations.
-    // split:  transferWafers(sourceLot, reworkLot, wafers) → move to rework lot
-    // merge:  transferWafers(reworkLot, sourceLot, wafers) → move back to source lot
     val sagaTxFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
       (srcId, tgtId, wids) => fabSagaService.transferWafers(srcId, tgtId, wids)
 
-    // Create source Lot + Rework Lot + 5 Wafers before starting the coordinator
+    // Create source Lot + Rework Lot + 5 Wafers before starting the chain
     val createEntities: Future[Unit] = for {
-      // Create source lot
       _ <- lotRef.ask[LotConfirmation](ref =>
         CreateLot(s"PHOTO-CELL-$runKey", waferUUIDs.values.toSet, ref)
       )
-      // Create rework lot (empty, will receive wafers via Saga split)
       _ <- reworkLotRef.ask[LotConfirmation](ref =>
         CreateLot(s"PHOTO-CELL-REWORK-$runKey", Set.empty, ref)
       )
-      // Create 5 wafers
       _ <- Future.sequence(waferUUIDs.map { case (_, uuid) =>
         val waferRef = sharding.entityRefFor(WaferEntityTypeKey, uuid.toString)
         waferRef.ask[WaferConfirmation](ref => CreateWafer(sourceLotId, ref))
       })
     } yield ()
 
-    // After entities are created, start the coordinator
+    // After entities are created, start the chain executor
     createEntities.flatMap { _ =>
       val processId = UUID.randomUUID().toString
       val processRef = sharding.entityRefFor(FabProcessAggregate.ProcessEntityTypeKey, processId)
-
       val adapter = new ActorEquipmentAdapter()
-      val coordinator = system.systemActorOf(
-        FabSimulationCoordinator(
-          publisher, adapter, processRef,
-          lotRef, reworkLotRef, waferRefs, waferUUIDs,
-          sagaTxFn, sourceLotId, reworkLotId
-        ),
-        s"fab-sim-${scenarioId}-${System.currentTimeMillis()}"
+
+      // Fire-and-forget reply targets
+      val ignoreReply = system.systemActorOf(
+        akka.actor.typed.scaladsl.Behaviors.ignore[ProcessConfirmation],
+        s"proc-ignore-$runKey"
+      )
+      val ignoreLotReply = system.systemActorOf(
+        akka.actor.typed.scaladsl.Behaviors.ignore[LotConfirmation],
+        s"lot-ignore-$runKey"
+      )
+      val ignoreWaferReply = system.systemActorOf(
+        akka.actor.typed.scaladsl.Behaviors.ignore[WaferConfirmation],
+        s"wafer-ignore-$runKey"
       )
 
-      coordinator.ask[SimResult](ref => StartScenario(scenario, ref))
+      val ctx = FabDemoContext(
+        scenario = scenario,
+        foupId = s"FOUP-${scenario.scenarioId}",
+        processRef = processRef,
+        lotRef = lotRef,
+        reworkLotRef = reworkLotRef,
+        waferRefs = waferRefs,
+        waferUUIDs = waferUUIDs,
+        sourceLotId = sourceLotId,
+        reworkLotId = reworkLotId,
+        adapter = adapter,
+        publisher = publisher,
+        ignoreReply = ignoreReply,
+        ignoreLotReply = ignoreLotReply,
+        ignoreWaferReply = ignoreWaferReply,
+        sagaTx = sagaTxFn,
+        speedMultiplier = 1.0
+      )
+
+      val initialState = FabDemoState(
+        wafers = scenario.waferIds.map(wid => wid -> WaferInfo(wid)).toMap
+      )
+
+      // Publish DemoStarted before launching chain
+      publisher(net.imadz.fab.events.DemoStarted(scenario.scenarioId, scenario.name, scenario.lotSize, scenario.waferIds))
+
+      // Spawn simulators (same as before)
+      spawnSimulators(scenario, adapter, publisher)
+
+      val executor = system.systemActorOf(
+        FabChainExecutor(runKey, initialState, ctx),
+        s"fab-chain-${scenarioId}-${System.currentTimeMillis()}"
+      )
+
+      executor.ask[ChainResult](ref => StartChain(ref))
     }
+  }
+
+  private def spawnSimulators(
+    scenario: net.imadz.fab.scenario.FabSimulationScenario,
+    adapter: ActorEquipmentAdapter,
+    publisher: FabSimulationEvent => Unit
+  ): Unit = {
+    // Spawn equipment simulators and register with adapter
+    import net.imadz.fab.simulation._
+    val lithoActor = system.systemActorOf(
+      new LithographySimulator(scenario.lithoDetail)(scenario.litho),
+      s"litho-${scenario.scenarioId}-${System.currentTimeMillis()}"
+    )
+    val cdSemActor = system.systemActorOf(
+      new CdSemSimulator(scenario.cdSemDetail)(scenario.cdSem),
+      s"cdsem-${scenario.scenarioId}-${System.currentTimeMillis()}"
+    )
+    val amhsActor = system.systemActorOf(
+      new AmhsSimulator()(scenario.amhs, 1.0),
+      s"amhs-${scenario.scenarioId}-${System.currentTimeMillis()}"
+    )
+    val stockerActor = system.systemActorOf(
+      new StockerSimulator()(scenario.stocker),
+      s"stocker-${scenario.scenarioId}-${System.currentTimeMillis()}"
+    )
+    adapter.registerSimulator(scenario.litho.equipmentId, lithoActor)
+    adapter.registerSimulator(scenario.cdSem.equipmentId, cdSemActor)
+    adapter.registerSimulator("AMHS", amhsActor)
+    adapter.registerSimulator(scenario.stocker.equipmentId, stockerActor)
+
+    publisher(net.imadz.fab.events.EquipmentStateChanged(scenario.litho.equipmentId, "LITHO", "Idle", None))
+    publisher(net.imadz.fab.events.EquipmentStateChanged(scenario.cdSem.equipmentId, "METROLOGY", "Idle", None))
+    publisher(net.imadz.fab.events.EquipmentStateChanged(scenario.stocker.equipmentId, "STOCKER", "Idle", None))
   }
 
   def getScenarios: Seq[Map[String, String]] = Seq(
     Map("id" -> "photo-cell-5wafer", "name" -> "Lithography Photo Cell (5 wafers)")
   )
 
-  /** Return the Event Sourcing Ledger (event timeline × aggregate states) for a scenario */
   def getScenarioLedger(scenarioId: String): Map[String, Any] = {
     val (steps, name) = scenarioId match {
       case "photo-cell-5wafer" => (photoCellLedger, "Photo Cell 5-Wafer — 2 PASS + 2 Rework → PASS + 1 SCRAP")
       case _ => (photoCellLedger, "Photo Cell 5-Wafer — 2 PASS + 2 Rework → PASS + 1 SCRAP")
     }
-    Map(
-      "scenarioId" -> scenarioId,
-      "name" -> name,
-      "steps" -> steps
-    )
+    Map("scenarioId" -> scenarioId, "name" -> name, "steps" -> steps)
   }
 
-  /** Mixed scenario: W1=PASS, W2=PASS, W3=FAIL→Rework→PASS, W4=FAIL→Rework→PASS, W5=SCRAP */
   private val photoCellLedger: Seq[Map[String, String]] = Seq(
     Map("seq" -> "0",  "event" -> "Load FOUP from Stocker (5 wafers)",      "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Load"),
     Map("seq" -> "1",  "event" -> "Transport: STOCKER → LITHO",              "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Transport"),
