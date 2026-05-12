@@ -50,6 +50,7 @@ object FabSagaTransactorBehaviors {
         eventHandler = (state, event) => state.applyEvent(event)
       )
         .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
+        .withTagger(_ => Set(s"fabsaga-${math.abs(id.hashCode % 5)}"))
         .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
     }
   }

@@ -14,8 +14,6 @@ sealed trait FabSimulationEvent extends CborSerializable
 // --- Lifecycle ---
 case class DemoStarted(scenarioId: String, name: String, lotSize: Int, waferIds: Seq[String]) extends FabSimulationEvent
 case class DemoCompleted(lotId: String, totalWafers: Int, passedWafers: Int, reworkedWafers: Int, scrappedWafers: Int) extends FabSimulationEvent
-case object DemoPaused extends FabSimulationEvent
-case object DemoResumed extends FabSimulationEvent
 
 // --- Equipment State ---
 case class EquipmentStateChanged(equipmentId: String, areaId: String, status: String, currentJob: Option[String]) extends FabSimulationEvent
@@ -23,7 +21,6 @@ case class EquipmentStateChanged(equipmentId: String, areaId: String, status: St
 // --- Material Handling ---
 case class FoupInTransit(foupId: String, fromArea: String, toArea: String, etaMs: Long) extends FabSimulationEvent
 case class FoupArrivedAtPort(foupId: String, equipmentId: String, portId: String) extends FabSimulationEvent
-case class FoupDepartedFromPort(foupId: String, equipmentId: String, portId: String) extends FabSimulationEvent
 
 // --- Processing ---
 case class ProcessingStarted(equipmentId: String, recipeId: String, estimatedMs: Long) extends FabSimulationEvent
@@ -61,8 +58,6 @@ case class SagaOperationEvent(transactionId: String, operation: String, status: 
 // --- Lot Summary ---
 case class LotUpdated(lotId: String, activeWafers: Int, scrappedWafers: Int, completedSteps: List[String], passedWafers: Int = 0, reworkedWafers: Int = 0) extends FabSimulationEvent
 
-// --- Fault Injection ---
-case class FaultInjected(equipmentId: String, faultType: String) extends FabSimulationEvent
 
 // --- Event Sourcing Ledger ---
 case class LedgerStepAdvanced(stepSeq: Int, stepName: String) extends FabSimulationEvent

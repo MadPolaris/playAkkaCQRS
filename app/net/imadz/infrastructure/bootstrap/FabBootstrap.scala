@@ -15,7 +15,7 @@ import net.imadz.application.aggregates.WaferProtocol.WaferCommand
 import net.imadz.application.aggregates.{LotAggregate, WaferAggregate}
 import net.imadz.application.aggregates.process.{FabProcessAggregate, FabProcessProtocol}
 import net.imadz.application.aggregates.process.FabProcessProtocol.FabProcessCommand
-import net.imadz.application.projection.FabProcessProjection
+import net.imadz.application.projection.{FabLotProjection, FabProcessProjection, FabSagaTransactionProjection, FabWaferProjection}
 import net.imadz.application.aggregates.repository.{LotRepository, WaferRepository}
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.{FabSagaProtocol, FabSagaTransactor, FabTransactionContext}
@@ -146,6 +146,39 @@ trait FabBootstrap {
       name = FabProcessProjection.projectionName,
       numberOfInstances = FabProcessAggregate.tags.size,
       behaviorFactory = index => ProjectionBehavior(FabProcessProjection.createProjection(system, index)),
+      settings = ShardedDaemonProcessSettings(system),
+      stopMessage = Some(ProjectionBehavior.Stop)
+    )
+  }
+
+  // --- Fab Lot Projection ---
+  def initFabLotProjection(system: ActorSystem[_]): Unit = {
+    ShardedDaemonProcess(system).init(
+      name = FabLotProjection.projectionName,
+      numberOfInstances = LotAggregate.tags.size,
+      behaviorFactory = index => ProjectionBehavior(FabLotProjection.createProjection(system, index)),
+      settings = ShardedDaemonProcessSettings(system),
+      stopMessage = Some(ProjectionBehavior.Stop)
+    )
+  }
+
+  // --- Fab Wafer Projection ---
+  def initFabWaferProjection(system: ActorSystem[_]): Unit = {
+    ShardedDaemonProcess(system).init(
+      name = FabWaferProjection.projectionName,
+      numberOfInstances = WaferAggregate.tags.size,
+      behaviorFactory = index => ProjectionBehavior(FabWaferProjection.createProjection(system, index)),
+      settings = ShardedDaemonProcessSettings(system),
+      stopMessage = Some(ProjectionBehavior.Stop)
+    )
+  }
+
+  // --- Fab Saga Transaction Projection ---
+  def initFabSagaTransactionProjection(system: ActorSystem[_]): Unit = {
+    ShardedDaemonProcess(system).init(
+      name = FabSagaTransactionProjection.projectionName,
+      numberOfInstances = FabSagaTransactionProjection.tags.size,
+      behaviorFactory = index => ProjectionBehavior(FabSagaTransactionProjection.createProjection(system, index)),
       settings = ShardedDaemonProcessSettings(system),
       stopMessage = Some(ProjectionBehavior.Stop)
     )

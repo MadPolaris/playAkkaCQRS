@@ -9,7 +9,6 @@ import net.imadz.application.aggregates.WaferAggregate.WaferEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.aggregates.WaferProtocol._
 import net.imadz.application.aggregates.process.FabProcessAggregate
-import net.imadz.application.aggregates.process.FabProcessProtocol._
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
@@ -58,9 +57,11 @@ class FabDemoService @Inject()(
     val waferRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[WaferCommand]] =
       waferUUIDs.map { case (wid, uuid) => wid -> sharding.entityRefFor(WaferEntityTypeKey, uuid.toString) }
 
-    // Saga split callback — calls real FabSagaService TCC transaction
-    val sagaSplitFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
-      (srcId, tgtId, wids) => fabSagaService.splitLot(srcId, tgtId, wids)
+    // Saga TCC callback — uses transferWafers for both split and merge operations.
+    // split:  transferWafers(sourceLot, reworkLot, wafers) → move to rework lot
+    // merge:  transferWafers(reworkLot, sourceLot, wafers) → move back to source lot
+    val sagaTxFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
+      (srcId, tgtId, wids) => fabSagaService.transferWafers(srcId, tgtId, wids)
 
     // Create source Lot + Rework Lot + 5 Wafers before starting the coordinator
     val createEntities: Future[Unit] = for {
@@ -89,7 +90,7 @@ class FabDemoService @Inject()(
         FabSimulationCoordinator(
           publisher, adapter, processRef,
           lotRef, reworkLotRef, waferRefs, waferUUIDs,
-          sagaSplitFn, sourceLotId, reworkLotId
+          sagaTxFn, sourceLotId, reworkLotId
         ),
         s"fab-sim-${scenarioId}-${System.currentTimeMillis()}"
       )
