@@ -237,7 +237,7 @@
         cls = event.data.action === 'Rework' ? 'rework' : 'fail';
         msg = event.data.waferId + ' → ' + event.data.action;
         break;
-      case 'FoupInTransit': cls = 'transport'; msg = event.data; break;
+      case 'FoupInTransit': cls = 'transport'; msg = 'FOUP: ' + event.data.fromArea + ' → ' + event.data.toArea; break;
       case 'SagaOperationEvent': cls = 'rework'; msg = event.data.operation + ' ' + event.data.status; break;
       case 'DemoCompleted': msg = '✓ Demo completed'; break;
       default: msg = event.type + ' ' + JSON.stringify(event.data).substring(0, 80);
