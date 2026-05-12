@@ -2,10 +2,15 @@
  * Fab Demo — M3 Closed-Loop Photo Cell Simulation
  *
  * Connects to the FabDemoController WebSocket and renders:
- *   1. Factory floor SVG (equipment nodes, AMHS rail, FOUP movement)
- *   2. Timeline log (scrollable event history)
- *   3. Summary panel (lot stats)
- *   4. Classification wheel (per-wafer dot colors)
+ *   1. Factory floor SVG (optimized: Decision Engine top, equipment same row, 3-tier rails)
+ *   2. Timeline log
+ *   3. Summary panel
+ *   4. Classification wheel
+ *   5. Event Sourcing Ledger
+ *   6. Aggregate State panel (需求5)
+ *   7. Scrap Bin (需求1)
+ *   8. Global Status indicator (需求3)
+ *   9. FOUP Lot labels (需求2)
  */
 
 (function() {
@@ -20,7 +25,9 @@
     paused: false,
     waferCount: 5,
     eventLog: [],
-    waferResults: {}  // waferId -> classification
+    waferResults: {},  // waferId -> classification
+    scrapCount: 0,
+    aggregatePanelOpen: true
   };
 
   // ===================================================================
@@ -87,6 +94,15 @@
       case 'LedgerStepAdvanced':
         highlightLedgerRow(event.data.stepSeq);
         break;
+      case 'GlobalStatusChanged':
+        updateGlobalStatus(event.data);
+        break;
+      case 'AggregateStateUpdated':
+        updateAggregatePanel(event.data);
+        break;
+      case 'ScrapEvent':
+        handleScrapEvent(event.data);
+        break;
     }
   }
 
@@ -107,12 +123,11 @@
       el.textContent = data.status || 'Idle';
       el.setAttribute('fill', statusColor(data.status));
     }
-    // Update rect stroke
     var nodeId = data.equipmentId.replace('-01','').toLowerCase();
     var node = document.getElementById('eq-' + nodeId);
     if (node) {
       var rect = node.querySelector('rect');
-      if (rect) rect.setAttribute('stroke', statusColor(data.status));
+      if (rect) rect.setAttribute('stroke', statusStrokeColor(data.status));
     }
   }
 
@@ -122,6 +137,15 @@
       case 'Processing': return '#f59e0b';
       case 'Error': return '#f85149';
       default: return '#6e7681';
+    }
+  }
+
+  function statusStrokeColor(status) {
+    switch (status) {
+      case 'Busy': return '#3b82f6';
+      case 'Processing': return '#f59e0b';
+      case 'Error': return '#f85149';
+      default: return '#30363d';
     }
   }
 
@@ -145,12 +169,12 @@
     var node = document.getElementById('eq-' + nodeId);
     if (node) {
       var rect = node.querySelector('rect');
-      if (rect) rect.setAttribute('stroke', '#30363d');
+      if (rect) rect.setAttribute('stroke', statusStrokeColor('Idle'));
     }
   }
 
   // ===================================================================
-  // FOUP Movement Animation
+  // FOUP Movement Animation (需求4: 新坐标)
   // ===================================================================
   function animateFoupMovement(data) {
     // Rework path: use rework FOUP icon
@@ -162,6 +186,8 @@
     if (data.fromArea === 'CDSEM' && data.toArea === 'STOCKER') {
       var rf = document.getElementById('reworkFoupIcon');
       if (rf) rf.setAttribute('opacity', '0');
+      var rl = document.getElementById('reworkFoupLabel');
+      if (rl) rl.setAttribute('opacity', '0');
     }
 
     var foup = document.getElementById('foupIcon');
@@ -180,7 +206,12 @@
       animY.setAttribute('values', fromPos.y + ';' + toPos.y);
       animY.setAttribute('dur', duration + 'ms');
     }
-    // Trigger SVG animation
+    // Move lot label with FOUP
+    var lotLabel = document.getElementById('foupLotLabel');
+    if (lotLabel) {
+      lotLabel.setAttribute('x', toPos.x);
+      lotLabel.setAttribute('y', toPos.y - 10);
+    }
     var animElems = document.querySelectorAll('#foupAnimX, #foupAnimY');
     animElems.forEach(function(a) { a.beginElement(); });
   }
@@ -189,13 +220,19 @@
     var rf = document.getElementById('reworkFoupIcon');
     if (!rf) return;
     rf.setAttribute('opacity', '1');
+    var rl = document.getElementById('reworkFoupLabel');
+    if (rl) {
+      rl.setAttribute('opacity', '1');
+      rl.setAttribute('x', '636');
+      rl.setAttribute('y', '152');
+    }
     var duration = Math.max(800, (data.etaMs || 2000) / state.speed);
-    // Animate along upper path: CDSEM(690,185) → up(690,150) → left(490,150) → Litho(490,185)
+    // Straight rework path: CDSEM(636,155) → left to Litho(336,155)
     var animX = document.getElementById('reworkFoupAnimX');
     var animY = document.getElementById('reworkFoupAnimY');
     if (animX && animY) {
-      animX.setAttribute('values', '690;690;490;490');
-      animY.setAttribute('values', '185;150;150;185');
+      animX.setAttribute('values', '636;336');
+      animY.setAttribute('values', '155;155');
       animX.setAttribute('dur', duration + 'ms');
       animY.setAttribute('dur', duration + 'ms');
     }
@@ -204,13 +241,13 @@
     // Show split label
     var sl = document.getElementById('splitMergeLabel');
     if (sl) {
-      sl.textContent = '↗ SPLIT: Rework wafers';
+      sl.textContent = '↗ SPLIT: Rework wafers to Litho / 拆批返工';
       sl.setAttribute('opacity', '1');
       sl.setAttribute('fill', '#a855f7');
     }
-    // Hide after transport
     setTimeout(function() {
       if (rf) rf.setAttribute('opacity', '0.3');
+      if (rl) rl.setAttribute('opacity', '0.3');
       if (sl) sl.setAttribute('opacity', '0');
     }, duration);
   }
@@ -223,25 +260,27 @@
       foup.setAttribute('y', pos.y);
       foup.setAttribute('opacity', '1');
     }
+    var lotLabel = document.getElementById('foupLotLabel');
+    if (lotLabel) {
+      lotLabel.setAttribute('x', pos.x);
+      lotLabel.setAttribute('y', pos.y - 10);
+    }
   }
 
   function getAreaPosition(areaId) {
-    // Strip -01 suffix from equipment IDs for position lookup
     var key = areaId.replace('-01', '');
     var map = {
-      'STOCKER': {x: 65, y: 85},
-      'LITHO': {x: 490, y: 185},
-      'CDSEM': {x: 690, y: 185},
-      'LITHO_REWORK': {x: 490, y: 145},
-      'RETURN': {x: 65, y: 85}
+      'STOCKER': {x: 66, y: 162},
+      'LITHO': {x: 336, y: 162},
+      'CDSEM': {x: 636, y: 162},
+      'LITHO_REWORK': {x: 336, y: 162},
+      'RETURN': {x: 66, y: 162}
     };
-    return map[key] || {x: 65, y: 85};
+    return map[key] || {x: 66, y: 162};
   }
 
-  // ---- Orchestrator Command Visibility ----
-
+  // ---- Orchestrator Command (also shows on bus) ----
   function showOrchestratorCommand(data) {
-    // Show command on Decision Engine
     var de = document.getElementById('eq-decision');
     if (de) {
       var rect = de.querySelector('rect');
@@ -251,63 +290,332 @@
         setTimeout(function() { rect.setAttribute('stroke', '#f59e0b'); rect.setAttribute('stroke-width', '2'); }, 1000);
       }
     }
-    var act = document.getElementById('decisionActivity');
-    if (act) {
-      act.textContent = data.commandType + ': ' + (data.description || '').substring(0, 40);
-      act.setAttribute('opacity', '1');
-      act.setAttribute('fill', '#58a6ff');
-      setTimeout(function() { act.setAttribute('opacity', '0.4'); }, 3000);
-    }
-    // Update Decision Engine status text
     var st = document.getElementById('status-decision');
     if (st) {
-      st.textContent = data.commandType;
+      st.textContent = data.commandType + ': ' + (data.description || '').substring(0, 35);
       st.setAttribute('fill', '#58a6ff');
     }
-    // Pulse the target equipment
+    // Show command on bus
+    var busLabel = document.getElementById('busCommandLabel');
+    if (busLabel) {
+      busLabel.textContent = '▶ ' + data.commandType;
+      busLabel.setAttribute('opacity', '0.9');
+      busLabel.setAttribute('fill', '#58a6ff');
+      setTimeout(function() { busLabel.setAttribute('opacity', '0.2'); }, 2000);
+    }
     pulseEquipment({equipmentId: data.targetEquipmentId});
   }
 
-  // ---- FOUP State ----
-
+  // ---- FOUP State + Lot Labels (需求2: Lot No.) ----
   function updateFoupState(data) {
-    var label = document.getElementById('foupStateLabel');
-    if (label) {
-      var text = data.status + ' @' + data.location + ' [' + data.activeWaferCount + 'w';
-      if (data.reworkWaferCount > 0) text += ' +' + data.reworkWaferCount + 'rw';
-      text += ']';
-      label.textContent = text;
+    // Main FOUP lot label
+    var label = document.getElementById('foupLotLabel');
+    if (label && data.lotId) {
+      label.textContent = data.lotId + ' [' + data.activeWaferCount + 'w]';
       label.setAttribute('opacity', '1');
     }
     // Color based on status
-    var color = '#f59e0b'; // default amber
+    var color = '#f59e0b';
     if (data.status === 'COMPLETED') color = '#3fb950';
     else if (data.status === 'SPLITTING') color = '#a855f7';
     else if (data.status === 'RETURNING') color = '#3fb950';
+    else if (data.status === 'IN_TRANSIT') color = '#58a6ff';
 
     var foup = document.getElementById('foupIcon');
     if (foup) foup.setAttribute('fill', color);
-
     if (label) label.setAttribute('fill', color);
+
+    // Rework lot label
+    var rwkLabel = document.getElementById('reworkFoupLabel');
+    if (rwkLabel && data.reworkLotId) {
+      rwkLabel.textContent = data.reworkLotId + ' [' + data.reworkWaferCount + 'w]';
+      rwkLabel.setAttribute('opacity', '1');
+      rwkLabel.setAttribute('fill', '#a855f7');
+      // Show rework FOUP icon near CDSEM during split
+      var rwf = document.getElementById('reworkFoupIcon');
+      if (rwf && data.status === 'SPLITTING') {
+        rwf.setAttribute('x', '770');
+        rwf.setAttribute('y', '94');
+        rwf.setAttribute('opacity', '1');
+        rwf.setAttribute('fill', '#a855f7');
+      }
+    }
+    if (rwkLabel && data.status === 'COMPLETED') {
+      rwkLabel.setAttribute('opacity', '0');
+      var rwf2 = document.getElementById('reworkFoupIcon');
+      if (rwf2) rwf2.setAttribute('opacity', '0');
+    }
   }
 
   function updateFoupCompleted() {
-    // Fade out FOUP when demo completes
     var foup = document.getElementById('foupIcon');
     if (foup) {
       foup.setAttribute('opacity', '0.3');
       foup.setAttribute('fill', '#3fb950');
     }
-    var label = document.getElementById('foupStateLabel');
+    var label = document.getElementById('foupLotLabel');
     if (label) {
-      label.textContent = 'COMPLETED';
       label.setAttribute('fill', '#3fb950');
     }
     var rf = document.getElementById('reworkFoupIcon');
     if (rf) rf.setAttribute('opacity', '0');
+    var rl = document.getElementById('reworkFoupLabel');
+    if (rl) rl.setAttribute('opacity', '0');
     var de = document.getElementById('status-decision');
     if (de) { de.textContent = 'Done'; de.setAttribute('fill', '#3fb950'); }
   }
+
+  // ===================================================================
+  // Global Status Indicator (需求3: 工作状态)
+  // ===================================================================
+  var statusColorMap = {
+    'LOADING': '#58a6ff',
+    'TRANSPORTING': '#58a6ff',
+    'AT_EQP': '#8b949e',
+    'PROCESSING': '#f59e0b',
+    'MEASURING': '#f59e0b',
+    'CLASSIFYING': '#a855f7',
+    'SPLITTING': '#a855f7',
+    'REWORKING': '#f59e0b',
+    'RETURNING': '#3fb950',
+    'COMPLETED': '#3fb950',
+    'RUNNING': '#58a6ff'
+  };
+
+  function updateGlobalStatus(data) {
+    // Update control bar status indicator
+    var stEl = document.getElementById('globalStatusText');
+    if (stEl) {
+      var color = statusColorMap[data.status] || '#8b949e';
+      stEl.innerHTML = '<span style="color:' + color + '">●</span> ' + data.detail;
+    }
+    // Update Decision Engine status text
+    var deSt = document.getElementById('status-decision');
+    if (deSt) {
+      deSt.textContent = data.status + ': ' + data.detail;
+      deSt.setAttribute('fill', statusColorMap[data.status] || '#8b949e');
+    }
+  }
+
+  // ===================================================================
+  // Scrap Bin (需求1: 报废去向)
+  // ===================================================================
+  function handleScrapEvent(data) {
+    state.scrapCount++;
+    var waferNum = data.waferId.replace('WAFER-','');
+    var curCount = state.scrapCount;
+
+    // Update scrap bin count text
+    var sc = document.getElementById('scrapCount');
+    if (sc) sc.textContent = curCount + ' wafer' + (curCount > 1 ? 's' : '');
+
+    // Flash the scrap path line
+    var scrapLine = document.getElementById('scrapPathLine');
+    if (scrapLine) {
+      scrapLine.setAttribute('stroke-opacity', '0.9');
+      scrapLine.setAttribute('stroke-width', '3.5');
+      setTimeout(function() {
+        scrapLine.setAttribute('stroke-opacity', '0.5');
+        scrapLine.setAttribute('stroke-width', '2');
+      }, 900);
+    }
+
+    // --- Animate flying wafer dot from CD-SEM (720,156) to Scrap Bin (870,156) ---
+    var svg = document.getElementById('factorySvg');
+    var NS = 'http://www.w3.org/2000/svg';
+    var flyId = 'scrap-fly-' + waferNum;
+
+    var flyG = document.createElementNS(NS, 'g');
+    flyG.setAttribute('id', flyId);
+
+    // Flying dot
+    var flyDot = document.createElementNS(NS, 'circle');
+    flyDot.setAttribute('cx', '720');
+    flyDot.setAttribute('cy', '156');
+    flyDot.setAttribute('r', '6');
+    flyDot.setAttribute('fill', '#f85149');
+    flyDot.setAttribute('stroke', '#ff6b6b');
+    flyDot.setAttribute('stroke-width', '1.5');
+    // animate cx along scrap path
+    var ax = document.createElementNS(NS, 'animate');
+    ax.setAttribute('attributeName', 'cx');
+    ax.setAttribute('values', '720;870');
+    ax.setAttribute('dur', '0.7s');
+    ax.setAttribute('fill', 'freeze');
+    flyDot.appendChild(ax);
+    // slight arc for visual interest
+    var ay = document.createElementNS(NS, 'animate');
+    ay.setAttribute('attributeName', 'cy');
+    ay.setAttribute('values', '156;146;156');
+    ay.setAttribute('dur', '0.7s');
+    ay.setAttribute('fill', 'freeze');
+    flyDot.appendChild(ay);
+    flyG.appendChild(flyDot);
+
+    // Flying label
+    var flyLbl = document.createElementNS(NS, 'text');
+    flyLbl.setAttribute('x', '720');
+    flyLbl.setAttribute('y', '152');
+    flyLbl.setAttribute('text-anchor', 'middle');
+    flyLbl.setAttribute('font-size', '6');
+    flyLbl.setAttribute('fill', '#fff');
+    flyLbl.setAttribute('font-family', 'monospace');
+    flyLbl.setAttribute('font-weight', '700');
+    flyLbl.textContent = 'W' + waferNum;
+    var lx = document.createElementNS(NS, 'animate');
+    lx.setAttribute('attributeName', 'x');
+    lx.setAttribute('values', '720;870');
+    lx.setAttribute('dur', '0.7s');
+    lx.setAttribute('fill', 'freeze');
+    flyLbl.appendChild(lx);
+    var ly = document.createElementNS(NS, 'animate');
+    ly.setAttribute('attributeName', 'y');
+    ly.setAttribute('values', '152;142;152');
+    ly.setAttribute('dur', '0.7s');
+    ly.setAttribute('fill', 'freeze');
+    flyLbl.appendChild(ly);
+    flyG.appendChild(flyLbl);
+
+    svg.appendChild(flyG);
+
+    // After flight, remove flying dot and place permanent dot inside scrap bin
+    setTimeout(function() {
+      var fg = document.getElementById(flyId);
+      if (fg) fg.remove();
+
+      // Place permanent dot in scrap bin
+      var dotsGroup = document.getElementById('scrapWaferDots');
+      if (dotsGroup) {
+        var gap = 16;
+        var cx = 14 + (curCount - 1) * gap;
+        var cy = 20;
+        var dot = document.createElementNS(NS, 'circle');
+        dot.setAttribute('cx', cx);
+        dot.setAttribute('cy', cy);
+        dot.setAttribute('r', '5');
+        dot.setAttribute('fill', '#f85149');
+        dot.setAttribute('stroke', '#ff6b6b');
+        dot.setAttribute('stroke-width', '1');
+        dotsGroup.appendChild(dot);
+        var label = document.createElementNS(NS, 'text');
+        label.setAttribute('x', cx);
+        label.setAttribute('y', cy + 13);
+        label.setAttribute('text-anchor', 'middle');
+        label.setAttribute('font-size', '6');
+        label.setAttribute('fill', '#fff');
+        label.setAttribute('font-family', 'monospace');
+        label.textContent = 'W' + waferNum;
+        dotsGroup.appendChild(label);
+      }
+
+      // Pulse scrap bin border
+      var bin = document.getElementById('scrapBin');
+      if (bin) {
+        bin.setAttribute('opacity', '1');
+        var rect = bin.querySelector('rect');
+        if (rect) {
+          rect.setAttribute('stroke', '#f85149');
+          rect.setAttribute('stroke-width', '3');
+          setTimeout(function() { rect.setAttribute('stroke-width', '2'); }, 800);
+        }
+      }
+    }, 750);
+
+    // Pulse the classification wheel dot
+    var idx = parseInt(waferNum) - 1;
+    var wd = document.getElementById('wd-' + idx);
+    if (wd) {
+      wd.setAttribute('fill', '#f85149');
+      wd.setAttribute('r', '5');
+      setTimeout(function() { wd.setAttribute('r', '3.5'); }, 500);
+    }
+
+    // Show bottom indicator text
+    var sl = document.getElementById('splitMergeLabel');
+    if (sl) {
+      sl.textContent = '✗ SCRAP: ' + data.waferId + ' → Bin / 报废';
+      sl.setAttribute('opacity', '1');
+      sl.setAttribute('fill', '#f85149');
+      setTimeout(function() { sl.setAttribute('opacity', '0'); }, 3000);
+    }
+  }
+
+  // ===================================================================
+  // Aggregate State Panel (需求5: 业务聚合状态)
+  // ===================================================================
+  function updateAggregatePanel(data) {
+    var tbody = document.getElementById('aggTreeBody');
+    var rows = '';
+
+    // Group wafers by lot
+    var sourceWafers = [];
+    var reworkWafers = [];
+    data.wafers.forEach(function(w) {
+      if (data.reworkLot && w.lotId === data.reworkLot.lotId) {
+        reworkWafers.push(w);
+      } else {
+        sourceWafers.push(w);
+      }
+    });
+
+    // --- Source Lot header row ---
+    var sl = data.sourceLot;
+    rows += '<tr class="lot-row">' +
+      '<td>Lot: ' + sl.lotId + '</td>' +
+      '<td>' + sl.status + '</td>' +
+      '<td colspan="2">Wafers: ' + sl.waferCount +
+      ' | Pass: ' + sl.passCount +
+      ' | Scrap: ' + sl.scrapCount + '</td>' +
+      '</tr>';
+    // Source lot wafer rows
+    sourceWafers.forEach(function(w) {
+      var stCls = w.status === 'Active' ? 'status-Active' : 'status-Scrapped';
+      var clsCls = 'cls-' + (w.classification || 'Pending');
+      rows += '<tr class="wafer-row">' +
+        '<td>' + w.waferId + '</td>' +
+        '<td class="' + stCls + '">' + w.status + '</td>' +
+        '<td class="' + clsCls + '">' + (w.classification || 'Pending') + '</td>' +
+        '<td>' + w.reworkCount + '</td>' +
+        '</tr>';
+    });
+
+    // --- Rework Lot header row ---
+    if (data.reworkLot) {
+      var rl = data.reworkLot;
+      rows += '<tr class="lot-row rwk">' +
+        '<td>Lot: ' + rl.lotId + '</td>' +
+        '<td>' + rl.status + '</td>' +
+        '<td colspan="2">Wafers: ' + reworkWafers.length + '</td>' +
+        '</tr>';
+      // Rework lot wafer rows
+      reworkWafers.forEach(function(w) {
+        var stCls = w.status === 'Active' ? 'status-Active' : 'status-Scrapped';
+        var clsCls = 'cls-' + (w.classification || 'Pending');
+        rows += '<tr class="wafer-row">' +
+          '<td>' + w.waferId + '</td>' +
+          '<td class="' + stCls + '">' + w.status + '</td>' +
+          '<td class="' + clsCls + '">' + (w.classification || 'Pending') + '</td>' +
+          '<td>' + w.reworkCount + '</td>' +
+          '</tr>';
+      });
+    }
+
+    tbody.innerHTML = rows;
+  }
+
+  window.toggleAggregatePanel = function() {
+    var panel = document.getElementById('aggregatePanel');
+    var btn = panel.querySelector('.agg-header button');
+    if (state.aggregatePanelOpen) {
+      panel.classList.add('collapsed');
+      btn.textContent = '▼ Expand';
+      state.aggregatePanelOpen = false;
+    } else {
+      panel.classList.remove('collapsed');
+      btn.textContent = '▲ Collapse';
+      state.aggregatePanelOpen = true;
+    }
+  };
 
   // ===================================================================
   // Classification Wheel
@@ -361,7 +669,7 @@
         msg = event.data.waferId + ' CD=' + event.data.cdNm + 'nm → ' + event.data.classification;
         break;
       case 'DecisionMade':
-        cls = event.data.action === 'Rework' ? 'rework' : 'fail';
+        cls = event.data.action.indexOf('Rework') >= 0 ? 'rework' : (event.data.action.indexOf('PASS') >= 0 ? 'pass' : 'fail');
         msg = event.data.waferId + ' → ' + event.data.action;
         break;
       case 'FoupInTransit': cls = 'transport'; msg = 'FOUP: ' + event.data.fromArea + ' → ' + event.data.toArea; break;
@@ -374,14 +682,21 @@
         break;
       case 'OrchestratorCommand':
         cls = 'transport';
-        msg = '▶ CMD: ' + event.data.targetEquipmentId + ' ← ' + event.data.commandType + ' — ' + event.data.description;
+        msg = '▶ CMD: ' + event.data.targetEquipmentId + ' ← ' + event.data.commandType + ' — ' + (event.data.description || '').substring(0, 50);
         break;
       case 'FoupStateChanged':
         cls = 'transport';
         msg = 'FOUP ' + event.data.status + ' @ ' + event.data.location + ' (' + event.data.activeWaferCount + 'w';
         if (event.data.reworkWaferCount > 0) msg += ' +' + event.data.reworkWaferCount + 'rw';
         msg += ')';
+        if (event.data.lotId) msg += ' [' + event.data.lotId + ']';
         break;
+      case 'GlobalStatusChanged':
+        cls = ''; msg = '⚡ ' + event.data.status + ': ' + event.data.detail; break;
+      case 'ScrapEvent':
+        cls = 'fail'; msg = '✗ SCRAP: ' + event.data.waferId + ' — ' + event.data.reason; break;
+      case 'AggregateStateUpdated':
+        cls = ''; msg = '📊 Aggregate state updated'; break;
       case 'DemoCompleted':
         msg = '✓ Demo completed — PASS=' + event.data.passedWafers + ' REWORK=' + event.data.reworkedWafers + ' SCRAP=' + event.data.scrappedWafers;
         break;
@@ -395,7 +710,6 @@
     if (highlight) entry.style.fontWeight = '700';
     timeline.insertBefore(entry, timeline.firstChild);
 
-    // Keep max 200 entries
     while (timeline.children.length > 200) {
       timeline.removeChild(timeline.lastChild);
     }
@@ -407,16 +721,21 @@
   window.startDemo = function() {
     var scenarioId = document.getElementById('scenarioSelect').value;
     loadScenarioLedger(scenarioId);
+    // Reset state
+    state.scrapCount = 0;
+    state.waferResults = {};
+    var sc = document.getElementById('scrapCount');
+    if (sc) sc.textContent = '0 wafer';
+    var dotsGroup = document.getElementById('scrapWaferDots');
+    if (dotsGroup) dotsGroup.innerHTML = '';
     fetch('/api/fab-demo/start/' + scenarioId, {method: 'POST'})
       .then(function(r) { return r.json(); })
       .then(function(data) {
         addTimelineEntry({type:'DemoStarted', data: 'Scenario: ' + data.message});
-        // Reset wafer dots
         for (var i = 0; i < 5; i++) {
           var dot = document.getElementById('wd-' + i);
           if (dot) dot.setAttribute('fill', '#30363d');
         }
-        state.waferResults = {};
       });
   };
 
@@ -433,7 +752,7 @@
   };
 
   // ===================================================================
-  // Event Sourcing Ledger (Scenario Script panel)
+  // Event Sourcing Ledger
   // ===================================================================
   function loadScenarioLedger(scenarioId) {
     fetch('/api/fab-demo/scenario/' + scenarioId + '/ledger')
@@ -454,7 +773,6 @@
             '<td>' + step.phase + '</td>';
           tbody.appendChild(tr);
         });
-        // Auto-scroll to first row
         var ledgerPanel = document.getElementById('ledgerPanel');
         if (ledgerPanel) ledgerPanel.scrollTop = 0;
       })
@@ -483,7 +801,6 @@
   // Init
   // ===================================================================
   document.addEventListener('DOMContentLoaded', function() {
-    // Load scenarios into dropdown
     fetch('/api/fab-demo/scenarios')
       .then(function(r) { return r.json(); })
       .then(function(scenarios) {
@@ -495,7 +812,6 @@
           opt.textContent = s.name;
           sel.appendChild(opt);
         });
-        // Load ledger for default scenario
         if (scenarios.length > 0) {
           loadScenarioLedger(scenarios[0].id);
         }

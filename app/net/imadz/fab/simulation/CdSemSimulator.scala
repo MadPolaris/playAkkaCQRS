@@ -22,7 +22,7 @@ class CdSemSimulator(
     state: SimState, job: Job, equipConfig: EquipmentConfig
   ): EquipmentResult = {
     val wafers = config.waferIds.map { waferId =>
-      val category = drawCategory()
+      val category = config.waferOutcomes.getOrElse(waferId, drawCategory())
       val measuredCd = generateCdValue(category)
       waferId -> CriticalDimension(waferId, measuredCd, config.targetCdNm)
     }.toMap
@@ -60,5 +60,7 @@ case class CdSemConfig(
   scrapRate: Double = 0.02,         // far out of spec, must scrap
   borderlineOffsetNm: Double = 3.0, // nm above target for borderline
   failOffsetNm: Double = 6.0,       // nm above target for fail
-  scrapFactor: Double = 1.5         // multiplier on target for scrap
+  scrapFactor: Double = 1.5,        // multiplier on target for scrap
+  // Deterministic per-wafer outcomes for demo scenarios (first pass only)
+  waferOutcomes: Map[String, String] = Map.empty
 )

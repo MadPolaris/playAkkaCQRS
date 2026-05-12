@@ -37,7 +37,23 @@ case class DecisionMade(waferId: String, action: String, detail: Option[String])
 case class OrchestratorCommand(commandId: String, targetEquipmentId: String, commandType: String, description: String, relatedWaferIds: Seq[String] = Seq.empty) extends FabSimulationEvent
 
 // --- FOUP State ---
-case class FoupStateChanged(foupId: String, status: String, activeWaferCount: Int, reworkWaferCount: Int, location: String) extends FabSimulationEvent
+case class FoupStateChanged(foupId: String, status: String, activeWaferCount: Int, reworkWaferCount: Int, location: String, lotId: String = "", reworkLotId: String = "") extends FabSimulationEvent
+
+// --- Global Status (需求3: 工作状态指示) ---
+case class GlobalStatusChanged(status: String, detail: String, phase: String) extends FabSimulationEvent
+
+// --- Aggregate State (需求5: 业务聚合状态面板) ---
+case class AggregateStateUpdated(
+  sourceLot: LotStateSnapshot,
+  reworkLot: Option[LotStateSnapshot],
+  wafers: Seq[WaferStateSnapshot]
+) extends FabSimulationEvent
+
+case class LotStateSnapshot(lotId: String, status: String, waferCount: Int, passCount: Int, scrapCount: Int)
+case class WaferStateSnapshot(waferId: String, status: String, lotId: String, classification: String, reworkCount: Int)
+
+// --- Scrap Event (需求1: 报废去向) ---
+case class ScrapEvent(waferId: String, reason: String) extends FabSimulationEvent
 
 // --- Saga ---
 case class SagaOperationEvent(transactionId: String, operation: String, status: String, sourceLotId: String = "", targetLotId: String = "", relatedWaferIds: Seq[String] = Seq.empty) extends FabSimulationEvent

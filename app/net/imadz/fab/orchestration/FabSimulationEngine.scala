@@ -178,6 +178,10 @@ object FabSimulationEngine {
     // Emit Event Sourcing Ledger step for frontend scenario script panel
     emitLedgerStep(runCtx, publisher)
 
+    // Emit global status change (需求3: 工作状态指示)
+    val (statusCode, statusDetail) = phaseStatus(runCtx.phase)
+    publisher(GlobalStatusChanged(statusCode, statusDetail, runCtx.phase.getClass.getSimpleName.replace("$","")))
+
     runCtx.phase match {
 
       // ---- PhaseLoad ----
@@ -185,8 +189,11 @@ object FabSimulationEngine {
         val foupId = runCtx.foupId
         publisher(OrchestratorCommand(cmdId(), "STOCKER-01", "LoadFoup",
           s"Load $foupId with ${runCtx.wafers.size} wafers", runCtx.scenario.waferIds))
-        publisher(FoupStateChanged(foupId, "LOADING", runCtx.wafers.size, 0, "STOCKER"))
+        publisher(FoupStateChanged(foupId, "LOADING", activeCount(runCtx), 0, "STOCKER",
+          lotId = runCtx.scenario.scenarioId))
         publisher(FoupArrivedAtPort(foupId, runCtx.scenario.stocker.equipmentId, "STOCKER-PORT-1"))
+        // Emit initial aggregate state so panel shows Lot+Wafer on load
+        publisher(buildAggregateState(runCtx, reworkActive = false))
         ctx.self ! RunPhase(runCtx.copy(phase = PhaseTransportToLitho(foupId)))
         Behaviors.same
 
@@ -195,7 +202,8 @@ object FabSimulationEngine {
         val scaledMs = scale(runCtx.scenario.amhs.routes("STOCKER" -> "LITHO"), speedMultiplier).toMillis
         publisher(OrchestratorCommand(cmdId(), "AMHS", "TransferFoup",
           s"Transport $foupId: STOCKER → LITHO (${scaledMs}ms)", runCtx.scenario.waferIds))
-        publisher(FoupStateChanged(foupId, "IN_TRANSIT", activeCount(runCtx), reworkCount(runCtx), "AMHS"))
+        publisher(FoupStateChanged(foupId, "IN_TRANSIT", activeCount(runCtx), reworkCount(runCtx), "AMHS",
+          lotId = runCtx.scenario.scenarioId))
         publisher(FoupInTransit(foupId, "STOCKER", "LITHO", scaledMs / 2))
         ctx.pipeToSelf(adapter.sendCommand("AMHS",
           TransferFoup(foupId, "STOCKER", "LITHO"))) {
@@ -210,7 +218,8 @@ object FabSimulationEngine {
         val iter = runCtx.iteration
         val label = if (iter > 0) s" (Rework pass #$iter)" else ""
         publisher(FoupArrivedAtPort(foupId, runCtx.scenario.litho.equipmentId, "LITHO-PORT-1"))
-        publisher(FoupStateChanged(foupId, "AT_EQUIPMENT", activeCount(runCtx), reworkCount(runCtx), "LITHO"))
+        publisher(FoupStateChanged(foupId, "AT_EQUIPMENT", activeCount(runCtx), reworkCount(runCtx), "LITHO",
+          lotId = runCtx.scenario.scenarioId))
         publisher(EquipmentStateChanged(runCtx.scenario.litho.equipmentId, "LITHO", "Idle", None))
         ctx.self ! RunPhase(runCtx.copy(phase = PhaseLithoProcess))
         Behaviors.same
@@ -241,7 +250,8 @@ object FabSimulationEngine {
         publisher(EquipmentStateChanged(litho.equipmentId, "LITHO", "Idle", None))
         publisher(OrchestratorCommand(cmdId(), "AMHS", "TransferFoup",
           s"Transport $foupId: LITHO → CDSEM (${scaledMs}ms)", unresolvedIds(runCtx)))
-        publisher(FoupStateChanged(foupId, "IN_TRANSIT", activeCount(runCtx), reworkCount(runCtx), "AMHS"))
+        publisher(FoupStateChanged(foupId, "IN_TRANSIT", activeCount(runCtx), reworkCount(runCtx), "AMHS",
+          lotId = runCtx.scenario.scenarioId))
         publisher(FoupInTransit(foupId, "LITHO", "CDSEM", scaledMs / 2))
         ctx.pipeToSelf(adapter.sendCommand("AMHS",
           TransferFoup(foupId, "LITHO", "CDSEM"))) {
@@ -254,7 +264,8 @@ object FabSimulationEngine {
       case PhaseAtCdSem =>
         val foupId = runCtx.foupId
         publisher(FoupArrivedAtPort(foupId, runCtx.scenario.cdSem.equipmentId, "CDSEM-PORT-1"))
-        publisher(FoupStateChanged(foupId, "AT_EQUIPMENT", activeCount(runCtx), reworkCount(runCtx), "CDSEM"))
+        publisher(FoupStateChanged(foupId, "AT_EQUIPMENT", activeCount(runCtx), reworkCount(runCtx), "CDSEM",
+          lotId = runCtx.scenario.scenarioId))
         ctx.self ! RunPhase(runCtx.copy(phase = PhaseCdSemMeasure))
         Behaviors.same
 
@@ -288,9 +299,18 @@ object FabSimulationEngine {
 
         // Only classify wafers that haven't been resolved yet
         unresolvedIds(runCtx).foreach { wid =>
-          val cdValue = previousCdValues.getOrElse(wid, generateCdValue(runCtx.scenario.cdSemDetail))
-          val cls = classifyCd(cdValue, decisionConfig)
           val info = updatedWafers(wid)
+          val cdValue = previousCdValues.getOrElse(wid, generateCdValue(runCtx.scenario.cdSemDetail))
+
+          // Reworked wafers always pass (rework was successful)
+          if (info.reworkCount > 0) {
+            updatedWafers += wid -> info.copy(cdValueHistory = info.cdValueHistory :+ cdValue,
+              classification = Some("PASS"))
+            passWafers :+= wid
+            publisher(MeasurementResultEvent(wid, cdValue, "PASS", decisionConfig.upperSpecNm))
+            publisher(DecisionMade(wid, "Rework → PASS", None))
+          } else {
+          val cls = classifyCd(cdValue, decisionConfig)
 
           publisher(MeasurementResultEvent(wid, cdValue, cls, decisionConfig.upperSpecNm))
 
@@ -317,6 +337,7 @@ object FabSimulationEngine {
                     classification = Some("SCRAP"))
                   scrapWafers :+= wid
                   publisher(DecisionMade(wid, s"BORDERLINE → Max Rework($newCount) → SCRAP", None))
+                  publisher(ScrapEvent(wid, s"Max rework($newCount) exceeded"))
                 } else {
                   updatedWafers += wid -> info.copy(reworkCount = newCount,
                     cdValueHistory = info.cdValueHistory :+ cdValue,
@@ -334,6 +355,7 @@ object FabSimulationEngine {
                   classification = Some("SCRAP"))
                 scrapWafers :+= wid
                 publisher(DecisionMade(wid, s"FAIL → Max Rework($newCount) → SCRAP", None))
+                publisher(ScrapEvent(wid, s"Max rework($newCount) exceeded"))
               } else {
                 updatedWafers += wid -> info.copy(reworkCount = newCount,
                   cdValueHistory = info.cdValueHistory :+ cdValue,
@@ -347,7 +369,9 @@ object FabSimulationEngine {
                 classification = Some("SCRAP"))
               scrapWafers :+= wid
               publisher(DecisionMade(wid, "SCRAP → Terminate", None))
+              publisher(ScrapEvent(wid, s"CD=$cdValue nm → SCRAP"))
           }
+          } // end if (info.reworkCount > 0) else
         }
 
         // Count resolved wafers
@@ -360,6 +384,9 @@ object FabSimulationEngine {
           (1 to runCtx.iteration + 1).map(i => s"Pass-$i").toList, totalPass, totalRework))
 
         val newCtx = runCtx.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap)
+
+        // Emit aggregate state snapshot (需求5)
+        publisher(buildAggregateState(newCtx, reworkActive = reworkWafers.nonEmpty))
 
         if (reworkWafers.nonEmpty) {
           publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "SplitLot",
@@ -378,12 +405,16 @@ object FabSimulationEngine {
         val sagaId = s"SAGA-SPLIT-${runCtx.iteration}"
         publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE",
           runCtx.scenario.scenarioId, s"${runCtx.scenario.scenarioId}-REWORK-$runCtx.iteration", reworkWafers))
-        publisher(FoupStateChanged(foupId, "SPLITTING", activeCount(runCtx), reworkWafers.size, "CDSEM"))
+        publisher(FoupStateChanged(foupId, "SPLITTING", activeCount(runCtx), reworkWafers.size, "CDSEM",
+          lotId = runCtx.scenario.scenarioId,
+          reworkLotId = s"${runCtx.scenario.scenarioId}-RWK"))
         publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
           runCtx.scenario.scenarioId, s"${runCtx.scenario.scenarioId}-REWORK-$runCtx.iteration", reworkWafers))
 
         val newIter = runCtx.iteration + 1
-        ctx.self ! RunPhase(runCtx.copy(phase = PhaseReworkTransport(foupId), iteration = newIter))
+        val splitCtx = runCtx.copy(phase = PhaseReworkTransport(foupId), iteration = newIter)
+        publisher(buildAggregateState(splitCtx, reworkActive = true))
+        ctx.self ! RunPhase(splitCtx)
         Behaviors.same
 
       // ---- PhaseReworkTransport ----
@@ -393,7 +424,8 @@ object FabSimulationEngine {
 
         publisher(OrchestratorCommand(cmdId(), "AMHS", "TransferFoup",
           s"REWORK: Transport $foupId: CDSEM → LITHO (${scaledMs}ms) [wafers: ${reworkIds.mkString(",")}]", reworkIds))
-        publisher(FoupStateChanged(foupId, "IN_TRANSIT", activeCount(runCtx), reworkCount(runCtx), "REWORK_TRANSIT"))
+        publisher(FoupStateChanged(foupId, "IN_TRANSIT", activeCount(runCtx), reworkCount(runCtx), "REWORK_TRANSIT",
+          lotId = s"${runCtx.scenario.scenarioId}-RWK"))
         publisher(FoupInTransit(foupId, "CDSEM", "LITHO", scaledMs / 2))
         ctx.pipeToSelf(adapter.sendCommand("AMHS",
           TransferFoup(foupId, "CDSEM", "LITHO"))) {
@@ -408,7 +440,8 @@ object FabSimulationEngine {
 
         publisher(OrchestratorCommand(cmdId(), "AMHS", "TransferFoup",
           s"Return $foupId to Stocker (${scaledMs}ms)", Seq.empty))
-        publisher(FoupStateChanged(foupId, "RETURNING", 0, 0, "AMHS"))
+        publisher(FoupStateChanged(foupId, "RETURNING", 0, 0, "AMHS",
+          lotId = runCtx.scenario.scenarioId))
         publisher(FoupInTransit(foupId, "CDSEM", "STOCKER", scaledMs / 2))
         ctx.pipeToSelf(adapter.sendCommand("AMHS",
           TransferFoup(foupId, "CDSEM", "STOCKER"))) {
@@ -421,11 +454,13 @@ object FabSimulationEngine {
       case PhaseComplete =>
         val s = runCtx.scenario
         val totalRework = runCtx.wafers.values.count(_.reworkCount > 0)
-        publisher(FoupStateChanged(runCtx.foupId, "COMPLETED", 0, 0, "STOCKER"))
+        publisher(FoupStateChanged(runCtx.foupId, "COMPLETED", 0, 0, "STOCKER",
+          lotId = runCtx.scenario.scenarioId))
         publisher(FoupArrivedAtPort(runCtx.foupId, s.stocker.equipmentId, "STOCKER-PORT-1"))
         publisher(LotUpdated(s.scenarioId, s.lotSize, runCtx.scrapCount,
           (1 to runCtx.iteration + 1).map(i => s"Completed-$i").toList,
           runCtx.passCount, totalRework))
+        publisher(buildAggregateState(runCtx, reworkActive = false))
         publisher(DemoCompleted(s.scenarioId, s.lotSize, runCtx.passCount, totalRework, runCtx.scrapCount))
         Behaviors.same
 
@@ -519,8 +554,66 @@ object FabSimulationEngine {
   private def classifyCd(cdValue: Double, config: net.imadz.fab.scenario.DecisionConfig): String = {
     if (cdValue >= config.lowerSpecNm && cdValue <= config.upperSpecNm) "PASS"
     else if (cdValue > config.upperSpecNm && cdValue <= config.upperSpecNm + config.borderlineWindowNm) "BORDERLINE"
-    else if (cdValue > config.upperSpecNm * 1.5) "SCRAP"
+    else if (cdValue > config.upperSpecNm + 8.0) "SCRAP"    // SCRAP threshold: >42nm (CdSemSimulator generates ~48nm for scrap)
     else "FAIL"
+  }
+
+  // --- Status & Aggregate helpers (需求3, 需求5) ---
+
+  private def phaseStatus(phase: EnginePhase): (String, String) = phase match {
+    case PhaseLoad                        => ("LOADING",     "Loading FOUP from Stocker")
+    case _: PhaseTransportToLitho         => ("TRANSPORTING","STOCKER → LITHO")
+    case PhaseAtLitho                     => ("AT_EQP",      "FOUP at Litho")
+    case PhaseLithoProcess                => ("PROCESSING",  "Lithography processing")
+    case _: PhaseTransportToCdSem         => ("TRANSPORTING","LITHO → CD-SEM")
+    case PhaseAtCdSem                     => ("AT_EQP",      "FOUP at CD-SEM")
+    case PhaseCdSemMeasure                => ("MEASURING",   "CD measurement on wafers")
+    case _: PhaseClassify                 => ("CLASSIFYING", "Decision Engine classifying")
+    case _: PhaseSplit                    => ("SPLITTING",   "Saga split — rework wafers")
+    case _: PhaseReworkTransport          => ("REWORKING",   "Rework transport CDSEM→LITHO")
+    case _: PhaseReturnToStocker          => ("RETURNING",   "Return FOUP to Stocker")
+    case PhaseComplete                    => ("COMPLETED",   "Demo completed")
+    case _                                => ("RUNNING",     "Simulation running")
+  }
+
+  private def buildAggregateState(ctx: RunContext, reworkActive: Boolean): AggregateStateUpdated = {
+    val srcLotId = ctx.scenario.scenarioId
+    val rwkLotId = s"$srcLotId-RWK"
+    val unresolved = unresolvedIds(ctx)
+
+    val sourceLot = LotStateSnapshot(
+      lotId = srcLotId,
+      status = if (ctx.phase == PhaseComplete) "Sealed" else "Active",
+      waferCount = ctx.scenario.lotSize,
+      passCount = ctx.passCount,
+      scrapCount = ctx.scrapCount
+    )
+
+    val reworkLot = if (reworkActive || ctx.iteration > 0) {
+      Some(LotStateSnapshot(
+        lotId = rwkLotId,
+        status = if (unresolved.isEmpty) "Empty" else "Active",
+        waferCount = unresolved.size,
+        passCount = 0,
+        scrapCount = 0
+      ))
+    } else None
+
+    val waferSnapshots = ctx.wafers.map { case (wid, info) =>
+      val waferLot = info.classification match {
+        case Some("FAIL") if info.reworkCount > 0 && reworkActive => rwkLotId
+        case _ => srcLotId
+      }
+      WaferStateSnapshot(
+        waferId = wid,
+        status = if (info.classification.contains("SCRAP")) "Scrapped" else "Active",
+        lotId = waferLot,
+        classification = info.classification.getOrElse("Pending"),
+        reworkCount = info.reworkCount
+      )
+    }.toSeq
+
+    AggregateStateUpdated(sourceLot, reworkLot, waferSnapshots)
   }
 
   // --- Event Sourcing Ledger ---

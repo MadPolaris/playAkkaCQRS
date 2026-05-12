@@ -75,7 +75,14 @@ object StandardScenarios {
         passRate = 0.80,
         borderlineRate = 0.10,
         failRate = 0.08,
-        scrapRate = 0.02
+        scrapRate = 0.02,
+        waferOutcomes = Map(
+          "WAFER-1" -> "PASS",
+          "WAFER-2" -> "PASS",
+          "WAFER-3" -> "FAIL",
+          "WAFER-4" -> "FAIL",
+          "WAFER-5" -> "SCRAP"
+        )
       ),
       amhs = AmhsConfig(
         routes = Map(
