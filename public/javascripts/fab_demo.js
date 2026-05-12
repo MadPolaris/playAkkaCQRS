@@ -27,6 +27,7 @@
     eventLog: [],
     waferResults: {},  // waferId -> classification
     scrapCount: 0,
+    scrappedWaferIds: {},  // dedup: waferId -> true
     aggregatePanelOpen: true
   };
 
@@ -102,6 +103,9 @@
         break;
       case 'ScrapEvent':
         handleScrapEvent(event.data);
+        break;
+      case 'DomainEventRecorded':
+        handleDomainEventRecorded(event.data);
         break;
     }
   }
@@ -401,6 +405,10 @@
   // Scrap Bin (需求1: 报废去向)
   // ===================================================================
   function handleScrapEvent(data) {
+    // Deduplicate: skip if this wafer was already scrapped
+    if (state.scrappedWaferIds[data.waferId]) return;
+    state.scrappedWaferIds[data.waferId] = true;
+
     state.scrapCount++;
     var waferNum = data.waferId.replace('WAFER-','');
     var curCount = state.scrapCount;
@@ -538,6 +546,32 @@
       sl.setAttribute('fill', '#f85149');
       setTimeout(function() { sl.setAttribute('opacity', '0'); }, 3000);
     }
+  }
+
+  // ===================================================================
+  // Domain Event Sidebar
+  // ===================================================================
+  var domainEventCount = 0;
+
+  function toggleDomainSidebar() {
+    var sidebar = document.getElementById('deSidebar');
+    sidebar.classList.toggle('open');
+  }
+
+  function handleDomainEventRecorded(data) {
+    domainEventCount++;
+    document.getElementById('deCount').textContent = domainEventCount;
+
+    var list = document.getElementById('deList');
+    if (domainEventCount === 1) { list.innerHTML = ''; }
+
+    var ts = new Date(data.timestamp).toTimeString().slice(0, 8);
+    var entry = document.createElement('div');
+    entry.className = 'de-entry';
+    entry.innerHTML = '<span class="de-ts">' + ts + '</span> '
+      + '<span class="de-type">' + data.eventType + '</span>'
+      + '<div class="de-data">' + data.data + '</div>';
+    list.insertBefore(entry, list.firstChild);
   }
 
   // ===================================================================
@@ -723,7 +757,13 @@
     loadScenarioLedger(scenarioId);
     // Reset state
     state.scrapCount = 0;
+    state.scrappedWaferIds = {};
     state.waferResults = {};
+    // Reset domain event sidebar
+    domainEventCount = 0;
+    document.getElementById('deCount').textContent = '0';
+    document.getElementById('deList').innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">Waiting for events...</span></div>';
+    document.getElementById('deSidebar').classList.remove('open');
     var sc = document.getElementById('scrapCount');
     if (sc) sc.textContent = '0 wafer';
     var dotsGroup = document.getElementById('scrapWaferDots');

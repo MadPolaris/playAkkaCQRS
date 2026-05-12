@@ -87,6 +87,7 @@ class ApplicationBootstrap @Inject()(
 
   // --- 6. 初始化投影 (Projection) ---
   initMonthlySummaryProjection(system, sharding, monthlyRepository)
+  initFabProcessProjection(system)
 
   println("🚀 [ApplicationBootstrap] All CQRS components initialized successfully.")
 }

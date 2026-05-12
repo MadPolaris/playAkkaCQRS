@@ -1,9 +1,11 @@
 package net.imadz.infrastructure.bootstrap
 
 import akka.actor.ExtendedActorSystem
-import akka.actor.typed.{Behavior, LogOptions, SupervisorStrategy}
+import akka.actor.typed.{ActorSystem, Behavior, LogOptions, SupervisorStrategy}
 import akka.actor.typed.scaladsl.Behaviors
-import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityContext, EntityTypeKey}
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
+import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityContext, EntityTypeKey, ShardedDaemonProcess}
+import akka.projection.ProjectionBehavior
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{EventSourcedBehavior, RetentionCriteria}
 import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
@@ -13,6 +15,7 @@ import net.imadz.application.aggregates.WaferProtocol.WaferCommand
 import net.imadz.application.aggregates.{LotAggregate, WaferAggregate}
 import net.imadz.application.aggregates.process.{FabProcessAggregate, FabProcessProtocol}
 import net.imadz.application.aggregates.process.FabProcessProtocol.FabProcessCommand
+import net.imadz.application.projection.FabProcessProjection
 import net.imadz.application.aggregates.repository.{LotRepository, WaferRepository}
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.{FabSagaProtocol, FabSagaTransactor, FabTransactionContext}
@@ -134,6 +137,17 @@ trait FabBootstrap {
       context = FabTransactionContext(lotRepository, waferRepository),
       entityTypeKey = FabSagaService.fabSagaCoordinatorKey,
       system = system
+    )
+  }
+
+  // --- Fab Process Projection ---
+  def initFabProcessProjection(system: ActorSystem[_]): Unit = {
+    ShardedDaemonProcess(system).init(
+      name = FabProcessProjection.projectionName,
+      numberOfInstances = FabProcessAggregate.tags.size,
+      behaviorFactory = index => ProjectionBehavior(FabProcessProjection.createProjection(system, index)),
+      settings = ShardedDaemonProcessSettings(system),
+      stopMessage = Some(ProjectionBehavior.Stop)
     )
   }
 

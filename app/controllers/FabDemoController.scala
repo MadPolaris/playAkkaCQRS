@@ -4,7 +4,8 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
 import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
-import net.imadz.fab.events.FabSimulationEvent
+import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent}
+import net.imadz.fab.projection.FabDemoEventBridge
 import net.imadz.fab.service.FabDemoService
 import play.api.libs.json.{Json, Writes}
 import play.api.mvc.{BaseController, ControllerComponents, WebSocket}
@@ -32,6 +33,13 @@ class FabDemoController @Inject()(
   private def publishEvent(event: FabSimulationEvent): Unit = {
     akka.stream.scaladsl.Source.single(event).runWith(hubSink)
   }
+
+  // Bridge: subscribes EventStream for domain events from FabProcessProjection,
+  // maps them to FabSimulationEvents, and pushes to the WebSocket hub
+  private val eventBridge = typedSystem.systemActorOf(
+    FabDemoEventBridge(publishEvent),
+    "fab-demo-event-bridge"
+  )
 
   /** Render the Fab demo page */
   def index() = Action {
@@ -68,6 +76,7 @@ class FabDemoController @Inject()(
       case FoupStateChanged(fid, st, awc, rwc, loc, lotId, rwkLotId) => Json.obj("foupId" -> fid, "status" -> st, "activeWaferCount" -> awc, "reworkWaferCount" -> rwc, "location" -> loc, "lotId" -> lotId, "reworkLotId" -> rwkLotId)
       case FaultInjected(eid, ft) => Json.obj("equipmentId" -> eid, "faultType" -> ft)
       case LedgerStepAdvanced(seq, name) => Json.obj("stepSeq" -> seq, "stepName" -> name)
+      case DomainEventRecorded(evtType, data, ts) => Json.obj("eventType" -> evtType, "data" -> data, "timestamp" -> ts)
       case GlobalStatusChanged(st, detail, phase) => Json.obj("status" -> st, "detail" -> detail, "phase" -> phase)
       case ScrapEvent(wid, reason) => Json.obj("waferId" -> wid, "reason" -> reason)
       case AggregateStateUpdated(srcLot, rwkLot, wafers) => Json.obj(

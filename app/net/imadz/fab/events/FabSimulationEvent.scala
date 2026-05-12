@@ -66,3 +66,6 @@ case class FaultInjected(equipmentId: String, faultType: String) extends FabSimu
 
 // --- Event Sourcing Ledger ---
 case class LedgerStepAdvanced(stepSeq: Int, stepName: String) extends FabSimulationEvent
+
+// --- Domain Event Record (sidebar audit trail) ---
+case class DomainEventRecorded(eventType: String, data: String, timestamp: Long) extends FabSimulationEvent

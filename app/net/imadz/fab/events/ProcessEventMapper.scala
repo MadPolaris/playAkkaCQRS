@@ -87,7 +87,9 @@ class ProcessEventMapper(
       List(
         SagaOperationEvent(sagaId, "SplitLot", "PREPARE", scenarioId, rwkLotId, reworkWaferIds.toSeq),
         SagaOperationEvent(sagaId, "SplitLot", "COMMITTED", scenarioId, rwkLotId, reworkWaferIds.toSeq)
-      ) ++ (if (scrapWaferIds.nonEmpty) scrapWaferIds.toSeq.map(wid => ScrapEvent(wid, "Max rework exceeded")) else Nil)
+      )
+      // ScrapEvent for individual wafers is already emitted by WaferClassified handler above,
+      // which fires per-wafer before the split and carries the correct per-wafer reason.
 
     case WafersReworked(waferIds) =>
       Nil // rework cycle markers, no UI event needed
