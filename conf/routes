@@ -59,4 +59,5 @@ GET     /fab-demo                               controllers.FabDemoController.in
 GET     /ws/fab-demo/events                     controllers.FabDemoController.socket
 POST    /api/fab-demo/start/:scenarioId          controllers.FabDemoController.startDemo(scenarioId: String)
 GET     /api/fab-demo/scenarios                  controllers.FabDemoController.getScenarios
+GET     /api/fab-demo/scenario/:id/ledger        controllers.FabDemoController.getScenarioLedger(id: String)
 

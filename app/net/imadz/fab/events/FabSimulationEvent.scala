@@ -33,11 +33,20 @@ case class ProcessingCompleted(equipmentId: String, jobId: String, success: Bool
 case class MeasurementResultEvent(waferId: String, cdNm: Double, classification: String, specLimit: Double) extends FabSimulationEvent
 case class DecisionMade(waferId: String, action: String, detail: Option[String]) extends FabSimulationEvent
 
+// --- Orchestrator Visibility ---
+case class OrchestratorCommand(commandId: String, targetEquipmentId: String, commandType: String, description: String, relatedWaferIds: Seq[String] = Seq.empty) extends FabSimulationEvent
+
+// --- FOUP State ---
+case class FoupStateChanged(foupId: String, status: String, activeWaferCount: Int, reworkWaferCount: Int, location: String) extends FabSimulationEvent
+
 // --- Saga ---
-case class SagaOperationEvent(transactionId: String, operation: String, status: String) extends FabSimulationEvent
+case class SagaOperationEvent(transactionId: String, operation: String, status: String, sourceLotId: String = "", targetLotId: String = "", relatedWaferIds: Seq[String] = Seq.empty) extends FabSimulationEvent
 
 // --- Lot Summary ---
-case class LotUpdated(lotId: String, activeWafers: Int, scrappedWafers: Int, completedSteps: List[String]) extends FabSimulationEvent
+case class LotUpdated(lotId: String, activeWafers: Int, scrappedWafers: Int, completedSteps: List[String], passedWafers: Int = 0, reworkedWafers: Int = 0) extends FabSimulationEvent
 
 // --- Fault Injection ---
 case class FaultInjected(equipmentId: String, faultType: String) extends FabSimulationEvent
+
+// --- Event Sourcing Ledger ---
+case class LedgerStepAdvanced(stepSeq: Int, stepName: String) extends FabSimulationEvent

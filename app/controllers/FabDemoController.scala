@@ -62,9 +62,12 @@ class FabDemoController @Inject()(
       case ProcessingCompleted(eid, jid, ok, detail) => Json.obj("equipmentId" -> eid, "jobId" -> jid, "success" -> ok, "detail" -> detail)
       case MeasurementResultEvent(wid, cd, cls, spec) => Json.obj("waferId" -> wid, "cdNm" -> cd, "classification" -> cls, "specLimit" -> spec)
       case DecisionMade(wid, act, detail) => Json.obj("waferId" -> wid, "action" -> act, "detail" -> detail)
-      case SagaOperationEvent(tid, op, st) => Json.obj("transactionId" -> tid, "operation" -> op, "status" -> st)
-      case LotUpdated(lid, act, scr, steps) => Json.obj("lotId" -> lid, "activeWafers" -> act, "scrappedWafers" -> scr, "completedSteps" -> steps)
+      case SagaOperationEvent(tid, op, st, src, tgt, wids) => Json.obj("transactionId" -> tid, "operation" -> op, "status" -> st, "sourceLotId" -> src, "targetLotId" -> tgt, "relatedWaferIds" -> wids)
+      case LotUpdated(lid, act, scr, steps, pass, rw) => Json.obj("lotId" -> lid, "activeWafers" -> act, "scrappedWafers" -> scr, "completedSteps" -> steps, "passedWafers" -> pass, "reworkedWafers" -> rw)
+      case OrchestratorCommand(cid, eid, ct, desc, wids) => Json.obj("commandId" -> cid, "targetEquipmentId" -> eid, "commandType" -> ct, "description" -> desc, "relatedWaferIds" -> wids)
+      case FoupStateChanged(fid, st, awc, rwc, loc) => Json.obj("foupId" -> fid, "status" -> st, "activeWaferCount" -> awc, "reworkWaferCount" -> rwc, "location" -> loc)
       case FaultInjected(eid, ft) => Json.obj("equipmentId" -> eid, "faultType" -> ft)
+      case LedgerStepAdvanced(seq, name) => Json.obj("stepSeq" -> seq, "stepName" -> name)
     }
   }
 
@@ -78,5 +81,26 @@ class FabDemoController @Inject()(
   /** Get available scenarios */
   def getScenarios = Action {
     Ok(Json.toJson(fabDemoService.getScenarios))
+  }
+
+  /** Get scenario event-sourcing ledger (time-line of expected events per aggregate) */
+  def getScenarioLedger(scenarioId: String) = Action {
+    val ledger = fabDemoService.getScenarioLedger(scenarioId)
+    val steps = ledger("steps").asInstanceOf[Seq[Map[String, String]]].map { step =>
+      Json.obj(
+        "seq" -> step("seq"),
+        "event" -> step("event"),
+        "lotSource" -> step("lotSource"),
+        "lotRework" -> step("lotRework"),
+        "wafer" -> step("wafer"),
+        "saga" -> step("saga"),
+        "phase" -> step("phase")
+      )
+    }
+    Ok(Json.obj(
+      "scenarioId" -> ledger("scenarioId").asInstanceOf[String],
+      "name" -> ledger("name").asInstanceOf[String],
+      "steps" -> steps
+    ))
   }
 }

@@ -75,7 +75,17 @@
         updateLotSummary(event.data);
         break;
       case 'DemoCompleted':
+        updateFoupCompleted();
         addTimelineEntry({type:'DemoCompleted', data:event.data}, true);
+        break;
+      case 'OrchestratorCommand':
+        showOrchestratorCommand(event.data);
+        break;
+      case 'FoupStateChanged':
+        updateFoupState(event.data);
+        break;
+      case 'LedgerStepAdvanced':
+        highlightLedgerRow(event.data.stepSeq);
         break;
     }
   }
@@ -143,6 +153,17 @@
   // FOUP Movement Animation
   // ===================================================================
   function animateFoupMovement(data) {
+    // Rework path: use rework FOUP icon
+    if (data.fromArea === 'CDSEM' && data.toArea === 'LITHO') {
+      animateReworkFoup(data);
+      return;
+    }
+    // Return to Stocker: hide rework FOUP
+    if (data.fromArea === 'CDSEM' && data.toArea === 'STOCKER') {
+      var rf = document.getElementById('reworkFoupIcon');
+      if (rf) rf.setAttribute('opacity', '0');
+    }
+
     var foup = document.getElementById('foupIcon');
     if (!foup) return;
     foup.setAttribute('opacity', '1');
@@ -159,11 +180,39 @@
       animY.setAttribute('values', fromPos.y + ';' + toPos.y);
       animY.setAttribute('dur', duration + 'ms');
     }
+    // Trigger SVG animation
+    var animElems = document.querySelectorAll('#foupAnimX, #foupAnimY');
+    animElems.forEach(function(a) { a.beginElement(); });
+  }
 
-    addTimelineEntry({
-      type: 'FoupInTransit',
-      data: 'FOUP moving: ' + data.fromArea + ' → ' + data.toArea + ' (' + (data.etaMs / 1000).toFixed(1) + 's)'
-    });
+  function animateReworkFoup(data) {
+    var rf = document.getElementById('reworkFoupIcon');
+    if (!rf) return;
+    rf.setAttribute('opacity', '1');
+    var duration = Math.max(800, (data.etaMs || 2000) / state.speed);
+    // Animate along upper path: CDSEM(690,185) → up(690,150) → left(490,150) → Litho(490,185)
+    var animX = document.getElementById('reworkFoupAnimX');
+    var animY = document.getElementById('reworkFoupAnimY');
+    if (animX && animY) {
+      animX.setAttribute('values', '690;690;490;490');
+      animY.setAttribute('values', '185;150;150;185');
+      animX.setAttribute('dur', duration + 'ms');
+      animY.setAttribute('dur', duration + 'ms');
+    }
+    var anims = document.querySelectorAll('#reworkFoupAnimX, #reworkFoupAnimY');
+    anims.forEach(function(a) { a.beginElement(); });
+    // Show split label
+    var sl = document.getElementById('splitMergeLabel');
+    if (sl) {
+      sl.textContent = '↗ SPLIT: Rework wafers';
+      sl.setAttribute('opacity', '1');
+      sl.setAttribute('fill', '#a855f7');
+    }
+    // Hide after transport
+    setTimeout(function() {
+      if (rf) rf.setAttribute('opacity', '0.3');
+      if (sl) sl.setAttribute('opacity', '0');
+    }, duration);
   }
 
   function showFoupAtEquipment(data) {
@@ -172,16 +221,92 @@
     if (foup) {
       foup.setAttribute('x', pos.x);
       foup.setAttribute('y', pos.y);
+      foup.setAttribute('opacity', '1');
     }
   }
 
   function getAreaPosition(areaId) {
+    // Strip -01 suffix from equipment IDs for position lookup
+    var key = areaId.replace('-01', '');
     var map = {
       'STOCKER': {x: 65, y: 85},
       'LITHO': {x: 490, y: 185},
-      'CDSEM': {x: 690, y: 185}
+      'CDSEM': {x: 690, y: 185},
+      'LITHO_REWORK': {x: 490, y: 145},
+      'RETURN': {x: 65, y: 85}
     };
-    return map[areaId] || {x: 65, y: 85};
+    return map[key] || {x: 65, y: 85};
+  }
+
+  // ---- Orchestrator Command Visibility ----
+
+  function showOrchestratorCommand(data) {
+    // Show command on Decision Engine
+    var de = document.getElementById('eq-decision');
+    if (de) {
+      var rect = de.querySelector('rect');
+      if (rect) {
+        rect.setAttribute('stroke', '#58a6ff');
+        rect.setAttribute('stroke-width', '3');
+        setTimeout(function() { rect.setAttribute('stroke', '#f59e0b'); rect.setAttribute('stroke-width', '2'); }, 1000);
+      }
+    }
+    var act = document.getElementById('decisionActivity');
+    if (act) {
+      act.textContent = data.commandType + ': ' + (data.description || '').substring(0, 40);
+      act.setAttribute('opacity', '1');
+      act.setAttribute('fill', '#58a6ff');
+      setTimeout(function() { act.setAttribute('opacity', '0.4'); }, 3000);
+    }
+    // Update Decision Engine status text
+    var st = document.getElementById('status-decision');
+    if (st) {
+      st.textContent = data.commandType;
+      st.setAttribute('fill', '#58a6ff');
+    }
+    // Pulse the target equipment
+    pulseEquipment({equipmentId: data.targetEquipmentId});
+  }
+
+  // ---- FOUP State ----
+
+  function updateFoupState(data) {
+    var label = document.getElementById('foupStateLabel');
+    if (label) {
+      var text = data.status + ' @' + data.location + ' [' + data.activeWaferCount + 'w';
+      if (data.reworkWaferCount > 0) text += ' +' + data.reworkWaferCount + 'rw';
+      text += ']';
+      label.textContent = text;
+      label.setAttribute('opacity', '1');
+    }
+    // Color based on status
+    var color = '#f59e0b'; // default amber
+    if (data.status === 'COMPLETED') color = '#3fb950';
+    else if (data.status === 'SPLITTING') color = '#a855f7';
+    else if (data.status === 'RETURNING') color = '#3fb950';
+
+    var foup = document.getElementById('foupIcon');
+    if (foup) foup.setAttribute('fill', color);
+
+    if (label) label.setAttribute('fill', color);
+  }
+
+  function updateFoupCompleted() {
+    // Fade out FOUP when demo completes
+    var foup = document.getElementById('foupIcon');
+    if (foup) {
+      foup.setAttribute('opacity', '0.3');
+      foup.setAttribute('fill', '#3fb950');
+    }
+    var label = document.getElementById('foupStateLabel');
+    if (label) {
+      label.textContent = 'COMPLETED';
+      label.setAttribute('fill', '#3fb950');
+    }
+    var rf = document.getElementById('reworkFoupIcon');
+    if (rf) rf.setAttribute('opacity', '0');
+    var de = document.getElementById('status-decision');
+    if (de) { de.textContent = 'Done'; de.setAttribute('fill', '#3fb950'); }
   }
 
   // ===================================================================
@@ -203,7 +328,9 @@
   }
 
   function updateLotSummary(data) {
-    document.getElementById('sum-active').textContent = data.activeWafers || '-';
+    document.getElementById('sum-active').textContent = data.activeWafers || '0';
+    document.getElementById('sum-pass').textContent = data.passedWafers || '0';
+    document.getElementById('sum-rework').textContent = data.reworkedWafers || '0';
     document.getElementById('sum-scrap').textContent = data.scrappedWafers || '0';
   }
 
@@ -238,8 +365,26 @@
         msg = event.data.waferId + ' → ' + event.data.action;
         break;
       case 'FoupInTransit': cls = 'transport'; msg = 'FOUP: ' + event.data.fromArea + ' → ' + event.data.toArea; break;
-      case 'SagaOperationEvent': cls = 'rework'; msg = event.data.operation + ' ' + event.data.status; break;
-      case 'DemoCompleted': msg = '✓ Demo completed'; break;
+      case 'SagaOperationEvent':
+        cls = 'rework';
+        msg = 'SAGA ' + event.data.operation + ' ' + event.data.status;
+        if (event.data.relatedWaferIds && event.data.relatedWaferIds.length > 0) {
+          msg += ' [' + event.data.relatedWaferIds.join(',') + ']';
+        }
+        break;
+      case 'OrchestratorCommand':
+        cls = 'transport';
+        msg = '▶ CMD: ' + event.data.targetEquipmentId + ' ← ' + event.data.commandType + ' — ' + event.data.description;
+        break;
+      case 'FoupStateChanged':
+        cls = 'transport';
+        msg = 'FOUP ' + event.data.status + ' @ ' + event.data.location + ' (' + event.data.activeWaferCount + 'w';
+        if (event.data.reworkWaferCount > 0) msg += ' +' + event.data.reworkWaferCount + 'rw';
+        msg += ')';
+        break;
+      case 'DemoCompleted':
+        msg = '✓ Demo completed — PASS=' + event.data.passedWafers + ' REWORK=' + event.data.reworkedWafers + ' SCRAP=' + event.data.scrappedWafers;
+        break;
       default: msg = event.type + ' ' + JSON.stringify(event.data).substring(0, 80);
     }
 
@@ -261,6 +406,7 @@
   // ===================================================================
   window.startDemo = function() {
     var scenarioId = document.getElementById('scenarioSelect').value;
+    loadScenarioLedger(scenarioId);
     fetch('/api/fab-demo/start/' + scenarioId, {method: 'POST'})
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -287,6 +433,53 @@
   };
 
   // ===================================================================
+  // Event Sourcing Ledger (Scenario Script panel)
+  // ===================================================================
+  function loadScenarioLedger(scenarioId) {
+    fetch('/api/fab-demo/scenario/' + scenarioId + '/ledger')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var tbody = document.getElementById('ledgerBody');
+        tbody.innerHTML = '';
+        data.steps.forEach(function(step) {
+          var tr = document.createElement('tr');
+          tr.setAttribute('data-seq', step.seq);
+          tr.innerHTML =
+            '<td class="seq">' + step.seq + '</td>' +
+            '<td>' + step.event + '</td>' +
+            '<td>' + step.lotSource + '</td>' +
+            '<td>' + step.lotRework + '</td>' +
+            '<td>' + step.wafer + '</td>' +
+            '<td>' + step.saga + '</td>' +
+            '<td>' + step.phase + '</td>';
+          tbody.appendChild(tr);
+        });
+        // Auto-scroll to first row
+        var ledgerPanel = document.getElementById('ledgerPanel');
+        if (ledgerPanel) ledgerPanel.scrollTop = 0;
+      })
+      .catch(function(err) {
+        console.warn('Failed to load ledger:', err);
+      });
+  }
+
+  function highlightLedgerRow(stepSeq) {
+    var rows = document.querySelectorAll('#ledgerBody tr');
+    rows.forEach(function(row) {
+      var rowSeq = parseInt(row.getAttribute('data-seq'));
+      if (rowSeq === stepSeq) {
+        row.classList.add('active');
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else if (rowSeq < stepSeq) {
+        row.classList.add('done');
+        row.classList.remove('active');
+      } else {
+        row.classList.remove('active', 'done');
+      }
+    });
+  }
+
+  // ===================================================================
   // Init
   // ===================================================================
   document.addEventListener('DOMContentLoaded', function() {
@@ -302,6 +495,10 @@
           opt.textContent = s.name;
           sel.appendChild(opt);
         });
+        // Load ledger for default scenario
+        if (scenarios.length > 0) {
+          loadScenarioLedger(scenarios[0].id);
+        }
       })
       .catch(function() { /* demo page may be served before backend is ready */ });
 

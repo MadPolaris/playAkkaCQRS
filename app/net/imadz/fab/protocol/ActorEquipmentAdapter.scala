@@ -23,7 +23,7 @@ class ActorEquipmentAdapter(implicit
 
   override def adapterId: String = "akka-actor-inprocess"
 
-  private implicit val timeout: Timeout = 30.seconds
+  private implicit val timeout: Timeout = 5.minutes
 
   // Registered simulator actors: equipmentId → ActorRef
   private var simulators: Map[String, ActorRef[SimulatorCommand]] = Map.empty

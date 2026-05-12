@@ -27,8 +27,9 @@ class AmhsSimulator {
       config.routes.get(key) match {
         case Some(duration) =>
           val scaled = scale(duration, speedMultiplier)
-          replyTo ! FoupDeparted(cmd.foupId, cmd.fromPort)
-          // Schedule arrival after transport time
+          // Reply only after transport completes (TimerTick → FoupArrived).
+          // Immediate FoupDeparted would complete the ask prematurely and
+          // cause the engine to re-enter the transport phase forever.
           timers.startSingleTimer(TimerTick, scaled)
           inTransit(cmd.foupId, cmd.fromPort, cmd.toPort, replyTo, config, speedMultiplier, timers)
 

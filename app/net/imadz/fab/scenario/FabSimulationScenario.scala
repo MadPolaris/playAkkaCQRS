@@ -61,14 +61,14 @@ object StandardScenarios {
       description = "Stocker → AMHS → Litho Scanner → AMHS → CD-SEM → Decision (PASS/BORDERLINE/FAIL/SCRAP)",
       lotSize = 5,
       waferIds = waferIds,
-      litho = EquipmentConfig("LITHO-01", "LITHO", processingTime = 45.seconds),
+      litho = EquipmentConfig("LITHO-01", "LITHO", processingTime = 8.seconds),
       lithoDetail = LithoConfig(
         waferCount = 5,
         alignmentErrorRate = 0.10,
         resistFailureRate = 0.05,
         hardwareFaultRate = 0.02
       ),
-      cdSem = EquipmentConfig("CDSEM-01", "METROLOGY", processingTime = 30.seconds),
+      cdSem = EquipmentConfig("CDSEM-01", "METROLOGY", processingTime = 5.seconds),
       cdSemDetail = CdSemConfig(
         waferIds = waferIds,
         targetCdNm = 32.0,
@@ -79,14 +79,14 @@ object StandardScenarios {
       ),
       amhs = AmhsConfig(
         routes = Map(
-          ("STOCKER", "LITHO")     -> 10.seconds,
-          ("LITHO", "CDSEM")       -> 8.seconds,
-          ("CDSEM", "STOCKER")     -> 10.seconds,
-          ("CDSEM", "LITHO")       -> 8.seconds   // rework path
+          ("STOCKER", "LITHO")     -> 3.seconds,
+          ("LITHO", "CDSEM")       -> 2.seconds,
+          ("CDSEM", "STOCKER")     -> 3.seconds,
+          ("CDSEM", "LITHO")       -> 2.seconds   // rework path
         ),
         maxConcurrentTransports = 3
       ),
-      stocker = StockerConfig("STOCKER-01", portCount = 4, loadTime = 5.seconds),
+      stocker = StockerConfig("STOCKER-01", portCount = 4, loadTime = 2.seconds),
       decision = DecisionConfig(
         lowerSpecNm = 28.0,
         upperSpecNm = 34.0,

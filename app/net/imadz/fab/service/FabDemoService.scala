@@ -44,4 +44,31 @@ class FabDemoService @Inject()(
   def getScenarios: Seq[Map[String, String]] = Seq(
     Map("id" -> "photo-cell-5wafer", "name" -> "Lithography Photo Cell (5 wafers)")
   )
+
+  /** Return the Event Sourcing Ledger (event timeline × aggregate states) for a scenario */
+  def getScenarioLedger(scenarioId: String): Map[String, Any] = {
+    val (steps, name) = scenarioId match {
+      case "photo-cell-5wafer" => (photoCellLedgerA, "Photo Cell 5-Wafer Closed-Loop (Scenario A: All PASS — Happy Path)")
+      case _ => (photoCellLedgerA, "Photo Cell 5-Wafer Closed-Loop (Scenario A: All PASS — Happy Path)")
+    }
+    Map(
+      "scenarioId" -> scenarioId,
+      "name" -> name,
+      "steps" -> steps
+    )
+  }
+
+  /** Scenario A: All 5 wafers PASS — matching engine phases 0–9 */
+  private val photoCellLedgerA: Seq[Map[String, String]] = Seq(
+    Map("seq" -> "0", "event" -> "Load FOUP from Stocker",        "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "—",         "saga" -> "—",  "phase" -> "Load"),
+    Map("seq" -> "1", "event" -> "Transport: STOCKER → LITHO",    "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "—",         "saga" -> "—",  "phase" -> "Transport"),
+    Map("seq" -> "2", "event" -> "FOUP arrives at Litho",         "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "—",         "saga" -> "—",  "phase" -> "AtEqp"),
+    Map("seq" -> "3", "event" -> "Litho: ProcessRecipe (8s)",     "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "(process)", "saga" -> "—",  "phase" -> "Process"),
+    Map("seq" -> "4", "event" -> "Transport: LITHO → CD-SEM",     "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "—",         "saga" -> "—",  "phase" -> "Transport"),
+    Map("seq" -> "5", "event" -> "FOUP arrives at CD-SEM",        "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "—",         "saga" -> "—",  "phase" -> "AtEqp"),
+    Map("seq" -> "6", "event" -> "CD-SEM: Measure CD (5 wafers)", "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "(measure)", "saga" -> "—",  "phase" -> "Measure"),
+    Map("seq" -> "7", "event" -> "Classify: 5/5 PASS",            "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "PASS×5",    "saga" -> "—",  "phase" -> "Decide"),
+    Map("seq" -> "8", "event" -> "Return FOUP to Stocker",        "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "—",         "saga" -> "—",  "phase" -> "Return"),
+    Map("seq" -> "9", "event" -> "Demo Completed",                "lotSource" -> "—",         "lotRework" -> "—",    "wafer" -> "PASS×5",    "saga" -> "—",  "phase" -> "Complete"),
+  )
 }
