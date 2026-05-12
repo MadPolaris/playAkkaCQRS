@@ -3,8 +3,12 @@ package net.imadz.fab.orchestration
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.cluster.sharding.typed.scaladsl.EntityRef
+import net.imadz.application.aggregates.LotProtocol._
+import net.imadz.application.aggregates.WaferProtocol._
 import net.imadz.application.aggregates.process.FabProcessProtocol.ProcessConfirmation
 import net.imadz.application.aggregates.process.FabProcessProtocol._
+import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
+import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.events._
 import net.imadz.fab.protocol._
 import net.imadz.fab.scenario.FabSimulationScenario
@@ -38,6 +42,9 @@ object FabSimulationCoordinator {
   private case class RunPhase(ctx: RunContext) extends SimCommand
   private case class PhaseResult(ctx: RunContext, event: EquipmentEvent) extends SimCommand
   private case class PhaseFailed(ctx: RunContext, error: Throwable) extends SimCommand
+  private case class SagaSplitCompleted(ctx: RunContext, sourceLotId: Id, targetLotId: Id, waferUUIDs: Set[Id]) extends SimCommand
+  private case class SagaMergeCompleted(ctx: RunContext, sourceLotId: Id, targetLotId: Id, waferUUIDs: Set[Id]) extends SimCommand
+  private case class SagaFailed(ctx: RunContext, error: String) extends SimCommand
 
   // ---- Engine Phases (identical to FabSimulationEngine) ----
 
@@ -52,6 +59,7 @@ object FabSimulationCoordinator {
   case class PhaseClassify(previousCdValues: Map[String, Double]) extends EnginePhase
   case class PhaseSplit(foupId: String, reworkWafers: Seq[String],
                         scrapWafers: Seq[String])               extends EnginePhase
+  case class PhaseMerge(foupId: String, reworkWafers: Seq[String]) extends EnginePhase
   case class PhaseReworkTransport(foupId: String)               extends EnginePhase
   case class PhaseReturnToStocker(foupId: String)               extends EnginePhase
   case object PhaseComplete                                     extends EnginePhase
@@ -79,13 +87,27 @@ object FabSimulationCoordinator {
   def apply(
     publisher: FabSimulationEvent => Unit,
     adapter: ActorEquipmentAdapter,
-    processRef: EntityRef[FabProcessCommand]
+    processRef: EntityRef[FabProcessCommand],
+    lotRef: EntityRef[LotCommand],
+    reworkLotRef: EntityRef[LotCommand],
+    waferRefs: Map[String, EntityRef[WaferCommand]],
+    waferUUIDs: Map[String, Id],
+    sagaTx: (Id, Id, Set[Id]) => scala.concurrent.Future[FabSagaConfirmation],
+    sourceLotId: Id,
+    reworkLotId: Id
   )(implicit ec: ExecutionContext): Behavior[SimCommand] =
     Behaviors.setup { ctx =>
-      // Fire-and-forget reply target — ignores ProcessConfirmation replies
+      // Fire-and-forget reply targets
       implicit val ignoreReply: ActorRef[ProcessConfirmation] =
         ctx.spawnAnonymous(Behaviors.ignore[ProcessConfirmation])
-      idle(ctx, publisher, adapter, processRef, ignoreReply, speedMultiplier = 1.0, running = false)
+      val ignoreLotReply: ActorRef[LotConfirmation] =
+        ctx.spawnAnonymous(Behaviors.ignore[LotConfirmation])
+      val ignoreWaferReply: ActorRef[WaferConfirmation] =
+        ctx.spawnAnonymous(Behaviors.ignore[WaferConfirmation])
+      idle(ctx, publisher, adapter, processRef, ignoreReply,
+        lotRef, reworkLotRef, waferRefs, waferUUIDs, sagaTx, sourceLotId, reworkLotId,
+        ignoreLotReply, ignoreWaferReply,
+        speedMultiplier = 1.0, running = false)
     }
 
   private def idle(
@@ -94,6 +116,15 @@ object FabSimulationCoordinator {
     adapter: ActorEquipmentAdapter,
     processRef: EntityRef[FabProcessCommand],
     ignoreReply: ActorRef[ProcessConfirmation],
+    lotRef: EntityRef[LotCommand],
+    reworkLotRef: EntityRef[LotCommand],
+    waferRefs: Map[String, EntityRef[WaferCommand]],
+    waferUUIDs: Map[String, Id],
+    sagaTx: (Id, Id, Set[Id]) => scala.concurrent.Future[FabSagaConfirmation],
+    sourceLotId: Id,
+    reworkLotId: Id,
+    ignoreLotReply: ActorRef[LotConfirmation],
+    ignoreWaferReply: ActorRef[WaferConfirmation],
     speedMultiplier: Double,
     running: Boolean
   ): Behavior[SimCommand] = Behaviors.receiveMessage {
@@ -114,20 +145,69 @@ object FabSimulationCoordinator {
 
       replyTo ! SimResult(success = true, s"Scenario '${scenario.name}' started")
       ctx.self ! RunPhase(runCtx)
-      idle(ctx, publisher, adapter, processRef, ignoreReply, speedMultiplier, running = true)
+      idle(ctx, publisher, adapter, processRef, ignoreReply,
+        lotRef, reworkLotRef, waferRefs, waferUUIDs, sagaTx, sourceLotId, reworkLotId,
+        ignoreLotReply, ignoreWaferReply, speedMultiplier, running = true)
 
     case StartScenario(_, replyTo) =>
       replyTo ! SimResult(success = false, "A scenario is already running. Reset the page to restart.")
       Behaviors.same
 
     case RunPhase(runCtx) =>
-      runPhase(ctx, runCtx, publisher, adapter, processRef, ignoreReply, speedMultiplier)
+      runPhase(ctx, runCtx, publisher, adapter, processRef, ignoreReply,
+        lotRef, reworkLotRef, waferRefs, waferUUIDs, sagaTx, sourceLotId, reworkLotId,
+        ignoreLotReply, ignoreWaferReply, speedMultiplier)
 
     case PhaseResult(runCtx, event) =>
-      handlePhaseResult(ctx, runCtx, event, publisher, adapter, processRef, ignoreReply, speedMultiplier)
+      handlePhaseResult(ctx, runCtx, event, publisher, adapter, processRef, ignoreReply,
+        lotRef, reworkLotRef, waferRefs, waferUUIDs, sagaTx, sourceLotId, reworkLotId,
+        ignoreLotReply, ignoreWaferReply, speedMultiplier)
 
     case PhaseFailed(runCtx, error) =>
       publisher(ProcessingCompleted("engine", "", success = false, error.getMessage))
+      Behaviors.same
+
+    case SagaSplitCompleted(runCtx, _, _, _splitWaferUUIDs) =>
+      val sagaId = s"SAGA-SPLIT-${runCtx.iteration}"
+      publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
+        runCtx.scenario.scenarioId, s"${runCtx.scenario.scenarioId}-RWK",
+        runCtx.wafers.filter { case (_, w) => w.classification.contains("FAIL") }.keys.toSeq))
+      val reworkWaferIds = runCtx.wafers.filter { case (_, w) => w.classification.contains("FAIL") }.keys.toSeq
+      publisher(OrchestratorCommand(cmdId(), "SAGA-TCC", "SplitCompleted",
+        s"TCC Split committed: ${reworkWaferIds.mkString(",")} → Rework Lot", reworkWaferIds))
+      val newIter = runCtx.iteration + 1
+      val splitCtx = runCtx.copy(phase = PhaseReworkTransport(runCtx.foupId), iteration = newIter)
+      publisher(buildAggregateState(splitCtx, reworkActive = true))
+      ctx.self ! RunPhase(splitCtx)
+      idle(ctx, publisher, adapter, processRef, ignoreReply,
+        lotRef, reworkLotRef, waferRefs, waferUUIDs, sagaTx, sourceLotId, reworkLotId,
+        ignoreLotReply, ignoreWaferReply, speedMultiplier, running = true)
+
+    case SagaMergeCompleted(runCtx, _, _, _mergeWaferUUIDs) =>
+      val sagaId = s"SAGA-MERGE-${runCtx.iteration}"
+      val reworkWafers = runCtx.wafers.filter { case (_, w) => w.classification.contains("FAIL") }.keys.toSeq
+      publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED",
+        s"${runCtx.scenario.scenarioId}-RWK", runCtx.scenario.scenarioId, reworkWafers))
+      publisher(OrchestratorCommand(cmdId(), "SAGA-TCC", "MergeCompleted",
+        s"TCC Merge: ${reworkWafers.mkString(",")} → Source Lot", reworkWafers))
+      // After merge, rework lot is empty, source lot has all wafers
+      val mergeCtx = runCtx.copy(
+        wafers = runCtx.wafers.map { case (wid, info) =>
+          if (info.classification.contains("FAIL")) wid -> info.copy(classification = Some("PASS"))
+          else wid -> info
+        },
+        scrapCount = runCtx.scrapCount,
+        passCount = runCtx.wafers.values.count(_.classification.contains("PASS"))
+      )
+      ctx.self ! RunPhase(mergeCtx.copy(phase = PhaseReturnToStocker(runCtx.foupId)))
+      idle(ctx, publisher, adapter, processRef, ignoreReply,
+        lotRef, reworkLotRef, waferRefs, waferUUIDs, sagaTx, sourceLotId, reworkLotId,
+        ignoreLotReply, ignoreWaferReply, speedMultiplier, running = true)
+
+    case SagaFailed(runCtx, error) =>
+      publisher(SagaOperationEvent(s"FAILED-${runCtx.iteration}", "SplitLot", "FAILED",
+        runCtx.scenario.scenarioId, "", Seq.empty))
+      publisher(ProcessingCompleted("saga", s"saga-${runCtx.iteration}", success = false, error))
       Behaviors.same
 
     case Pause  => Behaviors.same
@@ -182,6 +262,15 @@ object FabSimulationCoordinator {
     adapter: ActorEquipmentAdapter,
     processRef: EntityRef[FabProcessCommand],
     ignoreReply: ActorRef[ProcessConfirmation],
+    lotRef: EntityRef[LotCommand],
+    reworkLotRef: EntityRef[LotCommand],
+    waferRefs: Map[String, EntityRef[WaferCommand]],
+    waferUUIDs: Map[String, Id],
+    sagaTx: (Id, Id, Set[Id]) => scala.concurrent.Future[FabSagaConfirmation],
+    sourceLotId: Id,
+    reworkLotId: Id,
+    ignoreLotReply: ActorRef[LotConfirmation],
+    ignoreWaferReply: ActorRef[WaferConfirmation],
     speedMultiplier: Double
   ): Behavior[SimCommand] = {
     emitLedgerStep(runCtx, publisher)
@@ -390,6 +479,13 @@ object FabSimulationCoordinator {
           }
         }
 
+        // Send ScrapWafer commands to real Wafer aggregates (fire-and-forget)
+        scrapWafers.foreach { wid =>
+          waferRefs.get(wid).foreach { ref =>
+            ref ! ScrapWafer(s"CD measurement out of spec", ignoreWaferReply)
+          }
+        }
+
         val totalPass = updatedWafers.values.count(_.classification.contains("PASS"))
         val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
         val totalRework = updatedWafers.values.count(w => w.classification.contains("FAIL") && w.reworkCount > 0)
@@ -406,27 +502,69 @@ object FabSimulationCoordinator {
             s"Split ${reworkWafers.size} wafers for rework: ${reworkWafers.mkString(",")}", reworkWafers))
           ctx.self ! RunPhase(newCtx.copy(phase = PhaseSplit(runCtx.foupId, reworkWafers, scrapWafers)))
         } else {
-          publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "CompleteLot",
-            s"All wafers resolved: $totalPass PASS, $totalScrap SCRAP", Seq.empty))
-          ctx.self ! RunPhase(newCtx.copy(phase = PhaseReturnToStocker(runCtx.foupId)))
+          // If this is a rework pass and wafers passed, merge them back via Saga
+          if (runCtx.iteration > 0 && totalPass > 0) {
+            val reworkPassedWafers = runCtx.wafers
+              .filter { case (_, w) => w.classification.contains("FAIL") || w.reworkCount > 0 }
+              .keys.toSeq
+            if (reworkPassedWafers.nonEmpty) {
+              publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "MergeLot",
+                s"Rework passed: merge ${reworkPassedWafers.mkString(",")} → Source Lot", reworkPassedWafers))
+              ctx.self ! RunPhase(newCtx.copy(
+                phase = PhaseMerge(runCtx.foupId, reworkPassedWafers)))
+            } else {
+              ctx.self ! RunPhase(newCtx.copy(phase = PhaseReturnToStocker(runCtx.foupId)))
+            }
+          } else {
+            publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "CompleteLot",
+              s"All wafers resolved: $totalPass PASS, $totalScrap SCRAP", Seq.empty))
+            ctx.self ! RunPhase(newCtx.copy(phase = PhaseReturnToStocker(runCtx.foupId)))
+          }
         }
         Behaviors.same
 
       // ---- PhaseSplit ----
       case PhaseSplit(foupId, reworkWafers, _) =>
         val sagaId = s"SAGA-SPLIT-${runCtx.iteration}"
+        val reworkWaferUUIDs: Set[Id] = reworkWafers.flatMap(waferUUIDs.get).toSet
+
         publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE",
-          runCtx.scenario.scenarioId, s"${runCtx.scenario.scenarioId}-REWORK-$runCtx.iteration", reworkWafers))
+          runCtx.scenario.scenarioId, s"${runCtx.scenario.scenarioId}-RWK", reworkWafers))
         publisher(FoupStateChanged(foupId, "SPLITTING", activeCount(runCtx), reworkWafers.size, "CDSEM",
           lotId = runCtx.scenario.scenarioId,
           reworkLotId = s"${runCtx.scenario.scenarioId}-RWK"))
-        publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
-          runCtx.scenario.scenarioId, s"${runCtx.scenario.scenarioId}-REWORK-$runCtx.iteration", reworkWafers))
 
-        val newIter = runCtx.iteration + 1
-        val splitCtx = runCtx.copy(phase = PhaseReworkTransport(foupId), iteration = newIter)
-        publisher(buildAggregateState(splitCtx, reworkActive = true))
-        ctx.self ! RunPhase(splitCtx)
+        // Call real FabSagaService.splitLot via TCC Saga
+        ctx.pipeToSelf(sagaTx(sourceLotId, reworkLotId, reworkWaferUUIDs)) {
+          case Success(confirmation) if confirmation.error.isEmpty =>
+            SagaSplitCompleted(runCtx, sourceLotId, reworkLotId, reworkWaferUUIDs)
+          case Success(confirmation) =>
+            SagaFailed(runCtx, confirmation.error.getOrElse("Unknown saga error"))
+          case Failure(err) =>
+            SagaFailed(runCtx, err.getMessage)
+        }
+        Behaviors.same
+
+      // ---- PhaseMerge ----
+      case PhaseMerge(foupId, reworkWafers) =>
+        val sagaId = s"SAGA-MERGE-${runCtx.iteration}"
+        val mergeWaferUUIDs: Set[Id] = reworkWafers.flatMap(waferUUIDs.get).toSet
+
+        publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE",
+          s"${runCtx.scenario.scenarioId}-RWK", runCtx.scenario.scenarioId, reworkWafers))
+        publisher(FoupStateChanged(foupId, "MERGING", activeCount(runCtx), reworkWafers.size, "CDSEM",
+          lotId = runCtx.scenario.scenarioId,
+          reworkLotId = s"${runCtx.scenario.scenarioId}-RWK"))
+
+        // Merge wafers back from rework lot to source lot via TCC Saga
+        ctx.pipeToSelf(sagaTx(reworkLotId, sourceLotId, mergeWaferUUIDs)) {
+          case Success(confirmation) if confirmation.error.isEmpty =>
+            SagaMergeCompleted(runCtx, reworkLotId, sourceLotId, mergeWaferUUIDs)
+          case Success(confirmation) =>
+            SagaFailed(runCtx, confirmation.error.getOrElse("Unknown merge error"))
+          case Failure(err) =>
+            SagaFailed(runCtx, err.getMessage)
+        }
         Behaviors.same
 
       // ---- PhaseReworkTransport ----
@@ -469,6 +607,9 @@ object FabSimulationCoordinator {
         val s = runCtx.scenario
         val totalRework = runCtx.wafers.values.count(_.reworkCount > 0)
 
+        // Seal the Lot aggregate (fire-and-forget)
+        lotRef ! SealLot(ignoreLotReply)
+
         processRef ! CompleteProcess(s.scenarioId, runCtx.passCount, runCtx.scrapCount, totalRework, ignoreReply)
         publisher(FoupStateChanged(runCtx.foupId, "COMPLETED", 0, 0, "STOCKER",
           lotId = runCtx.scenario.scenarioId))
@@ -494,6 +635,15 @@ object FabSimulationCoordinator {
     adapter: ActorEquipmentAdapter,
     processRef: EntityRef[FabProcessCommand],
     ignoreReply: ActorRef[ProcessConfirmation],
+    lotRef: EntityRef[LotCommand],
+    reworkLotRef: EntityRef[LotCommand],
+    waferRefs: Map[String, EntityRef[WaferCommand]],
+    waferUUIDs: Map[String, Id],
+    sagaTx: (Id, Id, Set[Id]) => scala.concurrent.Future[FabSagaConfirmation],
+    sourceLotId: Id,
+    reworkLotId: Id,
+    ignoreLotReply: ActorRef[LotConfirmation],
+    ignoreWaferReply: ActorRef[WaferConfirmation],
     speedMultiplier: Double
   ): Behavior[SimCommand] = {
     event match {
@@ -578,6 +728,7 @@ object FabSimulationCoordinator {
     case PhaseCdSemMeasure                => ("MEASURING",   "CD measurement on wafers")
     case _: PhaseClassify                 => ("CLASSIFYING", "Decision Engine classifying")
     case _: PhaseSplit                    => ("SPLITTING",   "Saga split — rework wafers")
+    case _: PhaseMerge                    => ("MERGING",     "Saga merge — wafers → source lot")
     case _: PhaseReworkTransport          => ("REWORKING",   "Rework transport CDSEM→LITHO")
     case _: PhaseReturnToStocker          => ("RETURNING",   "Return FOUP to Stocker")
     case PhaseComplete                    => ("COMPLETED",   "Demo completed")
@@ -639,6 +790,7 @@ object FabSimulationCoordinator {
       case PhaseCdSemMeasure                => "PhaseCdSemMeasure: Measure CD on wafers"
       case _: PhaseClassify                 => "PhaseClassify: Decision Engine classifies wafers"
       case _: PhaseSplit                    => "PhaseSplit: Saga SplitLot (TCC Prepare)"
+      case _: PhaseMerge                    => "PhaseMerge: Saga MergeLot (TCC Prepare)"
       case _: PhaseReworkTransport          => "PhaseReworkTransport: Rework FOUP CDSEM → LITHO"
       case _: PhaseReturnToStocker          => "PhaseReturnToStocker: Return FOUP to Stocker"
       case PhaseComplete                    => "PhaseComplete: Demo finished, Lot sealed"

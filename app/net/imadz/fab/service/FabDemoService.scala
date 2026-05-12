@@ -4,8 +4,15 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.AskPattern._
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.util.Timeout
+import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
+import net.imadz.application.aggregates.WaferAggregate.WaferEntityTypeKey
+import net.imadz.application.aggregates.LotProtocol._
+import net.imadz.application.aggregates.WaferProtocol._
 import net.imadz.application.aggregates.process.FabProcessAggregate
 import net.imadz.application.aggregates.process.FabProcessProtocol._
+import net.imadz.application.services.FabSagaService
+import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
+import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.events.FabSimulationEvent
 import net.imadz.fab.orchestration.FabSimulationCoordinator
 import net.imadz.fab.orchestration.FabSimulationCoordinator.{SimResult, StartScenario}
@@ -20,19 +27,17 @@ import scala.concurrent.duration._
 @Singleton
 class FabDemoService @Inject()(
   classicSystem: akka.actor.ActorSystem,
-  sharding: ClusterSharding
+  sharding: ClusterSharding,
+  fabSagaService: FabSagaService
 ) {
   private implicit val system: ActorSystem[Nothing] =
     akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps(classicSystem).toTyped
   private implicit val ec: ExecutionContext = system.executionContext
+  private implicit val timeout: Timeout = 10.seconds
 
   /**
-   * Start a demo scenario. Events are published via the given callback
-   * (connected to the WebSocket hub in FabDemoController).
-   *
-   * The coordinator drives the process and sends domain commands to
-   * FabProcessAggregate for Event Sourcing. Simulation events flow
-   * directly to the WebSocket hub.
+   * Start a demo scenario. Now creates real EventSourced Lot + Wafer aggregates
+   * and wires the FabSagaService for TCC split/merge transactions.
    */
   def startDemo(scenarioId: String, publisher: FabSimulationEvent => Unit): Future[SimResult] = {
     val scenario = scenarioId match {
@@ -40,18 +45,57 @@ class FabDemoService @Inject()(
       case _ => StandardScenarios.photoCell5Wafer
     }
 
-    // Get or create the FabProcessAggregate entity ref
-    val processId = UUID.randomUUID().toString
-    val processRef = sharding.entityRefFor(FabProcessAggregate.ProcessEntityTypeKey, processId)
+    // Generate unique UUIDs for this run (deterministic from run key avoids cross-run collision)
+    val runKey = UUID.randomUUID().toString.take(8)
+    val waferUUIDs: Map[String, Id] = scenario.waferIds.map { wid =>
+      wid -> UUID.nameUUIDFromBytes(s"$runKey-$wid".getBytes)
+    }.toMap
+    val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-source-lot".getBytes)
+    val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-rework-lot".getBytes)
 
-    val adapter = new ActorEquipmentAdapter()
-    val coordinator = system.systemActorOf(
-      FabSimulationCoordinator(publisher, adapter, processRef),
-      s"fab-sim-${scenarioId}-${System.currentTimeMillis()}"
-    )
+    val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
+    val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
+    val waferRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[WaferCommand]] =
+      waferUUIDs.map { case (wid, uuid) => wid -> sharding.entityRefFor(WaferEntityTypeKey, uuid.toString) }
 
-    implicit val timeout: Timeout = 10.seconds
-    coordinator.ask[SimResult](ref => StartScenario(scenario, ref))
+    // Saga split callback — calls real FabSagaService TCC transaction
+    val sagaSplitFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
+      (srcId, tgtId, wids) => fabSagaService.splitLot(srcId, tgtId, wids)
+
+    // Create source Lot + Rework Lot + 5 Wafers before starting the coordinator
+    val createEntities: Future[Unit] = for {
+      // Create source lot
+      _ <- lotRef.ask[LotConfirmation](ref =>
+        CreateLot(s"PHOTO-CELL-$runKey", waferUUIDs.values.toSet, ref)
+      )
+      // Create rework lot (empty, will receive wafers via Saga split)
+      _ <- reworkLotRef.ask[LotConfirmation](ref =>
+        CreateLot(s"PHOTO-CELL-REWORK-$runKey", Set.empty, ref)
+      )
+      // Create 5 wafers
+      _ <- Future.sequence(waferUUIDs.map { case (_, uuid) =>
+        val waferRef = sharding.entityRefFor(WaferEntityTypeKey, uuid.toString)
+        waferRef.ask[WaferConfirmation](ref => CreateWafer(sourceLotId, ref))
+      })
+    } yield ()
+
+    // After entities are created, start the coordinator
+    createEntities.flatMap { _ =>
+      val processId = UUID.randomUUID().toString
+      val processRef = sharding.entityRefFor(FabProcessAggregate.ProcessEntityTypeKey, processId)
+
+      val adapter = new ActorEquipmentAdapter()
+      val coordinator = system.systemActorOf(
+        FabSimulationCoordinator(
+          publisher, adapter, processRef,
+          lotRef, reworkLotRef, waferRefs, waferUUIDs,
+          sagaSplitFn, sourceLotId, reworkLotId
+        ),
+        s"fab-sim-${scenarioId}-${System.currentTimeMillis()}"
+      )
+
+      coordinator.ask[SimResult](ref => StartScenario(scenario, ref))
+    }
   }
 
   def getScenarios: Seq[Map[String, String]] = Seq(
