@@ -553,10 +553,10 @@
   // ===================================================================
   var domainEventCount = 0;
 
-  function toggleDomainSidebar() {
+  window.toggleDomainSidebar = function() {
     var sidebar = document.getElementById('deSidebar');
     sidebar.classList.toggle('open');
-  }
+  };
 
   function handleDomainEventRecorded(data) {
     domainEventCount++;
