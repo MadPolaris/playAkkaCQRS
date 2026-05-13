@@ -58,6 +58,7 @@ GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(
 GET     /fab-demo                               controllers.FabDemoController.index()
 GET     /ws/fab-demo/events                     controllers.FabDemoController.socket
 POST    /api/fab-demo/start/:scenarioId          controllers.FabDemoController.startDemo(scenarioId: String)
+POST    /api/fab-demo/product/:productId/start   controllers.FabDemoController.startProductDemo(productId: String)
 GET     /api/fab-demo/scenarios                  controllers.FabDemoController.getScenarios
 GET     /api/fab-demo/scenario/:id/ledger        controllers.FabDemoController.getScenarioLedger(id: String)
 

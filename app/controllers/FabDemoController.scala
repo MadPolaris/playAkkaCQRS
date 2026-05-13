@@ -101,6 +101,13 @@ class FabDemoController @Inject()(
     Ok(Json.toJson(fabDemoService.getScenarios))
   }
 
+  /** Start a dynamic routing demo by product ID */
+  def startProductDemo(productId: String) = Action.async {
+    fabDemoService.startDemoWithProduct(productId, publishEvent).map { result =>
+      Ok(Json.obj("success" -> result.success, "message" -> result.message))
+    }
+  }
+
   /** Get scenario event-sourcing ledger (time-line of expected events per aggregate) */
   def getScenarioLedger(scenarioId: String) = Action {
     val ledger = fabDemoService.getScenarioLedger(scenarioId)

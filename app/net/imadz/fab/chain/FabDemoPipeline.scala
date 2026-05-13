@@ -42,7 +42,13 @@ object FabDemoPipeline {
     ledgerSeq: Int = 0,
     pilotPassed: Boolean = false,
     reviewApproved: Boolean = false,
-    spawnedChildLotKey: Option[String] = None
+    spawnedChildLotKey: Option[String] = None,
+    /** M3.5: current index into ProductRouting.steps (0-based) */
+    currentRoutingStep: Int = 0,
+    /** M3.5: reentry count per equipment area visited so far */
+    routingStepReentry: Map[String, Int] = Map.empty,
+    /** M3.5: ordered list of area IDs visited (for reentry calculation) */
+    areaVisitHistory: List[String] = Nil
   )
 
   case class FabDemoContext(

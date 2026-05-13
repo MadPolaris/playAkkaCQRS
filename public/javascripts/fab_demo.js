@@ -968,7 +968,9 @@
   // Control Actions
   // ===================================================================
   window.startDemo = function() {
-    var scenarioId = document.getElementById('scenarioSelect').value;
+    var sel = document.getElementById('scenarioSelect');
+    var scenarioId = sel.value;
+    var scenarioType = sel.options[sel.selectedIndex].getAttribute('data-type') || '';
     loadScenarioLedger(scenarioId);
     // Reset state
     state.scrapCount = 0;
@@ -990,7 +992,10 @@
     if (sc) sc.textContent = (window.__i18n && window.__i18n.scrap_count) || '0 wafer';
     var dotsGroup = document.getElementById('scrapWaferDots');
     if (dotsGroup) dotsGroup.innerHTML = '';
-    fetch('/api/fab-demo/start/' + scenarioId, {method: 'POST'})
+    var startUrl = scenarioType === 'dynamic-routing'
+      ? '/api/fab-demo/product/' + scenarioId + '/start'
+      : '/api/fab-demo/start/' + scenarioId;
+    fetch(startUrl, {method: 'POST'})
       .then(function(r) { return r.json(); })
       .then(function(data) {
         addTimelineEntry({type:'DemoStarted', data: 'Scenario: ' + data.message});
@@ -1076,6 +1081,7 @@
         scenarios.forEach(function(s) {
           var opt = document.createElement('option');
           opt.value = s.id;
+          opt.setAttribute('data-type', s.type || '');
           var typeLabel = s.type ? ' [' + (scenarioTypeLabels[s.type] || s.type) + ']' : '';
           opt.textContent = s.name + typeLabel;
           sel.appendChild(opt);
