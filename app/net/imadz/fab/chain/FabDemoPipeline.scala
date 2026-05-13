@@ -99,6 +99,7 @@ object FabDemoPipeline {
   private def loadFoup(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     emitLedger(state, "PhaseLoad: Load FOUP from Stocker", ctx)
     ctx.publisher(GlobalStatusChanged("LOADING", "Loading FOUP from Stocker", "PhaseLoad"))
+    ctx.processRef ! StartProcess(ctx.scenario.scenarioId, state.wafers.keySet, state.wafers.size, ctx.ignoreReply)
     ctx.processRef ! RecordFoupLoaded(ctx.foupId, ctx.scenario.stocker.equipmentId, ctx.ignoreReply)
     ctx.publisher(OrchestratorCommand(cmdId(), "STOCKER-01", "LoadFoup",
       s"Load ${ctx.foupId} with ${state.wafers.size} wafers", ctx.scenario.waferIds))

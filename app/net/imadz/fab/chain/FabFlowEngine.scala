@@ -143,6 +143,7 @@ object FabFlowEngine {
   private def loadFoup(state: FabDemoState, ctx: FabDemoContext, routing: ProductRouting): Future[FabDemoState] = {
     val s = emitLedger(state, s"PhaseLoad: Load FOUP — ${routing.productId} (${routing.steps.size} steps)", ctx)
     ctx.publisher(GlobalStatusChanged("LOADING", s"Starting ${routing.productId}", "PhaseLoad"))
+    ctx.processRef ! StartProcess(routing.productId, state.wafers.keySet, state.wafers.size, ctx.ignoreReply)
     ctx.processRef ! RecordFoupLoaded(ctx.foupId, StockerEquipId, ctx.ignoreReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "LOADING", activeCount(state), 0, "STOCKER",
       lotId = routing.productId))

@@ -58,7 +58,7 @@ object FabDemoEventBridge {
         case WrappedDomain(FabDomainEventEnvelope(aggType, aggId, event)) =>
           val layer = aggType match {
             case "Chain" => 0
-            case "FabSagaTransaction" => 2
+            case "FabSagaTransaction" => 1
             case _ => 2 // Lot, Wafer → Aggregate layer
           }
           emitDomainEvent(publishToHub, event, aggregateType = aggType,

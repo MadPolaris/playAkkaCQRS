@@ -150,6 +150,7 @@ object FabScenarioPipeline {
   private def loadFoup(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     emitLedger(state, "PhaseLoad: Load FOUP from Stocker", ctx)
     ctx.publisher(GlobalStatusChanged("LOADING", "Loading FOUP", "PhaseLoad"))
+    ctx.processRef ! StartProcess(ctx.scenario.scenarioId, state.wafers.keySet, state.wafers.size, ctx.ignoreReply)
     ctx.processRef ! RecordFoupLoaded(ctx.foupId, ctx.scenario.stocker.equipmentId, ctx.ignoreReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "LOADING", activeCount(state), 0, "STOCKER", lotId = ctx.scenario.scenarioId))
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, ctx.scenario.stocker.equipmentId, "STOCKER-PORT-1"))
