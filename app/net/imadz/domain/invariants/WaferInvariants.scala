@@ -44,6 +44,8 @@ object WaferInvariants {
       val (transferId, targetLotId) = param
       if (state.reservedTransfer.exists(_._1 == transferId))
         Right(List(WaferTransferCommitted(transferId, targetLotId)))
+      else if (state.completedTransferIds.contains(transferId))
+        Right(Nil) // already committed — idempotent
       else
         Left(iMadzError("WFR_013", s"Transfer $transferId not found in reserved transfer for wafer ${state.waferId}"))
     }
@@ -54,6 +56,8 @@ object WaferInvariants {
       val transferId = param
       if (state.reservedTransfer.exists(_._1 == transferId))
         Right(List(WaferTransferReleased(transferId)))
+      else if (state.completedTransferIds.contains(transferId))
+        Right(Nil) // already committed, release is a no-op — idempotent
       else
         Left(iMadzError("WFR_014", s"Transfer $transferId not found in reserved transfer for wafer ${state.waferId}"))
     }
@@ -71,6 +75,37 @@ object WaferInvariants {
   implicit object ChangeStatusRule extends InvariantRule[WaferEvent, WaferState, WaferStatus] {
     def apply(state: WaferState, param: WaferStatus): Either[iMadzError, List[WaferEvent]] = {
       Right(List(WaferStatusChanged(param)))
+    }
+  }
+
+  implicit object PlaceHoldRule extends InvariantRule[WaferEvent, WaferState, String] {
+    def apply(state: WaferState, param: String): Either[iMadzError, List[WaferEvent]] = {
+      if (state.status == OnHold)
+        Left(iMadzError("WFR_030", s"Wafer ${state.waferId} is already on hold"))
+      else if (state.status == Scrapped)
+        Left(iMadzError("WFR_031", s"Cannot hold scrapped wafer ${state.waferId}"))
+      else
+        Right(List(WaferHoldPlaced(param)))
+    }
+  }
+
+  implicit object ReleaseHoldRule extends InvariantRule[WaferEvent, WaferState, Unit] {
+    def apply(state: WaferState, param: Unit): Either[iMadzError, List[WaferEvent]] = {
+      if (state.status != OnHold)
+        Left(iMadzError("WFR_032", s"Wafer ${state.waferId} is not on hold (current: ${state.status})"))
+      else
+        Right(List(WaferHoldReleased()))
+    }
+  }
+
+  implicit object SkipWaferRule extends InvariantRule[WaferEvent, WaferState, String] {
+    def apply(state: WaferState, param: String): Either[iMadzError, List[WaferEvent]] = {
+      if (state.status == Skipped)
+        Left(iMadzError("WFR_040", s"Wafer ${state.waferId} is already skipped"))
+      else if (state.status == Scrapped)
+        Left(iMadzError("WFR_041", s"Cannot skip scrapped wafer ${state.waferId}"))
+      else
+        Right(List(WaferSkipped(param)))
     }
   }
 }

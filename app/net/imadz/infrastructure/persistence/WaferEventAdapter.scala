@@ -17,6 +17,9 @@ class WaferEventAdapter extends EventAdapter[WaferEvent, WaferEventPO.Event] wit
     case evt: WaferTransferReleased => WaferEventPO.Event.WaferTransferReleased(WaferTransferReleasedConv.toProto(evt))
     case evt: WaferScrapped => WaferEventPO.Event.WaferScrapped(WaferScrappedConv.toProto(evt))
     case evt: WaferStatusChanged => WaferEventPO.Event.WaferStatusChanged(WaferStatusChangedConv.toProto(evt))
+    case evt: WaferHoldPlaced => WaferEventPO.Event.WaferHoldPlaced(WaferHoldPlacedConv.toProto(evt))
+    case evt: WaferHoldReleased => WaferEventPO.Event.WaferHoldReleased(WaferHoldReleasedConv.toProto(evt))
+    case evt: WaferSkipped => WaferEventPO.Event.WaferSkipped(WaferSkippedConv.toProto(evt))
   }
 
   override def fromJournal(p: WaferEventPO.Event, manifest: String): EventSeq[WaferEvent] = p match {
@@ -27,6 +30,9 @@ class WaferEventAdapter extends EventAdapter[WaferEvent, WaferEventPO.Event] wit
     case WaferEventPO.Event.WaferTransferReleased(po) => EventSeq.single(WaferTransferReleasedConv.fromProto(po))
     case WaferEventPO.Event.WaferScrapped(po) => EventSeq.single(WaferScrappedConv.fromProto(po))
     case WaferEventPO.Event.WaferStatusChanged(po) => EventSeq.single(WaferStatusChangedConv.fromProto(po))
+    case WaferEventPO.Event.WaferHoldPlaced(po) => EventSeq.single(WaferHoldPlacedConv.fromProto(po))
+    case WaferEventPO.Event.WaferHoldReleased(po) => EventSeq.single(WaferHoldReleasedConv.fromProto(po))
+    case WaferEventPO.Event.WaferSkipped(po) => EventSeq.single(WaferSkippedConv.fromProto(po))
     case WaferEventPO.Event.Empty => EventSeq.empty
   }
 }

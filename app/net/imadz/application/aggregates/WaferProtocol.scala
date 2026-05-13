@@ -23,6 +23,9 @@ object WaferProtocol {
   // Status changes
   case class ScrapWafer(reason: String, replyTo: ActorRef[WaferConfirmation]) extends WaferCommand
   case class ChangeStatus(newStatus: WaferStatus, replyTo: ActorRef[WaferConfirmation]) extends WaferCommand
+  case class HoldWafer(reason: String, replyTo: ActorRef[WaferConfirmation]) extends WaferCommand
+  case class ReleaseHold(replyTo: ActorRef[WaferConfirmation]) extends WaferCommand
+  case class SkipWafer(reason: String, replyTo: ActorRef[WaferConfirmation]) extends WaferCommand
 
   // --- Replies ---
   case class WaferConfirmation(error: Option[iMadzError], status: Option[WaferStatus] = None, lotId: Option[Id] = None) extends CborSerializable

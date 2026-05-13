@@ -80,4 +80,5 @@ message LotStatePO {
   map<string, WaferIdSet> reserved_wafers = 4;
   map<string, WaferIdSet> incoming_wafers = 5;
   string phase = 6;
+  repeated string completed_transfer_ids = 7;
 }

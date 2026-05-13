@@ -13,7 +13,7 @@ import net.imadz.application.aggregates.process.FabProcessProtocol.ProcessConfir
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
-import net.imadz.fab.chain.FabChainExecutor
+import net.imadz.fab.chain.{FabChainExecutor, FabDemoPipeline, FabScenarioPipeline}
 import net.imadz.fab.chain.FabChainExecutor.{ChainResult, StartChain}
 import net.imadz.fab.chain.FabDemoPipeline.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.events.FabSimulationEvent
@@ -44,8 +44,13 @@ class FabDemoService @Inject()(
   def startDemo(scenarioId: String, publisher: FabSimulationEvent => Unit): Future[ChainResult] = {
     val scenario = scenarioId match {
       case "photo-cell-5wafer" => StandardScenarios.photoCell5Wafer
-      case _ => StandardScenarios.photoCell5Wafer
+      case "send-ahead-pilot"  => StandardScenarios.sendAheadPilot
+      case "scrap-downgrade"   => StandardScenarios.scrapDowngrade
+      case "sampling-demo"     => StandardScenarios.samplingDemo
+      case "hold-release"      => StandardScenarios.holdRelease
+      case _                   => StandardScenarios.photoCell5Wafer
     }
+    val isRework = scenarioId == "photo-cell-5wafer"
 
     // Generate unique UUIDs for this run
     val runKey = UUID.randomUUID().toString.take(8)
@@ -55,21 +60,39 @@ class FabDemoService @Inject()(
     val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-source-lot".getBytes)
     val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-rework-lot".getBytes)
 
+    // Child lots for new scenarios
+    val pilotLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-pilot-lot".getBytes)
+    val sampleLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-sample-lot".getBytes)
+    val holdLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-hold-lot".getBytes)
+
     val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
     val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
+    val pilotLotRef = sharding.entityRefFor(LotEntityTypeKey, pilotLotId.toString)
+    val sampleLotRef = sharding.entityRefFor(LotEntityTypeKey, sampleLotId.toString)
+    val holdLotRef = sharding.entityRefFor(LotEntityTypeKey, holdLotId.toString)
     val waferRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[WaferCommand]] =
       waferUUIDs.map { case (wid, uuid) => wid -> sharding.entityRefFor(WaferEntityTypeKey, uuid.toString) }
 
     val sagaTxFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
       (srcId, tgtId, wids) => fabSagaService.transferWafers(srcId, tgtId, wids)
 
-    // Create source Lot + Rework Lot + 5 Wafers before starting the chain
+    // Create source Lot + child Lots + Wafers before starting the chain
     val createEntities: Future[Unit] = for {
       _ <- lotRef.ask[LotConfirmation](ref =>
-        CreateLot(s"PHOTO-CELL-$runKey", waferUUIDs.values.toSet, ref)
+        CreateLot(s"FAB-$runKey", waferUUIDs.values.toSet, ref)
       )
       _ <- reworkLotRef.ask[LotConfirmation](ref =>
-        CreateLot(s"PHOTO-CELL-REWORK-$runKey", Set.empty, ref)
+        CreateLot(s"FAB-REWORK-$runKey", Set.empty, ref)
+      )
+      // Create child lots for new scenarios
+      _ <- pilotLotRef.ask[LotConfirmation](ref =>
+        CreateLot(s"FAB-PILOT-$runKey", Set.empty, ref)
+      )
+      _ <- sampleLotRef.ask[LotConfirmation](ref =>
+        CreateLot(s"FAB-SAMPLE-$runKey", Set.empty, ref)
+      )
+      _ <- holdLotRef.ask[LotConfirmation](ref =>
+        CreateLot(s"FAB-HOLD-$runKey", Set.empty, ref)
       )
       _ <- Future.sequence(waferUUIDs.map { case (_, uuid) =>
         val waferRef = sharding.entityRefFor(WaferEntityTypeKey, uuid.toString)
@@ -113,7 +136,17 @@ class FabDemoService @Inject()(
         ignoreLotReply = ignoreLotReply,
         ignoreWaferReply = ignoreWaferReply,
         sagaTx = sagaTxFn,
-        speedMultiplier = 1.0
+        speedMultiplier = 1.0,
+        childLotRefs = Map(
+          "pilot" -> pilotLotRef,
+          "sample" -> sampleLotRef,
+          "hold" -> holdLotRef
+        ),
+        childLotIds = Map(
+          "pilot" -> pilotLotId,
+          "sample" -> sampleLotId,
+          "hold" -> holdLotId
+        )
       )
 
       val initialState = FabDemoState(
@@ -126,8 +159,9 @@ class FabDemoService @Inject()(
       // Spawn simulators (same as before)
       spawnSimulators(scenario, adapter, publisher)
 
+      val pipelineFn = if (isRework) FabDemoPipeline.runPipeline _ else FabScenarioPipeline.runPipeline _
       val executor = system.systemActorOf(
-        FabChainExecutor(runKey, initialState, ctx),
+        FabChainExecutor(runKey, initialState, ctx, pipelineFn),
         s"fab-chain-${scenarioId}-${System.currentTimeMillis()}"
       )
 
@@ -169,7 +203,11 @@ class FabDemoService @Inject()(
   }
 
   def getScenarios: Seq[Map[String, String]] = Seq(
-    Map("id" -> "photo-cell-5wafer", "name" -> "Lithography Photo Cell (5 wafers)")
+    Map("id" -> "photo-cell-5wafer", "name" -> "Rework (5 wafers)", "type" -> "rework"),
+    Map("id" -> "send-ahead-pilot", "name" -> "Send-Ahead Pilot (5 wafers)", "type" -> "send-ahead"),
+    Map("id" -> "scrap-downgrade", "name" -> "Scrap & Downgrade (3 wafers)", "type" -> "scrap"),
+    Map("id" -> "sampling-demo", "name" -> "Metrology Sampling (6 wafers)", "type" -> "sampling"),
+    Map("id" -> "hold-release", "name" -> "Hold & Release (5 wafers)", "type" -> "hold")
   )
 
   def getScenarioLedger(scenarioId: String): Map[String, Any] = {

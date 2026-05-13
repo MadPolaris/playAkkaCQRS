@@ -78,6 +78,34 @@ trait ProcessProtoConverters extends PrimitiveConverter {
       WafersReworked(waferIds = p.waferIds.toSet)
   }
 
+  object WafersSentAsPilotConv extends ProtoConverter[WafersSentAsPilot, WafersSentAsPilotPO] {
+    override def toProto(e: WafersSentAsPilot): WafersSentAsPilotPO =
+      WafersSentAsPilotPO(waferIds = e.waferIds.toSeq)
+    override def fromProto(p: WafersSentAsPilotPO): WafersSentAsPilot =
+      WafersSentAsPilot(waferIds = p.waferIds.toSet)
+  }
+
+  object WafersSampledConv extends ProtoConverter[WafersSampled, WafersSampledPO] {
+    override def toProto(e: WafersSampled): WafersSampledPO =
+      WafersSampledPO(sampleIds = e.sampleIds.toSeq, skipIds = e.skipIds.toSeq)
+    override def fromProto(p: WafersSampledPO): WafersSampled =
+      WafersSampled(sampleIds = p.sampleIds.toSet, skipIds = p.skipIds.toSet)
+  }
+
+  object WafersHeldConv extends ProtoConverter[WafersHeld, WafersHeldPO] {
+    override def toProto(e: WafersHeld): WafersHeldPO =
+      WafersHeldPO(waferIds = e.waferIds.toSeq, reason = e.reason)
+    override def fromProto(p: WafersHeldPO): WafersHeld =
+      WafersHeld(waferIds = p.waferIds.toSet, reason = p.reason)
+  }
+
+  object WafersReleasedConv extends ProtoConverter[WafersReleased, WafersReleasedPO] {
+    override def toProto(e: WafersReleased): WafersReleasedPO =
+      WafersReleasedPO(waferIds = e.waferIds.toSeq)
+    override def fromProto(p: WafersReleasedPO): WafersReleased =
+      WafersReleased(waferIds = p.waferIds.toSet)
+  }
+
   object ProcessCompletedConv extends ProtoConverter[ProcessCompleted, ProcessCompletedPO] {
     override def toProto(e: ProcessCompleted): ProcessCompletedPO =
       ProcessCompletedPO(lotId = e.lotId, passCount = e.passCount, scrapCount = e.scrapCount, reworkCount = e.reworkCount)

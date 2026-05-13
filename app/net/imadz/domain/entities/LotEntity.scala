@@ -13,7 +13,8 @@ object LotEntity {
     waferIds: Set[Id],                  // currently owned wafers
     reservedWafers: Map[Id, Set[Id]],   // outgoing: transferId -> waferIds being removed
     incomingWafers: Map[Id, Set[Id]],   // incoming: transferId -> waferIds being added
-    phase: LotPhase
+    phase: LotPhase,
+    completedTransferIds: Set[Id] = Set.empty // committed transfer ids for idempotency
   )
 
   def empty(lotId: Id): LotState = LotState(lotId, "", Set.empty, Map.empty, Map.empty, Empty)

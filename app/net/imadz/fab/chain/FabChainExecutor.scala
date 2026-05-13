@@ -1,12 +1,15 @@
 package net.imadz.fab.chain
 
 import akka.actor.typed.{ActorRef, Behavior, SupervisorStrategy}
+import akka.actor.typed.eventstream.EventStream
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
-import akka.persistence.typed.PersistenceId
+import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, RetentionCriteria}
 import net.imadz.common.CborSerializable
+import net.imadz.domain.entities.FabDomainEventEnvelope
 import net.imadz.fab.chain.FabDemoPipeline.{FabDemoContext, FabDemoState}
 
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
@@ -51,7 +54,8 @@ object FabChainExecutor {
   def apply(
     persistenceId: String,
     initialState: FabDemoState,
-    context: FabDemoContext
+    context: FabDemoContext,
+    pipelineFn: (FabDemoState, FabDemoContext) => Future[FabDemoState] = FabDemoPipeline.runPipeline
   ): Behavior[Command] = Behaviors.setup { actorContext =>
     implicit val ec: scala.concurrent.ExecutionContext = actorContext.executionContext
     val batchId = java.util.UUID.randomUUID().toString.take(8)
@@ -59,15 +63,27 @@ object FabChainExecutor {
     EventSourcedBehavior[Command, Event, ChainState](
       persistenceId = PersistenceId("FabChain", persistenceId),
       emptyState = Idle,
-      commandHandler = (state, cmd) => handleCommand(state, cmd, batchId, initialState, context, actorContext),
+      commandHandler = (state, cmd) => handleCommand(state, cmd, batchId, initialState, context, pipelineFn, actorContext),
       eventHandler = (state, event) => handleEvent(state, event)
     ).withRetention(RetentionCriteria.snapshotEvery(20, 2))
+     .receiveSignal {
+       case (state: Running, RecoveryCompleted) =>
+         actorContext.log.info(
+           s"FabChainExecutor recovered in Running state for batch ${state.batchId}, re-triggering pipeline")
+         implicit val recoveryEc: scala.concurrent.ExecutionContext = actorContext.executionContext
+         actorContext.pipeToSelf(pipelineFn(initialState, context)) {
+           case Success(finalState) => PipelineCompleted(finalState)
+           case Failure(err)       => PipelineFailed(err.getMessage)
+         }
+       case _ => ()
+     }
      .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
   }
 
   private def handleCommand(
     state: ChainState, cmd: Command, batchId: String,
     initState: FabDemoState, ctx: FabDemoContext,
+    pipelineFn: (FabDemoState, FabDemoContext) => Future[FabDemoState],
     actorContext: ActorContext[Command]
   ): Effect[Event, ChainState] = state match {
     case Idle =>
@@ -75,10 +91,12 @@ object FabChainExecutor {
         case StartChain(replyTo) =>
           val event = ChainStarted(batchId, ctx.scenario.scenarioId, ctx.scenario.lotSize)
           Effect.persist(event).thenRun { _ =>
+            actorContext.system.eventStream ! EventStream.Publish(
+              FabDomainEventEnvelope("Chain", batchId, event))
             replyTo ! ChainResult(success = true, s"Chain $batchId started")
             // Run pipeline asynchronously; pipe result back to self
             implicit val ec: scala.concurrent.ExecutionContext = actorContext.executionContext
-            actorContext.pipeToSelf(FabDemoPipeline.runPipeline(initState, ctx)) {
+            actorContext.pipeToSelf(pipelineFn(initState, ctx)) {
               case Success(finalState) => PipelineCompleted(finalState)
               case Failure(err)       => PipelineFailed(err.getMessage)
             }
@@ -91,9 +109,17 @@ object FabChainExecutor {
       cmd match {
         case PipelineCompleted(fs) =>
           val rework = fs.wafers.values.count(_.reworkCount > 0)
-          Effect.persist(ChainCompleted(batchId, fs.passCount, fs.scrapCount, rework))
+          val event = ChainCompleted(batchId, fs.passCount, fs.scrapCount, rework)
+          Effect.persist(event).thenRun { _ =>
+            actorContext.system.eventStream ! EventStream.Publish(
+              FabDomainEventEnvelope("Chain", batchId, event))
+          }
         case PipelineFailed(err) =>
-          Effect.persist(ChainFailed(batchId, err))
+          val event = ChainFailed(batchId, err)
+          Effect.persist(event).thenRun { _ =>
+            actorContext.system.eventStream ! EventStream.Publish(
+              FabDomainEventEnvelope("Chain", batchId, event))
+          }
         case _ => Effect.unhandled
       }
 

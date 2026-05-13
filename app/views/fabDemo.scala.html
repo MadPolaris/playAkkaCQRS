@@ -193,7 +193,24 @@
     }
     .de-entry .de-ts { color: var(--fg-muted); font-size: 0.5rem; }
     .de-entry .de-type { color: var(--accent); font-weight: 600; }
-    .de-entry .de-data { color: var(--fg); word-break: break-all; }
+    .de-entry .de-data { color: var(--fg); word-break: break-all; font-size: 0.52rem; }
+    .de-entry .de-agg-id { color: var(--fg-muted); font-size: 0.45rem; margin-left: 4px; }
+
+    /* Layer filter bar */
+    .de-filter-bar { display: flex; gap: 3px; padding: 3px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+    .de-filter-btn { background: var(--bg-alt); border: 1px solid var(--border); color: var(--fg-muted); font-size: 0.55rem; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-family: inherit; }
+    .de-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .de-layer-badge { font-size: 0.45rem; opacity: 0.7; }
+
+    /* Layer groups */
+    .de-layer-group { margin: 2px 0; }
+    .de-layer-header { padding: 3px 6px; cursor: pointer; user-select: none; font-size: 0.6rem; font-weight: 600; color: var(--fg-muted); background: var(--bg-alt); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 4px; }
+    .de-layer-header:hover { opacity: 0.8; }
+    .de-layer-arrow { font-size: 0.5rem; width: 12px; text-align: center; }
+    .de-layer-name { flex: 1; }
+    .de-layer-count { font-size: 0.5rem; opacity: 0.6; }
+    .de-layer-events { }
+    .de-more { color: var(--fg-muted); font-style: italic; text-align: center; }
   </style>
 </head>
 <body>

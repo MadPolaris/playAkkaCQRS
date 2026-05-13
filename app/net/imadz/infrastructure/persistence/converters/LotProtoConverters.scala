@@ -108,7 +108,8 @@ trait LotProtoConverters extends PrimitiveConverter {
       waferIds = s.waferIds.map(IdConv.toProto).toSeq,
       reservedWafers = toProtoMap(s.reservedWafers, IdConv, WaferIdSetConv),
       incomingWafers = toProtoMap(s.incomingWafers, IdConv, WaferIdSetConv),
-      phase = s.phase.toString
+      phase = s.phase.toString,
+      completedTransferIds = s.completedTransferIds.map(IdConv.toProto).toSeq
     )
 
     override def fromProto(p: LotStatePO): LotState = LotState(
@@ -117,7 +118,8 @@ trait LotProtoConverters extends PrimitiveConverter {
       waferIds = p.waferIds.map(IdConv.fromProto).toSet,
       reservedWafers = fromProtoMap(p.reservedWafers, IdConv, WaferIdSetConv),
       incomingWafers = fromProtoMap(p.incomingWafers, IdConv, WaferIdSetConv),
-      phase = parsePhase(p.phase)
+      phase = parsePhase(p.phase),
+      completedTransferIds = p.completedTransferIds.map(IdConv.fromProto).toSet
     )
 
     private def parsePhase(s: String): LotPhase = s match {

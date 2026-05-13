@@ -14,7 +14,8 @@ object LotEventHandler {
       val removedWafers = state.reservedWafers.getOrElse(transferId, Set.empty)
       state.copy(
         waferIds = state.waferIds -- removedWafers,
-        reservedWafers = state.reservedWafers - transferId
+        reservedWafers = state.reservedWafers - transferId,
+        completedTransferIds = state.completedTransferIds + transferId
       )
 
     case WaferRemovalReleased(transferId) =>
@@ -27,7 +28,8 @@ object LotEventHandler {
       val addedWafers = state.incomingWafers.getOrElse(transferId, Set.empty)
       state.copy(
         waferIds = state.waferIds ++ addedWafers,
-        incomingWafers = state.incomingWafers - transferId
+        incomingWafers = state.incomingWafers - transferId,
+        completedTransferIds = state.completedTransferIds + transferId
       )
 
     case WaferAdditionCanceled(transferId) =>

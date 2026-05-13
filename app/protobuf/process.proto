@@ -62,6 +62,24 @@ message WafersReworkedPO {
   repeated string wafer_ids = 1;
 }
 
+message WafersSentAsPilotPO {
+  repeated string wafer_ids = 1;
+}
+
+message WafersSampledPO {
+  repeated string sample_ids = 1;
+  repeated string skip_ids = 2;
+}
+
+message WafersHeldPO {
+  repeated string wafer_ids = 1;
+  string reason = 2;
+}
+
+message WafersReleasedPO {
+  repeated string wafer_ids = 1;
+}
+
 message ProcessCompletedPO {
   string lot_id = 1;
   int32 pass_count = 2;
@@ -83,6 +101,10 @@ message ProcessEventPO {
     WaferClassifiedPO waferClassified = 8;
     WafersSplitForReworkPO wafersSplitForRework = 9;
     WafersReworkedPO wafersReworked = 10;
+    WafersSentAsPilotPO wafersSentAsPilot = 12;
+    WafersSampledPO wafersSampled = 13;
+    WafersHeldPO wafersHeld = 14;
+    WafersReleasedPO wafersReleased = 15;
     ProcessCompletedPO processCompleted = 11;
   }
 }

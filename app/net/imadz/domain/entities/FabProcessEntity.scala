@@ -44,6 +44,10 @@ object FabProcessEntity {
   case class WaferClassified(waferId: String, classification: String, reworkCount: Int, cdValue: Double) extends FabProcessEvent
   case class WafersSplitForRework(reworkWaferIds: Set[String], scrapWaferIds: Set[String], iteration: Int) extends FabProcessEvent
   case class WafersReworked(waferIds: Set[String]) extends FabProcessEvent
+  case class WafersSentAsPilot(waferIds: Set[String]) extends FabProcessEvent
+  case class WafersSampled(sampleIds: Set[String], skipIds: Set[String]) extends FabProcessEvent
+  case class WafersHeld(waferIds: Set[String], reason: String) extends FabProcessEvent
+  case class WafersReleased(waferIds: Set[String]) extends FabProcessEvent
   case class ProcessCompleted(lotId: String, passCount: Int, scrapCount: Int, reworkCount: Int) extends FabProcessEvent
   // @formatter:on
 

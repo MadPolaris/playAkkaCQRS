@@ -65,6 +65,21 @@ trait WaferProtoConverters extends PrimitiveConverter {
     }
   }
 
+  object WaferHoldPlacedConv extends ProtoConverter[WaferHoldPlaced, WaferHoldPlacedPO] {
+    override def toProto(e: WaferHoldPlaced): WaferHoldPlacedPO = WaferHoldPlacedPO(reason = e.reason)
+    override def fromProto(p: WaferHoldPlacedPO): WaferHoldPlaced = WaferHoldPlaced(p.reason)
+  }
+
+  object WaferHoldReleasedConv extends ProtoConverter[WaferHoldReleased, WaferHoldReleasedPO] {
+    override def toProto(e: WaferHoldReleased): WaferHoldReleasedPO = WaferHoldReleasedPO()
+    override def fromProto(p: WaferHoldReleasedPO): WaferHoldReleased = WaferHoldReleased()
+  }
+
+  object WaferSkippedConv extends ProtoConverter[WaferSkipped, WaferSkippedPO] {
+    override def toProto(e: WaferSkipped): WaferSkippedPO = WaferSkippedPO(reason = e.reason)
+    override def fromProto(p: WaferSkippedPO): WaferSkipped = WaferSkipped(p.reason)
+  }
+
   // --- State Snapshot ---
 
   object WaferStateConv extends ProtoConverter[WaferState, WaferStatePO] {
@@ -78,7 +93,8 @@ trait WaferProtoConverters extends PrimitiveConverter {
         lotId = s.lotId.map(IdConv.toProto),
         status = s.status.toString,
         reservedTransferId = reservedTid,
-        reservedTargetLotId = reservedTgt
+        reservedTargetLotId = reservedTgt,
+        completedTransferIds = s.completedTransferIds.map(IdConv.toProto).toSeq
       )
     }
 
@@ -91,7 +107,8 @@ trait WaferProtoConverters extends PrimitiveConverter {
         waferId = IdConv.fromProto(p.waferId),
         lotId = p.lotId.map(IdConv.fromProto),
         status = parseStatus(p.status),
-        reservedTransfer = reserved
+        reservedTransfer = reserved,
+        completedTransferIds = p.completedTransferIds.map(IdConv.fromProto).toSet
       )
     }
 

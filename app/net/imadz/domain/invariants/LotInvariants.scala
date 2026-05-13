@@ -12,8 +12,6 @@ object LotInvariants {
         Left(iMadzError("LOT_001", s"Lot ${state.lotId} already created, cannot create again"))
       else if (productId.isEmpty)
         Left(iMadzError("LOT_002", "Product ID must not be empty"))
-      else if (waferIds.isEmpty)
-        Left(iMadzError("LOT_003", "Lot must have at least 1 wafer"))
       else if (waferIds.size > 25)
         Left(iMadzError("LOT_004", s"Lot cannot exceed FOUP capacity of 25 wafers, got ${waferIds.size}"))
       else
@@ -53,6 +51,8 @@ object LotInvariants {
       val transferId = param
       if (state.reservedWafers.contains(transferId))
         Right(List(WaferRemovalCommitted(transferId)))
+      else if (state.completedTransferIds.contains(transferId))
+        Right(Nil) // already committed — idempotent
       else
         Left(iMadzError("LOT_013", s"Transfer $transferId not found in reserved wafers"))
     }
@@ -63,6 +63,8 @@ object LotInvariants {
       val transferId = param
       if (state.reservedWafers.contains(transferId))
         Right(List(WaferRemovalReleased(transferId)))
+      else if (state.completedTransferIds.contains(transferId))
+        Right(Nil) // already committed, release is a no-op — idempotent
       else
         Left(iMadzError("LOT_014", s"Transfer $transferId not found in reserved wafers"))
     }
@@ -99,6 +101,8 @@ object LotInvariants {
       val transferId = param
       if (state.incomingWafers.contains(transferId))
         Right(List(WaferAdditionCommitted(transferId)))
+      else if (state.completedTransferIds.contains(transferId))
+        Right(Nil) // already committed — idempotent
       else
         Left(iMadzError("LOT_023", s"Transfer $transferId not found in incoming wafers"))
     }
@@ -109,6 +113,8 @@ object LotInvariants {
       val transferId = param
       if (state.incomingWafers.contains(transferId))
         Right(List(WaferAdditionCanceled(transferId)))
+      else if (state.completedTransferIds.contains(transferId))
+        Right(Nil) // already committed, cancel is a no-op — idempotent
       else
         Left(iMadzError("LOT_024", s"Transfer $transferId not found in incoming wafers"))
     }

@@ -42,4 +42,22 @@ trait WaferCommandHelpers {
     override def createFailureReply(param: Id)(error: iMadzError): TransferConfirmation = TransferConfirmation(param, Some(error))
     override def createSuccessReply(param: Id)(state: WaferState): TransferConfirmation = TransferConfirmation(param, None)
   }
+
+  implicit object HoldWaferHelper extends CommandHelper[HoldWafer, WaferState, String, WaferConfirmation] {
+    override def toParam(state: WaferState, command: HoldWafer): String = command.reason
+    override def createFailureReply(param: String)(error: iMadzError): WaferConfirmation = WaferConfirmation(Some(error))
+    override def createSuccessReply(param: String)(state: WaferState): WaferConfirmation = WaferConfirmation(None, Some(state.status), state.lotId)
+  }
+
+  implicit object ReleaseHoldHelper extends CommandHelper[ReleaseHold, WaferState, Unit, WaferConfirmation] {
+    override def toParam(state: WaferState, command: ReleaseHold): Unit = ()
+    override def createFailureReply(param: Unit)(error: iMadzError): WaferConfirmation = WaferConfirmation(Some(error))
+    override def createSuccessReply(param: Unit)(state: WaferState): WaferConfirmation = WaferConfirmation(None, Some(state.status), state.lotId)
+  }
+
+  implicit object SkipWaferHelper extends CommandHelper[SkipWafer, WaferState, String, WaferConfirmation] {
+    override def toParam(state: WaferState, command: SkipWafer): String = command.reason
+    override def createFailureReply(param: String)(error: iMadzError): WaferConfirmation = WaferConfirmation(Some(error))
+    override def createSuccessReply(param: String)(state: WaferState): WaferConfirmation = WaferConfirmation(None, Some(state.status), state.lotId)
+  }
 }

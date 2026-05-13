@@ -35,6 +35,14 @@ object FabProcessEventHandler {
 
     case WafersReworked(_) => state
 
+    case WafersSentAsPilot(_) => state
+
+    case WafersSampled(_, _) => state
+
+    case WafersHeld(_, _) => state
+
+    case WafersReleased(_) => state
+
     case ProcessCompleted(_, passCount, scrapCount, reworkCount) =>
       state.copy(passCount = passCount, scrapCount = scrapCount, reworkCount = reworkCount, phase = ProcessCompleted)
   }

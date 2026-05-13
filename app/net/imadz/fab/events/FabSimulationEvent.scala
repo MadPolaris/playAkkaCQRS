@@ -63,4 +63,11 @@ case class LotUpdated(lotId: String, activeWafers: Int, scrappedWafers: Int, com
 case class LedgerStepAdvanced(stepSeq: Int, stepName: String) extends FabSimulationEvent
 
 // --- Domain Event Record (sidebar audit trail) ---
-case class DomainEventRecorded(eventType: String, data: String, timestamp: Long) extends FabSimulationEvent
+case class DomainEventRecorded(
+  eventType: String,
+  aggregateType: String,  // "Chain" | "Saga" | "Lot" | "Wafer" | "FabProcess" | "FabSagaTransaction"
+  aggregateId: String,
+  data: String,
+  timestamp: Long,
+  layer: Int             // 0=Chain, 1=Saga, 2=Aggregate, 3=Process
+) extends FabSimulationEvent

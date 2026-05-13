@@ -12,6 +12,7 @@ object WaferBehaviors extends WaferCommandHelpers {
   def apply(context: ActorContext[WaferCommand]): WaferCommandHandler = (state, command) =>
     directBehaviors(context)(state)
       .orElse(transferBehaviors(context)(state))
+      .orElse(holdBehaviors(context)(state))
       .apply(command)
 
   // Group 1: Lifecycle & Direct
@@ -39,5 +40,17 @@ object WaferBehaviors extends WaferCommandHelpers {
 
     case cmd: ReleaseTransfer =>
       runReplyingPolicy(ReleaseTransferRule, ReleaseTransferHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
+  }
+
+  // Group 3: Hold / Release / Skip — for Hold/Release and Sampling scenarios
+  private def holdBehaviors(context: ActorContext[WaferCommand])(state: WaferState): PartialFunction[WaferCommand, Effect[WaferEvent, WaferState]] = {
+    case cmd: HoldWafer =>
+      runReplyingPolicy(PlaceHoldRule, HoldWaferHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
+
+    case cmd: ReleaseHold =>
+      runReplyingPolicy(ReleaseHoldRule, ReleaseHoldHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
+
+    case cmd: SkipWafer =>
+      runReplyingPolicy(SkipWaferRule, SkipWaferHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
   }
 }

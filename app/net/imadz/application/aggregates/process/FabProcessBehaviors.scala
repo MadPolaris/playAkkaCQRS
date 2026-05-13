@@ -52,6 +52,22 @@ object FabProcessBehaviors {
       Effect.persist(WafersReworked(cmd.waferIds))
         .thenReply(cmd.replyTo)(s => ProcessConfirmation(s.processId, s.phase.toString))
 
+    case cmd: RecordWafersSentAsPilot =>
+      Effect.persist(WafersSentAsPilot(cmd.waferIds))
+        .thenReply(cmd.replyTo)(s => ProcessConfirmation(s.processId, s.phase.toString))
+
+    case cmd: RecordWafersSampled =>
+      Effect.persist(WafersSampled(cmd.sampleIds, cmd.skipIds))
+        .thenReply(cmd.replyTo)(s => ProcessConfirmation(s.processId, s.phase.toString))
+
+    case cmd: RecordWafersHeld =>
+      Effect.persist(WafersHeld(cmd.waferIds, cmd.reason))
+        .thenReply(cmd.replyTo)(s => ProcessConfirmation(s.processId, s.phase.toString))
+
+    case cmd: RecordWafersReleased =>
+      Effect.persist(WafersReleased(cmd.waferIds))
+        .thenReply(cmd.replyTo)(s => ProcessConfirmation(s.processId, s.phase.toString))
+
     case cmd: CompleteProcess =>
       Effect.persist(ProcessCompleted(cmd.lotId, cmd.passCount, cmd.scrapCount, cmd.reworkCount))
         .thenReply(cmd.replyTo)(s => ProcessConfirmation(s.processId, s.phase.toString))

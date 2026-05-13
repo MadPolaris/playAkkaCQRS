@@ -16,7 +16,8 @@ object WaferEventHandler {
     case WaferTransferCommitted(transferId, targetLotId) =>
       state.copy(
         lotId = Some(targetLotId),
-        reservedTransfer = None
+        reservedTransfer = None,
+        completedTransferIds = state.completedTransferIds + transferId
       )
 
     case WaferTransferReleased(transferId) =>
@@ -27,5 +28,14 @@ object WaferEventHandler {
 
     case WaferStatusChanged(newStatus) =>
       state.copy(status = newStatus)
+
+    case WaferHoldPlaced(reason) =>
+      state.copy(status = OnHold)
+
+    case WaferHoldReleased() =>
+      state.copy(status = Active)
+
+    case WaferSkipped(reason) =>
+      state.copy(status = Skipped)
   }
 }

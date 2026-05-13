@@ -36,6 +36,17 @@ message WaferStatusChangedPO {
   string new_status = 1;
 }
 
+message WaferHoldPlacedPO {
+  string reason = 1;
+}
+
+message WaferHoldReleasedPO {
+}
+
+message WaferSkippedPO {
+  string reason = 1;
+}
+
 // --- Event Union ---
 
 message WaferEventPO {
@@ -47,6 +58,9 @@ message WaferEventPO {
     WaferTransferReleasedPO waferTransferReleased = 5;
     WaferScrappedPO waferScrapped = 6;
     WaferStatusChangedPO waferStatusChanged = 7;
+    WaferHoldPlacedPO waferHoldPlaced = 8;
+    WaferHoldReleasedPO waferHoldReleased = 9;
+    WaferSkippedPO waferSkipped = 10;
   }
 }
 
@@ -58,4 +72,5 @@ message WaferStatePO {
   string status = 3;
   optional string reserved_transfer_id = 4;
   optional string reserved_target_lot_id = 5;
+  repeated string completed_transfer_ids = 6;
 }

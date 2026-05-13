@@ -72,7 +72,9 @@ class FabDemoController @Inject()(
       case OrchestratorCommand(cid, eid, ct, desc, wids) => Json.obj("commandId" -> cid, "targetEquipmentId" -> eid, "commandType" -> ct, "description" -> desc, "relatedWaferIds" -> wids)
       case FoupStateChanged(fid, st, awc, rwc, loc, lotId, rwkLotId) => Json.obj("foupId" -> fid, "status" -> st, "activeWaferCount" -> awc, "reworkWaferCount" -> rwc, "location" -> loc, "lotId" -> lotId, "reworkLotId" -> rwkLotId)
       case LedgerStepAdvanced(seq, name) => Json.obj("stepSeq" -> seq, "stepName" -> name)
-      case DomainEventRecorded(evtType, data, ts) => Json.obj("eventType" -> evtType, "data" -> data, "timestamp" -> ts)
+      case DomainEventRecorded(evtType, aggType, aggId, data, ts, layer) => Json.obj(
+        "eventType" -> evtType, "aggregateType" -> aggType, "aggregateId" -> aggId,
+        "data" -> data, "timestamp" -> ts, "layer" -> layer)
       case GlobalStatusChanged(st, detail, phase) => Json.obj("status" -> st, "detail" -> detail, "phase" -> phase)
       case ScrapEvent(wid, reason) => Json.obj("waferId" -> wid, "reason" -> reason)
       case AggregateStateUpdated(srcLot, rwkLot, wafers) => Json.obj(

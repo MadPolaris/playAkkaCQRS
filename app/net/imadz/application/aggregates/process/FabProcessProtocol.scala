@@ -20,6 +20,10 @@ object FabProcessProtocol {
   case class RecordWaferClassified(waferId: String, classification: String, reworkCount: Int, cdValue: Double, replyTo: ActorRef[ProcessConfirmation]) extends FabProcessCommand
   case class RecordWafersSplitForRework(reworkWaferIds: Set[String], scrapWaferIds: Set[String], iteration: Int, replyTo: ActorRef[ProcessConfirmation]) extends FabProcessCommand
   case class RecordWafersReworked(waferIds: Set[String], replyTo: ActorRef[ProcessConfirmation]) extends FabProcessCommand
+  case class RecordWafersSentAsPilot(waferIds: Set[String], replyTo: ActorRef[ProcessConfirmation]) extends FabProcessCommand
+  case class RecordWafersSampled(sampleIds: Set[String], skipIds: Set[String], replyTo: ActorRef[ProcessConfirmation]) extends FabProcessCommand
+  case class RecordWafersHeld(waferIds: Set[String], reason: String, replyTo: ActorRef[ProcessConfirmation]) extends FabProcessCommand
+  case class RecordWafersReleased(waferIds: Set[String], replyTo: ActorRef[ProcessConfirmation]) extends FabProcessCommand
   case class CompleteProcess(lotId: String, passCount: Int, scrapCount: Int, reworkCount: Int, replyTo: ActorRef[ProcessConfirmation]) extends FabProcessCommand
 
   // --- Reply ---

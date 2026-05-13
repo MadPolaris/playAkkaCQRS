@@ -30,7 +30,8 @@ object FabDemoPipeline {
     waferId: String,
     reworkCount: Int = 0,
     cdValueHistory: List[Double] = Nil,
-    classification: Option[String] = None
+    classification: Option[String] = None,
+    subLot: Option[String] = None
   )
 
   case class FabDemoState(
@@ -38,7 +39,10 @@ object FabDemoPipeline {
     passCount: Int = 0,
     scrapCount: Int = 0,
     iteration: Int = 0,
-    ledgerSeq: Int = 0
+    ledgerSeq: Int = 0,
+    pilotPassed: Boolean = false,
+    reviewApproved: Boolean = false,
+    spawnedChildLotKey: Option[String] = None
   )
 
   case class FabDemoContext(
@@ -57,7 +61,9 @@ object FabDemoPipeline {
     ignoreLotReply: akka.actor.typed.ActorRef[LotConfirmation],
     ignoreWaferReply: akka.actor.typed.ActorRef[WaferConfirmation],
     sagaTx: (Id, Id, Set[Id]) => Future[FabSagaConfirmation],
-    speedMultiplier: Double
+    speedMultiplier: Double,
+    childLotRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand]] = Map.empty,
+    childLotIds: Map[String, Id] = Map.empty
   )(implicit val ec: ExecutionContext)
 
   // ====================================================================

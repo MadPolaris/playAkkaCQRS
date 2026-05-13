@@ -107,6 +107,15 @@
       case 'DomainEventRecorded':
         handleDomainEventRecorded(event.data);
         break;
+      case 'SagaOperationEvent':
+        showSagaStatus(event.data);
+        break;
+      case 'DecisionMade':
+        showWaferDecision(event.data);
+        break;
+      case 'DemoStarted':
+        updateGlobalStatus({status: 'STARTED', detail: event.data.name, phase: 'Init'});
+        break;
     }
   }
 
@@ -549,92 +558,298 @@
   }
 
   // ===================================================================
-  // Domain Event Sidebar
+  // Domain Event Sidebar (four-layer timeline)
   // ===================================================================
   var domainEventCount = 0;
+  var deLayerCounts = [0, 0, 0, 0]; // L0=Chain, L1=Saga, L2=Aggregate, L3=Process
+  var deLayerVisible = [true, true, false, false]; // L0/L1 open by default, L2/L3 collapsed
+  var deLayerEvents = [[], [], [], []]; // events per layer (newest first)
+  var deActiveFilter = -1; // -1 = show all, 0-3 = filter to layer
+
+  var deLayerColors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
+  var deLayerNames = ['Chain / Orchestration', 'Saga / Transaction', 'Aggregate / Entity', 'Process / Execution'];
 
   window.toggleDomainSidebar = function() {
     var sidebar = document.getElementById('deSidebar');
     sidebar.classList.toggle('open');
   };
 
+  // Incremental aggregate model, built from domain events
+  var aggregateModel = { lots: {}, wafers: {} };
+
   function handleDomainEventRecorded(data) {
     domainEventCount++;
+    var layer = (data.layer !== undefined) ? data.layer : 3;
+    deLayerCounts[layer]++;
+    deLayerEvents[layer].unshift(data);
+
     document.getElementById('deCount').textContent = domainEventCount;
+    renderDomainEventSidebar();
 
+    // Incrementally update aggregate model from domain events
+    applyDomainEventToModel(data);
+    renderAggregatePanelFromModel();
+  }
+
+  function applyDomainEventToModel(data) {
+    var evtType = data.eventType;
+    var evtData = data.data;
+    try {
+      if (evtType === 'LotCreated') {
+        var m = evtData.match(/LotCreated\(([^,]*),/);
+        var productId = m ? m[1] : '';
+        aggregateModel.lots[data.aggregateId] = {
+          lotId: data.aggregateId, productId: productId,
+          status: 'Active', waferCount: 0, passCount: 0, scrapCount: 0,
+          waferIds: []
+        };
+      } else if (evtType === 'WaferCreated') {
+        var m2 = evtData.match(/WaferCreated\(([^)]*)\)/);
+        var lotId = m2 ? m2[1] : '';
+        aggregateModel.wafers[data.aggregateId] = {
+          waferId: data.aggregateId, status: 'Active', lotId: lotId,
+          classification: 'Created', reworkCount: 0
+        };
+        // Add wafer to lot
+        var lot = aggregateModel.lots[lotId];
+        if (lot && lot.waferIds.indexOf(data.aggregateId) < 0) {
+          lot.waferIds.push(data.aggregateId);
+          lot.waferCount = lot.waferIds.length;
+        }
+      } else if (evtType === 'WaferScrapped') {
+        var w = aggregateModel.wafers[data.aggregateId];
+        if (w) { w.status = 'Scrapped'; w.classification = 'SCRAP'; }
+      } else if (evtType === 'WaferTransferCommitted') {
+        var m3 = evtData.match(/WaferTransferCommitted\(([^,]+),([^)]+)\)/);
+        if (m3) {
+          var w2 = aggregateModel.wafers[data.aggregateId];
+          var newLotId = m3[2].trim();
+          if (w2) {
+            // Remove from old lot
+            var oldLot = aggregateModel.lots[w2.lotId];
+            if (oldLot) {
+              oldLot.waferIds = oldLot.waferIds.filter(function(id) { return id !== data.aggregateId; });
+              oldLot.waferCount = oldLot.waferIds.length;
+            }
+            // Add to new lot
+            w2.lotId = newLotId;
+            var newLot = aggregateModel.lots[newLotId];
+            if (newLot && newLot.waferIds.indexOf(data.aggregateId) < 0) {
+              newLot.waferIds.push(data.aggregateId);
+              newLot.waferCount = newLot.waferIds.length;
+            }
+          }
+        }
+      } else if (evtType === 'LotSealed') {
+        var lot2 = aggregateModel.lots[data.aggregateId];
+        if (lot2) lot2.status = 'Sealed';
+      }
+    } catch(e) { /* ignore parse errors for non-matching events */ }
+  }
+
+  function renderAggregatePanelFromModel() {
+    var tbody = document.getElementById('aggTreeBody');
+    var rows = '';
+    var lotIds = Object.keys(aggregateModel.lots);
+    if (lotIds.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">Waiting for Lot creation...</td></tr>';
+      return;
+    }
+    lotIds.forEach(function(lotId) {
+      var lot = aggregateModel.lots[lotId];
+      rows += '<tr class="lot-row">' +
+        '<td>Lot: ' + (lot.productId || lotId.substring(0, 8)) + '</td>' +
+        '<td>' + (lot.status || 'Active') + '</td>' +
+        '<td colspan="2">Wafers: ' + (lot.waferCount || 0) +
+        ' | Pass: ' + (lot.passCount || 0) +
+        ' | Scrap: ' + (lot.scrapCount || 0) + '</td>' +
+        '</tr>';
+      (lot.waferIds || []).forEach(function(wid) {
+        var w = aggregateModel.wafers[wid];
+        if (!w) return;
+        var stCls = w.status === 'Scrapped' ? 'status-Scrapped' : 'status-Active';
+        var clsCls = 'cls-' + (w.classification || 'Pending');
+        rows += '<tr class="wafer-row">' +
+          '<td>' + (w.waferId || wid).substring(0, 8) + '</td>' +
+          '<td class="' + stCls + '">' + (w.status || 'Active') + '</td>' +
+          '<td class="' + clsCls + '">' + (w.classification || 'Pending') + '</td>' +
+          '<td>' + (w.reworkCount || 0) + '</td>' +
+          '</tr>';
+      });
+    });
+    tbody.innerHTML = rows;
+  }
+
+  function renderDomainEventSidebar() {
     var list = document.getElementById('deList');
-    if (domainEventCount === 1) { list.innerHTML = ''; }
+    if (domainEventCount === 0) {
+      list.innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">Waiting for events...</span></div>';
+      return;
+    }
 
-    var ts = new Date(data.timestamp).toTimeString().slice(0, 8);
-    var entry = document.createElement('div');
-    entry.className = 'de-entry';
-    entry.innerHTML = '<span class="de-ts">' + ts + '</span> '
-      + '<span class="de-type">' + data.eventType + '</span>'
-      + '<div class="de-data">' + data.data + '</div>';
-    list.insertBefore(entry, list.firstChild);
+    var html = '';
+
+    // Layer filter buttons
+    html += '<div class="de-filter-bar">';
+    html += '<button class="de-filter-btn' + (deActiveFilter === -1 ? ' active' : '') + '" onclick="deSetFilter(-1)">All</button>';
+    for (var l = 0; l < 4; l++) {
+      var activeCls = deActiveFilter === l ? ' active' : '';
+      html += '<button class="de-filter-btn' + activeCls + '" style="border-left:3px solid ' + deLayerColors[l] + '" onclick="deSetFilter(' + l + ')">' +
+        'L' + l + ' <span class="de-layer-badge">' + deLayerCounts[l] + '</span></button>';
+    }
+    html += '</div>';
+
+    // Render layers (respect filter)
+    for (var l = 0; l < 4; l++) {
+      if (deActiveFilter !== -1 && deActiveFilter !== l) continue;
+      if (deLayerEvents[l].length === 0) continue;
+
+      var collapsed = !deLayerVisible[l];
+      var arrow = collapsed ? '▶' : '▼';
+      html += '<div class="de-layer-group" style="border-left:3px solid ' + deLayerColors[l] + '">';
+      html += '<div class="de-layer-header" onclick="deToggleLayer(' + l + ')">';
+      html += '<span class="de-layer-arrow">' + arrow + '</span> ';
+      html += '<span class="de-layer-name">Layer ' + l + ': ' + deLayerNames[l] + '</span> ';
+      html += '<span class="de-layer-count">(' + deLayerCounts[l] + ')</span>';
+      html += '</div>';
+
+      if (!collapsed) {
+        html += '<div class="de-layer-events" id="de-layer-' + l + '">';
+        var events = deActiveFilter === -1 ? deLayerEvents[l] : deLayerEvents[l];
+        var maxShow = deActiveFilter === -1 ? Math.min(events.length, 20) : events.length;
+        for (var i = 0; i < maxShow; i++) {
+          var e = events[i];
+          var ts = new Date(e.timestamp).toTimeString().slice(0, 8);
+          var indent = l === 1 && e.eventType.indexOf('Step') >= 0 ? '├ ' : '';
+          html += '<div class="de-entry" style="border-left:2px solid ' + deLayerColors[l] + '">';
+          html += '<span class="de-ts">' + ts + '</span> ';
+          html += '<span class="de-type" style="color:' + deLayerColors[l] + '">' + indent + e.eventType + '</span>';
+          html += '<span class="de-agg-id">[' + e.aggregateType + ':' + (e.aggregateId || '').substring(0, 8) + ']</span>';
+          html += '<div class="de-data">' + e.data + '</div>';
+          html += '</div>';
+        }
+        if (events.length > maxShow) {
+          html += '<div class="de-entry de-more">... ' + (events.length - maxShow) + ' more events (use layer filter to see all)</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    list.innerHTML = html;
+  }
+
+  window.deSetFilter = function(layer) {
+    deActiveFilter = layer;
+    // Auto-expand the filtered layer
+    if (layer >= 0) deLayerVisible[layer] = true;
+    renderDomainEventSidebar();
+  };
+
+  window.deToggleLayer = function(layer) {
+    deLayerVisible[layer] = !deLayerVisible[layer];
+    renderDomainEventSidebar();
+  };
+
+  // --- Saga / Decision UI helpers ---
+
+  function showSagaStatus(data) {
+    var label = document.getElementById('splitMergeLabel');
+    if (label) {
+      var opText = data.operation + ' ' + data.status;
+      label.textContent = (data.status === 'COMMITTED' ? '✓ ' : '⟳ ') + opText;
+      label.setAttribute('fill', data.status === 'COMMITTED' ? '#3fb950' : '#d29922');
+      label.setAttribute('opacity', '1');
+      setTimeout(function() { label.setAttribute('opacity', '0.5'); }, 4000);
+    }
+  }
+
+  function showWaferDecision(data) {
+    // Update classification wheel dot
+    var wid = data.waferId;
+    var waferIdx = parseInt(wid.split('-').pop()) - 1;
+    if (isNaN(waferIdx)) return;
+    var dot = document.getElementById('wd-' + waferIdx);
+    if (!dot) return;
+    var action = data.action || '';
+    if (action.indexOf('HOLD') >= 0) {
+      dot.setAttribute('fill', '#d29922'); // amber for hold
+    } else if (action.indexOf('SCRAP') >= 0) {
+      dot.setAttribute('fill', '#f85149'); // red for scrap
+    } else if (action.indexOf('PASS') >= 0 || action.indexOf('Merge') >= 0) {
+      dot.setAttribute('fill', '#3fb950'); // green for pass
+    } else if (action.indexOf('Skip') >= 0) {
+      dot.setAttribute('fill', '#8b949e'); // grey for skip
+    }
   }
 
   // ===================================================================
   // Aggregate State Panel (需求5: 业务聚合状态)
   // ===================================================================
   function updateAggregatePanel(data) {
-    var tbody = document.getElementById('aggTreeBody');
-    var rows = '';
-
-    // Group wafers by lot
-    var sourceWafers = [];
-    var reworkWafers = [];
-    data.wafers.forEach(function(w) {
-      if (data.reworkLot && w.lotId === data.reworkLot.lotId) {
-        reworkWafers.push(w);
+    // Sync bulk pipeline event into incremental model
+    var srcLot = data.sourceLot;
+    if (srcLot && srcLot.lotId) {
+      if (!aggregateModel.lots[srcLot.lotId]) {
+        aggregateModel.lots[srcLot.lotId] = {
+          lotId: srcLot.lotId, productId: srcLot.lotId.substring(0, 8),
+          status: srcLot.status, waferCount: srcLot.waferCount,
+          passCount: srcLot.passCount, scrapCount: srcLot.scrapCount,
+          waferIds: []
+        };
       } else {
-        sourceWafers.push(w);
+        var sl = aggregateModel.lots[srcLot.lotId];
+        sl.status = srcLot.status;
+        sl.waferCount = srcLot.waferCount;
+        sl.passCount = srcLot.passCount;
+        sl.scrapCount = srcLot.scrapCount;
+      }
+    }
+    // Child/rework lots
+    var childLots = data.reworkLot ? [data.reworkLot] : [];
+    childLots.forEach(function(cl) {
+      if (!aggregateModel.lots[cl.lotId]) {
+        aggregateModel.lots[cl.lotId] = {
+          lotId: cl.lotId, productId: cl.lotId.substring(0, 8),
+          status: cl.status, waferCount: cl.waferCount,
+          passCount: cl.passCount || 0, scrapCount: cl.scrapCount || 0,
+          waferIds: []
+        };
       }
     });
-
-    // --- Source Lot header row ---
-    var sl = data.sourceLot;
-    rows += '<tr class="lot-row">' +
-      '<td>Lot: ' + sl.lotId + '</td>' +
-      '<td>' + sl.status + '</td>' +
-      '<td colspan="2">Wafers: ' + sl.waferCount +
-      ' | Pass: ' + sl.passCount +
-      ' | Scrap: ' + sl.scrapCount + '</td>' +
-      '</tr>';
-    // Source lot wafer rows
-    sourceWafers.forEach(function(w) {
-      var stCls = w.status === 'Active' ? 'status-Active' : 'status-Scrapped';
-      var clsCls = 'cls-' + (w.classification || 'Pending');
-      rows += '<tr class="wafer-row">' +
-        '<td>' + w.waferId + '</td>' +
-        '<td class="' + stCls + '">' + w.status + '</td>' +
-        '<td class="' + clsCls + '">' + (w.classification || 'Pending') + '</td>' +
-        '<td>' + w.reworkCount + '</td>' +
-        '</tr>';
+    // Wafers
+    (data.wafers || []).forEach(function(w) {
+      if (!aggregateModel.wafers[w.waferId]) {
+        aggregateModel.wafers[w.waferId] = {
+          waferId: w.waferId, status: w.status, lotId: w.lotId,
+          classification: w.classification, reworkCount: w.reworkCount
+        };
+        var lot = aggregateModel.lots[w.lotId];
+        if (lot && lot.waferIds.indexOf(w.waferId) < 0) {
+          lot.waferIds.push(w.waferId);
+          lot.waferCount = lot.waferIds.length;
+        }
+      } else {
+        var ew = aggregateModel.wafers[w.waferId];
+        ew.status = w.status;
+        ew.classification = w.classification;
+        ew.reworkCount = w.reworkCount;
+        if (ew.lotId !== w.lotId) {
+          var oldLot = aggregateModel.lots[ew.lotId];
+          if (oldLot) {
+            oldLot.waferIds = oldLot.waferIds.filter(function(id) { return id !== w.waferId; });
+            oldLot.waferCount = oldLot.waferIds.length;
+          }
+          ew.lotId = w.lotId;
+          var newLot = aggregateModel.lots[w.lotId];
+          if (newLot && newLot.waferIds.indexOf(w.waferId) < 0) {
+            newLot.waferIds.push(w.waferId);
+            newLot.waferCount = newLot.waferIds.length;
+          }
+        }
+      }
     });
-
-    // --- Rework Lot header row ---
-    if (data.reworkLot) {
-      var rl = data.reworkLot;
-      rows += '<tr class="lot-row rwk">' +
-        '<td>Lot: ' + rl.lotId + '</td>' +
-        '<td>' + rl.status + '</td>' +
-        '<td colspan="2">Wafers: ' + reworkWafers.length + '</td>' +
-        '</tr>';
-      // Rework lot wafer rows
-      reworkWafers.forEach(function(w) {
-        var stCls = w.status === 'Active' ? 'status-Active' : 'status-Scrapped';
-        var clsCls = 'cls-' + (w.classification || 'Pending');
-        rows += '<tr class="wafer-row">' +
-          '<td>' + w.waferId + '</td>' +
-          '<td class="' + stCls + '">' + w.status + '</td>' +
-          '<td class="' + clsCls + '">' + (w.classification || 'Pending') + '</td>' +
-          '<td>' + w.reworkCount + '</td>' +
-          '</tr>';
-      });
-    }
-
-    tbody.innerHTML = rows;
+    renderAggregatePanelFromModel();
   }
 
   window.toggleAggregatePanel = function() {
@@ -759,8 +974,15 @@
     state.scrapCount = 0;
     state.scrappedWaferIds = {};
     state.waferResults = {};
+    // Reset aggregate model
+    aggregateModel = { lots: {}, wafers: {} };
+    document.getElementById('aggTreeBody').innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">Waiting for Lot creation...</td></tr>';
+
     // Reset domain event sidebar
     domainEventCount = 0;
+    deLayerCounts = [0, 0, 0, 0];
+    deLayerEvents = [[], [], [], []];
+    deActiveFilter = -1;
     document.getElementById('deCount').textContent = '0';
     document.getElementById('deList').innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">Waiting for events...</span></div>';
     document.getElementById('deSidebar').classList.remove('open');
@@ -840,6 +1062,11 @@
   // ===================================================================
   // Init
   // ===================================================================
+  var scenarioTypeLabels = {
+    'rework': 'Rework', 'send-ahead': 'Send-Ahead',
+    'scrap': 'Scrap', 'sampling': 'Sampling', 'hold': 'Hold/Release'
+  };
+
   document.addEventListener('DOMContentLoaded', function() {
     fetch('/api/fab-demo/scenarios')
       .then(function(r) { return r.json(); })
@@ -849,7 +1076,8 @@
         scenarios.forEach(function(s) {
           var opt = document.createElement('option');
           opt.value = s.id;
-          opt.textContent = s.name;
+          var typeLabel = s.type ? ' [' + (scenarioTypeLabels[s.type] || s.type) + ']' : '';
+          opt.textContent = s.name + typeLabel;
           sel.appendChild(opt);
         });
         if (scenarios.length > 0) {
