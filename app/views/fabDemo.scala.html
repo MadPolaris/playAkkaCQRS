@@ -58,7 +58,7 @@
 
     /* Factory Floor */
     .factory-floor {
-      flex: 1; min-height: 310px; background: #0a0e14;
+      flex: 1; min-height: 360px; background: #0a0e14;
       border-bottom: 1px solid var(--border); position: relative; overflow: hidden;
     }
     .factory-floor svg { width: 100%; height: 100%; }
@@ -244,13 +244,14 @@
   <label>@Messages("fab.controls.speed") <input type="range" id="speedSlider" min="1" max="10" value="1" oninput="adjustSpeed(this.value)"></label>
   <span id="speedLabel" style="font-size:0.75rem;color:var(--fg-muted)">1x</span>
   <button class="danger" onclick="injectFault('LITHO-01','hardware_fault')">@Messages("fab.controls.fault")</button>
+  <span id="stepProgress" style="font-family:'SF Mono','Fira Code',monospace;font-size:0.68rem;color:var(--amber);min-width:220px;text-align:center;display:none"></span>
   <span style="margin-left:auto;font-size:0.7rem;color:var(--fg-muted)" id="globalStatusText">@Messages("fab.controls.ready")</span>
 </div>
 
 <div class="main">
   <!-- Factory Floor SVG (需求4: 优化布局, 需求6: 减少高度) -->
   <div class="factory-floor" id="factoryFloor">
-    <svg id="factorySvg" viewBox="0 0 1000 360" xmlns="http://www.w3.org/2000/svg">
+    <svg id="factorySvg" viewBox="0 0 1000 460" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <marker id="arrowBlue" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
           <path d="M0,0 L6,2 L0,4 Z" fill="#58a6ff"/>
@@ -269,122 +270,183 @@
         </marker>
       </defs>
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- Decision Engine / 决策引擎 — Top Center             -->
-      <!-- ═══════════════════════════════════════════════════ -->
+      <!-- Decision Engine -->
       <g class="eq-node" id="eq-decision">
-        <rect x="360" y="8" width="260" height="56" rx="8" fill="#161b22" stroke="#f59e0b" stroke-width="2"/>
-        <text x="490" y="24" text-anchor="middle" font-size="10" fill="#e6edf3" font-weight="600">@Messages("fab.decision_engine")</text>
-        <text x="490" y="38" text-anchor="middle" font-size="7" fill="#8b949e">@Messages("fab.decision_sub")</text>
-        <text x="490" y="56" text-anchor="middle" font-size="7" fill="#6e7681" id="status-decision">@Messages("fab.decision_wait")</text>
+        <rect x="360" y="4" width="260" height="40" rx="8" fill="#161b22" stroke="#f59e0b" stroke-width="2"/>
+        <text x="490" y="17" text-anchor="middle" font-size="9" fill="#e6edf3" font-weight="600">@Messages("fab.decision_engine")</text>
+        <text x="490" y="29" text-anchor="middle" font-size="6.5" fill="#8b949e">@Messages("fab.decision_sub")</text>
+        <text x="490" y="40" text-anchor="middle" font-size="6" fill="#6e7681" id="status-decision">@Messages("fab.decision_wait")</text>
       </g>
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- Command Bus / 指令总线 (独立路径, 不交叉)           -->
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- DE→Stocker: 左侧出发 → 左折 → Stocker 中心 -->
-      <polyline points="370,64 370,90 75,90 75,120" stroke="#a855f7" stroke-width="1.5"
-                stroke-opacity="0.5" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
-      <!-- DE→Litho: 中心 → 右折 → Litho 右1/5处 上方进入 -->
-      <polyline points="490,64 490,80 390,80 390,120" stroke="#a855f7" stroke-width="1.5"
-                stroke-opacity="0.5" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
-      <!-- DE→CDSEM: 右1/5 → 右折 → CDSEM 中心 -->
-      <polyline points="568,64 568,90 645,90 645,120" stroke="#a855f7" stroke-width="1.5"
-                stroke-opacity="0.5" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
-      <text id="busCommandLabel" x="490" y="72" text-anchor="middle" font-size="6" fill="#58a6ff" font-family="monospace" opacity="0">--</text>
+      <!-- Command Bus -->
+      <polyline points="370,44 370,70 63,70 63,95" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+      <polyline points="490,44 490,70 344,70 344,95" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+      <polyline points="610,44 610,70 274,70 274,230" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+      <text id="busCommandLabel" x="490" y="60" text-anchor="middle" font-size="5.5" fill="#58a6ff" font-family="monospace" opacity="0">--</text>
 
-      <!-- Transport Rail: Rework -->
-      <line x1="570" y1="155" x2="420" y2="155" stroke="#f59e0b" stroke-width="2.2"
-            stroke-opacity="0.55" stroke-dasharray="5 3" marker-end="url(#arrowAmber)"/>
-      <text x="495" y="148" text-anchor="middle" font-size="6" fill="#f59e0b" opacity="0.4">@Messages("fab.rework")</text>
+      <!-- ====== ROW 1: STOCKER | CLEAN | DIFF | LITHO | ETCH | IMPL ====== -->
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- Equipment Row / 设备行 (等间距: gap=150)           -->
-      <!-- Stocker(30,90)  Litho(270,150)  CDSEM(570,150)  ScrapBin(870,100) -->
-      <!-- ═══════════════════════════════════════════════════ -->
-
-      <!-- Stocker -->
+      <!-- Stocker (tall, spans both rows) -->
       <g class="eq-node" id="eq-stocker">
-        <rect x="30" y="120" width="90" height="22" rx="4" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
-        <text x="38" y="134" font-size="8" fill="#e6edf3" font-weight="600">@Messages("fab.stocker")</text>
-        <text x="112" y="134" text-anchor="end" font-size="7" fill="#6e7681" id="status-stocker">@Messages("fab.js.status_idle")</text>
-        <rect x="30" y="142" width="90" height="56" rx="4" fill="#0d1117" stroke="#30363d" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="75" y="208" text-anchor="middle" font-size="6" fill="#8b949e" opacity="0.5">@Messages("fab.stocker_storage")</text>
+        <rect x="22" y="95" width="82" height="18" rx="3" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <text x="30" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.stocker")</text>
+        <text x="96" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-stocker">@Messages("fab.js.status_idle")</text>
+        <rect x="22" y="113" width="82" height="112" rx="3" fill="#0d1117" stroke="#30363d" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="63" y="175" text-anchor="middle" font-size="5" fill="#8b949e" opacity="0.5">@Messages("fab.stocker_storage")</text>
       </g>
 
-      <!-- Litho Scanner -->
+      <!-- CLEAN -->
+      <g class="eq-node" id="eq-clean">
+        <rect x="118" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#06b6d4" stroke-width="1.5"/>
+        <text x="122" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.clean")</text>
+        <text x="190" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-clean">@Messages("fab.js.status_idle")</text>
+        <rect x="118" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="158" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.clean_sub")</text>
+      </g>
+
+      <!-- DIFF -->
+      <g class="eq-node" id="eq-diff">
+        <rect x="211" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#f97316" stroke-width="1.5"/>
+        <text x="215" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.diff")</text>
+        <text x="283" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-diff">@Messages("fab.js.status_idle")</text>
+        <rect x="211" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="251" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.diff_sub")</text>
+      </g>
+
+      <!-- LITHO -->
       <g class="eq-node" id="eq-litho">
-        <rect x="270" y="120" width="150" height="22" rx="4" fill="#161b22" stroke="#3b82f6" stroke-width="1.5"/>
-        <text x="278" y="134" font-size="8" fill="#e6edf3" font-weight="600">@Messages("fab.litho")</text>
-        <text x="412" y="134" text-anchor="end" font-size="7" fill="#6e7681" id="status-litho">@Messages("fab.js.status_idle")</text>
-        <rect x="270" y="142" width="150" height="56" rx="4" fill="#0d1117" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="345" y="208" text-anchor="middle" font-size="6" fill="#8b949e" opacity="0.5">@Messages("fab.litho_sub")</text>
+        <rect x="304" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="308" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.litho")</text>
+        <text x="376" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-litho">@Messages("fab.js.status_idle")</text>
+        <rect x="304" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="344" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.litho_sub")</text>
       </g>
 
-      <!-- CD-SEM -->
-      <g class="eq-node" id="eq-cdsem">
-        <rect x="570" y="120" width="150" height="22" rx="4" fill="#161b22" stroke="#8b5cf6" stroke-width="1.5"/>
-        <text x="578" y="134" font-size="8" fill="#e6edf3" font-weight="600">@Messages("fab.cdsem")</text>
-        <text x="712" y="134" text-anchor="end" font-size="7" fill="#6e7681" id="status-cdsem">@Messages("fab.js.status_idle")</text>
-        <rect x="570" y="142" width="150" height="56" rx="4" fill="#0d1117" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="645" y="208" text-anchor="middle" font-size="6" fill="#8b949e" opacity="0.5">@Messages("fab.cdsem_sub")</text>
+      <!-- ETCH -->
+      <g class="eq-node" id="eq-etch">
+        <rect x="397" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="401" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.etch")</text>
+        <text x="469" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-etch">@Messages("fab.js.status_idle")</text>
+        <rect x="397" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="437" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.etch_sub")</text>
       </g>
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- Transport: Forward / 正向传输 (container center)   -->
-      <!-- ═══════════════════════════════════════════════════ -->
-      <line x1="120" y1="170" x2="270" y2="170" stroke="#58a6ff" stroke-width="2.5"
-            stroke-opacity="0.65" marker-end="url(#arrowBlue)"/>
-      <line x1="420" y1="170" x2="570" y2="170" stroke="#58a6ff" stroke-width="2.5"
-            stroke-opacity="0.65" marker-end="url(#arrowBlue)"/>
-      <text x="195" y="164" text-anchor="middle" font-size="6" fill="#58a6ff" opacity="0.4">@Messages("fab.transport_forward")</text>
+      <!-- IMPL -->
+      <g class="eq-node" id="eq-implant">
+        <rect x="490" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#ec4899" stroke-width="1.5"/>
+        <text x="494" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.impl")</text>
+        <text x="562" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-implant">@Messages("fab.js.status_idle")</text>
+        <rect x="490" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#ec4899" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="530" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.impl_sub")</text>
+      </g>
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- Transport: Return / 返回存储 (endpoints outward)   -->
-      <!-- ═══════════════════════════════════════════════════ -->
-      <polyline points="690,198 690,230 60,230 60,198" stroke="#3fb950" stroke-width="2.2"
-                stroke-opacity="0.45" stroke-dasharray="5 4" fill="none" marker-end="url(#arrowGreen)"/>
-      <text x="375" y="224" text-anchor="middle" font-size="6" fill="#3fb950" opacity="0.4">@Messages("fab.transport_return")</text>
+      <!-- Row 1 transport lines -->
+      <line x1="104" y1="140" x2="118" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="198" y1="140" x2="211" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="291" y1="140" x2="304" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="384" y1="140" x2="397" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="477" y1="140" x2="490" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- Scrap Path: CD-SEM → Scrap Bin (horizontal)        -->
-      <!-- ═══════════════════════════════════════════════════ -->
-      <line id="scrapPathLine" x1="720" y1="156" x2="870" y2="156" stroke="#f85149" stroke-width="2" stroke-opacity="0.5"
+      <!-- Row 1 -> Row 2 connector (IMPL -> DEP) -->
+      <polyline points="530,155 530,205 460,205 460,230" stroke="#58a6ff" stroke-width="1.5"
+                stroke-opacity="0.35" fill="none" marker-end="url(#arrowBlue)"/>
+
+      <!-- ====== ROW 2: DEP | CMP | MET | DRY | LOG | SCRAP BIN ====== -->
+
+      <!-- DEP -->
+      <g class="eq-node" id="eq-dep">
+        <rect x="420" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#14b8a6" stroke-width="1.5"/>
+        <text x="424" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.dep")</text>
+        <text x="492" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dep">@Messages("fab.js.status_idle")</text>
+        <rect x="420" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#14b8a6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="460" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.dep_sub")</text>
+      </g>
+
+      <!-- CMP -->
+      <g class="eq-node" id="eq-cmp">
+        <rect x="327" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#eab308" stroke-width="1.5"/>
+        <text x="331" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.cmp")</text>
+        <text x="399" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cmp">@Messages("fab.js.status_idle")</text>
+        <rect x="327" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#eab308" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="367" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.cmp_sub")</text>
+      </g>
+
+      <!-- MET / CD-SEM (id=eq-met for dynamic routing, status-cdsem for backward compat) -->
+      <g class="eq-node" id="eq-met">
+        <rect x="234" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="238" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.met")</text>
+        <text x="306" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cdsem">@Messages("fab.js.status_idle")</text>
+        <rect x="234" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="274" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.met_sub")</text>
+      </g>
+
+      <!-- DRY -->
+      <g class="eq-node" id="eq-dry">
+        <rect x="141" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#64748b" stroke-width="1.5"/>
+        <text x="145" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.dry")</text>
+        <text x="213" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dry">@Messages("fab.js.status_idle")</text>
+        <rect x="141" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#64748b" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="181" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.dry_sub")</text>
+      </g>
+
+      <!-- LOG -->
+      <g class="eq-node" id="eq-log">
+        <rect x="510" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="514" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.log")</text>
+        <text x="582" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-log">@Messages("fab.js.status_idle")</text>
+        <rect x="510" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="550" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.log_sub")</text>
+      </g>
+
+      <!-- Row 2 transport lines (right-to-left: DEP->CMP->MET->DRY->LOG) -->
+      <line x1="420" y1="275" x2="407" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="327" y1="275" x2="314" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="234" y1="275" x2="221" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+
+      <!-- Return to Stocker -->
+      <polyline points="141,275 110,275 110,185 104,185" stroke="#3fb950" stroke-width="1.8"
+                stroke-opacity="0.4" stroke-dasharray="5 4" fill="none" marker-end="url(#arrowGreen)"/>
+      <text x="115" y="230" text-anchor="middle" font-size="5" fill="#3fb950" opacity="0.4">@Messages("fab.transport_return")</text>
+
+      <!-- Rework: MET->LITHO (diagonal for reentry) -->
+      <line x1="274" y1="248" x2="344" y2="155" stroke="#f59e0b" stroke-width="1.5"
+            stroke-opacity="0.45" stroke-dasharray="5 3" marker-end="url(#arrowAmber)"/>
+      <text x="320" y="200" text-anchor="middle" font-size="5" fill="#f59e0b" opacity="0.4">@Messages("fab.rework")</text>
+
+      <!-- Scrap Path (vertical from MET down to ScrapBin) -->
+      <line id="scrapPathLine" x1="274" y1="290" x2="274" y2="310" stroke="#f85149" stroke-width="1.8" stroke-opacity="0.45"
             stroke-dasharray="4 3" marker-end="url(#arrowRed)"/>
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- Scrap Bin / 报废仓 (same row, gap=150 after CDSEM)  -->
-      <!-- ═══════════════════════════════════════════════════ -->
-      <g id="scrapBin" opacity="0.75">
-        <rect x="870" y="120" width="100" height="22" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5"/>
-        <text x="920" y="134" text-anchor="middle" font-size="7" fill="#f85149" font-weight="600">@Messages("fab.scrap_bin")</text>
-        <rect x="870" y="142" width="100" height="56" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="920" y="158" text-anchor="middle" font-size="6" fill="#f87168">@Messages("fab.scrap_sub")</text>
-        <text x="920" y="188" text-anchor="middle" font-size="8" fill="#f85149" font-weight="700" id="scrapCount">@Messages("fab.scrap_count")</text>
-        <g id="scrapWaferDots" transform="translate(870, 142)"></g>
+      <!-- Scrap Bin (below MET area) -->
+      <g id="scrapBin" opacity="0.75" transform="translate(204, 320)">
+        <rect x="0" y="0" width="140" height="20" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5"/>
+        <text x="70" y="13" text-anchor="middle" font-size="7" fill="#f85149" font-weight="600">@Messages("fab.scrap_bin")</text>
+        <rect x="0" y="20" width="140" height="60" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="70" y="36" text-anchor="middle" font-size="6" fill="#f87168">@Messages("fab.scrap_sub")</text>
+        <text x="70" y="58" text-anchor="middle" font-size="8" fill="#f85149" font-weight="700" id="scrapCount">@Messages("fab.scrap_count")</text>
+        <g id="scrapWaferDots" transform="translate(0, 20)"></g>
       </g>
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- FOUP Icons + Lot Labels                              -->
-      <!-- ═══════════════════════════════════════════════════ -->
-      <rect id="foupIcon" x="66" y="162" width="18" height="12" rx="2" fill="#f59e0b" opacity="0">
-        <animate id="foupAnimX" attributeName="x" values="66" dur="1s" fill="freeze" begin="indefinite"/>
-        <animate id="foupAnimY" attributeName="y" values="162" dur="1s" fill="freeze" begin="indefinite"/>
+      <!-- ====== FOUP Icons + Labels ====== -->
+      <rect id="foupIcon" x="55" y="170" width="16" height="10" rx="2" fill="#f59e0b" opacity="0">
+        <animate id="foupAnimX" attributeName="x" values="55" dur="1s" fill="freeze" begin="indefinite"/>
+        <animate id="foupAnimY" attributeName="y" values="170" dur="1s" fill="freeze" begin="indefinite"/>
       </rect>
-      <text id="foupLotLabel" x="66" y="152" text-anchor="start" font-size="6" fill="#f59e0b" font-family="monospace" opacity="0">--</text>
+      <text id="foupLotLabel" x="55" y="165" text-anchor="start" font-size="5.5" fill="#f59e0b" font-family="monospace" opacity="0">--</text>
 
-      <rect id="reworkFoupIcon" x="636" y="162" width="18" height="12" rx="2" fill="#a855f7" opacity="0">
-        <animate id="reworkFoupAnimX" attributeName="x" values="636" dur="1s" fill="freeze" begin="indefinite"/>
-        <animate id="reworkFoupAnimY" attributeName="y" values="162" dur="1s" fill="freeze" begin="indefinite"/>
+      <rect id="reworkFoupIcon" x="300" y="265" width="16" height="10" rx="2" fill="#a855f7" opacity="0">
+        <animate id="reworkFoupAnimX" attributeName="x" values="300" dur="1s" fill="freeze" begin="indefinite"/>
+        <animate id="reworkFoupAnimY" attributeName="y" values="300" dur="1s" fill="freeze" begin="indefinite"/>
       </rect>
-      <text id="reworkFoupLabel" x="636" y="152" text-anchor="start" font-size="6" fill="#a855f7" font-family="monospace" opacity="0">--</text>
+      <text id="reworkFoupLabel" x="300" y="260" text-anchor="start" font-size="5.5" fill="#a855f7" font-family="monospace" opacity="0">--</text>
 
-      <text id="splitMergeLabel" x="490" y="240" text-anchor="middle" font-size="9" fill="#a855f7" font-family="monospace" opacity="0">--</text>
+      <text id="splitMergeLabel" x="490" y="320" text-anchor="middle" font-size="8" fill="#a855f7" font-family="monospace" opacity="0">--</text>
 
-      <!-- ═══════════════════════════════════════════════════ -->
-      <!-- Classification Wheel / 晶圆分类 (top-right)         -->
-      <!-- ═══════════════════════════════════════════════════ -->
-      <g transform="translate(870, 8)">
+      <!-- ====== Classification Wheel (top-right) ====== -->
+      <g transform="translate(870, 4)">
         <circle cx="32" cy="28" r="24" fill="none" stroke="#30363d" stroke-width="1.5"/>
         <text x="32" y="32" text-anchor="middle" font-size="7" fill="var(--fg-muted)">@Messages("fab.wafer_class")</text>
         <circle id="wd-0" cx="32" cy="12" r="3.5" fill="#30363d"/>
@@ -491,6 +553,10 @@ window.__i18n = {
   all_layers: "@Messages("fab.js.all_layers")",
   unknown_lot: "@Messages("fab.js.unknown_lot")",
   unknown_wafer: "@Messages("fab.js.unknown_wafer")",
+  step_progress: "@Messages("fab.js.step_progress")",
+  step_no_measure: "@Messages("fab.js.step_no_measure")",
+  status_busy: "@Messages("fab.js.status_busy")",
+  status_transporting: "@Messages("fab.js.status_transporting")",
   /* Helper: translate a key, falls back to key itself */
   t: function(key) { return this[key] || key; },
   /* Map old status/classification labels to i18n */

@@ -94,6 +94,7 @@
         break;
       case 'LedgerStepAdvanced':
         highlightLedgerRow(event.data.stepSeq);
+        updateStepProgress(event.data.stepName || '');
         break;
       case 'GlobalStatusChanged':
         updateGlobalStatus(event.data);
@@ -125,7 +126,15 @@
   var eqStatusMap = {
     'STOCKER-01': 'status-stocker',
     'LITHO-01': 'status-litho',
-    'CDSEM-01': 'status-cdsem'
+    'CDSEM-01': 'status-cdsem',
+    'CLEAN-01': 'status-clean',
+    'DIFF-01': 'status-diff',
+    'ETCH-01': 'status-etch',
+    'IMPL-01': 'status-implant',
+    'DEP-01': 'status-dep',
+    'CMP-01': 'status-cmp',
+    'DRY-01': 'status-dry',
+    'LOG-01': 'status-log'
   };
 
   function updateEquipmentNode(data) {
@@ -190,13 +199,13 @@
   // FOUP Movement Animation (需求4: 新坐标)
   // ===================================================================
   function animateFoupMovement(data) {
-    // Rework path: use rework FOUP icon
-    if (data.fromArea === 'CDSEM' && data.toArea === 'LITHO') {
+    // Rework path: use rework FOUP icon (CDSEM or MET → LITHO)
+    if ((data.fromArea === 'CDSEM' || data.fromArea === 'MET') && data.toArea === 'LITHO') {
       animateReworkFoup(data);
       return;
     }
     // Return to Stocker: hide rework FOUP
-    if (data.fromArea === 'CDSEM' && data.toArea === 'STOCKER') {
+    if ((data.fromArea === 'CDSEM' || data.fromArea === 'MET') && data.toArea === 'STOCKER') {
       var rf = document.getElementById('reworkFoupIcon');
       if (rf) rf.setAttribute('opacity', '0');
       var rl = document.getElementById('reworkFoupLabel');
@@ -282,14 +291,25 @@
 
   function getAreaPosition(areaId) {
     var key = areaId.replace('-01', '');
+    // FOUP icon center positions for all equipment areas (matching SVG layout)
     var map = {
-      'STOCKER': {x: 66, y: 162},
-      'LITHO': {x: 336, y: 162},
-      'CDSEM': {x: 636, y: 162},
-      'LITHO_REWORK': {x: 336, y: 162},
-      'RETURN': {x: 66, y: 162}
+      'STOCKER': {x: 55, y: 170},
+      'CLEAN': {x: 150, y: 133},
+      'DIFF': {x: 243, y: 133},
+      'LITHO': {x: 336, y: 133},
+      'ETCH': {x: 429, y: 133},
+      'IMPL': {x: 522, y: 133},
+      'DEP': {x: 452, y: 268},
+      'CMP': {x: 359, y: 268},
+      'MET': {x: 266, y: 268},
+      'CDSEM': {x: 266, y: 268},
+      'DRY': {x: 173, y: 268},
+      'LOG': {x: 542, y: 268},
+      'SCRAP': {x: 274, y: 335},
+      'LITHO_REWORK': {x: 336, y: 133},
+      'RETURN': {x: 55, y: 170}
     };
-    return map[key] || {x: 66, y: 162};
+    return map[key] || {x: 55, y: 170};
   }
 
   // ---- Orchestrator Command (also shows on bus) ----
@@ -992,6 +1012,9 @@
     if (sc) sc.textContent = (window.__i18n && window.__i18n.scrap_count) || '0 wafer';
     var dotsGroup = document.getElementById('scrapWaferDots');
     if (dotsGroup) dotsGroup.innerHTML = '';
+    // Reset step progress indicator
+    var spEl = document.getElementById('stepProgress');
+    if (spEl) { spEl.style.display = 'none'; spEl.textContent = ''; }
     var startUrl = scenarioType === 'dynamic-routing'
       ? '/api/fab-demo/product/' + scenarioId + '/start'
       : '/api/fab-demo/start/' + scenarioId;
@@ -1062,6 +1085,23 @@
         row.classList.remove('active', 'done');
       }
     });
+  }
+
+  // Step progress indicator for dynamic routing (M3.5)
+  function updateStepProgress(stepName) {
+    var el = document.getElementById('stepProgress');
+    if (!el) return;
+    // Try to parse "Step X/Y: AREA (reentry=N)" or "Step X/Y: AREA — ..."
+    var match = stepName.match(/^Step\s+(\d+)\/(\d+):\s+(\S+)/);
+    if (match) {
+      var stepNum = match[1], total = match[2], area = match[3];
+      var reentryMatch = stepName.match(/reentry=(\d+)/);
+      var reentry = reentryMatch ? reentryMatch[1] : '0';
+      var tpl = (window.__i18n && window.__i18n.step_progress) || 'Step __step__/__total__: __area__ (reentry=__reentry__)';
+      el.textContent = tpl.replace('__step__', stepNum).replace('__total__', total).replace('__area__', area).replace('__reentry__', reentry);
+      el.style.display = 'inline';
+      el.style.color = stepName.indexOf('auto-advance') >= 0 ? 'var(--fg-muted)' : 'var(--amber)';
+    }
   }
 
   // ===================================================================
