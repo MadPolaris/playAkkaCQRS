@@ -8,7 +8,7 @@
 |-----------|------|
 | M1 — Saga 分布式事务协调器 | ✅ 线上质量 |
 | M2 — 流批一体多层级 DAG 执行引擎 | ✅ 线上质量 |
-| M3 — 面向制造业控制论的 CIMs iPaaS | ✅ Demo 可运行 (5 场景 + 4 层事件投影 + 崩溃恢复 + 128 单元测试) |
+| M3 — 面向制造业控制论的 CIMs iPaaS | ✅ Demo 可运行 (5 场景 + 动态 POR + 4 层事件投影 + 崩溃恢复 + 161 单元测试) |
 | M4 — 即时反馈闭环 + 自适应 DAG 引擎 | 🔮 探索中 |
 
 详见首页：`/` (EN) 和 `/zh` (中文)。Demo 页：`/fab-demo`。
@@ -90,22 +90,24 @@ app/net/imadz/
 ├── application/        Aggregate, ApplicationService, Projection, Saga
 │   └── aggregates/     Lot/Wafer/FabProcess Aggregates + Process Entity
 ├── infrastructure/     Persistence adapter, Bootstrap, Guice module
-└── fab/                M3 Fab Demo (5 拆批/合批场景)
+└── fab/                M3 Fab Demo (5 静态场景 + 动态 POR)
     ├── chain/           FabChainExecutor + FabDemoPipeline + FabScenarioPipeline
+    │                    + DynamicFlowAssembler (纯决策引擎) + FabFlowEngine (动态执行)
     ├── scenario/        FabSimulationScenario (5 StandardScenarios)
-    ├── service/         FabDemoService (多场景路由)
+    ├── service/         FabDemoService (多场景路由 + startDemoWithProduct)
     ├── projection/      FabDemoEventBridge (3 层 EventStream 订阅)
     ├── events/          FabSimulationEvent (WebSocket 事件类型)
-    ├── simulation/      Litho/CD-SEM/AMHS/Stocker 模拟器
+    ├── simulation/      Litho/CD-SEM/AMHS/Stocker/GenericEquipment 模拟器
     ├── protocol/        ActorEquipmentAdapter + EquipmentAdapter
-    └── model/           LotContext, ProductRouting, EquipmentArea (探索)
+    └── model/           LotContext, ProductRouting, ProductRoutingRepository,
+                         EquipmentArea, MeasurementResult
 
 app/views/           Play Twirl 模板（首页、Demo 页、文档页）
 app/protobuf/        .proto 文件 (lot/wafer/process — 三件套)
 conf/                application.conf / persistence.conf / cluster.conf / logback-test.xml
 conf/sql/1.sql       MySQL read-side schema（docker-compose 自动初始化）
 knowledge_base/      架构文档 & 方法论文档
-test/                单元 + 集成测试 (128 用例, 5 种 Pattern)
+test/                单元 + 集成测试 (161 用例, 5 种 Pattern + DynamicFlowAssembler)
 ```
 
 ### Test Patterns (测试分层)
