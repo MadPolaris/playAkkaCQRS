@@ -245,15 +245,15 @@
     var rl = document.getElementById('reworkFoupLabel');
     if (rl) {
       rl.setAttribute('opacity', '1');
-      rl.setAttribute('x', '636');
+      rl.setAttribute('x', '304');
       rl.setAttribute('y', '152');
     }
     var duration = Math.max(800, (data.etaMs || 2000) / state.speed);
-    // Straight rework path: CDSEM(636,155) → left to Litho(336,155)
+    // Straight rework path: CDSEM(304,155) → left to Litho(424,155)
     var animX = document.getElementById('reworkFoupAnimX');
     var animY = document.getElementById('reworkFoupAnimY');
     if (animX && animY) {
-      animX.setAttribute('values', '636;336');
+      animX.setAttribute('values', '304;424');
       animY.setAttribute('values', '155;155');
       animX.setAttribute('dur', duration + 'ms');
       animY.setAttribute('dur', duration + 'ms');
@@ -294,19 +294,19 @@
     // FOUP icon center positions for all equipment areas (matching SVG layout)
     var map = {
       'STOCKER': {x: 55, y: 170},
-      'CLEAN': {x: 150, y: 133},
-      'DIFF': {x: 243, y: 133},
-      'LITHO': {x: 336, y: 133},
-      'ETCH': {x: 429, y: 133},
-      'IMPL': {x: 522, y: 133},
-      'DEP': {x: 452, y: 268},
-      'CMP': {x: 359, y: 268},
-      'MET': {x: 266, y: 268},
-      'CDSEM': {x: 266, y: 268},
-      'DRY': {x: 173, y: 268},
-      'LOG': {x: 542, y: 268},
-      'SCRAP': {x: 274, y: 335},
-      'LITHO_REWORK': {x: 336, y: 133},
+      'CLEAN': {x: 184, y: 133},
+      'DIFF': {x: 304, y: 133},
+      'LITHO': {x: 424, y: 133},
+      'ETCH': {x: 544, y: 133},
+      'IMPL': {x: 664, y: 133},
+      'DEP': {x: 544, y: 268},
+      'CMP': {x: 424, y: 268},
+      'MET': {x: 304, y: 268},
+      'CDSEM': {x: 304, y: 268},
+      'DRY': {x: 184, y: 268},
+      'LOG': {x: 664, y: 268},
+      'SCRAP': {x: 304, y: 335},
+      'LITHO_REWORK': {x: 424, y: 133},
       'RETURN': {x: 55, y: 170}
     };
     return map[key] || {x: 55, y: 170};
@@ -457,7 +457,7 @@
       }, 900);
     }
 
-    // --- Animate flying wafer dot from CD-SEM (720,156) to Scrap Bin (870,156) ---
+    // --- Animate flying wafer dot from MET (304,248) to Scrap Bin (304,340) ---
     var svg = document.getElementById('factorySvg');
     var NS = 'http://www.w3.org/2000/svg';
     var flyId = 'scrap-fly-' + waferNum;
@@ -467,8 +467,8 @@
 
     // Flying dot
     var flyDot = document.createElementNS(NS, 'circle');
-    flyDot.setAttribute('cx', '720');
-    flyDot.setAttribute('cy', '156');
+    flyDot.setAttribute('cx', '304');
+    flyDot.setAttribute('cy', '248');
     flyDot.setAttribute('r', '6');
     flyDot.setAttribute('fill', '#f85149');
     flyDot.setAttribute('stroke', '#ff6b6b');
@@ -476,14 +476,14 @@
     // animate cx along scrap path
     var ax = document.createElementNS(NS, 'animate');
     ax.setAttribute('attributeName', 'cx');
-    ax.setAttribute('values', '720;870');
+    ax.setAttribute('values', '304;304');
     ax.setAttribute('dur', '0.7s');
     ax.setAttribute('fill', 'freeze');
     flyDot.appendChild(ax);
-    // slight arc for visual interest
+    // arc down into scrap bin
     var ay = document.createElementNS(NS, 'animate');
     ay.setAttribute('attributeName', 'cy');
-    ay.setAttribute('values', '156;146;156');
+    ay.setAttribute('values', '248;238;340');
     ay.setAttribute('dur', '0.7s');
     ay.setAttribute('fill', 'freeze');
     flyDot.appendChild(ay);
@@ -491,8 +491,8 @@
 
     // Flying label
     var flyLbl = document.createElementNS(NS, 'text');
-    flyLbl.setAttribute('x', '720');
-    flyLbl.setAttribute('y', '152');
+    flyLbl.setAttribute('x', '304');
+    flyLbl.setAttribute('y', '244');
     flyLbl.setAttribute('text-anchor', 'middle');
     flyLbl.setAttribute('font-size', '6');
     flyLbl.setAttribute('fill', '#fff');
@@ -501,13 +501,13 @@
     flyLbl.textContent = 'W' + waferNum;
     var lx = document.createElementNS(NS, 'animate');
     lx.setAttribute('attributeName', 'x');
-    lx.setAttribute('values', '720;870');
+    lx.setAttribute('values', '304;304');
     lx.setAttribute('dur', '0.7s');
     lx.setAttribute('fill', 'freeze');
     flyLbl.appendChild(lx);
     var ly = document.createElementNS(NS, 'animate');
     ly.setAttribute('attributeName', 'y');
-    ly.setAttribute('values', '152;142;152');
+    ly.setAttribute('values', '244;234;336');
     ly.setAttribute('dur', '0.7s');
     ly.setAttribute('fill', 'freeze');
     flyLbl.appendChild(ly);
@@ -1065,6 +1065,13 @@
         });
         var ledgerPanel = document.getElementById('ledgerPanel');
         if (ledgerPanel) ledgerPanel.scrollTop = 0;
+        // Update second Lot column header dynamically per scenario
+        if (data.lotReworkLabel) {
+          var ths = document.querySelectorAll('#ledgerTable thead th');
+          if (ths.length >= 4) {
+            ths[3].textContent = 'Lot(' + data.lotReworkLabel + ')';
+          }
+        }
       })
       .catch(function(err) {
         console.warn('Failed to load ledger:', err);

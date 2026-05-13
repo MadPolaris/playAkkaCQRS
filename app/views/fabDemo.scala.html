@@ -272,20 +272,20 @@
 
       <!-- Decision Engine -->
       <g class="eq-node" id="eq-decision">
-        <rect x="360" y="4" width="260" height="40" rx="8" fill="#161b22" stroke="#f59e0b" stroke-width="2"/>
-        <text x="490" y="17" text-anchor="middle" font-size="9" fill="#e6edf3" font-weight="600">@Messages("fab.decision_engine")</text>
-        <text x="490" y="29" text-anchor="middle" font-size="6.5" fill="#8b949e">@Messages("fab.decision_sub")</text>
-        <text x="490" y="40" text-anchor="middle" font-size="6" fill="#6e7681" id="status-decision">@Messages("fab.decision_wait")</text>
+        <rect x="294" y="4" width="260" height="40" rx="8" fill="#161b22" stroke="#f59e0b" stroke-width="2"/>
+        <text x="424" y="17" text-anchor="middle" font-size="9" fill="#e6edf3" font-weight="600">@Messages("fab.decision_engine")</text>
+        <text x="424" y="29" text-anchor="middle" font-size="6.5" fill="#8b949e">@Messages("fab.decision_sub")</text>
+        <text x="424" y="40" text-anchor="middle" font-size="6" fill="#6e7681" id="status-decision">@Messages("fab.decision_wait")</text>
       </g>
 
       <!-- Command Bus -->
-      <polyline points="370,44 370,70 63,70 63,95" stroke="#a855f7" stroke-width="1.5"
+      <polyline points="304,44 304,70 63,70 63,95" stroke="#a855f7" stroke-width="1.5"
                 stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
-      <polyline points="490,44 490,70 344,70 344,95" stroke="#a855f7" stroke-width="1.5"
+      <polyline points="424,44 424,70 384,70 384,95" stroke="#a855f7" stroke-width="1.5"
                 stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
-      <polyline points="610,44 610,70 274,70 274,230" stroke="#a855f7" stroke-width="1.5"
+      <polyline points="544,44 544,70 264,70 264,230" stroke="#a855f7" stroke-width="1.5"
                 stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
-      <text id="busCommandLabel" x="490" y="60" text-anchor="middle" font-size="5.5" fill="#58a6ff" font-family="monospace" opacity="0">--</text>
+      <text id="busCommandLabel" x="424" y="60" text-anchor="middle" font-size="5.5" fill="#58a6ff" font-family="monospace" opacity="0">--</text>
 
       <!-- ====== ROW 1: STOCKER | CLEAN | DIFF | LITHO | ETCH | IMPL ====== -->
 
@@ -300,128 +300,128 @@
 
       <!-- CLEAN -->
       <g class="eq-node" id="eq-clean">
-        <rect x="118" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#06b6d4" stroke-width="1.5"/>
-        <text x="122" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.clean")</text>
-        <text x="190" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-clean">@Messages("fab.js.status_idle")</text>
-        <rect x="118" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="158" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.clean_sub")</text>
+        <rect x="144" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#06b6d4" stroke-width="1.5"/>
+        <text x="148" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.clean")</text>
+        <text x="216" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-clean">@Messages("fab.js.status_idle")</text>
+        <rect x="144" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="184" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.clean_sub")</text>
       </g>
 
       <!-- DIFF -->
       <g class="eq-node" id="eq-diff">
-        <rect x="211" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#f97316" stroke-width="1.5"/>
-        <text x="215" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.diff")</text>
-        <text x="283" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-diff">@Messages("fab.js.status_idle")</text>
-        <rect x="211" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="251" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.diff_sub")</text>
+        <rect x="264" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#f97316" stroke-width="1.5"/>
+        <text x="268" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.diff")</text>
+        <text x="336" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-diff">@Messages("fab.js.status_idle")</text>
+        <rect x="264" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="304" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.diff_sub")</text>
       </g>
 
       <!-- LITHO -->
       <g class="eq-node" id="eq-litho">
-        <rect x="304" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#3b82f6" stroke-width="1.5"/>
-        <text x="308" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.litho")</text>
-        <text x="376" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-litho">@Messages("fab.js.status_idle")</text>
-        <rect x="304" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="344" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.litho_sub")</text>
+        <rect x="384" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="388" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.litho")</text>
+        <text x="456" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-litho">@Messages("fab.js.status_idle")</text>
+        <rect x="384" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="424" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.litho_sub")</text>
       </g>
 
       <!-- ETCH -->
       <g class="eq-node" id="eq-etch">
-        <rect x="397" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#8b5cf6" stroke-width="1.5"/>
-        <text x="401" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.etch")</text>
-        <text x="469" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-etch">@Messages("fab.js.status_idle")</text>
-        <rect x="397" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="437" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.etch_sub")</text>
+        <rect x="504" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="508" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.etch")</text>
+        <text x="576" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-etch">@Messages("fab.js.status_idle")</text>
+        <rect x="504" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="544" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.etch_sub")</text>
       </g>
 
       <!-- IMPL -->
       <g class="eq-node" id="eq-implant">
-        <rect x="490" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#ec4899" stroke-width="1.5"/>
-        <text x="494" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.impl")</text>
-        <text x="562" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-implant">@Messages("fab.js.status_idle")</text>
-        <rect x="490" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#ec4899" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="530" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.impl_sub")</text>
+        <rect x="624" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#ec4899" stroke-width="1.5"/>
+        <text x="628" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.impl")</text>
+        <text x="696" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-implant">@Messages("fab.js.status_idle")</text>
+        <rect x="624" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#ec4899" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="664" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.impl_sub")</text>
       </g>
 
       <!-- Row 1 transport lines -->
-      <line x1="104" y1="140" x2="118" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
-      <line x1="198" y1="140" x2="211" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
-      <line x1="291" y1="140" x2="304" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
-      <line x1="384" y1="140" x2="397" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
-      <line x1="477" y1="140" x2="490" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="104" y1="140" x2="144" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="224" y1="140" x2="264" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="344" y1="140" x2="384" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="464" y1="140" x2="504" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="584" y1="140" x2="624" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
 
       <!-- Row 1 -> Row 2 connector (IMPL -> DEP) -->
-      <polyline points="530,155 530,205 460,205 460,230" stroke="#58a6ff" stroke-width="1.5"
+      <polyline points="664,155 664,205 544,205 544,230" stroke="#58a6ff" stroke-width="1.5"
                 stroke-opacity="0.35" fill="none" marker-end="url(#arrowBlue)"/>
 
       <!-- ====== ROW 2: DEP | CMP | MET | DRY | LOG | SCRAP BIN ====== -->
 
       <!-- DEP -->
       <g class="eq-node" id="eq-dep">
-        <rect x="420" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#14b8a6" stroke-width="1.5"/>
-        <text x="424" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.dep")</text>
-        <text x="492" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dep">@Messages("fab.js.status_idle")</text>
-        <rect x="420" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#14b8a6" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="460" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.dep_sub")</text>
+        <rect x="504" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#14b8a6" stroke-width="1.5"/>
+        <text x="508" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.dep")</text>
+        <text x="576" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dep">@Messages("fab.js.status_idle")</text>
+        <rect x="504" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#14b8a6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="544" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.dep_sub")</text>
       </g>
 
       <!-- CMP -->
       <g class="eq-node" id="eq-cmp">
-        <rect x="327" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#eab308" stroke-width="1.5"/>
-        <text x="331" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.cmp")</text>
-        <text x="399" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cmp">@Messages("fab.js.status_idle")</text>
-        <rect x="327" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#eab308" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="367" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.cmp_sub")</text>
+        <rect x="384" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#eab308" stroke-width="1.5"/>
+        <text x="388" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.cmp")</text>
+        <text x="456" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cmp">@Messages("fab.js.status_idle")</text>
+        <rect x="384" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#eab308" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="424" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.cmp_sub")</text>
       </g>
 
       <!-- MET / CD-SEM (id=eq-met for dynamic routing, status-cdsem for backward compat) -->
       <g class="eq-node" id="eq-met">
-        <rect x="234" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#a855f7" stroke-width="1.5"/>
-        <text x="238" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.met")</text>
-        <text x="306" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cdsem">@Messages("fab.js.status_idle")</text>
-        <rect x="234" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="274" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.met_sub")</text>
+        <rect x="264" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="268" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.met")</text>
+        <text x="336" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cdsem">@Messages("fab.js.status_idle")</text>
+        <rect x="264" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="304" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.met_sub")</text>
       </g>
 
       <!-- DRY -->
       <g class="eq-node" id="eq-dry">
-        <rect x="141" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#64748b" stroke-width="1.5"/>
-        <text x="145" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.dry")</text>
-        <text x="213" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dry">@Messages("fab.js.status_idle")</text>
-        <rect x="141" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#64748b" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="181" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.dry_sub")</text>
+        <rect x="144" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#64748b" stroke-width="1.5"/>
+        <text x="148" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.dry")</text>
+        <text x="216" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dry">@Messages("fab.js.status_idle")</text>
+        <rect x="144" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#64748b" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="184" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.dry_sub")</text>
       </g>
 
       <!-- LOG -->
       <g class="eq-node" id="eq-log">
-        <rect x="510" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#22c55e" stroke-width="1.5"/>
-        <text x="514" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.log")</text>
-        <text x="582" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-log">@Messages("fab.js.status_idle")</text>
-        <rect x="510" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="3 2"/>
-        <text x="550" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.log_sub")</text>
+        <rect x="624" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="628" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.log")</text>
+        <text x="696" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-log">@Messages("fab.js.status_idle")</text>
+        <rect x="624" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="664" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.log_sub")</text>
       </g>
 
       <!-- Row 2 transport lines (right-to-left: DEP->CMP->MET->DRY->LOG) -->
-      <line x1="420" y1="275" x2="407" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
-      <line x1="327" y1="275" x2="314" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
-      <line x1="234" y1="275" x2="221" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="504" y1="275" x2="464" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="384" y1="275" x2="344" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="264" y1="275" x2="224" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
 
       <!-- Return to Stocker -->
-      <polyline points="141,275 110,275 110,185 104,185" stroke="#3fb950" stroke-width="1.8"
+      <polyline points="144,275 110,275 110,185 104,185" stroke="#3fb950" stroke-width="1.8"
                 stroke-opacity="0.4" stroke-dasharray="5 4" fill="none" marker-end="url(#arrowGreen)"/>
       <text x="115" y="230" text-anchor="middle" font-size="5" fill="#3fb950" opacity="0.4">@Messages("fab.transport_return")</text>
 
       <!-- Rework: MET->LITHO (diagonal for reentry) -->
-      <line x1="274" y1="248" x2="344" y2="155" stroke="#f59e0b" stroke-width="1.5"
+      <line x1="304" y1="248" x2="424" y2="155" stroke="#f59e0b" stroke-width="1.5"
             stroke-opacity="0.45" stroke-dasharray="5 3" marker-end="url(#arrowAmber)"/>
-      <text x="320" y="200" text-anchor="middle" font-size="5" fill="#f59e0b" opacity="0.4">@Messages("fab.rework")</text>
+      <text x="364" y="200" text-anchor="middle" font-size="5" fill="#f59e0b" opacity="0.4">@Messages("fab.rework")</text>
 
       <!-- Scrap Path (vertical from MET down to ScrapBin) -->
-      <line id="scrapPathLine" x1="274" y1="290" x2="274" y2="310" stroke="#f85149" stroke-width="1.8" stroke-opacity="0.45"
+      <line id="scrapPathLine" x1="304" y1="290" x2="304" y2="310" stroke="#f85149" stroke-width="1.8" stroke-opacity="0.45"
             stroke-dasharray="4 3" marker-end="url(#arrowRed)"/>
 
       <!-- Scrap Bin (below MET area) -->
-      <g id="scrapBin" opacity="0.75" transform="translate(204, 320)">
+      <g id="scrapBin" opacity="0.75" transform="translate(234, 320)">
         <rect x="0" y="0" width="140" height="20" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5"/>
         <text x="70" y="13" text-anchor="middle" font-size="7" fill="#f85149" font-weight="600">@Messages("fab.scrap_bin")</text>
         <rect x="0" y="20" width="140" height="60" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5" stroke-dasharray="3 2"/>
@@ -437,13 +437,13 @@
       </rect>
       <text id="foupLotLabel" x="55" y="165" text-anchor="start" font-size="5.5" fill="#f59e0b" font-family="monospace" opacity="0">--</text>
 
-      <rect id="reworkFoupIcon" x="300" y="265" width="16" height="10" rx="2" fill="#a855f7" opacity="0">
-        <animate id="reworkFoupAnimX" attributeName="x" values="300" dur="1s" fill="freeze" begin="indefinite"/>
+      <rect id="reworkFoupIcon" x="304" y="265" width="16" height="10" rx="2" fill="#a855f7" opacity="0">
+        <animate id="reworkFoupAnimX" attributeName="x" values="304" dur="1s" fill="freeze" begin="indefinite"/>
         <animate id="reworkFoupAnimY" attributeName="y" values="300" dur="1s" fill="freeze" begin="indefinite"/>
       </rect>
-      <text id="reworkFoupLabel" x="300" y="260" text-anchor="start" font-size="5.5" fill="#a855f7" font-family="monospace" opacity="0">--</text>
+      <text id="reworkFoupLabel" x="304" y="260" text-anchor="start" font-size="5.5" fill="#a855f7" font-family="monospace" opacity="0">--</text>
 
-      <text id="splitMergeLabel" x="490" y="320" text-anchor="middle" font-size="8" fill="#a855f7" font-family="monospace" opacity="0">--</text>
+      <text id="splitMergeLabel" x="424" y="320" text-anchor="middle" font-size="8" fill="#a855f7" font-family="monospace" opacity="0">--</text>
 
       <!-- ====== Classification Wheel (top-right) ====== -->
       <g transform="translate(870, 4)">
