@@ -71,12 +71,13 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       result.reply.error.get.code shouldBe "LOT_004"
     }
 
-    "reject lot with empty wafer list" in {
+    "allow empty lot for child lot creation" in {
       val result = lotTestKit.runCommand[LotConfirmation](replyTo =>
         CreateLot("P1", Set.empty, replyTo))
 
-      result.reply.error shouldBe defined
-      result.reply.error.get.code shouldBe "LOT_003"
+      result.reply.error shouldBe None
+      result.reply.phase shouldBe Some(Active)
+      result.state.waferIds shouldBe empty
     }
   }
 
@@ -230,7 +231,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
     }
 
     "reject when FOUP total would exceed 25" in {
-      val manyWafers = (1 to 24).map(_ => UUID.randomUUID()).toSet
+      val manyWafers = (1 to 25).map(_ => UUID.randomUUID()).toSet
       createLot(Set(w1)) // 1 existing
       val txId = UUID.randomUUID()
 
@@ -323,6 +324,69 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       result.events should contain(WaferAdditionCanceled(txId))
       result.state.incomingWafers should not contain key(txId)
       result.state.waferIds should not contain newWafer
+    }
+  }
+
+  // ===================================================================
+  // Idempotency: Repeat commit/release after already completed
+  // ===================================================================
+
+  "CommitWaferRemoval idempotency" should {
+    "handle repeat removal commit (no new events)" in {
+      createLot(fiveWafers)
+      val txId = UUID.randomUUID()
+      lotTestKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), r))
+      lotTestKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(txId, r))
+
+      // Repeat commit — idempotent
+      val result = lotTestKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(txId, r))
+      result.reply.error shouldBe None
+      result.events shouldBe empty // no new events
+      result.state.waferIds should not contain w3
+    }
+  }
+
+  "CommitAddWafer idempotency" should {
+    "handle repeat addition commit (no new events)" in {
+      createLot(fiveWafers)
+      val newWafer = UUID.randomUUID()
+      val txId = UUID.randomUUID()
+      lotTestKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(txId, Set(newWafer), r))
+      lotTestKit.runCommand[WaferAdditionConfirmation](r => CommitAddWafer(txId, r))
+
+      // Repeat commit — idempotent
+      val result = lotTestKit.runCommand[WaferAdditionConfirmation](r => CommitAddWafer(txId, r))
+      result.reply.error shouldBe None
+      result.events shouldBe empty // no new events
+    }
+  }
+
+  "ReleaseReservedWafer idempotency" should {
+    "handle release after already committed (no-op)" in {
+      createLot(fiveWafers)
+      val txId = UUID.randomUUID()
+      lotTestKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w1), r))
+      lotTestKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(txId, r))
+
+      // Release after commit — idempotent no-op
+      val result = lotTestKit.runCommand[WaferRemovalConfirmation](r => ReleaseReservedWafer(txId, r))
+      result.reply.error shouldBe None
+      result.events shouldBe empty
+    }
+  }
+
+  "CancelAddWafer idempotency" should {
+    "handle cancel after already committed (no-op)" in {
+      createLot(fiveWafers)
+      val newWafer = UUID.randomUUID()
+      val txId = UUID.randomUUID()
+      lotTestKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(txId, Set(newWafer), r))
+      lotTestKit.runCommand[WaferAdditionConfirmation](r => CommitAddWafer(txId, r))
+
+      // Cancel after commit — idempotent no-op
+      val result = lotTestKit.runCommand[WaferAdditionConfirmation](r => CancelAddWafer(txId, r))
+      result.reply.error shouldBe None
+      result.events shouldBe empty
     }
   }
 

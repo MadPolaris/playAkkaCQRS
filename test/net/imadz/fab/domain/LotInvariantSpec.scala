@@ -33,9 +33,9 @@ class LotInvariantSpec extends AnyWordSpec with Matchers {
       result shouldBe Left(iMadzError("LOT_001", s"Lot $lotId already created, cannot create again"))
     }
 
-    "reject empty wafer list" in {
+    "allow empty wafer list for child lot creation" in {
       val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Set.empty))
-      result shouldBe Left(iMadzError("LOT_003", "Lot must have at least 1 wafer"))
+      result shouldBe Right(List(LotCreated("PROD-A", Set.empty)))
     }
 
     "reject > 25 wafers" in {

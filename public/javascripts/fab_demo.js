@@ -133,7 +133,7 @@
     if (!statusId) return;
     var el = document.getElementById(statusId);
     if (el) {
-      el.textContent = data.status || 'Idle';
+      el.textContent = (window.__i18n && window.__i18n.statusMap[data.status]) || data.status || window.__i18n.status_idle;
       el.setAttribute('fill', statusColor(data.status));
     }
     var nodeId = data.equipmentId.replace('-01','').toLowerCase();
@@ -254,7 +254,7 @@
     // Show split label
     var sl = document.getElementById('splitMergeLabel');
     if (sl) {
-      sl.textContent = '↗ SPLIT: Rework wafers to Litho / 拆批返工';
+      sl.textContent = (window.__i18n && window.__i18n.phase_split) ? '↗ ' + window.__i18n.phase_split : '↗ SPLIT';
       sl.setAttribute('opacity', '1');
       sl.setAttribute('fill', '#a855f7');
     }
@@ -550,7 +550,7 @@
     // Show bottom indicator text
     var sl = document.getElementById('splitMergeLabel');
     if (sl) {
-      sl.textContent = '✗ SCRAP: ' + data.waferId + ' → Bin / 报废';
+      sl.textContent = (window.__i18n && window.__i18n.status_scrap) ? '✗ ' + window.__i18n.status_scrap + ': ' + data.waferId : '✗ SCRAP: ' + data.waferId;
       sl.setAttribute('opacity', '1');
       sl.setAttribute('fill', '#f85149');
       setTimeout(function() { sl.setAttribute('opacity', '0'); }, 3000);
@@ -652,7 +652,7 @@
     var rows = '';
     var lotIds = Object.keys(aggregateModel.lots);
     if (lotIds.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">Waiting for Lot creation...</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
       return;
     }
     lotIds.forEach(function(lotId) {
@@ -683,7 +683,7 @@
   function renderDomainEventSidebar() {
     var list = document.getElementById('deList');
     if (domainEventCount === 0) {
-      list.innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">Waiting for events...</span></div>';
+      list.innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">' + ((window.__i18n && window.__i18n.de_placeholder) || 'Waiting for events...') + '</span></div>';
       return;
     }
 
@@ -857,11 +857,11 @@
     var btn = panel.querySelector('.agg-header button');
     if (state.aggregatePanelOpen) {
       panel.classList.add('collapsed');
-      btn.textContent = '▼ Expand';
+      btn.textContent = (window.__i18n && window.__i18n.lang === 'zh') ? '▼ 展开' : '▼ Expand';
       state.aggregatePanelOpen = false;
     } else {
       panel.classList.remove('collapsed');
-      btn.textContent = '▲ Collapse';
+      btn.textContent = (window.__i18n && window.__i18n.lang === 'zh') ? '▲ 折叠' : '▲ Collapse';
       state.aggregatePanelOpen = true;
     }
   };
@@ -976,7 +976,7 @@
     state.waferResults = {};
     // Reset aggregate model
     aggregateModel = { lots: {}, wafers: {} };
-    document.getElementById('aggTreeBody').innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">Waiting for Lot creation...</td></tr>';
+    document.getElementById('aggTreeBody').innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
 
     // Reset domain event sidebar
     domainEventCount = 0;
@@ -984,10 +984,10 @@
     deLayerEvents = [[], [], [], []];
     deActiveFilter = -1;
     document.getElementById('deCount').textContent = '0';
-    document.getElementById('deList').innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">Waiting for events...</span></div>';
+    document.getElementById('deList').innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">' + ((window.__i18n && window.__i18n.de_placeholder) || 'Waiting for events...') + '</span></div>';
     document.getElementById('deSidebar').classList.remove('open');
     var sc = document.getElementById('scrapCount');
-    if (sc) sc.textContent = '0 wafer';
+    if (sc) sc.textContent = (window.__i18n && window.__i18n.scrap_count) || '0 wafer';
     var dotsGroup = document.getElementById('scrapWaferDots');
     if (dotsGroup) dotsGroup.innerHTML = '';
     fetch('/api/fab-demo/start/' + scenarioId, {method: 'POST'})

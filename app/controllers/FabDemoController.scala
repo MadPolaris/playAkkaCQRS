@@ -7,6 +7,7 @@ import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
 import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent}
 import net.imadz.fab.projection.FabDemoEventBridge
 import net.imadz.fab.service.FabDemoService
+import play.api.i18n.{I18nSupport, Lang}
 import play.api.libs.json.Json
 import play.api.mvc.{BaseController, ControllerComponents, WebSocket}
 
@@ -19,7 +20,7 @@ class FabDemoController @Inject()(
   implicit val mat: Materializer,
   implicit val ec: ExecutionContext,
   fabDemoService: FabDemoService
-) extends BaseController {
+) extends BaseController with I18nSupport {
 
   private implicit val typedSystem: ActorSystem[Nothing] = classicSystem.toTyped
 
@@ -42,8 +43,11 @@ class FabDemoController @Inject()(
   )
 
   /** Render the Fab demo page */
-  def index() = Action {
-    Ok(views.html.fabDemo())
+  def index() = Action { implicit request =>
+    val langParam = request.getQueryString("lang").getOrElse("")
+    val langs: Seq[Lang] = if (langParam.nonEmpty) Seq(Lang(langParam)) else request.acceptLanguages
+    val messages = messagesApi.preferred(langs)
+    Ok(views.html.fabDemo()(messages))
   }
 
   /** WebSocket endpoint for real-time simulation events */

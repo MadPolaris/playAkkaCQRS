@@ -1,29 +1,24 @@
 <configuration>
-    <!-- Console appender -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
         </encoder>
     </appender>
 
-    <!-- Capturing appender for tests -->
-    <appender name="CapturingAppender" class="akka.actor.testkit.typed.internal.CapturingAppender" />
-
     <logger name="play" level="INFO"/>
-    <logger name="application" level="DEBUG"/>
+    <logger name="application" level="INFO"/>
 
-    <!-- The appenders defined for this CapturingAppenderDelegate logger are used when there is a test failure and all logging events from the test are flushed to these appenders. -->
-    <logger name="akka.actor.testkit.typed.internal.CapturingAppenderDelegate" >
-        <appender-ref ref="CONSOLE"/>
-    </logger>
+    <!-- Silence Akka internals during tests (too noisy at DEBUG) -->
+    <logger name="akka" level="WARN"/>
+    <logger name="akka.actor" level="WARN"/>
+    <logger name="akka.event.slf4j.Slf4jLogger" level="WARN"/>
+    <logger name="akka.remote" level="WARN"/>
+    <logger name="akka.persistence" level="WARN"/>
+    <logger name="akka.contrib.persistence.mongodb" level="WARN"/>
+    <logger name="com.mongodb" level="WARN"/>
+    <logger name="org.mongodb" level="WARN"/>
 
-    <logger name="akka" level="DEBUG"/>
-    <logger name="akka.actor" level="DEBUG"/>
-    <logger name="akka.event.slf4j.Slf4jLogger" level="DEBUG"/>
-    <logger name="akka.remote" level="DEBUG"/>
-
-    <root level="DEBUG">
-        <appender-ref ref="CapturingAppender"/>
+    <root level="INFO">
         <appender-ref ref="CONSOLE"/>
     </root>
 </configuration>

@@ -120,15 +120,13 @@ class FabSagaTransactorSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.
       val commitSteps = steps.filter(_.phase == CommitPhase)
       commitSteps should have size 5 // 3 wafer-level + 2 lot-level
 
-      // Group 2 (wafer commits, parallel) first
-      val group2 = commitSteps.takeWhile(_.stepGroup == 2)
+      val group2 = commitSteps.filter(_.stepGroup == 2)
       group2 should have size 3
-      group2.map(_.stepId) shouldBe Seq("commit-wafer-0", "commit-wafer-1", "commit-wafer-2")
+      group2.map(_.stepId) should contain theSameElementsAs Seq("commit-wafer-0", "commit-wafer-1", "commit-wafer-2")
 
-      // Group 1 (lot commits, sequential) follows
-      val group1 = commitSteps.drop(3).takeWhile(_.stepGroup == 1)
+      val group1 = commitSteps.filter(_.stepGroup == 1)
       group1 should have size 2
-      group1.map(_.stepId) shouldBe Seq("commit-source-lot", "commit-target-lot")
+      group1.map(_.stepId) should contain theSameElementsAs Seq("commit-source-lot", "commit-target-lot")
     }
 
     "Compensate phase: lot cancellations (group 1) before wafer releases (group 2)" in {

@@ -3,7 +3,7 @@ package net.imadz.fab.domain
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import net.imadz.application.aggregates.WaferProtocol._
 import net.imadz.domain.entities.WaferEntity
-import net.imadz.domain.entities.WaferEntity.{Active, Scrapped, WaferCreated, WaferScrapped, WaferStatusChanged, WaferTransferCommitted, WaferTransferReleased, WaferTransferReserved}
+import net.imadz.domain.entities.WaferEntity.{Active, OnHold, Scrapped, Skipped, WaferCreated, WaferHoldPlaced, WaferHoldReleased, WaferScrapped, WaferSkipped, WaferStatusChanged, WaferTransferCommitted, WaferTransferReleased, WaferTransferReserved}
 import net.imadz.fab.saga.FabSagaTestConfig
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -200,6 +200,107 @@ class WaferAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.tes
   }
 
   // ===================================================================
+  // Hold & Release
+  // ===================================================================
+
+  "HoldWafer" should {
+    "place active wafer on hold" in {
+      createWafer(lotId)
+
+      val result = waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        HoldWafer("borderline CD", replyTo))
+
+      result.reply.error shouldBe None
+      result.events should contain(WaferHoldPlaced("borderline CD"))
+      result.state.status shouldBe OnHold
+    }
+
+    "reject hold on already held wafer" in {
+      createWafer(lotId)
+      waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        HoldWafer("first hold", replyTo))
+
+      val result = waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        HoldWafer("double hold", replyTo))
+
+      result.reply.error shouldBe defined
+      result.reply.error.get.code shouldBe "WFR_030"
+    }
+
+    "reject hold on scrapped wafer" in {
+      createWafer(lotId)
+      scrapWafer("defect")
+
+      val result = waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        HoldWafer("hold scrapped", replyTo))
+
+      result.reply.error shouldBe defined
+      result.reply.error.get.code shouldBe "WFR_031"
+    }
+  }
+
+  "ReleaseHold" should {
+    "release wafer from hold back to active" in {
+      createWafer(lotId)
+      waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        HoldWafer("review needed", replyTo))
+
+      val result = waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        ReleaseHold(replyTo))
+
+      result.reply.error shouldBe None
+      result.events should contain(WaferHoldReleased())
+      result.state.status shouldBe Active
+    }
+
+    "reject release when not on hold" in {
+      createWafer(lotId)
+
+      val result = waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        ReleaseHold(replyTo))
+
+      result.reply.error shouldBe defined
+      result.reply.error.get.code shouldBe "WFR_032"
+    }
+  }
+
+  "SkipWafer" should {
+    "skip active wafer" in {
+      createWafer(lotId)
+
+      val result = waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        SkipWafer("sampling skip", replyTo))
+
+      result.reply.error shouldBe None
+      result.events should contain(WaferSkipped("sampling skip"))
+      result.state.status shouldBe Skipped
+    }
+
+    "reject skip on already skipped wafer" in {
+      createWafer(lotId)
+      waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        SkipWafer("first skip", replyTo))
+
+      val result = waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        SkipWafer("double skip", replyTo))
+
+      result.reply.error shouldBe defined
+      result.reply.error.get.code shouldBe "WFR_040"
+    }
+
+    "reject skip on scrapped wafer" in {
+      createWafer(lotId)
+      scrapWafer("defect")
+
+      val result = waferTestKit.runCommand[WaferConfirmation](replyTo =>
+        SkipWafer("skip scrapped", replyTo))
+
+      result.reply.error shouldBe defined
+      result.reply.error.get.code shouldBe "WFR_041"
+    }
+  }
+
+  // ===================================================================
   // Change Status
   // ===================================================================
 
@@ -226,6 +327,36 @@ class WaferAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.tes
       result.reply.error shouldBe None
       result.reply.status shouldBe Some(Active)
       result.reply.lotId shouldBe Some(lotId)
+    }
+  }
+
+  // ===================================================================
+  // Idempotency: Repeat commit/release after already completed
+  // ===================================================================
+
+  "CommitTransfer idempotency" should {
+    "handle repeat commit (no new events)" in {
+      createWafer(lotId)
+      val txId = UUID.randomUUID()
+      waferTestKit.runCommand[TransferConfirmation](r => ReserveTransfer(txId, reworkLotId, r))
+      waferTestKit.runCommand[TransferConfirmation](r => CommitTransfer(txId, reworkLotId, r))
+
+      val result = waferTestKit.runCommand[TransferConfirmation](r => CommitTransfer(txId, reworkLotId, r))
+      result.reply.error shouldBe None
+      result.events shouldBe empty
+    }
+  }
+
+  "ReleaseTransfer idempotency" should {
+    "handle release after already committed (no-op)" in {
+      createWafer(lotId)
+      val txId = UUID.randomUUID()
+      waferTestKit.runCommand[TransferConfirmation](r => ReserveTransfer(txId, reworkLotId, r))
+      waferTestKit.runCommand[TransferConfirmation](r => CommitTransfer(txId, reworkLotId, r))
+
+      val result = waferTestKit.runCommand[TransferConfirmation](r => ReleaseTransfer(txId, r))
+      result.reply.error shouldBe None
+      result.events shouldBe empty
     }
   }
 
