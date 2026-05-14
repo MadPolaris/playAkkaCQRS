@@ -1,123 +1,103 @@
 /**
  * Fab Demo — M3 Closed-Loop Photo Cell Simulation
  *
- * Connects to the FabDemoController WebSocket and renders:
- *   1. Factory floor SVG (optimized: Decision Engine top, equipment same row, 3-tier rails)
- *   2. Timeline log
- *   3. Summary panel
- *   4. Classification wheel
- *   5. Event Sourcing Ledger
- *   6. Aggregate State panel (需求5)
- *   7. Scrap Bin (需求1)
- *   8. Global Status indicator (需求3)
- *   9. FOUP Lot labels (需求2)
+ * UI control state + DOM rendering functions.
+ * Observables streams are defined in fab_observable.js and wired via initObservableSubscriptions().
  */
-
 (function() {
   'use strict';
 
   // ===================================================================
-  // State
+  // UI State (control-only, no data)
   // ===================================================================
   var state = {
-    ws: null,
     speed: 1,
     paused: false,
-    waferCount: 5,
-    eventLog: [],
-    waferResults: {},  // waferId -> classification
-    scrapCount: 0,
-    scrappedWaferIds: {},  // dedup: waferId -> true
     aggregatePanelOpen: true
   };
 
-  // ===================================================================
-  // WebSocket
-  // ===================================================================
-  function connectWebSocket() {
-    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    var wsUrl = protocol + '//' + window.location.host + '/ws/fab-demo/events';
-    state.ws = new WebSocket(wsUrl);
-    state.ws.onmessage = function(msg) {
-      try {
-        var event = JSON.parse(msg.data);
-        handleEvent(event);
-      } catch(e) {
-        console.warn('Failed to parse WebSocket message:', e);
-      }
-    };
-    state.ws.onclose = function() {
-      console.log('WebSocket closed, reconnecting in 3s...');
-      setTimeout(connectWebSocket, 3000);
-    };
-  }
+  // Data accumulators (reset on _rxDestroy)
+  var _scrap = { count: 0, ids: {} };
+  var _waferResults = {};
 
   // ===================================================================
-  // Event Handlers
+  // Observable wiring (replaces handleEvent + connectWebSocket)
   // ===================================================================
-  function handleEvent(event) {
-    if (state.paused && event.type !== 'DemoResumed') return;
+  function initObservableSubscriptions() {
+    var S = window._rxStreams;
+    var sub = window._rxSubscribe;
 
-    addTimelineEntry(event);
+    // --- SVG / Equipment ---
+    sub(S.equipmentState$, updateEquipmentNode);
+    sub(S.foupInTransit$, animateFoupMovement);
+    sub(S.foupArrived$, showFoupAtEquipment);
+    sub(S.processingStarted$, pulseEquipment);
+    sub(S.processingCompleted$, resetEquipmentColor);
+    sub(S.orchestratorCmd$, showOrchestratorCommand);
+    sub(S.foupStateChanged$, updateFoupState);
 
-    switch (event.type) {
-      case 'EquipmentStateChanged':
-        updateEquipmentNode(event.data);
-        break;
-      case 'FoupInTransit':
-        animateFoupMovement(event.data);
-        break;
-      case 'FoupArrivedAtPort':
-        showFoupAtEquipment(event.data);
-        break;
-      case 'ProcessingStarted':
-        pulseEquipment(event.data);
-        break;
-      case 'ProcessingCompleted':
-        resetEquipmentColor(event.data);
-        break;
-      case 'MeasurementResultEvent':
-        updateClassificationWheel(event.data);
-        break;
-      case 'LotUpdated':
-        updateLotSummary(event.data);
-        break;
-      case 'DemoCompleted':
-        updateFoupCompleted();
-        addTimelineEntry({type:'DemoCompleted', data:event.data}, true);
-        break;
-      case 'OrchestratorCommand':
-        showOrchestratorCommand(event.data);
-        break;
-      case 'FoupStateChanged':
-        updateFoupState(event.data);
-        break;
-      case 'LedgerStepAdvanced':
-        highlightLedgerRow(event.data.stepSeq);
-        updateStepProgress(event.data.stepName || '');
-        break;
-      case 'GlobalStatusChanged':
-        updateGlobalStatus(event.data);
-        break;
-      case 'AggregateStateUpdated':
-        updateAggregatePanel(event.data);
-        break;
-      case 'ScrapEvent':
-        handleScrapEvent(event.data);
-        break;
-      case 'DomainEventRecorded':
-        handleDomainEventRecorded(event.data);
-        break;
-      case 'SagaOperationEvent':
-        showSagaStatus(event.data);
-        break;
-      case 'DecisionMade':
-        showWaferDecision(event.data);
-        break;
-      case 'DemoStarted':
-        updateGlobalStatus({status: 'STARTED', detail: event.data.name, phase: 'Init'});
-        break;
-    }
+    // --- Measurement + Classification ---
+    sub(S.measurement$, updateClassificationWheel);
+
+    // --- Lot Summary ---
+    sub(S.lotUpdated$, updateLotSummary);
+
+    // --- Demo Lifecycle ---
+    sub(S.demoCompleted$, function(data) {
+      updateFoupCompleted();
+      addTimelineEntry({type: 'DemoCompleted', data: data}, true);
+    });
+    sub(S.demoStarted$, function(data) {
+      updateGlobalStatus({status: 'STARTED', detail: data.name, phase: 'Init'});
+    });
+
+    // --- Ledger ---
+    sub(S.ledger$, function(data) {
+      highlightLedgerRow(data.stepSeq);
+      updateStepProgress(data.stepName || '');
+    });
+
+    // --- Global Status ---
+    sub(S.globalStatus$, updateGlobalStatus);
+
+    // --- Aggregate State (scan reducer) ---
+    var aggModel$ = S.aggregateState$.pipe(
+      rxjs.operators.scan(window._rxReducers.aggregate, {lots: {}, wafers: {}})
+    );
+    sub(aggModel$, renderAggregatePanel);
+
+    // --- Domain Events (scan reducer) ---
+    var deModel$ = S.domainEvent$.pipe(
+      rxjs.operators.scan(window._rxReducers.domainEvent, {
+        count: 0, layerCounts: [0, 0, 0, 0], layerEvents: [[], [], [], []]
+      })
+    );
+    sub(deModel$, function(model) {
+      document.getElementById('deCount').textContent = model.count;
+      window._deModel = model;
+      renderDomainEventSidebar(model);
+    });
+
+    // --- Scrap Events (local dedup state) ---
+    _scrap = { count: 0, ids: {} };
+    sub(S.scrapEvent$, function(data) {
+      if (_scrap.ids[data.waferId]) return;
+      _scrap.ids[data.waferId] = true;
+      _scrap.count++;
+      handleScrapEvent(data, _scrap.count);
+    });
+
+    // --- Saga / Decision ---
+    sub(S.sagaEvent$, showSagaStatus);
+    sub(S.decisionMade$, showWaferDecision);
+
+    // --- Timeline (all events, batched at ~10fps) ---
+    sub(S.timeline$, function(batch) {
+      batch.forEach(function(evt) { addTimelineEntry(evt); });
+    });
+
+    // Sync paused state with the rx filter in fab_observable.js
+    window._demoPaused = state.paused;
   }
 
   // ===================================================================
@@ -196,18 +176,16 @@
   }
 
   // ===================================================================
-  // FOUP Movement Animation (requestAnimationFrame — reliable cross-browser)
+  // FOUP Movement Animation (requestAnimationFrame)
   // ===================================================================
   var _foupRafId = null;
   var _reworkFoupRafId = null;
   var _reworkFadeTimer = null;
 
-  /** Ease-in-out quad */
   function _easeInOutQuad(t) {
     return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   }
 
-  /** Animate an SVG rect + optional label from fromPos to toPos over durationMs. */
   function _animateRect(rectId, labelId, fromPos, toPos, durationMs) {
     var rect = document.getElementById(rectId);
     if (!rect) return;
@@ -259,12 +237,10 @@
   }
 
   function animateFoupMovement(data) {
-    // Rework path: use rework FOUP icon (CDSEM or MET → LITHO)
     if ((data.fromArea === 'CDSEM' || data.fromArea === 'MET') && data.toArea === 'LITHO') {
       animateReworkFoup(data);
       return;
     }
-    // Return to Stocker: hide rework FOUP
     if ((data.fromArea === 'CDSEM' || data.fromArea === 'MET') && data.toArea === 'STOCKER') {
       var rf = document.getElementById('reworkFoupIcon');
       if (rf) rf.setAttribute('opacity', '0');
@@ -288,15 +264,11 @@
     if (!rf) return;
     rf.setAttribute('opacity', '1');
     var rl = document.getElementById('reworkFoupLabel');
-    if (rl) {
-      rl.setAttribute('opacity', '1');
-    }
+    if (rl) rl.setAttribute('opacity', '1');
 
     var duration = Math.max(800, (data.etaMs || 2000) / state.speed);
-    // Straight rework path: CDSEM edge (304,155) → Litho edge (424,155)
     _animateRect('reworkFoupIcon', 'reworkFoupLabel', {x: 304, y: 155}, {x: 424, y: 155}, duration);
 
-    // Show split label
     var sl = document.getElementById('splitMergeLabel');
     if (sl) {
       sl.textContent = (window.__i18n && window.__i18n.phase_split) ? '↗ ' + window.__i18n.phase_split : '↗ SPLIT';
@@ -312,7 +284,6 @@
   }
 
   function showFoupAtEquipment(data) {
-    // Cancel any in-flight main-FOUP animation
     if (_foupRafId) { cancelAnimationFrame(_foupRafId); _foupRafId = null; }
     var pos = getAreaPosition(data.equipmentId);
     var foup = document.getElementById('foupIcon');
@@ -330,7 +301,6 @@
 
   function getAreaPosition(areaId) {
     var key = areaId.replace('-01', '');
-    // FOUP icon center positions for all equipment areas (matching SVG layout)
     var map = {
       'STOCKER': {x: 55, y: 170},
       'CLEAN': {x: 184, y: 133},
@@ -351,7 +321,7 @@
     return map[key] || {x: 55, y: 170};
   }
 
-  // ---- Orchestrator Command (also shows on bus) ----
+  // ---- Orchestrator Command ----
   function showOrchestratorCommand(data) {
     var de = document.getElementById('eq-decision');
     if (de) {
@@ -367,7 +337,6 @@
       st.textContent = data.commandType + ': ' + (data.description || '').substring(0, 35);
       st.setAttribute('fill', '#58a6ff');
     }
-    // Show command on bus
     var busLabel = document.getElementById('busCommandLabel');
     if (busLabel) {
       busLabel.textContent = '▶ ' + data.commandType;
@@ -378,15 +347,13 @@
     pulseEquipment({equipmentId: data.targetEquipmentId});
   }
 
-  // ---- FOUP State + Lot Labels (需求2: Lot No.) ----
+  // ---- FOUP State + Lot Labels ----
   function updateFoupState(data) {
-    // Main FOUP lot label
     var label = document.getElementById('foupLotLabel');
     if (label && data.lotId) {
       label.textContent = data.lotId + ' [' + data.activeWaferCount + 'w]';
       label.setAttribute('opacity', '1');
     }
-    // Color based on status
     var color = '#f59e0b';
     if (data.status === 'COMPLETED') color = '#3fb950';
     else if (data.status === 'SPLITTING') color = '#a855f7';
@@ -397,13 +364,11 @@
     if (foup) foup.setAttribute('fill', color);
     if (label) label.setAttribute('fill', color);
 
-    // Rework lot label
     var rwkLabel = document.getElementById('reworkFoupLabel');
     if (rwkLabel && data.reworkLotId) {
       rwkLabel.textContent = data.reworkLotId + ' [' + data.reworkWaferCount + 'w]';
       rwkLabel.setAttribute('opacity', '1');
       rwkLabel.setAttribute('fill', '#a855f7');
-      // Show rework FOUP icon near CDSEM during split
       var rwf = document.getElementById('reworkFoupIcon');
       if (rwf && data.status === 'SPLITTING') {
         rwf.setAttribute('x', '770');
@@ -426,9 +391,7 @@
       foup.setAttribute('fill', '#3fb950');
     }
     var label = document.getElementById('foupLotLabel');
-    if (label) {
-      label.setAttribute('fill', '#3fb950');
-    }
+    if (label) label.setAttribute('fill', '#3fb950');
     var rf = document.getElementById('reworkFoupIcon');
     if (rf) rf.setAttribute('opacity', '0');
     var rl = document.getElementById('reworkFoupLabel');
@@ -438,7 +401,7 @@
   }
 
   // ===================================================================
-  // Global Status Indicator (需求3: 工作状态)
+  // Global Status Indicator
   // ===================================================================
   var statusColorMap = {
     'LOADING': '#58a6ff',
@@ -455,13 +418,11 @@
   };
 
   function updateGlobalStatus(data) {
-    // Update control bar status indicator
     var stEl = document.getElementById('globalStatusText');
     if (stEl) {
       var color = statusColorMap[data.status] || '#8b949e';
       stEl.innerHTML = '<span style="color:' + color + '">●</span> ' + data.detail;
     }
-    // Update Decision Engine status text
     var deSt = document.getElementById('status-decision');
     if (deSt) {
       deSt.textContent = data.status + ': ' + data.detail;
@@ -470,18 +431,12 @@
   }
 
   // ===================================================================
-  // Scrap Bin (需求1: 报废去向)
+  // Scrap Bin
   // ===================================================================
-  function handleScrapEvent(data) {
-    // Deduplicate: skip if this wafer was already scrapped
-    if (state.scrappedWaferIds[data.waferId]) return;
-    state.scrappedWaferIds[data.waferId] = true;
+  function handleScrapEvent(data, count) {
+    var curCount = count || 1;
 
-    state.scrapCount++;
-    var waferNum = data.waferId.replace('WAFER-','');
-    var curCount = state.scrapCount;
-
-    // Update scrap bin count text
+    // Update scrap bin count
     var sc = document.getElementById('scrapCount');
     if (sc) sc.textContent = curCount + ' wafer' + (curCount > 1 ? 's' : '');
 
@@ -496,7 +451,7 @@
       }, 900);
     }
 
-    // --- Animate flying wafer dot from MET (304,248) to Scrap Bin (304,340) ---
+    var waferNum = data.waferId.replace('WAFER-','');
     var svg = document.getElementById('factorySvg');
     var NS = 'http://www.w3.org/2000/svg';
     var flyId = 'scrap-fly-' + waferNum;
@@ -504,7 +459,6 @@
     var flyG = document.createElementNS(NS, 'g');
     flyG.setAttribute('id', flyId);
 
-    // Flying dot
     var flyDot = document.createElementNS(NS, 'circle');
     flyDot.setAttribute('cx', '304');
     flyDot.setAttribute('cy', '248');
@@ -512,14 +466,12 @@
     flyDot.setAttribute('fill', '#f85149');
     flyDot.setAttribute('stroke', '#ff6b6b');
     flyDot.setAttribute('stroke-width', '1.5');
-    // animate cx along scrap path
     var ax = document.createElementNS(NS, 'animate');
     ax.setAttribute('attributeName', 'cx');
     ax.setAttribute('values', '304;304');
     ax.setAttribute('dur', '0.7s');
     ax.setAttribute('fill', 'freeze');
     flyDot.appendChild(ax);
-    // arc down into scrap bin
     var ay = document.createElementNS(NS, 'animate');
     ay.setAttribute('attributeName', 'cy');
     ay.setAttribute('values', '248;238;340');
@@ -528,7 +480,6 @@
     flyDot.appendChild(ay);
     flyG.appendChild(flyDot);
 
-    // Flying label
     var flyLbl = document.createElementNS(NS, 'text');
     flyLbl.setAttribute('x', '304');
     flyLbl.setAttribute('y', '244');
@@ -554,12 +505,10 @@
 
     svg.appendChild(flyG);
 
-    // After flight, remove flying dot and place permanent dot inside scrap bin
     setTimeout(function() {
       var fg = document.getElementById(flyId);
       if (fg) fg.remove();
 
-      // Place permanent dot in scrap bin
       var dotsGroup = document.getElementById('scrapWaferDots');
       if (dotsGroup) {
         var gap = 16;
@@ -584,7 +533,6 @@
         dotsGroup.appendChild(label);
       }
 
-      // Pulse scrap bin border
       var bin = document.getElementById('scrapBin');
       if (bin) {
         bin.setAttribute('opacity', '1');
@@ -597,7 +545,7 @@
       }
     }, 750);
 
-    // Pulse the classification wheel dot
+    // Pulse classification wheel dot
     var idx = parseInt(waferNum) - 1;
     var wd = document.getElementById('wd-' + idx);
     if (wd) {
@@ -617,13 +565,10 @@
   }
 
   // ===================================================================
-  // Domain Event Sidebar (four-layer timeline)
+  // Domain Event Sidebar (pure render from model)
   // ===================================================================
-  var domainEventCount = 0;
-  var deLayerCounts = [0, 0, 0, 0]; // L0=Chain, L1=Saga, L2=Aggregate, L3=Process
-  var deLayerVisible = [true, true, true, false]; // L0/L1/L2 open by default, L3 collapsed
-  var deLayerEvents = [[], [], [], []]; // events per layer (newest first)
-  var deActiveFilter = -1; // -1 = show all, 0-3 = filter to layer
+  var deLayerVisible = [true, true, true, false];
+  var deActiveFilter = -1;
 
   var deLayerColors = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b'];
   var deLayerNames = ['Chain / Orchestration', 'Saga / Transaction', 'Aggregate / Entity', 'Process / Execution'];
@@ -633,114 +578,9 @@
     sidebar.classList.toggle('open');
   };
 
-  // Incremental aggregate model, built from domain events
-  var aggregateModel = { lots: {}, wafers: {} };
-
-  function handleDomainEventRecorded(data) {
-    domainEventCount++;
-    var layer = (data.layer !== undefined) ? data.layer : 3;
-    deLayerCounts[layer]++;
-    deLayerEvents[layer].unshift(data);
-
-    document.getElementById('deCount').textContent = domainEventCount;
-    renderDomainEventSidebar();
-
-    // Aggregate model is updated via AggregateStateUpdated pipeline events only,
-    // not from individual domain events (which use entity UUIDs, not scenario IDs).
-  }
-
-  function applyDomainEventToModel(data) {
-    var evtType = data.eventType;
-    var evtData = data.data;
-    try {
-      if (evtType === 'LotCreated') {
-        var m = evtData.match(/LotCreated\(([^,]*),/);
-        var productId = m ? m[1] : '';
-        aggregateModel.lots[data.aggregateId] = {
-          lotId: data.aggregateId, productId: productId,
-          status: 'Active', waferCount: 0, passCount: 0, scrapCount: 0,
-          waferIds: []
-        };
-      } else if (evtType === 'WaferCreated') {
-        var m2 = evtData.match(/WaferCreated\(([^)]*)\)/);
-        var lotId = m2 ? m2[1] : '';
-        aggregateModel.wafers[data.aggregateId] = {
-          waferId: data.aggregateId, status: 'Active', lotId: lotId,
-          classification: 'Created', reworkCount: 0
-        };
-        // Add wafer to lot
-        var lot = aggregateModel.lots[lotId];
-        if (lot && lot.waferIds.indexOf(data.aggregateId) < 0) {
-          lot.waferIds.push(data.aggregateId);
-          lot.waferCount = lot.waferIds.length;
-        }
-      } else if (evtType === 'WaferScrapped') {
-        var w = aggregateModel.wafers[data.aggregateId];
-        if (w) { w.status = 'Scrapped'; w.classification = 'SCRAP'; }
-      } else if (evtType === 'WaferTransferCommitted') {
-        var m3 = evtData.match(/WaferTransferCommitted\(([^,]+),([^)]+)\)/);
-        if (m3) {
-          var w2 = aggregateModel.wafers[data.aggregateId];
-          var newLotId = m3[2].trim();
-          if (w2) {
-            // Remove from old lot
-            var oldLot = aggregateModel.lots[w2.lotId];
-            if (oldLot) {
-              oldLot.waferIds = oldLot.waferIds.filter(function(id) { return id !== data.aggregateId; });
-              oldLot.waferCount = oldLot.waferIds.length;
-            }
-            // Add to new lot
-            w2.lotId = newLotId;
-            var newLot = aggregateModel.lots[newLotId];
-            if (newLot && newLot.waferIds.indexOf(data.aggregateId) < 0) {
-              newLot.waferIds.push(data.aggregateId);
-              newLot.waferCount = newLot.waferIds.length;
-            }
-          }
-        }
-      } else if (evtType === 'LotSealed') {
-        var lot2 = aggregateModel.lots[data.aggregateId];
-        if (lot2) lot2.status = 'Sealed';
-      }
-    } catch(e) { /* ignore parse errors for non-matching events */ }
-  }
-
-  function renderAggregatePanelFromModel() {
-    var tbody = document.getElementById('aggTreeBody');
-    var rows = '';
-    var lotIds = Object.keys(aggregateModel.lots);
-    if (lotIds.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
-      return;
-    }
-    lotIds.forEach(function(lotId) {
-      var lot = aggregateModel.lots[lotId];
-      rows += '<tr class="lot-row">' +
-        '<td>Lot: ' + (lot.productId || lotId) + '</td>' +
-        '<td>' + (lot.status || 'Active') + '</td>' +
-        '<td colspan="2">Wafers: ' + (lot.waferCount || 0) +
-        ' | Pass: ' + (lot.passCount || 0) +
-        ' | Scrap: ' + (lot.scrapCount || 0) + '</td>' +
-        '</tr>';
-      (lot.waferIds || []).forEach(function(wid) {
-        var w = aggregateModel.wafers[wid];
-        if (!w) return;
-        var stCls = w.status === 'Scrapped' ? 'status-Scrapped' : 'status-Active';
-        var clsCls = 'cls-' + (w.classification || 'Pending');
-        rows += '<tr class="wafer-row">' +
-          '<td>' + (w.waferId || wid).substring(0, 8) + '</td>' +
-          '<td class="' + stCls + '">' + (w.status || 'Active') + '</td>' +
-          '<td class="' + clsCls + '">' + (w.classification || 'Pending') + '</td>' +
-          '<td>' + (w.reworkCount || 0) + '</td>' +
-          '</tr>';
-      });
-    });
-    tbody.innerHTML = rows;
-  }
-
-  function renderDomainEventSidebar() {
+  function renderDomainEventSidebar(model) {
     var list = document.getElementById('deList');
-    if (domainEventCount === 0) {
+    if (model.count === 0) {
       list.innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">' + ((window.__i18n && window.__i18n.de_placeholder) || 'Waiting for events...') + '</span></div>';
       return;
     }
@@ -753,35 +593,34 @@
     for (var l = 0; l < 4; l++) {
       var activeCls = deActiveFilter === l ? ' active' : '';
       html += '<button class="de-filter-btn' + activeCls + '" style="border-left:3px solid ' + deLayerColors[l] + '" onclick="deSetFilter(' + l + ')">' +
-        'L' + l + ' <span class="de-layer-badge">' + deLayerCounts[l] + '</span></button>';
+        'L' + l + ' <span class="de-layer-badge">' + model.layerCounts[l] + '</span></button>';
     }
     html += '</div>';
 
-    // Render layers (respect filter)
-    for (var l = 0; l < 4; l++) {
-      if (deActiveFilter !== -1 && deActiveFilter !== l) continue;
-      if (deLayerEvents[l].length === 0) continue;
+    for (var ll = 0; ll < 4; ll++) {
+      if (deActiveFilter !== -1 && deActiveFilter !== ll) continue;
+      if (model.layerEvents[ll].length === 0) continue;
 
-      var collapsed = !deLayerVisible[l];
+      var collapsed = !deLayerVisible[ll];
       var arrow = collapsed ? '▶' : '▼';
-      html += '<div class="de-layer-group" style="border-left:3px solid ' + deLayerColors[l] + '">';
-      html += '<div class="de-layer-header" onclick="deToggleLayer(' + l + ')">';
+      html += '<div class="de-layer-group" style="border-left:3px solid ' + deLayerColors[ll] + '">';
+      html += '<div class="de-layer-header" onclick="deToggleLayer(' + ll + ')">';
       html += '<span class="de-layer-arrow">' + arrow + '</span> ';
-      html += '<span class="de-layer-name">Layer ' + l + ': ' + deLayerNames[l] + '</span> ';
-      html += '<span class="de-layer-count">(' + deLayerCounts[l] + ')</span>';
+      html += '<span class="de-layer-name">Layer ' + ll + ': ' + deLayerNames[ll] + '</span> ';
+      html += '<span class="de-layer-count">(' + model.layerCounts[ll] + ')</span>';
       html += '</div>';
 
       if (!collapsed) {
-        html += '<div class="de-layer-events" id="de-layer-' + l + '">';
-        var events = deActiveFilter === -1 ? deLayerEvents[l] : deLayerEvents[l];
+        html += '<div class="de-layer-events" id="de-layer-' + ll + '">';
+        var events = model.layerEvents[ll];
         var maxShow = deActiveFilter === -1 ? Math.min(events.length, 20) : events.length;
         for (var i = 0; i < maxShow; i++) {
           var e = events[i];
           var ts = new Date(e.timestamp).toTimeString().slice(0, 8);
-          var indent = l === 1 && e.eventType.indexOf('Step') >= 0 ? '├ ' : '';
-          html += '<div class="de-entry" style="border-left:2px solid ' + deLayerColors[l] + '">';
+          var indent = ll === 1 && e.eventType.indexOf('Step') >= 0 ? '├ ' : '';
+          html += '<div class="de-entry" style="border-left:2px solid ' + deLayerColors[ll] + '">';
           html += '<span class="de-ts">' + ts + '</span> ';
-          html += '<span class="de-type" style="color:' + deLayerColors[l] + '">' + indent + e.eventType + '</span>';
+          html += '<span class="de-type" style="color:' + deLayerColors[ll] + '">' + indent + e.eventType + '</span>';
           html += '<span class="de-agg-id">[' + e.aggregateType + ':' + (e.aggregateId || '').substring(0, 8) + ']</span>';
           html += '<div class="de-data">' + e.data + '</div>';
           html += '</div>';
@@ -799,18 +638,17 @@
 
   window.deSetFilter = function(layer) {
     deActiveFilter = layer;
-    // Auto-expand the filtered layer
     if (layer >= 0) deLayerVisible[layer] = true;
-    renderDomainEventSidebar();
+    // Re-render from current rx model
+    renderDomainEventSidebar(window._deModel || {count: 0, layerCounts: [0,0,0,0], layerEvents: [[],[],[],[]]});
   };
 
   window.deToggleLayer = function(layer) {
     deLayerVisible[layer] = !deLayerVisible[layer];
-    renderDomainEventSidebar();
+    renderDomainEventSidebar(window._deModel || {count: 0, layerCounts: [0,0,0,0], layerEvents: [[],[],[],[]]});
   };
 
-  // --- Saga / Decision UI helpers ---
-
+  // --- Saga / Decision helpers ---
   function showSagaStatus(data) {
     var label = document.getElementById('splitMergeLabel');
     if (label) {
@@ -823,7 +661,6 @@
   }
 
   function showWaferDecision(data) {
-    // Update classification wheel dot
     var wid = data.waferId;
     var waferIdx = parseInt(wid.split('-').pop()) - 1;
     if (isNaN(waferIdx)) return;
@@ -831,83 +668,51 @@
     if (!dot) return;
     var action = data.action || '';
     if (action.indexOf('HOLD') >= 0) {
-      dot.setAttribute('fill', '#d29922'); // amber for hold
+      dot.setAttribute('fill', '#d29922');
     } else if (action.indexOf('SCRAP') >= 0) {
-      dot.setAttribute('fill', '#f85149'); // red for scrap
+      dot.setAttribute('fill', '#f85149');
     } else if (action.indexOf('PASS') >= 0 || action.indexOf('Merge') >= 0) {
-      dot.setAttribute('fill', '#3fb950'); // green for pass
+      dot.setAttribute('fill', '#3fb950');
     } else if (action.indexOf('Skip') >= 0) {
-      dot.setAttribute('fill', '#8b949e'); // grey for skip
+      dot.setAttribute('fill', '#8b949e');
     }
   }
 
   // ===================================================================
-  // Aggregate State Panel (需求5: 业务聚合状态)
+  // Aggregate State Panel (pure render from model)
   // ===================================================================
-  function updateAggregatePanel(data) {
-    // Sync bulk pipeline event into incremental model
-    var srcLot = data.sourceLot;
-    if (srcLot && srcLot.lotId) {
-      if (!aggregateModel.lots[srcLot.lotId]) {
-        aggregateModel.lots[srcLot.lotId] = {
-          lotId: srcLot.lotId, productId: srcLot.lotId,
-          status: srcLot.status, waferCount: srcLot.waferCount,
-          passCount: srcLot.passCount, scrapCount: srcLot.scrapCount,
-          waferIds: []
-        };
-      } else {
-        var sl = aggregateModel.lots[srcLot.lotId];
-        sl.status = srcLot.status;
-        sl.waferCount = srcLot.waferCount;
-        sl.passCount = srcLot.passCount;
-        sl.scrapCount = srcLot.scrapCount;
-      }
+  function renderAggregatePanel(model) {
+    var tbody = document.getElementById('aggTreeBody');
+    var lotIds = Object.keys(model.lots);
+    if (lotIds.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
+      return;
     }
-    // Child/rework lots
-    var childLots = data.reworkLot ? [data.reworkLot] : [];
-    childLots.forEach(function(cl) {
-      if (!aggregateModel.lots[cl.lotId]) {
-        aggregateModel.lots[cl.lotId] = {
-          lotId: cl.lotId, productId: cl.lotId,
-          status: cl.status, waferCount: cl.waferCount,
-          passCount: cl.passCount || 0, scrapCount: cl.scrapCount || 0,
-          waferIds: []
-        };
-      }
+
+    var rows = '';
+    lotIds.forEach(function(lotId) {
+      var lot = model.lots[lotId];
+      rows += '<tr class="lot-row">' +
+        '<td>Lot: ' + (lot.productId || lotId) + '</td>' +
+        '<td>' + (lot.status || 'Active') + '</td>' +
+        '<td colspan="2">Wafers: ' + (lot.waferCount || 0) +
+        ' | Pass: ' + (lot.passCount || 0) +
+        ' | Scrap: ' + (lot.scrapCount || 0) + '</td>' +
+        '</tr>';
+      (lot.waferIds || []).forEach(function(wid) {
+        var w = model.wafers[wid];
+        if (!w) return;
+        var stCls = w.status === 'Scrapped' ? 'status-Scrapped' : 'status-Active';
+        var clsCls = 'cls-' + (w.classification || 'Pending');
+        rows += '<tr class="wafer-row">' +
+          '<td>' + (w.waferId || wid).substring(0, 8) + '</td>' +
+          '<td class="' + stCls + '">' + (w.status || 'Active') + '</td>' +
+          '<td class="' + clsCls + '">' + (w.classification || 'Pending') + '</td>' +
+          '<td>' + (w.reworkCount || 0) + '</td>' +
+          '</tr>';
+      });
     });
-    // Wafers
-    (data.wafers || []).forEach(function(w) {
-      if (!aggregateModel.wafers[w.waferId]) {
-        aggregateModel.wafers[w.waferId] = {
-          waferId: w.waferId, status: w.status, lotId: w.lotId,
-          classification: w.classification, reworkCount: w.reworkCount
-        };
-        var lot = aggregateModel.lots[w.lotId];
-        if (lot && lot.waferIds.indexOf(w.waferId) < 0) {
-          lot.waferIds.push(w.waferId);
-          lot.waferCount = lot.waferIds.length;
-        }
-      } else {
-        var ew = aggregateModel.wafers[w.waferId];
-        ew.status = w.status;
-        ew.classification = w.classification;
-        ew.reworkCount = w.reworkCount;
-        if (ew.lotId !== w.lotId) {
-          var oldLot = aggregateModel.lots[ew.lotId];
-          if (oldLot) {
-            oldLot.waferIds = oldLot.waferIds.filter(function(id) { return id !== w.waferId; });
-            oldLot.waferCount = oldLot.waferIds.length;
-          }
-          ew.lotId = w.lotId;
-          var newLot = aggregateModel.lots[w.lotId];
-          if (newLot && newLot.waferIds.indexOf(w.waferId) < 0) {
-            newLot.waferIds.push(w.waferId);
-            newLot.waferCount = newLot.waferIds.length;
-          }
-        }
-      }
-    });
-    renderAggregatePanelFromModel();
+    tbody.innerHTML = rows;
   }
 
   window.toggleAggregatePanel = function() {
@@ -938,8 +743,8 @@
       case 'SCRAP': dot.setAttribute('fill', '#f85149'); break;
       default: dot.setAttribute('fill', '#30363d');
     }
-    state.waferResults[data.waferId] = data.classification;
-    updateSummary();
+    _waferResults[data.waferId] = data.classification;
+    updateSummary(_waferResults);
   }
 
   function updateLotSummary(data) {
@@ -949,9 +754,10 @@
     document.getElementById('sum-scrap').textContent = data.scrappedWafers || '0';
   }
 
-  function updateSummary() {
+  function updateSummary(waferResults) {
+    var results = waferResults || {};
     var pass = 0, fail = 0, rework = 0;
-    Object.values(state.waferResults).forEach(function(r) {
+    Object.values(results).forEach(function(r) {
       if (r === 'PASS') pass++;
       else if (r === 'FAIL') rework++;
       else if (r === 'SCRAP') fail++;
@@ -1023,10 +829,21 @@
   }
 
   // ===================================================================
-  // Control Actions
+  // UI Reset + Controls
   // ===================================================================
-  /** Clear all UI state for a fresh demo run */
   function _resetAllUI() {
+    // Destroy all rx subscriptions
+    if (typeof window._rxDestroy === 'function') {
+      window._rxDestroy();
+    }
+
+    // Reset local data
+    _scrap = { count: 0, ids: {} };
+    _waferResults = {};
+    deLayerVisible = [true, true, true, false];
+    deActiveFilter = -1;
+    window._deModel = {count: 0, layerCounts: [0,0,0,0], layerEvents: [[],[],[],[]]};
+
     // Cancel in-flight FOUP animations
     if (_foupRafId) { cancelAnimationFrame(_foupRafId); _foupRafId = null; }
     if (_reworkFoupRafId) { cancelAnimationFrame(_reworkFoupRafId); _reworkFoupRafId = null; }
@@ -1051,14 +868,10 @@
     }
 
     // Reset summary counters
-    var sumActive = document.getElementById('sum-active');
-    var sumPass = document.getElementById('sum-pass');
-    var sumRework = document.getElementById('sum-rework');
-    var sumScrap = document.getElementById('sum-scrap');
-    if (sumActive) sumActive.textContent = '-';
-    if (sumPass) sumPass.textContent = '-';
-    if (sumRework) sumRework.textContent = '-';
-    if (sumScrap) sumScrap.textContent = '-';
+    document.getElementById('sum-active').textContent = '-';
+    document.getElementById('sum-pass').textContent = '-';
+    document.getElementById('sum-rework').textContent = '-';
+    document.getElementById('sum-scrap').textContent = '-';
 
     // Reset equipment status indicators
     var statusIds = ['status-stocker','status-clean','status-diff','status-litho','status-etch',
@@ -1068,7 +881,6 @@
       var el = document.getElementById(sid);
       if (el) { el.textContent = idleText; el.setAttribute('fill', '#6e7681'); }
     });
-    // Reset equipment node borders
     var eqIds = ['stocker','clean','diff','litho','etch','implant','dep','cmp','met','dry','log','decision'];
     eqIds.forEach(function(eid) {
       var node = document.getElementById('eq-' + eid);
@@ -1087,9 +899,7 @@
 
     // Reset global status
     var gsEl = document.getElementById('globalStatusText');
-    if (gsEl) {
-      gsEl.innerHTML = (window.__i18n && window.__i18n.controls_ready) || 'Ready';
-    }
+    if (gsEl) { gsEl.innerHTML = (window.__i18n && window.__i18n.controls_ready) || 'Ready'; }
     var busLabel = document.getElementById('busCommandLabel');
     if (busLabel) { busLabel.setAttribute('opacity', '0'); busLabel.textContent = '--'; }
 
@@ -1114,36 +924,37 @@
     // Reset step progress indicator
     var spEl = document.getElementById('stepProgress');
     if (spEl) { spEl.style.display = 'none'; spEl.textContent = ''; }
-  }
-
-  window.startDemo = function() {
-    var sel = document.getElementById('scenarioSelect');
-    var scenarioId = sel.value;
-    var scenarioType = sel.options[sel.selectedIndex].getAttribute('data-type') || '';
-    loadScenarioLedger(scenarioId);
-
-    // Reset JS state
-    state.scrapCount = 0;
-    state.scrappedWaferIds = {};
-    state.waferResults = {};
-    state.eventLog = [];
-    state.paused = false;
-
-    // Reset aggregate model
-    aggregateModel = { lots: {}, wafers: {} };
-    document.getElementById('aggTreeBody').innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
 
     // Reset domain event sidebar
-    domainEventCount = 0;
-    deLayerCounts = [0, 0, 0, 0];
-    deLayerEvents = [[], [], [], []];
-    deActiveFilter = -1;
     document.getElementById('deCount').textContent = '0';
     document.getElementById('deList').innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">' + ((window.__i18n && window.__i18n.de_placeholder) || 'Waiting for events...') + '</span></div>';
     document.getElementById('deSidebar').classList.remove('open');
 
-    // Reset all visual UI
+    // Reset aggregate panel
+    document.getElementById('aggTreeBody').innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
+
+    // Re-init rx subscriptions for the new demo
+    window._rxInit();
+    if (typeof window._rxStreams !== 'undefined') {
+      initObservableSubscriptions();
+    }
+  }
+
+  window.startDemo = function() {
+    // Stash the chosen scenario for ledger loading
+    var sel = document.getElementById('scenarioSelect');
+    var scenarioId = sel.value;
+    var scenarioType = sel.options[sel.selectedIndex].getAttribute('data-type') || '';
+
+    // Reset JS state
+    state.paused = false;
+    window._demoPaused = false;
+
+    // Reset all UI + rx subscriptions
     _resetAllUI();
+
+    // Load ledger for the scenario
+    loadScenarioLedger(scenarioId);
 
     var startUrl = scenarioType === 'dynamic-routing'
       ? '/api/fab-demo/product/' + scenarioId + '/start'
@@ -1155,8 +966,15 @@
       });
   };
 
-  window.pauseDemo = function() { state.paused = true; };
-  window.resumeDemo = function() { state.paused = false; };
+  window.pauseDemo = function() {
+    state.paused = true;
+    window._demoPaused = true;
+  };
+
+  window.resumeDemo = function() {
+    state.paused = false;
+    window._demoPaused = false;
+  };
 
   window.adjustSpeed = function(val) {
     state.speed = parseInt(val);
@@ -1191,7 +1009,6 @@
         });
         var ledgerPanel = document.getElementById('ledgerPanel');
         if (ledgerPanel) ledgerPanel.scrollTop = 0;
-        // Update second Lot column header dynamically per scenario
         if (data.lotReworkLabel) {
           var ths = document.querySelectorAll('#ledgerTable thead th');
           if (ths.length >= 4) {
@@ -1220,11 +1037,9 @@
     });
   }
 
-  // Step progress indicator for dynamic routing (M3.5)
   function updateStepProgress(stepName) {
     var el = document.getElementById('stepProgress');
     if (!el) return;
-    // Try to parse "Step X/Y: AREA (reentry=N)" or "Step X/Y: AREA — ..."
     var match = stepName.match(/^Step\s+(\d+)\/(\d+):\s+(\S+)/);
     if (match) {
       var stepNum = match[1], total = match[2], area = match[3];
@@ -1246,6 +1061,10 @@
   };
 
   document.addEventListener('DOMContentLoaded', function() {
+    // Wire up rx streams (fab_observable.js is loaded first, so _rxStreams exists)
+    initObservableSubscriptions();
+
+    // Load scenario list
     fetch('/api/fab-demo/scenarios')
       .then(function(r) { return r.json(); })
       .then(function(scenarios) {
@@ -1264,7 +1083,5 @@
         }
       })
       .catch(function() { /* demo page may be served before backend is ready */ });
-
-    connectWebSocket();
   });
 })();
