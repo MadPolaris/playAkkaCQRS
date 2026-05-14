@@ -9,9 +9,9 @@ import net.imadz.domain.entities.FabProcessEntity._
 import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent, ProcessEventMapper}
 
 /**
- * Subscribes to Akka Typed EventStream for [[ProcessEventEnvelope]],
- * [[FabDomainEventEnvelope]], and [[SagaProgressEvent]] published by
- * FabProcess/Lot/Wafer/Saga projections and the SagaTransactionCoordinator,
+ * Subscribes to Akka Typed EventStream for [[FabDomainEventEnvelope]]
+ * and [[SagaProgressEvent]] published by FabProcess/Lot/Wafer/Saga
+ * projection handlers, the SagaTransactionCoordinator, and FabChainExecutor,
  * and bridges domain events to the WebSocket hub.
  *
  * Domain events are classified into 4 logical layers:
@@ -23,46 +23,45 @@ import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent, ProcessEve
 object FabDemoEventBridge {
 
   sealed trait BridgeCommand
-  private case class WrappedProcess(envelope: ProcessEventEnvelope) extends BridgeCommand
   private case class WrappedDomain(envelope: FabDomainEventEnvelope) extends BridgeCommand
   private case class WrappedSaga(event: SagaProgressEvent) extends BridgeCommand
 
   def apply(publishToHub: FabSimulationEvent => Unit): Behavior[BridgeCommand] =
     Behaviors.setup[BridgeCommand] { ctx =>
-      val processAdapter = ctx.messageAdapter[ProcessEventEnvelope](WrappedProcess)
       val domainAdapter = ctx.messageAdapter[FabDomainEventEnvelope](WrappedDomain)
       val sagaAdapter = ctx.messageAdapter[SagaProgressEvent](WrappedSaga)
-      ctx.system.eventStream ! EventStream.Subscribe(processAdapter)
       ctx.system.eventStream ! EventStream.Subscribe(domainAdapter)
       ctx.system.eventStream ! EventStream.Subscribe(sagaAdapter)
 
       var mappers = Map.empty[String, ProcessEventMapper]
 
       Behaviors.receiveMessage {
-        case WrappedProcess(ProcessEventEnvelope(processId, event)) =>
-          emitDomainEvent(publishToHub, event, aggregateType = "FabProcess",
-            aggregateId = processId, layer = 3)
-          event match {
-            case ProcessStarted(lotId, waferIds, lotSize) =>
-              val mapper = new ProcessEventMapper(lotId, lotId, waferIds.toSeq, lotSize)
-              mappers = mappers + (processId -> mapper)
-              mapper.mapToFabSimulationEvent(event).foreach(publishToHub)
-
-            case _ =>
-              mappers.get(processId).foreach { mapper =>
-                mapper.mapToFabSimulationEvent(event).foreach(publishToHub)
-              }
-          }
-          Behaviors.same
-
         case WrappedDomain(FabDomainEventEnvelope(aggType, aggId, event)) =>
           val layer = aggType match {
-            case "Chain" => 0
+            case "Chain"              => 0
             case "FabSagaTransaction" => 1
-            case _ => 2 // Lot, Wafer → Aggregate layer
+            case "FabProcess"         => 3
+            case _                    => 2 // Lot, Wafer → Aggregate layer
           }
           emitDomainEvent(publishToHub, event, aggregateType = aggType,
-            aggregateId = aggId.toString, layer = layer)
+            aggregateId = aggId, layer = layer)
+
+          // For Process events, also map to UI simulation events via ProcessEventMapper
+          if (layer == 3) {
+            event match {
+              case ProcessStarted(lotId, waferIds, lotSize) =>
+                val mapper = new ProcessEventMapper(lotId, lotId, waferIds.toSeq, lotSize)
+                mappers = mappers + (aggId -> mapper)
+                mapper.mapToFabSimulationEvent(event.asInstanceOf[FabProcessEvent]).foreach(publishToHub)
+
+              case e: FabProcessEvent =>
+                mappers.get(aggId).foreach { mapper =>
+                  mapper.mapToFabSimulationEvent(e).foreach(publishToHub)
+                }
+
+              case _ => () // not a FabProcessEvent (shouldn't happen)
+            }
+          }
           Behaviors.same
 
         case WrappedSaga(event) =>

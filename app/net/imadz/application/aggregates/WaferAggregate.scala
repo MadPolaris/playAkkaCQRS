@@ -10,5 +10,5 @@ object WaferAggregate {
   def commandHandler(context: ActorContext[WaferCommand]): WaferCommandHandler = WaferBehaviors.apply(context)
 
   val WaferEntityTypeKey: EntityTypeKey[WaferCommand] = EntityTypeKey("Wafer")
-  val tags: Vector[String] = Vector.tabulate(5)(i => s"wafer-$i")
+  val tags: Vector[String] = Vector.tabulate(2)(i => s"wafer-$i")
 }

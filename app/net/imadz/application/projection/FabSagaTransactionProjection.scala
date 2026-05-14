@@ -8,25 +8,28 @@ import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.jdbc.scaladsl.JdbcProjection
 import akka.projection.scaladsl.{ExactlyOnceProjection, SourceProvider}
-import net.imadz.common.application.projection.ScalikeJdbcSession
+import net.imadz.common.application.projection.{ProjectionSourceHelpers, ScalikeJdbcSession}
 import net.imadz.domain.entities.FabSagaTransactionEntity.FabSagaTransactionEvent
+
+import scala.concurrent.ExecutionContext
 
 object FabSagaTransactionProjection {
 
   val projectionName = "FabSagaTransaction"
-  val tags: Vector[String] = Vector.tabulate(5)(i => s"fabsaga-$i")
+  val tags: Vector[String] = Vector.tabulate(2)(i => s"fabsaga-$i")
 
   def createProjection(system: ActorSystem[_], index: Int): ExactlyOnceProjection[Offset, EventEnvelope[FabSagaTransactionEvent]] = {
+    implicit val ec: ExecutionContext = system.executionContext
     val tag = tags(index)
 
-    val sourceProvider: SourceProvider[Offset, EventEnvelope[FabSagaTransactionEvent]] = EventSourcedProvider
+    val rawProvider: SourceProvider[Offset, EventEnvelope[FabSagaTransactionEvent]] = EventSourcedProvider
       .eventsByTag(system = system,
         readJournalPluginId = MongoReadJournal.Identifier,
         tag = tag)
 
     JdbcProjection.exactlyOnce(
       projectionId = ProjectionId(projectionName, tag),
-      sourceProvider = sourceProvider,
+      sourceProvider = ProjectionSourceHelpers.withIdleTimeout(rawProvider),
       sessionFactory = () => new ScalikeJdbcSession(),
       handler = () => new FabSagaTransactionProjectionHandler(system)
     )(system)

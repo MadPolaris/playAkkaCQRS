@@ -10,5 +10,5 @@ object LotAggregate {
   def commandHandler(context: ActorContext[LotCommand]): LotCommandHandler = LotBehaviors.apply(context)
 
   val LotEntityTypeKey: EntityTypeKey[LotCommand] = EntityTypeKey("Lot")
-  val tags: Vector[String] = Vector.tabulate(5)(i => s"lot-$i")
+  val tags: Vector[String] = Vector.tabulate(2)(i => s"lot-$i")
 }

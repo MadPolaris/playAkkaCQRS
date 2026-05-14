@@ -3,6 +3,7 @@ package net.imadz.fab.chain
 import net.imadz.application.aggregates.LotProtocol.{LotConfirmation, SealLot}
 import net.imadz.application.aggregates.WaferProtocol.{ScrapWafer, WaferConfirmation}
 import net.imadz.application.aggregates.process.FabProcessProtocol._
+import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.chain.FabDemoPipeline.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.events._
 import net.imadz.fab.model.{EquipmentArea, ProductRouting, RoutingStep}
@@ -149,6 +150,7 @@ object FabFlowEngine {
       lotId = routing.productId))
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, StockerEquipId, "STOCKER-PORT-1"))
     ctx.publisher(EquipmentStateChanged(StockerEquipId, "STOCKER", "Idle", None))
+    publishAggregateState(s, ctx)
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
   }
 
@@ -247,7 +249,7 @@ object FabFlowEngine {
     var updatedWafers = state.wafers
     val dispositions = scala.collection.mutable.Map.empty[String, WaferDisposition]
 
-    state.wafers.filter { case (_, w) => w.classification.isEmpty || w.classification.contains("FAIL") }.foreach {
+    state.wafers.filter { case (_, w) => !w.classification.contains("SCRAP") }.foreach {
       case (wid, info) =>
         val cdValue = info.cdValueHistory.lastOption.getOrElse(32.0)
         val disposition = DynamicFlowAssembler.classifyWafer(cdValue, spec, info.reworkCount)
@@ -288,6 +290,9 @@ object FabFlowEngine {
     val totalPass = updatedWafers.values.count(_.classification.contains("PASS"))
     val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
 
+    // Publish real-time aggregate state for the aggregate panel UI
+    publishAggregateState(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap), ctx)
+
     decision match {
       case AdvanceToNextStep =>
         val next = s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
@@ -315,14 +320,38 @@ object FabFlowEngine {
         Future.successful(next)
 
       case SplitAndRework(waferIds, reason) =>
-        ctx.publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "SplitAndRework",
-          s"Split ${waferIds.size} wafers for offline rework: $reason", waferIds.toSeq))
-        val next = s.copy(wafers = updatedWafers,
-          currentRoutingStep = s.currentRoutingStep + 1,
-          areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
-          routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
-          ledgerSeq = s.ledgerSeq + 1)
-        Future.successful(next)
+        val reworkWaferIds = waferIds.toSeq
+        val reworkWaferUUIDs: Set[Id] = reworkWaferIds.flatMap(ctx.waferUUIDs.get).toSet
+        val scrapWaferIdsInStep: Set[String] = updatedWafers.collect {
+          case (wid, w) if w.classification.contains("SCRAP") => wid
+        }.toSet
+
+        // 1. Persist split intent to Process aggregate BEFORE sagaTx
+        ctx.processRef ! RecordWafersSplitForRework(
+          reworkWaferIds.toSet, scrapWaferIdsInStep, s.iteration + 1, ctx.ignoreReply)
+
+        // 2. Publish Saga PREPARE event (immediate UI feedback)
+        val sagaId = cmdId()
+        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE",
+          ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
+
+        // 3. Execute TCC Saga (async, persists to journal, idempotent on retry)
+        ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs).map { confirmation =>
+          if (confirmation.error.isEmpty) {
+            ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
+              ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
+            ctx.publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "SplitCompleted",
+              s"TCC Split committed: ${reworkWaferIds.mkString(",")} → Rework Lot", reworkWaferIds))
+          } else {
+            ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "FAILED",
+              ctx.scenario.scenarioId, "", Seq.empty))
+          }
+          s.copy(wafers = updatedWafers,
+            currentRoutingStep = s.currentRoutingStep + 1,
+            areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
+            routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
+            ledgerSeq = s.ledgerSeq + 1)
+        }(ctx.ec)
 
       case FallbackToArea(area, reason) =>
         ctx.publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "FallbackToArea",
@@ -374,6 +403,7 @@ object FabFlowEngine {
     ctx.publisher(LotUpdated(routing.productId, ctx.scenario.lotSize, state.scrapCount,
       (1 to routing.steps.size).map(i => s"Step-$i").toList, state.passCount, 0))
     ctx.publisher(DemoCompleted(routing.productId, ctx.scenario.lotSize, state.passCount, 0, state.scrapCount))
+    publishAggregateState(state, ctx, lotStatus = "Sealed")
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
   }
 
@@ -392,5 +422,24 @@ object FabFlowEngine {
   private def emitLedger(state: FabDemoState, name: String, ctx: FabDemoContext): FabDemoState = {
     ctx.publisher(LedgerStepAdvanced(state.ledgerSeq, name))
     state
+  }
+
+  /** Publish real-time AggregateStateUpdated for the aggregate panel.
+   *  This is a direct pipeline publish (same pattern as FabScenarioPipeline),
+   *  separate from the Projection→EventStream→Bridge domain-event path.
+   */
+  private def publishAggregateState(state: FabDemoState, ctx: FabDemoContext, lotStatus: String = "Active"): Unit = {
+    val lotId = ctx.scenario.scenarioId
+    val sourceLot = LotStateSnapshot(lotId, lotStatus, ctx.scenario.lotSize, state.passCount, state.scrapCount)
+    val wafers = state.wafers.map { case (wid, info) =>
+      val cls = info.classification.getOrElse("Pending")
+      val status = cls match {
+        case "SCRAP" => "Scrapped"
+        case "PASS" | "FAIL" => "Active"
+        case _ => "Active"
+      }
+      WaferStateSnapshot(wid, status, lotId, cls, info.reworkCount)
+    }.toSeq
+    ctx.publisher(AggregateStateUpdated(sourceLot, None, wafers))
   }
 }

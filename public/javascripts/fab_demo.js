@@ -196,8 +196,68 @@
   }
 
   // ===================================================================
-  // FOUP Movement Animation (需求4: 新坐标)
+  // FOUP Movement Animation (requestAnimationFrame — reliable cross-browser)
   // ===================================================================
+  var _foupRafId = null;
+  var _reworkFoupRafId = null;
+  var _reworkFadeTimer = null;
+
+  /** Ease-in-out quad */
+  function _easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
+  /** Animate an SVG rect + optional label from fromPos to toPos over durationMs. */
+  function _animateRect(rectId, labelId, fromPos, toPos, durationMs) {
+    var rect = document.getElementById(rectId);
+    if (!rect) return;
+    var label = labelId ? document.getElementById(labelId) : null;
+
+    if (rectId === 'foupIcon') {
+      if (_foupRafId) { cancelAnimationFrame(_foupRafId); _foupRafId = null; }
+    } else {
+      if (_reworkFoupRafId) { cancelAnimationFrame(_reworkFoupRafId); _reworkFoupRafId = null; }
+    }
+
+    rect.setAttribute('x', fromPos.x);
+    rect.setAttribute('y', fromPos.y);
+
+    var startTime = performance.now();
+
+    function step(now) {
+      var elapsed = now - startTime;
+      var progress = Math.min(elapsed / durationMs, 1.0);
+      var eased = _easeInOutQuad(progress);
+
+      var curX = fromPos.x + (toPos.x - fromPos.x) * eased;
+      var curY = fromPos.y + (toPos.y - fromPos.y) * eased;
+
+      rect.setAttribute('x', curX);
+      rect.setAttribute('y', curY);
+      if (label) {
+        label.setAttribute('x', curX);
+        label.setAttribute('y', curY - 10);
+      }
+
+      if (progress < 1.0) {
+        if (rectId === 'foupIcon') {
+          _foupRafId = requestAnimationFrame(step);
+        } else {
+          _reworkFoupRafId = requestAnimationFrame(step);
+        }
+      } else {
+        if (rectId === 'foupIcon') _foupRafId = null;
+        else _reworkFoupRafId = null;
+      }
+    }
+
+    if (rectId === 'foupIcon') {
+      _foupRafId = requestAnimationFrame(step);
+    } else {
+      _reworkFoupRafId = requestAnimationFrame(step);
+    }
+  }
+
   function animateFoupMovement(data) {
     // Rework path: use rework FOUP icon (CDSEM or MET → LITHO)
     if ((data.fromArea === 'CDSEM' || data.fromArea === 'MET') && data.toArea === 'LITHO') {
@@ -220,22 +280,7 @@
     var toPos = getAreaPosition(data.toArea);
     var duration = Math.max(500, (data.etaMs || 1000) / state.speed);
 
-    var animX = document.getElementById('foupAnimX');
-    var animY = document.getElementById('foupAnimY');
-    if (animX && animY) {
-      animX.setAttribute('values', fromPos.x + ';' + toPos.x);
-      animX.setAttribute('dur', duration + 'ms');
-      animY.setAttribute('values', fromPos.y + ';' + toPos.y);
-      animY.setAttribute('dur', duration + 'ms');
-    }
-    // Move lot label with FOUP
-    var lotLabel = document.getElementById('foupLotLabel');
-    if (lotLabel) {
-      lotLabel.setAttribute('x', toPos.x);
-      lotLabel.setAttribute('y', toPos.y - 10);
-    }
-    var animElems = document.querySelectorAll('#foupAnimX, #foupAnimY');
-    animElems.forEach(function(a) { a.beginElement(); });
+    _animateRect('foupIcon', 'foupLotLabel', fromPos, toPos, duration);
   }
 
   function animateReworkFoup(data) {
@@ -245,21 +290,12 @@
     var rl = document.getElementById('reworkFoupLabel');
     if (rl) {
       rl.setAttribute('opacity', '1');
-      rl.setAttribute('x', '304');
-      rl.setAttribute('y', '152');
     }
+
     var duration = Math.max(800, (data.etaMs || 2000) / state.speed);
-    // Straight rework path: CDSEM(304,155) → left to Litho(424,155)
-    var animX = document.getElementById('reworkFoupAnimX');
-    var animY = document.getElementById('reworkFoupAnimY');
-    if (animX && animY) {
-      animX.setAttribute('values', '304;424');
-      animY.setAttribute('values', '155;155');
-      animX.setAttribute('dur', duration + 'ms');
-      animY.setAttribute('dur', duration + 'ms');
-    }
-    var anims = document.querySelectorAll('#reworkFoupAnimX, #reworkFoupAnimY');
-    anims.forEach(function(a) { a.beginElement(); });
+    // Straight rework path: CDSEM edge (304,155) → Litho edge (424,155)
+    _animateRect('reworkFoupIcon', 'reworkFoupLabel', {x: 304, y: 155}, {x: 424, y: 155}, duration);
+
     // Show split label
     var sl = document.getElementById('splitMergeLabel');
     if (sl) {
@@ -267,7 +303,8 @@
       sl.setAttribute('opacity', '1');
       sl.setAttribute('fill', '#a855f7');
     }
-    setTimeout(function() {
+    if (_reworkFadeTimer) clearTimeout(_reworkFadeTimer);
+    _reworkFadeTimer = setTimeout(function() {
       if (rf) rf.setAttribute('opacity', '0.3');
       if (rl) rl.setAttribute('opacity', '0.3');
       if (sl) sl.setAttribute('opacity', '0');
@@ -275,6 +312,8 @@
   }
 
   function showFoupAtEquipment(data) {
+    // Cancel any in-flight main-FOUP animation
+    if (_foupRafId) { cancelAnimationFrame(_foupRafId); _foupRafId = null; }
     var pos = getAreaPosition(data.equipmentId);
     var foup = document.getElementById('foupIcon');
     if (foup) {
@@ -582,7 +621,7 @@
   // ===================================================================
   var domainEventCount = 0;
   var deLayerCounts = [0, 0, 0, 0]; // L0=Chain, L1=Saga, L2=Aggregate, L3=Process
-  var deLayerVisible = [true, true, false, false]; // L0/L1 open by default, L2/L3 collapsed
+  var deLayerVisible = [true, true, true, false]; // L0/L1/L2 open by default, L3 collapsed
   var deLayerEvents = [[], [], [], []]; // events per layer (newest first)
   var deActiveFilter = -1; // -1 = show all, 0-3 = filter to layer
 
@@ -606,9 +645,8 @@
     document.getElementById('deCount').textContent = domainEventCount;
     renderDomainEventSidebar();
 
-    // Incrementally update aggregate model from domain events
-    applyDomainEventToModel(data);
-    renderAggregatePanelFromModel();
+    // Aggregate model is updated via AggregateStateUpdated pipeline events only,
+    // not from individual domain events (which use entity UUIDs, not scenario IDs).
   }
 
   function applyDomainEventToModel(data) {
@@ -678,7 +716,7 @@
     lotIds.forEach(function(lotId) {
       var lot = aggregateModel.lots[lotId];
       rows += '<tr class="lot-row">' +
-        '<td>Lot: ' + (lot.productId || lotId.substring(0, 8)) + '</td>' +
+        '<td>Lot: ' + (lot.productId || lotId) + '</td>' +
         '<td>' + (lot.status || 'Active') + '</td>' +
         '<td colspan="2">Wafers: ' + (lot.waferCount || 0) +
         ' | Pass: ' + (lot.passCount || 0) +
@@ -812,7 +850,7 @@
     if (srcLot && srcLot.lotId) {
       if (!aggregateModel.lots[srcLot.lotId]) {
         aggregateModel.lots[srcLot.lotId] = {
-          lotId: srcLot.lotId, productId: srcLot.lotId.substring(0, 8),
+          lotId: srcLot.lotId, productId: srcLot.lotId,
           status: srcLot.status, waferCount: srcLot.waferCount,
           passCount: srcLot.passCount, scrapCount: srcLot.scrapCount,
           waferIds: []
@@ -830,7 +868,7 @@
     childLots.forEach(function(cl) {
       if (!aggregateModel.lots[cl.lotId]) {
         aggregateModel.lots[cl.lotId] = {
-          lotId: cl.lotId, productId: cl.lotId.substring(0, 8),
+          lotId: cl.lotId, productId: cl.lotId,
           status: cl.status, waferCount: cl.waferCount,
           passCount: cl.passCount || 0, scrapCount: cl.scrapCount || 0,
           waferIds: []
@@ -987,15 +1025,110 @@
   // ===================================================================
   // Control Actions
   // ===================================================================
+  /** Clear all UI state for a fresh demo run */
+  function _resetAllUI() {
+    // Cancel in-flight FOUP animations
+    if (_foupRafId) { cancelAnimationFrame(_foupRafId); _foupRafId = null; }
+    if (_reworkFoupRafId) { cancelAnimationFrame(_reworkFoupRafId); _reworkFoupRafId = null; }
+    if (_reworkFadeTimer) { clearTimeout(_reworkFadeTimer); _reworkFadeTimer = null; }
+
+    // Hide FOUP icons
+    var foup = document.getElementById('foupIcon');
+    if (foup) { foup.setAttribute('opacity', '0'); foup.setAttribute('x', '55'); foup.setAttribute('y', '170'); }
+    var lotLabel = document.getElementById('foupLotLabel');
+    if (lotLabel) { lotLabel.setAttribute('opacity', '0'); lotLabel.textContent = '--'; }
+    var rf = document.getElementById('reworkFoupIcon');
+    if (rf) { rf.setAttribute('opacity', '0'); rf.setAttribute('x', '304'); rf.setAttribute('y', '265'); }
+    var rl = document.getElementById('reworkFoupLabel');
+    if (rl) { rl.setAttribute('opacity', '0'); rl.textContent = '--'; }
+    var sl = document.getElementById('splitMergeLabel');
+    if (sl) { sl.setAttribute('opacity', '0'); sl.textContent = '--'; }
+
+    // Reset timeline
+    var timeline = document.getElementById('timeline');
+    if (timeline) {
+      timeline.innerHTML = '<div class="entry"><span class="ts">--:--:--</span> ' + ((window.__i18n && window.__i18n.timeline_ready) || 'Ready. Click Start to begin.') + '</div>';
+    }
+
+    // Reset summary counters
+    var sumActive = document.getElementById('sum-active');
+    var sumPass = document.getElementById('sum-pass');
+    var sumRework = document.getElementById('sum-rework');
+    var sumScrap = document.getElementById('sum-scrap');
+    if (sumActive) sumActive.textContent = '-';
+    if (sumPass) sumPass.textContent = '-';
+    if (sumRework) sumRework.textContent = '-';
+    if (sumScrap) sumScrap.textContent = '-';
+
+    // Reset equipment status indicators
+    var statusIds = ['status-stocker','status-clean','status-diff','status-litho','status-etch',
+      'status-implant','status-dep','status-cmp','status-cdsem','status-dry','status-log'];
+    var idleText = (window.__i18n && window.__i18n.status_idle) || 'Idle';
+    statusIds.forEach(function(sid) {
+      var el = document.getElementById(sid);
+      if (el) { el.textContent = idleText; el.setAttribute('fill', '#6e7681'); }
+    });
+    // Reset equipment node borders
+    var eqIds = ['stocker','clean','diff','litho','etch','implant','dep','cmp','met','dry','log','decision'];
+    eqIds.forEach(function(eid) {
+      var node = document.getElementById('eq-' + eid);
+      if (node) {
+        var rect = node.querySelector('rect');
+        if (rect) { rect.setAttribute('stroke', eid === 'decision' ? '#f59e0b' : '#30363d'); rect.setAttribute('stroke-width', '2'); }
+      }
+    });
+
+    // Reset decision engine status
+    var deSt = document.getElementById('status-decision');
+    if (deSt) {
+      deSt.textContent = (window.__i18n && window.__i18n.decision_wait) || 'Waiting for scenario...';
+      deSt.setAttribute('fill', '#6e7681');
+    }
+
+    // Reset global status
+    var gsEl = document.getElementById('globalStatusText');
+    if (gsEl) {
+      gsEl.innerHTML = (window.__i18n && window.__i18n.controls_ready) || 'Ready';
+    }
+    var busLabel = document.getElementById('busCommandLabel');
+    if (busLabel) { busLabel.setAttribute('opacity', '0'); busLabel.textContent = '--'; }
+
+    // Reset classification wheel dots
+    for (var i = 0; i < 10; i++) {
+      var dot = document.getElementById('wd-' + i);
+      if (dot) dot.setAttribute('fill', '#30363d');
+    }
+
+    // Reset scrap bin
+    var sc = document.getElementById('scrapCount');
+    if (sc) sc.textContent = (window.__i18n && window.__i18n.scrap_count) || '0 wafer';
+    var dotsGroup = document.getElementById('scrapWaferDots');
+    if (dotsGroup) dotsGroup.innerHTML = '';
+    var scrapLine = document.getElementById('scrapPathLine');
+    if (scrapLine) { scrapLine.setAttribute('stroke-opacity', '0.45'); scrapLine.setAttribute('stroke-width', '1.8'); }
+
+    // Reset ledger row highlights
+    var ledgerRows = document.querySelectorAll('#ledgerBody tr');
+    ledgerRows.forEach(function(row) { row.classList.remove('active', 'done'); });
+
+    // Reset step progress indicator
+    var spEl = document.getElementById('stepProgress');
+    if (spEl) { spEl.style.display = 'none'; spEl.textContent = ''; }
+  }
+
   window.startDemo = function() {
     var sel = document.getElementById('scenarioSelect');
     var scenarioId = sel.value;
     var scenarioType = sel.options[sel.selectedIndex].getAttribute('data-type') || '';
     loadScenarioLedger(scenarioId);
-    // Reset state
+
+    // Reset JS state
     state.scrapCount = 0;
     state.scrappedWaferIds = {};
     state.waferResults = {};
+    state.eventLog = [];
+    state.paused = false;
+
     // Reset aggregate model
     aggregateModel = { lots: {}, wafers: {} };
     document.getElementById('aggTreeBody').innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
@@ -1008,13 +1141,10 @@
     document.getElementById('deCount').textContent = '0';
     document.getElementById('deList').innerHTML = '<div class="de-entry"><span class="de-ts">--</span> <span class="de-data">' + ((window.__i18n && window.__i18n.de_placeholder) || 'Waiting for events...') + '</span></div>';
     document.getElementById('deSidebar').classList.remove('open');
-    var sc = document.getElementById('scrapCount');
-    if (sc) sc.textContent = (window.__i18n && window.__i18n.scrap_count) || '0 wafer';
-    var dotsGroup = document.getElementById('scrapWaferDots');
-    if (dotsGroup) dotsGroup.innerHTML = '';
-    // Reset step progress indicator
-    var spEl = document.getElementById('stepProgress');
-    if (spEl) { spEl.style.display = 'none'; spEl.textContent = ''; }
+
+    // Reset all visual UI
+    _resetAllUI();
+
     var startUrl = scenarioType === 'dynamic-routing'
       ? '/api/fab-demo/product/' + scenarioId + '/start'
       : '/api/fab-demo/start/' + scenarioId;
@@ -1022,10 +1152,6 @@
       .then(function(r) { return r.json(); })
       .then(function(data) {
         addTimelineEntry({type:'DemoStarted', data: 'Scenario: ' + data.message});
-        for (var i = 0; i < 5; i++) {
-          var dot = document.getElementById('wd-' + i);
-          if (dot) dot.setAttribute('fill', '#30363d');
-        }
       });
   };
 

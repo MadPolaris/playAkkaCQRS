@@ -275,7 +275,7 @@
         <rect x="294" y="4" width="260" height="40" rx="8" fill="#161b22" stroke="#f59e0b" stroke-width="2"/>
         <text x="424" y="17" text-anchor="middle" font-size="9" fill="#e6edf3" font-weight="600">@Messages("fab.decision_engine")</text>
         <text x="424" y="29" text-anchor="middle" font-size="6.5" fill="#8b949e">@Messages("fab.decision_sub")</text>
-        <text x="424" y="40" text-anchor="middle" font-size="6" fill="#6e7681" id="status-decision">@Messages("fab.decision_wait")</text>
+	    <text x="424" y="40" text-anchor="middle" font-size="6" fill="#6e7681" id="status-decision">@Messages("fab.decision_wait")</text>
       </g>
 
       <!-- Command Bus -->
@@ -426,21 +426,15 @@
         <text x="70" y="13" text-anchor="middle" font-size="7" fill="#f85149" font-weight="600">@Messages("fab.scrap_bin")</text>
         <rect x="0" y="20" width="140" height="60" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5" stroke-dasharray="3 2"/>
         <text x="70" y="36" text-anchor="middle" font-size="6" fill="#f87168">@Messages("fab.scrap_sub")</text>
-        <text x="70" y="58" text-anchor="middle" font-size="8" fill="#f85149" font-weight="700" id="scrapCount">@Messages("fab.scrap_count")</text>
+	    <text x="70" y="58" text-anchor="middle" font-size="8" fill="#f85149" font-weight="700" id="scrapCount">@Messages("fab.scrap_count")</text>
         <g id="scrapWaferDots" transform="translate(0, 20)"></g>
       </g>
 
       <!-- ====== FOUP Icons + Labels ====== -->
-      <rect id="foupIcon" x="55" y="170" width="16" height="10" rx="2" fill="#f59e0b" opacity="0">
-        <animate id="foupAnimX" attributeName="x" values="55" dur="1s" fill="freeze" begin="indefinite"/>
-        <animate id="foupAnimY" attributeName="y" values="170" dur="1s" fill="freeze" begin="indefinite"/>
-      </rect>
+      <rect id="foupIcon" x="55" y="170" width="16" height="10" rx="2" fill="#f59e0b" opacity="0"/>
       <text id="foupLotLabel" x="55" y="165" text-anchor="start" font-size="5.5" fill="#f59e0b" font-family="monospace" opacity="0">--</text>
 
-      <rect id="reworkFoupIcon" x="304" y="265" width="16" height="10" rx="2" fill="#a855f7" opacity="0">
-        <animate id="reworkFoupAnimX" attributeName="x" values="304" dur="1s" fill="freeze" begin="indefinite"/>
-        <animate id="reworkFoupAnimY" attributeName="y" values="300" dur="1s" fill="freeze" begin="indefinite"/>
-      </rect>
+      <rect id="reworkFoupIcon" x="304" y="265" width="16" height="10" rx="2" fill="#a855f7" opacity="0"/>
       <text id="reworkFoupLabel" x="304" y="260" text-anchor="start" font-size="5.5" fill="#a855f7" font-family="monospace" opacity="0">--</text>
 
       <text id="splitMergeLabel" x="424" y="320" text-anchor="middle" font-size="8" fill="#a855f7" font-family="monospace" opacity="0">--</text>
@@ -471,7 +465,7 @@
       <table class="agg-tree-table" id="aggTreeTable">
         <thead><tr>@Messages("fab.aggregate_cols").split("\\|").map { col => <th>@col</th> }</tr></thead>
         <tbody id="aggTreeBody">
-          <tr><td colspan="4" style="color:var(--fg-muted)">@Messages("fab.aggregate_placeholder")</td></tr>
+	      <tr><td colspan="4" style="color:var(--fg-muted)">@Messages("fab.aggregate_placeholder")</td></tr>
         </tbody>
       </table>
     </div>
@@ -480,7 +474,7 @@
   <!-- Bottom Panel -->
   <div class="bottom-panel">
     <div class="timeline" id="timeline">
-      <div class="entry"><span class="ts">--:--:--</span> @Messages("fab.timeline_ready")</div>
+	  <div class="entry"><span class="ts">--:--:--</span> @Messages("fab.timeline_ready")</div>
     </div>
     <div class="summary" id="summary">
       <h3>@Messages("fab.lot_summary")</h3>
@@ -509,7 +503,7 @@
       <div class="de-sidebar-body">
         <h3>📋 @Messages("fab.de_sidebar") <span style="font-weight:400;font-size:0.6rem;color:var(--fg-muted)" id="deCount">0</span></h3>
         <div class="de-list" id="deList">
-          <div class="de-entry"><span class="de-ts">--</span> <span class="de-data">@Messages("fab.de_placeholder")</span></div>
+	      <div class="de-entry"><span class="de-ts">--</span> <span class="de-data">@Messages("fab.de_placeholder")</span></div>
         </div>
       </div>
     </div>
@@ -556,8 +550,14 @@ window.__i18n = {
   step_progress: "@Messages("fab.js.step_progress")",
   step_no_measure: "@Messages("fab.js.step_no_measure")",
   status_busy: "@Messages("fab.js.status_busy")",
-  status_transporting: "@Messages("fab.js.status_transporting")",
-  /* Helper: translate a key, falls back to key itself */
+	status_transporting: "@Messages("fab.js.status_transporting")",
+	timeline_ready: "@Messages("fab.timeline_ready")",
+	controls_ready: "@Messages("fab.controls.ready")",
+	decision_wait: "@Messages("fab.decision_wait")",
+	scrap_count: "@Messages("fab.scrap_count")",
+	aggregate_placeholder: "@Messages("fab.aggregate_placeholder")",
+	de_placeholder: "@Messages("fab.de_placeholder")",
+	/* Helper: translate a key, falls back to key itself */
   t: function(key) { return this[key] || key; },
   /* Map old status/classification labels to i18n */
   statusMap: {

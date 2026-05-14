@@ -78,24 +78,23 @@ class FabDemoService @Inject()(
     val sagaTxFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
       (srcId, tgtId, wids) => fabSagaService.transferWafers(srcId, tgtId, wids)
 
-    // Create source Lot + child Lots + Wafers before starting the chain
+    // Create source Lot + scenario-specific child Lots + Wafers
+    val childLotFutures: Seq[Future[LotConfirmation]] = scenarioId match {
+      case "photo-cell-5wafer" =>
+        Seq(reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$runKey", Set.empty, ref)))
+      case "send-ahead-pilot" =>
+        Seq(pilotLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-PILOT-$runKey", Set.empty, ref)))
+      case "sampling-demo" =>
+        Seq(sampleLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SAMPLE-$runKey", Set.empty, ref)))
+      case "hold-release" =>
+        Seq(holdLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-HOLD-$runKey", Set.empty, ref)))
+      case _ => Seq.empty // scrap-downgrade / dynamic products: no child lots
+    }
     val createEntities: Future[Unit] = for {
       _ <- lotRef.ask[LotConfirmation](ref =>
         CreateLot(s"FAB-$runKey", waferUUIDs.values.toSet, ref)
       )
-      _ <- reworkLotRef.ask[LotConfirmation](ref =>
-        CreateLot(s"FAB-REWORK-$runKey", Set.empty, ref)
-      )
-      // Create child lots for new scenarios
-      _ <- pilotLotRef.ask[LotConfirmation](ref =>
-        CreateLot(s"FAB-PILOT-$runKey", Set.empty, ref)
-      )
-      _ <- sampleLotRef.ask[LotConfirmation](ref =>
-        CreateLot(s"FAB-SAMPLE-$runKey", Set.empty, ref)
-      )
-      _ <- holdLotRef.ask[LotConfirmation](ref =>
-        CreateLot(s"FAB-HOLD-$runKey", Set.empty, ref)
-      )
+      _ <- Future.sequence(childLotFutures)
       _ <- Future.sequence(waferUUIDs.map { case (_, uuid) =>
         val waferRef = sharding.entityRefFor(WaferEntityTypeKey, uuid.toString)
         waferRef.ask[WaferConfirmation](ref => CreateWafer(sourceLotId, ref))
@@ -294,7 +293,7 @@ class FabDemoService @Inject()(
       publisher(net.imadz.fab.events.DemoStarted(productId, routing.productId, 5, waferIds))
 
       // Spawn simulators for all areas used in routing + AMHS + CDSEM + STOCKER
-      spawnDynamicSimulators(routing, adapter, publisher)
+      spawnDynamicSimulators(routing, adapter, publisher, waferIds)
 
       val pipelineFn = FabFlowEngine.runRouting(routing, FabFlowEngine.DefaultDecisionConfig) _
       val executor = system.systemActorOf(
@@ -310,7 +309,8 @@ class FabDemoService @Inject()(
   private def spawnDynamicSimulators(
     routing: ProductRouting,
     adapter: ActorEquipmentAdapter,
-    publisher: FabSimulationEvent => Unit
+    publisher: FabSimulationEvent => Unit,
+    waferIds: Seq[String]
   ): Unit = {
     val areaIds = routing.steps.map(_.equipmentArea.areaId).distinct
     val equipIds = areaIds.flatMap(aid => FabFlowEngine.AreaToEquipmentId.get(aid))
@@ -331,7 +331,7 @@ class FabDemoService @Inject()(
     // CD-SEM simulator (for measurement)
     val cdSemId = FabFlowEngine.CdsemEquipId
     val cdSemCfg = CdSemConfig(
-      waferIds = routing.steps.flatMap(_ => Seq.empty).distinct,
+      waferIds = waferIds,
       targetCdNm = 32.0,
       waferOutcomes = Map.empty // will use random generation
     )
@@ -375,12 +375,23 @@ class FabDemoService @Inject()(
   }
 
   def getScenarioLedger(scenarioId: String): Map[String, Any] = {
-    val (steps, name) = scenarioId match {
-      case "photo-cell-5wafer" => (photoCellLedger, "Photo Cell 5-Wafer — 2 PASS + 2 Rework → PASS + 1 SCRAP")
-      case _ => (photoCellLedger, "Photo Cell 5-Wafer — 2 PASS + 2 Rework → PASS + 1 SCRAP")
+    val (steps, name, lotReworkLabel) = scenarioId match {
+      case "photo-cell-5wafer" => (photoCellLedger, "Photo Cell 5-Wafer — 2 PASS + 2 Rework → PASS + 1 SCRAP", "Rework")
+      case "send-ahead-pilot"  => (sendAheadLedger,  "Send-Ahead Pilot — 1 wafer Pilot → PASS → Merge back", "Pilot")
+      case "scrap-downgrade"   => (scrapLedger,      "Scrap & Downgrade — Direct Scrap, no child lot", "—")
+      case "sampling-demo"     => (samplingLedger,   "Metrology Sampling — 2 sampled, rest skipped", "Sample")
+      case "hold-release"      => (holdReleaseLedger,"Hold & Release — Borderline → Hold → Review → Release", "Hold")
+      case productId if ProductRoutingRepository.findByProductId(productId).isDefined =>
+        val routing = ProductRoutingRepository.findByProductId(productId).get
+        (generateRoutingLedger(routing), s"Dynamic POR: ${routing.productId} (${routing.steps.size} steps)", "—")
+      case _ => (photoCellLedger, "Photo Cell 5-Wafer — 2 PASS + 2 Rework → PASS + 1 SCRAP", "Rework")
     }
-    Map("scenarioId" -> scenarioId, "name" -> name, "steps" -> steps)
+    Map("scenarioId" -> scenarioId, "name" -> name, "steps" -> steps, "lotReworkLabel" -> lotReworkLabel)
   }
+
+  // ===========================================================================
+  // Static Scenario Ledgers
+  // ===========================================================================
 
   private val photoCellLedger: Seq[Map[String, String]] = Seq(
     Map("seq" -> "0",  "event" -> "Load FOUP from Stocker (5 wafers)",      "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Load"),
@@ -402,4 +413,116 @@ class FabDemoService @Inject()(
     Map("seq" -> "16", "event" -> "Merge: W3,W4 → Source Lot",        "lotSource" -> "Active(5w)", "lotRework" -> "Empty", "wafer" -> "W3,W4→source","saga" -> "Completed","phase" -> "Return"),
     Map("seq" -> "17", "event" -> "Return FOUP to Stocker + Demo Completed",  "lotSource" -> "Sealed",   "lotRework" -> "—",     "wafer" -> "4PASS 1SCRAP","saga" -> "—",     "phase" -> "Complete"),
   )
+
+  // -- Send-Ahead Pilot (PASS path) --
+  private val sendAheadLedger: Seq[Map[String, String]] = Seq(
+    Map("seq" -> "0",  "event" -> "Load FOUP from Stocker (5 wafers)",       "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "—",         "saga" -> "—",      "phase" -> "Load"),
+    Map("seq" -> "1",  "event" -> "Split: W1 → Pilot Lot (1 wafer)",          "lotSource" -> "Active(4w)","lotRework" -> "Active(1w)","wafer" -> "W1→pilot",  "saga" -> "Initiated","phase" -> "Split"),
+    Map("seq" -> "2",  "event" -> "Transport Pilot: STOCKER → LITHO",         "lotSource" -> "(wait)",   "lotRework" -> "(transit)","wafer" -> "—",       "saga" -> "Committed","phase" -> "Transport"),
+    Map("seq" -> "3",  "event" -> "Pilot arrives at Litho",                   "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "4",  "event" -> "Pilot Litho: PILOT-RECIPE-001",            "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "(process)", "saga" -> "—",      "phase" -> "Process"),
+    Map("seq" -> "5",  "event" -> "Transport Pilot: LITHO → CD-SEM",          "lotSource" -> "—",        "lotRework" -> "(transit)","wafer" -> "—",       "saga" -> "—",      "phase" -> "Transport"),
+    Map("seq" -> "6",  "event" -> "Pilot arrives at CD-SEM",                  "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "7",  "event" -> "CD-SEM: Measure pilot wafer (W1)",         "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "(measure)", "saga" -> "—",      "phase" -> "Measure"),
+    Map("seq" -> "8",  "event" -> "Classify: W1=PASS → Pilot OK",             "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "PASS×1",    "saga" -> "—",      "phase" -> "Decide"),
+    Map("seq" -> "9",  "event" -> "Merge: Pilot Lot → Source Lot",            "lotSource" -> "Active(5w)","lotRework" -> "Empty",  "wafer" -> "W1→source", "saga" -> "Completed","phase" -> "Merge"),
+    Map("seq" -> "10", "event" -> "Transport: CDSEM → LITHO (main batch)",    "lotSource" -> "(transit)","lotRework" -> "—",      "wafer" -> "—",         "saga" -> "—",      "phase" -> "Transport"),
+    Map("seq" -> "11", "event" -> "FOUP arrives at Litho",                    "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "12", "event" -> "Litho: ProcessRecipe LITHO-28-001",        "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "(process)", "saga" -> "—",      "phase" -> "Process"),
+    Map("seq" -> "13", "event" -> "Transport: LITHO → CD-SEM",                "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "—",         "saga" -> "—",      "phase" -> "Transport"),
+    Map("seq" -> "14", "event" -> "FOUP arrives at CD-SEM",                   "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "15", "event" -> "CD-SEM: Measure CD (5 wafers)",            "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "(measure)", "saga" -> "—",      "phase" -> "Measure"),
+    Map("seq" -> "16", "event" -> "Classify: Final PASS/FAIL/SCRAP",          "lotSource" -> "—",        "lotRework" -> "—",      "wafer" -> "PASS×4 SCRAP×1","saga" -> "—",  "phase" -> "Decide"),
+    Map("seq" -> "17", "event" -> "Return FOUP to Stocker + Demo Completed",  "lotSource" -> "Sealed",   "lotRework" -> "—",      "wafer" -> "4PASS 1SCRAP","saga" -> "—",    "phase" -> "Complete"),
+  )
+
+  // -- Scrap & Downgrade --
+  private val scrapLedger: Seq[Map[String, String]] = Seq(
+    Map("seq" -> "0",  "event" -> "Load FOUP from Stocker (5 wafers)",       "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Load"),
+    Map("seq" -> "1",  "event" -> "Transport: STOCKER → LITHO",              "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Transport"),
+    Map("seq" -> "2",  "event" -> "FOUP arrives at Litho",                   "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "3",  "event" -> "Litho: ProcessRecipe LITHO-28-001",       "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "(process)", "saga" -> "—",      "phase" -> "Process"),
+    Map("seq" -> "4",  "event" -> "Transport: LITHO → CD-SEM",               "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Transport"),
+    Map("seq" -> "5",  "event" -> "FOUP arrives at CD-SEM",                  "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "6",  "event" -> "CD-SEM: Measure CD (5 wafers)",           "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "(measure)", "saga" -> "—",      "phase" -> "Measure"),
+    Map("seq" -> "7",  "event" -> "Classify: W1=PASS W2=PASS W3=PASS W4=FAIL W5=SCRAP", "lotSource" -> "—", "lotRework" -> "—", "wafer" -> "3PASS 1FAIL 1SCRAP", "saga" -> "—", "phase" -> "Decide"),
+    Map("seq" -> "8",  "event" -> "Scrap: W5 → Terminated (no child lot)",   "lotSource" -> "Active(4w)","lotRework" -> "—",     "wafer" -> "W5→Scrapped","saga" -> "—",     "phase" -> "Scrap"),
+    Map("seq" -> "9",  "event" -> "Return FOUP to Stocker + Demo Completed", "lotSource" -> "Sealed",   "lotRework" -> "—",     "wafer" -> "4PASS 1SCRAP","saga" -> "—",    "phase" -> "Complete"),
+  )
+
+  // -- Metrology Sampling --
+  private val samplingLedger: Seq[Map[String, String]] = Seq(
+    Map("seq" -> "0",  "event" -> "Load FOUP from Stocker (6 wafers)",       "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Load"),
+    Map("seq" -> "1",  "event" -> "Split: W1,W2 → Sample Lot (2 wafers)",     "lotSource" -> "Active(4w)","lotRework" -> "Active(2w)","wafer" -> "W1,W2→sample","saga" -> "Initiated","phase" -> "Split"),
+    Map("seq" -> "2",  "event" -> "Transport Sample: STOCKER → CD-SEM",       "lotSource" -> "(wait)",   "lotRework" -> "(transit)","wafer" -> "—",      "saga" -> "Committed","phase" -> "Transport"),
+    Map("seq" -> "3",  "event" -> "Sample arrives at CD-SEM",                 "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "4",  "event" -> "CD-SEM: Measure sampled wafers (W1,W2)",   "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "(measure)", "saga" -> "—",      "phase" -> "Measure"),
+    Map("seq" -> "5",  "event" -> "Classify: W1=PASS W2=PASS → Sample OK",    "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "PASS×2",    "saga" -> "—",      "phase" -> "Decide"),
+    Map("seq" -> "6",  "event" -> "Merge: Sample Lot → Source Lot",           "lotSource" -> "Active(6w)","lotRework" -> "Empty", "wafer" -> "W1,W2→source","saga" -> "Completed","phase" -> "Merge"),
+    Map("seq" -> "7",  "event" -> "Source wafers W3-W6: Skipped (no measure)","lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "4 Skipped", "saga" -> "—",      "phase" -> "Skip"),
+    Map("seq" -> "8",  "event" -> "Return FOUP to Stocker + Demo Completed",  "lotSource" -> "Sealed",   "lotRework" -> "—",     "wafer" -> "6 Active",  "saga" -> "—",      "phase" -> "Complete"),
+  )
+
+  // -- Hold & Release (PASS path: Review approved) --
+  private val holdReleaseLedger: Seq[Map[String, String]] = Seq(
+    Map("seq" -> "0",  "event" -> "Load FOUP from Stocker (5 wafers)",       "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Load"),
+    Map("seq" -> "1",  "event" -> "Transport: STOCKER → LITHO",              "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Transport"),
+    Map("seq" -> "2",  "event" -> "FOUP arrives at Litho",                   "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "3",  "event" -> "Litho: ProcessRecipe LITHO-28-001",       "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "(process)", "saga" -> "—",      "phase" -> "Process"),
+    Map("seq" -> "4",  "event" -> "Transport: LITHO → CD-SEM",               "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Transport"),
+    Map("seq" -> "5",  "event" -> "FOUP arrives at CD-SEM",                  "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "AtEqp"),
+    Map("seq" -> "6",  "event" -> "CD-SEM: Measure CD (5 wafers)",           "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "(measure)", "saga" -> "—",      "phase" -> "Measure"),
+    Map("seq" -> "7",  "event" -> "Classify: W3=BORDERLINE → Hold for Review","lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "4PASS 1BORDERLINE","saga" -> "—", "phase" -> "Decide"),
+    Map("seq" -> "8",  "event" -> "Split: W3 → Hold Lot",                    "lotSource" -> "Active(4w)","lotRework" -> "Active(1w)","wafer" -> "W3→hold",  "saga" -> "Initiated","phase" -> "Split"),
+    Map("seq" -> "9",  "event" -> "Hold: W3 placed on hold (engineer review)","lotSource" -> "(wait)",   "lotRework" -> "OnHold","wafer" -> "W3=OnHold",  "saga" -> "Committed","phase" -> "Hold"),
+    Map("seq" -> "10", "event" -> "Engineer Review (15s) → Decision: PASS",   "lotSource" -> "—",        "lotRework" -> "—",     "wafer" -> "—",         "saga" -> "—",      "phase" -> "Review"),
+    Map("seq" -> "11", "event" -> "Release: W3 hold released",                "lotSource" -> "—",        "lotRework" -> "Active","wafer" -> "W3→Active",  "saga" -> "—",      "phase" -> "Release"),
+    Map("seq" -> "12", "event" -> "Merge: Hold Lot → Source Lot",             "lotSource" -> "Active(5w)","lotRework" -> "Empty","wafer" -> "W3→source",  "saga" -> "Completed","phase" -> "Merge"),
+    Map("seq" -> "13", "event" -> "Return FOUP to Stocker + Demo Completed",  "lotSource" -> "Sealed",   "lotRework" -> "—",     "wafer" -> "5 Active",  "saga" -> "—",      "phase" -> "Complete"),
+  )
+
+  // ===========================================================================
+  // Dynamic POR Ledger Generator
+  // ===========================================================================
+
+  private def generateRoutingLedger(routing: ProductRouting): Seq[Map[String, String]] = {
+    val measureAreas = Set("LITHO", "ETCH", "MET")
+    var seq = 0
+    var prevArea = "STOCKER"
+    val buf = Seq.newBuilder[Map[String, String]]
+
+    def add(event: String, lot: String, wafer: String, saga: String, phase: String): Unit = {
+      buf += Map("seq" -> seq.toString, "event" -> event,
+        "lotSource" -> lot, "lotRework" -> "—", "wafer" -> wafer, "saga" -> saga, "phase" -> phase)
+      seq += 1
+    }
+
+    add(s"Load FOUP: ${routing.productId} (5 wafers, ${routing.steps.size} steps)", "—", "—", "—", "Load")
+
+    routing.steps.foreach { step =>
+      val areaId = step.equipmentArea.areaId
+      val equipId = FabFlowEngine.AreaToEquipmentId.getOrElse(areaId, s"$areaId-01")
+      val reentry = routing.steps.take(routing.steps.indexOf(step)).count(_.equipmentArea.areaId == areaId)
+      val reentryLabel = if (reentry > 0) s" (reentry #$reentry)" else ""
+
+      add(s"Transport: $prevArea → $areaId", "—", "—", "—", "Transport")
+      add(s"Arrive: $equipId ($areaId)$reentryLabel", "—", "—", "—", "AtEqp")
+      add(s"Process: ${step.recipeId} on $equipId", "—", "(process)", "—", "Process")
+
+      if (measureAreas.contains(areaId)) {
+        add(s"Transport: $areaId → MET (CD-SEM)", "—", "—", "—", "Transport")
+        add(s"Arrive: CD-SEM-01 (MET)", "—", "—", "—", "AtEqp")
+        add(s"Measure: CD-SEM — ${step.recipeId}", "—", "(measure)", "—", "Measure")
+        add(s"Classify: Decision Engine → Advance", "—", "PASS/FAIL/SCRAP", "—", "Decide")
+      } else {
+        add(s"Step Complete: $areaId (no measure, auto-advance)", "—", "—", "—", "Advance")
+      }
+      prevArea = areaId
+    }
+
+    add(s"Transport: $prevArea → STOCKER", "—", "—", "—", "Transport")
+    add(s"Seal Lot + Demo Completed: ${routing.productId}", "Sealed", "5 Active", "—", "Complete")
+
+    buf.result()
+  }
 }

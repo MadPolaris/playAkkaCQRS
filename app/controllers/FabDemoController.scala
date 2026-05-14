@@ -125,6 +125,7 @@ class FabDemoController @Inject()(
     Ok(Json.obj(
       "scenarioId" -> ledger("scenarioId").asInstanceOf[String],
       "name" -> ledger("name").asInstanceOf[String],
+      "lotReworkLabel" -> ledger("lotReworkLabel").asInstanceOf[String],
       "steps" -> steps
     ))
   }
