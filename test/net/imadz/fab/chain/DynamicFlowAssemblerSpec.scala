@@ -102,15 +102,15 @@ class DynamicFlowAssemblerSpec extends AnyWordSpec with Matchers {
       DynamicFlowAssembler.decideNextStep(Map.empty, exampleStep) shouldBe AdvanceToNextStep
     }
 
-    "return RetryCurrentStep when some wafers need REWORK (within maxRetries)" in {
+    "return SplitAndRework when some wafers need REWORK (FAIL → split for rework)" in {
       val disps = Map(
         "W1" -> PassDisposition("W1"),
         "W2" -> ReworkDisposition("W2", attempt = 1, maxRetries = 3),
         "W3" -> PassDisposition("W3")
       )
       val d = DynamicFlowAssembler.decideNextStep(disps, exampleStep)
-      d shouldBe a[RetryCurrentStep]
-      d.asInstanceOf[RetryCurrentStep].waferIds should contain("W2")
+      d shouldBe a[SplitAndRework]
+      d.asInstanceOf[SplitAndRework].waferIds should contain("W2")
     }
 
     "return ScrapWafersDecision when any wafer is SCRAP (takes priority over REWORK)" in {
@@ -123,7 +123,7 @@ class DynamicFlowAssemblerSpec extends AnyWordSpec with Matchers {
       d shouldBe a[ScrapWafersDecision]
     }
 
-    "return SplitAndRework when rework attempt exceeds step maxRetries" in {
+    "return SplitAndRework when rework attempt exceeds step maxRetries (classifyWafer pre-filters, but decideNextStep handles directly)" in {
       val disps = Map(
         "W1" -> ReworkDisposition("W1", attempt = 5, maxRetries = 3)
       )
@@ -132,14 +132,14 @@ class DynamicFlowAssemblerSpec extends AnyWordSpec with Matchers {
       d.asInstanceOf[SplitAndRework].waferIds should contain("W1")
     }
 
-    "return RetryCurrentStep when all reworks are within step maxRetries" in {
+    "return SplitAndRework when multiple wafers need REWORK (all FAIL wafers split for rework)" in {
       val disps = Map(
         "W1" -> ReworkDisposition("W1", attempt = 2, maxRetries = 5),
         "W2" -> ReworkDisposition("W2", attempt = 1, maxRetries = 5)
       )
       val d = DynamicFlowAssembler.decideNextStep(disps, exampleStep.copy(maxRetries = 5))
-      d shouldBe a[RetryCurrentStep]
-      d.asInstanceOf[RetryCurrentStep].waferIds should (contain("W1") and contain("W2"))
+      d shouldBe a[SplitAndRework]
+      d.asInstanceOf[SplitAndRework].waferIds should (contain("W1") and contain("W2"))
     }
   }
 

@@ -10,8 +10,8 @@ import net.imadz.fab.scenario.DecisionConfig
  *
  * Four-way wafer disposition:
  *   PASS → Continue to next process step
- *   FAIL → Rework (retry current step, up to maxRetries)
- *   BORDERLINE → Conditional pass (first time) or rework (subsequent)
+ *   FAIL → Saga Split + Rework (split FAIL wafers to rework lot, return to Litho)
+ *   BORDERLINE → Conditional pass (first time) or split rework (subsequent)
  *   SCRAP → Terminate wafer
  *
  * Aggregates per-wafer dispositions into a step-level decision for the flow engine.
@@ -80,11 +80,11 @@ object DynamicFlowAssembler {
     } else if (holds.nonEmpty) {
       HoldAndReview(holds.keySet, holds.values.map(_.reason).mkString("; "))
     } else if (reworks.nonEmpty) {
-      val withinLimit = reworks.filter { case (_, d) => d.attempt <= step.maxRetries }
-      if (withinLimit.nonEmpty)
-        RetryCurrentStep(withinLimit.keySet, withinLimit.values.map(d => s"${d.waferId}: attempt ${d.attempt}/${d.maxRetries}").mkString("; "))
-      else
-        SplitAndRework(reworks.keySet, "Max retries exceeded — split for offline rework")
+      // FAIL wafers must split for rework (strip resist → re-litho → re-measure).
+      // In-place retry does not exist in semiconductor manufacturing —
+      // PASS wafers continue forward, FAIL wafers split to a rework child lot.
+      SplitAndRework(reworks.keySet,
+        s"Split ${reworks.size} wafer(s) for rework: ${reworks.values.map(d => s"${d.waferId}: attempt ${d.attempt}/${d.maxRetries}").mkString("; ")}")
     } else {
       AdvanceToNextStep
     }

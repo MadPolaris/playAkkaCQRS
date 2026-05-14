@@ -267,7 +267,7 @@ object FabFlowEngine {
           case d: ReworkDisposition =>
             updatedWafers += wid -> info.copy(reworkCount = d.attempt, classification = Some("FAIL"))
             ctx.processRef ! RecordWaferClassified(wid, "FAIL", d.attempt, cdValue, ctx.ignoreReply)
-            ctx.publisher(DecisionMade(wid, s"FAIL → Rework (attempt ${d.attempt}/${d.maxRetries})", None))
+            ctx.publisher(DecisionMade(wid, s"FAIL → Split for Rework (attempt ${d.attempt}/${d.maxRetries})", None))
             dispositions += wid -> d
           case d: ScrapDisposition =>
             updatedWafers += wid -> info.copy(classification = Some("SCRAP"))
