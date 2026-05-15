@@ -20,7 +20,7 @@ import scala.concurrent.duration._
  * and handling failures and retries.
  */
 object SagaTransactionCoordinator {
-  val tags: Vector[String] = Vector.tabulate(5)(i => s"SagaTransactionCoordinator-$i")
+  val tags: Vector[String] = Vector.tabulate(1)(i => s"SagaTransactionCoordinator-$i")
   val entityTypeKey: EntityTypeKey[Command] = EntityTypeKey("SagaTransactionCoordinator")
 
 

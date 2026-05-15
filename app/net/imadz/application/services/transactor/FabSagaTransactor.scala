@@ -9,7 +9,7 @@ import net.imadz.infra.saga.SagaTransactionCoordinator
 object FabSagaTransactor {
 
   val entityTypeKey: EntityTypeKey[FabSagaCommand] = EntityTypeKey("FabSagaTransaction")
-  val tags: Vector[String] = Vector.tabulate(5)(i => s"fabsaga-$i")
+  val tags: Vector[String] = Vector.tabulate(1)(i => s"fabsaga-$i")
 
   def apply(
     id: String,

@@ -11,5 +11,5 @@ object FabProcessAggregate {
     FabProcessBehaviors.apply(context)
 
   val ProcessEntityTypeKey: EntityTypeKey[FabProcessCommand] = EntityTypeKey("FabProcess")
-  val tags: Vector[String] = Vector.tabulate(2)(i => s"process-$i")
+  val tags: Vector[String] = Vector.tabulate(1)(i => s"process-$i")
 }

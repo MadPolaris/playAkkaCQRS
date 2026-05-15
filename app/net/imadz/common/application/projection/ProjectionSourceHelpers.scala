@@ -16,7 +16,7 @@ object ProjectionSourceHelpers {
    */
   def withIdleTimeout[Envelope](
     provider: SourceProvider[Offset, Envelope],
-    timeout: FiniteDuration = 5.seconds
+    timeout: FiniteDuration = 300.seconds
   )(implicit ec: ExecutionContext): SourceProvider[Offset, Envelope] =
     new SourceProvider[Offset, Envelope] {
       override def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] =

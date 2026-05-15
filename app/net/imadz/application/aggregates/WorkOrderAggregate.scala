@@ -17,7 +17,7 @@ import scala.util.{Failure, Success}
 object WorkOrderAggregate {
 
   val WorkOrderEntityTypeKey: EntityTypeKey[WorkOrderCommand] = EntityTypeKey("WorkOrder")
-  val tags: Vector[String] = Vector.tabulate(2)(i => s"workorder-$i")
+  val tags: Vector[String] = Vector.tabulate(1)(i => s"workorder-$i")
 
   def apply(workOrderId: String, pipelineStarter: PipelineStarter): Behavior[WorkOrderCommand] =
     Behaviors.setup { actorContext =>

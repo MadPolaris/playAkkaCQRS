@@ -12,5 +12,5 @@ object CreditBalanceAggregate {
 
   // Akka Sharding Configuration
   val CreditBalanceEntityTypeKey: EntityTypeKey[CreditBalanceCommand] = EntityTypeKey("CreditBalance")
-  val tags: Vector[String] = Vector.tabulate(5)(i => s"credit-balance-$i")
+  val tags: Vector[String] = Vector.tabulate(1)(i => s"credit-balance-$i")
 }
