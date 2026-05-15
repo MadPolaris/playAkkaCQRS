@@ -1109,7 +1109,7 @@
   };
 
 
-  function closeEntityModal() { document.getElementById("entityStateModal").style.display = "none"; }
+  window.closeEntityModal = function() { document.getElementById("entityStateModal").style.display = "none"; };
   function createEntityModal() {
     var modal = document.createElement('div');
     modal.id = 'entityStateModal';
