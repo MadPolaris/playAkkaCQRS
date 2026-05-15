@@ -41,13 +41,12 @@ object LotEntity {
   ) {
     // --- Derived views (computed on-demand, no cache) ---
     def waferIds: Set[Id] = wafers.keySet
-    def measuredWafers: Set[String] = wafers.collect { case (_, ws) if ws.measured => ws.name }.toSet
-    def waferClassifications: Map[String, WaferClassResult] =
-      wafers.collect { case (_, ws) if ws.classification.isDefined =>
-        ws.name -> WaferClassResult(ws.classification.get, ws.cdValue.getOrElse(0.0), ws.reworkCount)
+    def measuredWafers: Set[Id] = wafers.collect { case (id, ws) if ws.measured => id }.toSet
+    def waferClassifications: Map[Id, WaferClassResult] =
+      wafers.collect { case (id, ws) if ws.classification.isDefined =>
+        id -> WaferClassResult(ws.classification.get, ws.cdValue.getOrElse(0.0), ws.reworkCount)
       }
     def waferNameById(id: Id): Option[String] = wafers.get(id).map(_.name)
-    def waferIdByName(name: String): Option[Id] = wafers.collectFirst { case (id, ws) if ws.name == name => id }
   }
 
   def empty(lotId: Id): LotState = LotState(lotId = lotId, productId = "")

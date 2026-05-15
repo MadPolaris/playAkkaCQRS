@@ -230,37 +230,37 @@ object FabDemoPipeline {
     val s = PipelineStages.emitLedger(state, "PhaseMerge: Saga MergeLot (TCC)", ctx)
     ctx.publisher(GlobalStatusChanged("MERGING", "Saga TCC merge — wafers → source lot", "PhaseMerge"))
 
+    val uuidToName: Map[Id, String] = ctx.waferUUIDs.map(_.swap)
     ctx.reworkLotRef.ask[LotConfirmation](ref => GetLotState(ref)).flatMap { reworkState =>
-      val passWaferIds = reworkState.waferClassifications.collect {
-        case (wid, cls) if cls == "PASS" => wid
+      val passWaferUUIDs: Seq[Id] = reworkState.waferClassifications.collect {
+        case (id, cls) if cls == "PASS" => id
       }.toSeq
 
-      if (passWaferIds.isEmpty) {
+      if (passWaferUUIDs.isEmpty) {
         ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeSkipped",
           "No PASS wafers in rework lot to merge", Seq.empty))
         Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
       } else {
-        val mergeWaferUUIDs: Set[Id] = passWaferIds.flatMap(ctx.waferUUIDs.get).toSet
-
+        val passWaferNames = passWaferUUIDs.flatMap(uuidToName.get)
         val sagaId = s"SAGA-MERGE-${state.iteration}"
         ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE",
-          s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferIds))
+          s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
 
-        ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, mergeWaferUUIDs, passWaferIds.toSet).map { confirmation =>
+        ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, passWaferUUIDs.toSet, passWaferNames.toSet).map { confirmation =>
           if (confirmation.error.isEmpty) {
             ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED",
-              s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferIds))
+              s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
             ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeCompleted",
-              s"TCC Merge: ${passWaferIds.mkString(",")} → Source Lot", passWaferIds))
-            passWaferIds.foreach { wid =>
-              state.wafers.get(wid).foreach { info =>
+              s"TCC Merge: ${passWaferNames.mkString(",")} → Source Lot", passWaferNames.toSeq))
+            passWaferNames.foreach { name =>
+              state.wafers.get(name).foreach { info =>
                 val cdValue = info.cdValueHistory.lastOption.getOrElse(0.0)
-                ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
+                ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(name), "PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
               }
             }
-            val passSet = passWaferIds.toSet
+            val nameSet = passWaferNames.toSet
             val mergedWafers = state.wafers.map { case (wid, info) =>
-              if (passSet.contains(wid)) wid -> info.copy(classification = Some("PASS"), subLot = None)
+              if (nameSet.contains(wid)) wid -> info.copy(classification = Some("PASS"), subLot = None)
               else wid -> info
             }
             val finalState = s.copy(wafers = mergedWafers, ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = None, childLotView = Map("rwk" -> ("Merged", 0)))

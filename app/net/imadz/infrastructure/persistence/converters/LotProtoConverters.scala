@@ -67,8 +67,14 @@ trait LotProtoConverters extends PrimitiveConverter {
   }
 
   object WaferAdditionReservedConv extends ProtoConverter[WaferAdditionReserved, WaferAdditionReservedPO] {
-    override def toProto(e: WaferAdditionReserved): WaferAdditionReservedPO = WaferAdditionReservedPO(transferId = IdConv.toProto(e.transferId), waferIds = e.waferIds.map(IdConv.toProto).toSeq)
-    override def fromProto(p: WaferAdditionReservedPO): WaferAdditionReserved = WaferAdditionReserved(transferId = IdConv.fromProto(p.transferId), waferIds = p.waferIds.map(IdConv.fromProto).toSet)
+    override def toProto(e: WaferAdditionReserved): WaferAdditionReservedPO = WaferAdditionReservedPO(
+      transferId = IdConv.toProto(e.transferId),
+      waferIds = e.waferIds.map(IdConv.toProto).toSeq
+    )
+    override def fromProto(p: WaferAdditionReservedPO): WaferAdditionReserved = WaferAdditionReserved(
+      transferId = IdConv.fromProto(p.transferId),
+      waferIds = p.waferIds.map(IdConv.fromProto).toSet
+    )
   }
 
   object WaferAdditionCommittedConv extends ProtoConverter[WaferAdditionCommitted, WaferAdditionCommittedPO] {
@@ -181,28 +187,26 @@ trait LotProtoConverters extends PrimitiveConverter {
       phase = s.phase.toString,
       completedTransferIds = s.completedTransferIds.map(IdConv.toProto).toSeq,
       loadedFoupId = s.loadedFoupId.getOrElse(""),
-      measuredWafers = s.measuredWafers.toSeq,
-      waferClassifications = s.waferClassifications.map { case (wid, r) =>
-        WaferClassResultPO(waferId = wid, classification = r.classification, cdValueNm = r.cdValueNm, reworkCount = r.reworkCount)
+      measuredWafers = s.measuredWafers.map(IdConv.toProto).toSeq,
+      waferClassifications = s.waferClassifications.map { case (id, r) =>
+        WaferClassResultPO(waferId = IdConv.toProto(id), classification = r.classification, cdValueNm = r.cdValueNm, reworkCount = r.reworkCount)
       }.toSeq
     )
 
     override def fromProto(p: LotStatePO): LotState = {
       // Reconstruct unified wafers map from old-style snapshot fields
-      val classMap = p.waferClassifications.map(r => r.waferId -> WaferClassResultConv.fromProto(r)).toMap
-      val measuredSet = p.measuredWafers.toSet
+      val classMap = p.waferClassifications.map(r => parseWaferId(r.waferId) -> WaferClassResultConv.fromProto(r)).toMap
+      val measuredSet = p.measuredWafers.map(parseWaferId).toSet
       val waferIds = p.waferIds.map(IdConv.fromProto)
       val waferEntries: Map[Id, WaferState] = if (waferIds.nonEmpty) {
         waferIds.zipWithIndex.map { case (id, idx) =>
-          // Try to match by index into classification list; fall back to empty name
-          val name = if (idx < p.waferIds.size) s"WAFER-${idx + 1}" else id.toString.take(8)
-          val cls = classMap.get(name)
+          val cls = classMap.get(id)
           id -> WaferState(
-            name = name,
+            name = s"WAFER-${idx + 1}",
             classification = cls.map(_.classification),
             reworkCount = cls.map(_.reworkCount).getOrElse(0),
             cdValue = cls.map(_.cdValueNm),
-            measured = measuredSet.contains(name)
+            measured = measuredSet.contains(id)
           )
         }.toMap
       } else Map.empty

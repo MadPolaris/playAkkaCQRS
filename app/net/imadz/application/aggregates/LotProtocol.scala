@@ -53,9 +53,9 @@ object LotProtocol {
                             areaVisitHistory: List[String] = Nil,
                             routingStepReentry: Map[String, Int] = Map.empty,
                             loadedFoupId: Option[String] = None,
-                            waferClassifications: Map[String, String] = Map.empty,
+                            waferClassifications: Map[Id, String] = Map.empty,
                             completedJobs: Set[String] = Set.empty,
-                            measuredWafers: Set[String] = Set.empty,
+                            measuredWafers: Set[Id] = Set.empty,
                             currentStepIndex: Int = 0) extends CborSerializable
   case class WaferRemovalConfirmation(transferId: Id, error: Option[iMadzError]) extends CborSerializable
   case class WaferAdditionConfirmation(transferId: Id, error: Option[iMadzError]) extends CborSerializable

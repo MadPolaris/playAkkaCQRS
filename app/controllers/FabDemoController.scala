@@ -162,9 +162,9 @@ class FabDemoController @Inject()(
           "areaVisitHistory" -> l.areaVisitHistory,
           "routingStepReentry" -> l.routingStepReentry,
           "loadedFoupId" -> lotFoup,
-          "waferClassifications" -> l.waferClassifications,
+          "waferClassifications" -> l.waferClassifications.map { case (id, cls) => id.toString -> cls },
           "completedJobs" -> l.completedJobs.toSeq,
-          "measuredWafers" -> l.measuredWafers.toSeq,
+          "measuredWafers" -> l.measuredWafers.map(_.toString).toSeq,
           "currentStepIndex" -> l.currentStepIndex
         ),
         "reworkLot" -> state.reworkLot.map { rl =>
@@ -185,14 +185,14 @@ class FabDemoController @Inject()(
             "completedTransferIds" -> rl.completedTransferIds.map(_.toString),
             "areaVisitHistory" -> rl.areaVisitHistory,
             "loadedFoupId" -> rlFoup,
-            "waferClassifications" -> rl.waferClassifications,
+            "waferClassifications" -> rl.waferClassifications.map { case (id, cls) => id.toString -> cls },
             "completedJobs" -> rl.completedJobs.toSeq,
-            "measuredWafers" -> rl.measuredWafers.toSeq
+            "measuredWafers" -> rl.measuredWafers.map(_.toString).toSeq
           )
         },
         "wafers" -> l.waferIds.map { wid =>
           val widStr = wid.toString
-          val classification = l.waferClassifications.getOrElse(widStr, "Pending")
+          val classification = l.waferClassifications.getOrElse(wid, "Pending")
           Json.obj(
             "waferId" -> widStr,
             "status" -> (if (classification == "SCRAP") "Scrapped" else "Active"),

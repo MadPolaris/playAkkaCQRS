@@ -25,14 +25,13 @@ object LotBehaviors extends LotCommandHelpers {
       runReplyingPolicy(SealLotRule, SealLotHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
 
     case GetLotState(replyTo) =>
-      val classifications = state.waferClassifications.map { case (wid, r) => wid -> r.classification }
       Effect.reply(replyTo)(LotConfirmation(
         error = None, waferIds = state.waferIds, phase = Some(state.phase),
         productId = Some(state.productId), lotId = Some(state.lotId),
         reservedWafers = state.reservedWafers, incomingWafers = state.incomingWafers,
         completedTransferIds = state.completedTransferIds,
         loadedFoupId = state.loadedFoupId,
-        waferClassifications = classifications,
+        waferClassifications = state.waferClassifications.map { case (id, r) => id -> r.classification },
         measuredWafers = state.measuredWafers
       ))
   }
