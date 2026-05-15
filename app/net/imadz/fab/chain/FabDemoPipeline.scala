@@ -302,10 +302,13 @@ object FabDemoPipeline {
         ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "ScrapCompleted",
           s"TCC Scrap: ${scrapWaferIds.mkString(",")} → Scrap Lot", scrapWaferIds))
         val scrapSet = scrapWaferIds.toSet
-        val remainingWafers = state.wafers.filterKeys(wid => !scrapSet.contains(wid)).toMap
-        val finalState = s.copy(wafers = remainingWafers, ledgerSeq = s.ledgerSeq + 1,
+        val updatedWafers = state.wafers.map { case (wid, info) =>
+          if (scrapSet.contains(wid)) wid -> info.copy(subLot = Some("scrap"))
+          else wid -> info
+        }
+        val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1,
           childLotView = state.childLotView + ("scrap" -> ("Scrapped", scrapWaferIds.size)))
-        ctx.publisher(PipelineStages.buildAggregateState(remainingWafers, ctx, state.passCount, state.scrapCount,
+        ctx.publisher(PipelineStages.buildAggregateState(updatedWafers, ctx, state.passCount, state.scrapCount,
           sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
         finalState
       } else {
