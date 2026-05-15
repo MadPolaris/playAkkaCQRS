@@ -199,12 +199,14 @@ class FabDemoService @Inject()(
       childLotRefs = Map(
         "pilot" -> pilotLotRef,
         "sample" -> sampleLotRef,
-        "hold" -> holdLotRef
+        "hold" -> holdLotRef,
+        "scrap" -> scrapLotRef
       ),
       childLotIds = Map(
         "pilot" -> pilotLotId,
         "sample" -> sampleLotId,
-        "hold" -> holdLotId
+        "hold" -> holdLotId,
+        "scrap" -> scrapLotId
       )
     )
 
@@ -228,6 +230,8 @@ class FabDemoService @Inject()(
         Seq(sampleLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SAMPLE-$workOrderId", Map.empty, ref)))
       case "hold-release" =>
         Seq(holdLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-HOLD-$workOrderId", Map.empty, ref)))
+      case "scrap-downgrade" =>
+        Seq(scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref)))
       case _ => Seq.empty
     }
 
@@ -545,23 +549,24 @@ class FabDemoService @Inject()(
     val sourceLotUUID = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
     val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotUUID.toString)
 
+    val childLotKeys = Seq("rework", "scrap", "pilot", "sample", "hold")
+
     lotRef.ask[LotConfirmation](GetLotState(_)).flatMap { lotConf =>
-      val reworkLotUUID = UUID.nameUUIDFromBytes(s"$workOrderId-rework-lot".getBytes)
-      val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotUUID.toString)
+      val childLotFutures: Seq[Future[Option[(String, LotConfirmation)]]] = childLotKeys.map { key =>
+        val uuid = UUID.nameUUIDFromBytes(s"$workOrderId-$key-lot".getBytes)
+        val ref = sharding.entityRefFor(LotEntityTypeKey, uuid.toString)
+        ref.ask[LotConfirmation](GetLotState(_))
+          .map { conf =>
+            if (conf.waferIds.nonEmpty || conf.phase.nonEmpty) Some(key -> conf) else None
+          }
+          .recover { case _ => None }
+      }
 
-      // Query rework lot if it exists
-      val reworkLotFuture: Future[Option[LotConfirmation]] = reworkLotRef
-        .ask[LotConfirmation](GetLotState(_))
-        .map { conf =>
-          if (conf.waferIds.nonEmpty) Some(conf) else None
-        }
-        .recover { case _ => None }
-
-      reworkLotFuture.map { reworkLot =>
+      Future.sequence(childLotFutures).map { results =>
         EntityStateSnapshot(
           workOrderId = workOrderId,
           lot = lotConf,
-          reworkLot = reworkLot
+          childLots = results.flatten.toMap
         )
       }
     }
@@ -570,7 +575,7 @@ class FabDemoService @Inject()(
   case class EntityStateSnapshot(
     workOrderId: String,
     lot: LotConfirmation,
-    reworkLot: Option[LotConfirmation]
+    childLots: Map[String, LotConfirmation]
   )
 
 }

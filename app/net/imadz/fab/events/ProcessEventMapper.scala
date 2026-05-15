@@ -159,7 +159,7 @@ class ProcessEventMapper(
       val classification = if (status == "Pending") "Pending" else status
       WaferStateSnapshot(wid, status, scenarioId, classification, waferRework.getOrElse(wid, 0))
     }
-    AggregateStateUpdated(sourceLot, None, wafers)
+    AggregateStateUpdated(sourceLot, Seq.empty, wafers)
   }
 
   /** Builds final AggregateStateUpdated for completed processes. */
@@ -169,6 +169,6 @@ class ProcessEventMapper(
       WaferStateSnapshot(wid, "Active", scenarioId,
         waferStatus.getOrElse(wid, "PASS"), waferRework.getOrElse(wid, 0))
     }
-    AggregateStateUpdated(sourceLot, None, wafers)
+    AggregateStateUpdated(sourceLot, Seq.empty, wafers)
   }
 }

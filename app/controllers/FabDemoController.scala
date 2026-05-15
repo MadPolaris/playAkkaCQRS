@@ -86,9 +86,9 @@ class FabDemoController @Inject()(
         "data" -> data, "timestamp" -> ts, "layer" -> layer)
       case GlobalStatusChanged(st, detail, phase) => Json.obj("status" -> st, "detail" -> detail, "phase" -> phase)
       case ScrapEvent(wid, reason) => Json.obj("waferId" -> wid, "reason" -> reason)
-      case AggregateStateUpdated(srcLot, rwkLot, wafers) => Json.obj(
+      case AggregateStateUpdated(srcLot, childLots, wafers) => Json.obj(
         "sourceLot" -> Json.obj("lotId" -> srcLot.lotId, "status" -> srcLot.status, "waferCount" -> srcLot.waferCount, "passCount" -> srcLot.passCount, "scrapCount" -> srcLot.scrapCount, "currentArea" -> srcLot.currentArea),
-        "reworkLot" -> rwkLot.map(rl => Json.obj("lotId" -> rl.lotId, "status" -> rl.status, "waferCount" -> rl.waferCount, "passCount" -> rl.passCount, "scrapCount" -> rl.scrapCount, "currentArea" -> rl.currentArea)),
+        "childLots" -> childLots.map(cl => Json.obj("lotId" -> cl.lotId, "status" -> cl.status, "waferCount" -> cl.waferCount, "passCount" -> cl.passCount, "scrapCount" -> cl.scrapCount, "currentArea" -> cl.currentArea)),
         "wafers" -> wafers.map(w => Json.obj("waferId" -> w.waferId, "status" -> w.status, "lotId" -> w.lotId, "classification" -> w.classification, "reworkCount" -> w.reworkCount))
       )
     }
@@ -144,6 +144,31 @@ class FabDemoController @Inject()(
       val lotProduct: String = l.productId.getOrElse("")
       val lotIdStr: String = l.lotId.map(_.toString).getOrElse("")
       val lotFoup: String = l.loadedFoupId.getOrElse("")
+
+      def lotJson(conf: net.imadz.application.aggregates.LotProtocol.LotConfirmation): play.api.libs.json.JsValue = {
+        val p: String = conf.phase.map(_.toString).getOrElse("")
+        val lid: String = conf.lotId.map(_.toString).getOrElse("")
+        val foup: String = conf.loadedFoupId.getOrElse("")
+        Json.obj(
+          "phase" -> p,
+          "lotId" -> lid,
+          "waferIds" -> conf.waferIds.map(_.toString),
+          "waferCount" -> conf.waferIds.size,
+          "reservedWafers" -> conf.reservedWafers.map { case (tid, wids) =>
+            Json.obj("transferId" -> tid.toString, "waferIds" -> wids.map(_.toString))
+          },
+          "incomingWafers" -> conf.incomingWafers.map { case (tid, wids) =>
+            Json.obj("transferId" -> tid.toString, "waferIds" -> wids.map(_.toString))
+          },
+          "completedTransferIds" -> conf.completedTransferIds.map(_.toString),
+          "areaVisitHistory" -> conf.areaVisitHistory,
+          "loadedFoupId" -> foup,
+          "waferClassifications" -> conf.waferClassifications.map { case (id, cls) => id.toString -> cls },
+          "completedJobs" -> conf.completedJobs.toSeq,
+          "measuredWafers" -> conf.measuredWafers.map(_.toString).toSeq
+        )
+      }
+
       Ok(Json.obj(
         "workOrderId" -> state.workOrderId,
         "sourceLot" -> Json.obj(
@@ -167,29 +192,7 @@ class FabDemoController @Inject()(
           "measuredWafers" -> l.measuredWafers.map(_.toString).toSeq,
           "currentStepIndex" -> l.currentStepIndex
         ),
-        "reworkLot" -> state.reworkLot.map { rl =>
-          val rlPhase: String = rl.phase.map(_.toString).getOrElse("")
-          val rlLotId: String = rl.lotId.map(_.toString).getOrElse("")
-          val rlFoup: String = rl.loadedFoupId.getOrElse("")
-          Json.obj(
-            "phase" -> rlPhase,
-            "lotId" -> rlLotId,
-            "waferIds" -> rl.waferIds.map(_.toString),
-            "waferCount" -> rl.waferIds.size,
-            "reservedWafers" -> rl.reservedWafers.map { case (tid, wids) =>
-              Json.obj("transferId" -> tid.toString, "waferIds" -> wids.map(_.toString))
-            },
-            "incomingWafers" -> rl.incomingWafers.map { case (tid, wids) =>
-              Json.obj("transferId" -> tid.toString, "waferIds" -> wids.map(_.toString))
-            },
-            "completedTransferIds" -> rl.completedTransferIds.map(_.toString),
-            "areaVisitHistory" -> rl.areaVisitHistory,
-            "loadedFoupId" -> rlFoup,
-            "waferClassifications" -> rl.waferClassifications.map { case (id, cls) => id.toString -> cls },
-            "completedJobs" -> rl.completedJobs.toSeq,
-            "measuredWafers" -> rl.measuredWafers.map(_.toString).toSeq
-          )
-        },
+        "childLots" -> state.childLots.map { case (key, conf) => key -> lotJson(conf) },
         "wafers" -> l.waferIds.map { wid =>
           val widStr = wid.toString
           val classification = l.waferClassifications.getOrElse(wid, "Pending")

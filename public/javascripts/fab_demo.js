@@ -1155,22 +1155,26 @@
       ['waferClassifications', obj(sl.waferClassifications)]
     ]) + '</div></details>';
 
-    // Rework Lot
-    if (data.reworkLot) {
-      var rl = data.reworkLot;
-      h += '<details open style="margin-bottom:8px"><summary style="font-weight:700;color:var(--amber);cursor:pointer;font-size:13px">Rework Lot</summary>';
-      h += '<div style="padding:4px 0 0 12px">' + tbl([
-        ['phase', '<b>' + rl.phase + '</b>'],
-        ['lotId (UUID)', ff(rl.lotId)],
-        ['waferCount', rl.waferCount],
-        ['waferIds', arr(rl.waferIds)],
-        ['loadedFoupId', ff(rl.loadedFoupId)],
-        ['areaVisitHistory', arr(rl.areaVisitHistory)],
-        ['completedJobs', arr(rl.completedJobs)],
-        ['measuredWafers', arr(rl.measuredWafers)],
-        ['completedTransferIds', arr(rl.completedTransferIds)],
-        ['waferClassifications', obj(rl.waferClassifications)]
-      ]) + '</div></details>';
+    // Child Lots
+    var childLotKeys = Object.keys(data.childLots || {});
+    if (childLotKeys.length > 0) {
+      childLotKeys.forEach(function(key) {
+        var rl = data.childLots[key];
+        var label = key.charAt(0).toUpperCase() + key.slice(1) + ' Lot';
+        h += '<details open style="margin-bottom:8px"><summary style="font-weight:700;color:var(--amber);cursor:pointer;font-size:13px">' + label + '</summary>';
+        h += '<div style="padding:4px 0 0 12px">' + tbl([
+          ['phase', '<b>' + (rl.phase || '') + '</b>'],
+          ['lotId (UUID)', ff(rl.lotId)],
+          ['waferCount', rl.waferCount],
+          ['waferIds', arr(rl.waferIds)],
+          ['loadedFoupId', ff(rl.loadedFoupId)],
+          ['areaVisitHistory', arr(rl.areaVisitHistory)],
+          ['completedJobs', arr(rl.completedJobs)],
+          ['measuredWafers', arr(rl.measuredWafers)],
+          ['completedTransferIds', arr(rl.completedTransferIds)],
+          ['waferClassifications', obj(rl.waferClassifications)]
+        ]) + '</div></details>';
+      });
     }
 
     // Wafer Entities

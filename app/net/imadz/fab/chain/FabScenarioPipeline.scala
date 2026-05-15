@@ -121,7 +121,7 @@ object FabScenarioPipeline {
     Seq(LoadFoup, Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
       RunRecipe(equipId, "LITHO-28-001"),
       Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
-      Measure(cdSemId), Classify, ScrapWafers,
+      Measure(cdSemId), Classify, SagaSplit("scrap"), ScrapWafers,
       Transport("CDSEM", "STOCKER"), SealComplete)
   }
 
@@ -176,8 +176,9 @@ object FabScenarioPipeline {
             ctx.publisher(DecisionMade(wid, "Pilot FAIL → Scrap", None))
           }
         case "scrap-downgrade" =>
-          updatedWafers += wid -> info.copy(classification = Some(cls))
-          if (cls == "SCRAP") { scrapWafers :+= wid; ctx.publisher(DecisionMade(wid, "SCRAP → Terminate", None)) }
+          updatedWafers += wid -> info.copy(classification = Some(cls),
+            subLot = if (cls == "SCRAP") Some("scrap") else None)
+          if (cls == "SCRAP") { scrapWafers :+= wid; ctx.publisher(DecisionMade(wid, "SCRAP → Scrap Lot", None)) }
           else ctx.publisher(DecisionMade(wid, s"$cls → Continue", None))
         case "sampling-demo" =>
           updatedWafers += wid -> info.copy(classification = Some(cls))
@@ -216,7 +217,7 @@ object FabScenarioPipeline {
     val childLotId = ctx.childLotIds.getOrElse(lotKey, ctx.reworkLotId)
     val childLotRef = ctx.childLotRefs.getOrElse(lotKey, ctx.reworkLotRef)
     val waferEntries = state.wafers.filter { case (_, info) =>
-      info.subLot.contains(lotKey) || lotKey == state.spawnedChildLotKey.getOrElse("")
+      info.subLot.contains(lotKey)
     }
     val moveIds = waferEntries.flatMap { case (wid, _) => ctx.waferUUIDs.get(wid) }.toSet
     val moveNames = waferEntries.keys.toSet
@@ -224,22 +225,31 @@ object FabScenarioPipeline {
       lotKey match {
         case "pilot"  => ctx.scenario.waferIds.take(1).flatMap(ctx.waferUUIDs.get).toSet
         case "sample" => ctx.scenario.waferIds.take(2).flatMap(ctx.waferUUIDs.get).toSet
+        case "scrap"  =>
+          state.wafers.filter(_._2.classification.contains("SCRAP")).keys.flatMap(ctx.waferUUIDs.get).toSet
         case _ => Set.empty[Id]
       }
     }
-    val finalMoveNames = if (moveNames.nonEmpty) moveNames else Set.empty[String]
+    val finalMoveNames = if (moveNames.nonEmpty) moveNames else {
+      lotKey match {
+        case "pilot" => ctx.scenario.waferIds.take(1).toSet
+        case "sample" => ctx.scenario.waferIds.take(2).toSet
+        case "scrap" => state.wafers.filter(_._2.classification.contains("SCRAP")).keys.toSet
+        case _ => Set.empty[String]
+      }
+    }
     val sagaId = s"SAGA-SPLIT-$lotKey-${state.iteration}"
     val rwkLotName = s"${ctx.scenario.scenarioId}-${lotKey.toUpperCase}"
     ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE", ctx.scenario.scenarioId, rwkLotName, finalMoveIds.toSeq.map(_.toString)))
     ctx.sagaTx(ctx.sourceLotId, childLotId, finalMoveIds, finalMoveNames).map { confirmation =>
       if (confirmation.error.isEmpty) {
-        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED", ctx.scenario.scenarioId, rwkLotName, moveIds.toSeq.map(_.toString)))
+        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED", ctx.scenario.scenarioId, rwkLotName, finalMoveIds.toSeq.map(_.toString)))
         val updatedWafers = state.wafers.map { case (wid, info) =>
-          if (moveIds.contains(ctx.waferUUIDs.getOrElse(wid, UUID.nameUUIDFromBytes("none".getBytes))))
+          if (finalMoveIds.contains(ctx.waferUUIDs.getOrElse(wid, UUID.nameUUIDFromBytes("none".getBytes))))
             wid -> info.copy(subLot = Some(lotKey))
           else wid -> info
         }
-        val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1, childLotView = Map(lotKey -> ("Active", moveIds.size)))
+        val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1, childLotView = Map(lotKey -> ("Active", finalMoveIds.size)))
         ctx.publisher(PipelineStages.buildAggregateState(updatedWafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
         finalState
       } else {

@@ -42,7 +42,7 @@ case class GlobalStatusChanged(status: String, detail: String, phase: String) ex
 // --- Aggregate State (需求5: 业务聚合状态面板) ---
 case class AggregateStateUpdated(
   sourceLot: LotStateSnapshot,
-  reworkLot: Option[LotStateSnapshot],
+  childLots: Seq[LotStateSnapshot],
   wafers: Seq[WaferStateSnapshot]
 ) extends FabSimulationEvent
 

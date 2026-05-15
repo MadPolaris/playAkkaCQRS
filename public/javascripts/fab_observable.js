@@ -135,52 +135,38 @@
     },
 
     aggregate: function aggregateReducer(model, data) {
-      // data = AggregateStateUpdated: {sourceLot, reworkLot, wafers[]}
+      // data = AggregateStateUpdated: {sourceLot, childLots[], wafers[]}
       // Accumulate authoritative snapshots from the pipeline's buildAggregateState
       var lots = Object.assign({}, model.lots);
       var wafers = Object.assign({}, model.wafers);
 
-      // Source lot
-      var srcLot = data.sourceLot;
-      if (srcLot && srcLot.lotId) {
-        if (!lots[srcLot.lotId]) {
-          lots[srcLot.lotId] = {
-            lotId: srcLot.lotId, productId: srcLot.lotId,
-            status: srcLot.status, waferCount: srcLot.waferCount,
-            passCount: srcLot.passCount, scrapCount: srcLot.scrapCount,
-            currentArea: srcLot.currentArea || '',
+      function upsertLot(lotData) {
+        if (!lotData || !lotData.lotId) return;
+        if (!lots[lotData.lotId]) {
+          lots[lotData.lotId] = {
+            lotId: lotData.lotId, productId: lotData.lotId,
+            status: lotData.status, waferCount: lotData.waferCount,
+            passCount: lotData.passCount || 0, scrapCount: lotData.scrapCount || 0,
+            currentArea: lotData.currentArea || '',
             waferIds: []
           };
         } else {
-          var sl = lots[srcLot.lotId];
-          sl.status = srcLot.status;
-          sl.waferCount = srcLot.waferCount;
-          sl.passCount = srcLot.passCount;
-          sl.scrapCount = srcLot.scrapCount;
-          sl.currentArea = srcLot.currentArea || '';
+          var l = lots[lotData.lotId];
+          l.status = lotData.status;
+          l.waferCount = lotData.waferCount;
+          l.passCount = lotData.passCount || 0;
+          l.scrapCount = lotData.scrapCount || 0;
+          l.currentArea = lotData.currentArea || '';
         }
       }
 
-      // Rework lot
-      var reworkLot = data.reworkLot;
-      if (reworkLot && reworkLot.lotId) {
-        if (!lots[reworkLot.lotId]) {
-          lots[reworkLot.lotId] = {
-            lotId: reworkLot.lotId, productId: reworkLot.lotId,
-            status: reworkLot.status, waferCount: reworkLot.waferCount,
-            passCount: reworkLot.passCount || 0, scrapCount: reworkLot.scrapCount || 0,
-            currentArea: reworkLot.currentArea || '',
-            waferIds: []
-          };
-        } else {
-          var rl = lots[reworkLot.lotId];
-          rl.status = reworkLot.status;
-          rl.waferCount = reworkLot.waferCount;
-          rl.passCount = reworkLot.passCount;
-          rl.scrapCount = reworkLot.scrapCount;
-          rl.currentArea = reworkLot.currentArea || '';
-        }
-      }
+      // Source lot
+      upsertLot(data.sourceLot);
+
+      // Child lots (supports pilot, scrap, sample, hold, rework, etc.)
+      (data.childLots || []).forEach(function(cl) {
+        upsertLot(cl);
+      });
 
       // Wafers — accumulate all seen wafer IDs
       (data.wafers || []).forEach(function(w) {

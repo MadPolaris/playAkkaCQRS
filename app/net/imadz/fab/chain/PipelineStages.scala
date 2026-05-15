@@ -34,7 +34,7 @@ object PipelineStages {
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, ctx.scenario.stocker.equipmentId, "STOCKER-PORT-1"))
     ctx.publisher(AggregateStateUpdated(
       LotStateSnapshot(ctx.scenario.scenarioId, "Active", ctx.scenario.lotSize, state.passCount, state.scrapCount, "STOCKER"),
-      None,
+      Seq.empty,
       state.wafers.map { case (wid, info) =>
         WaferStateSnapshot(wid, "Active", ctx.scenario.scenarioId, info.classification.getOrElse("Pending"), 0)
       }.toSeq
@@ -201,6 +201,6 @@ object PipelineStages {
                  else "Active",
         lotId = waferLot, classification = info.classification.getOrElse("Pending"), reworkCount = info.reworkCount)
     }.toSeq
-    AggregateStateUpdated(sourceLot, childLots.headOption, waferSnapshots)
+    AggregateStateUpdated(sourceLot, childLots, waferSnapshots)
   }
 }
