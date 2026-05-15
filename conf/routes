@@ -36,9 +36,6 @@ GET     /api/saga/history/:transactionId          controllers.ShowcaseController
 GET     /architecture               controllers.DddGuideController.index()
 GET     /projection                 controllers.DddGuideController.projectionShowcase()
 GET     /dag                        controllers.DddGuideController.m2Demo()
-GET     /m25                        controllers.DddGuideController.m25Explore()
-GET     /en/m25                     controllers.DddGuideController.m25En()
-GET     /m25-demo                   controllers.DddGuideController.m25Demo()
 # M1 Saga
 GET     /m1                         controllers.DddGuideController.sagaExplore()
 GET     /en/m1                      controllers.DddGuideController.sagaEn()
@@ -61,4 +58,5 @@ POST    /api/fab-demo/start/:scenarioId          controllers.FabDemoController.s
 POST    /api/fab-demo/product/:productId/start   controllers.FabDemoController.startProductDemo(productId: String)
 GET     /api/fab-demo/scenarios                  controllers.FabDemoController.getScenarios
 GET     /api/fab-demo/scenario/:id/ledger        controllers.FabDemoController.getScenarioLedger(id: String)
+GET     /api/fab-demo/entity-state/:workOrderId  controllers.FabDemoController.getEntityState(workOrderId: String)
 

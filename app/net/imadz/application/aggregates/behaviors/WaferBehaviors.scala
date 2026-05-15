@@ -27,7 +27,12 @@ object WaferBehaviors extends WaferCommandHelpers {
       runReplyingPolicy(ChangeStatusRule, ChangeStatusHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
 
     case GetWaferState(replyTo) =>
-      Effect.reply(replyTo)(WaferConfirmation(None, Some(state.status), state.lotId))
+      Effect.reply(replyTo)(WaferConfirmation(
+        error = None, status = Some(state.status), lotId = state.lotId,
+        waferId = Some(state.waferId.toString),
+        reservedTransfer = state.reservedTransfer,
+        completedTransferIds = state.completedTransferIds
+      ))
   }
 
   // Group 2: Transfer — reserve/commit/release ownership transfer

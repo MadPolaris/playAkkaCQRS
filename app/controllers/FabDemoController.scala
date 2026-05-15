@@ -24,16 +24,21 @@ class FabDemoController @Inject()(
 
   private implicit val typedSystem: ActorSystem[Nothing] = classicSystem.toTyped
 
-  // WebSocket event hub (same pattern as ShowcaseController)
+  // WebSocket event hub — pure pass-through, no aggregation.
+  // Aggregate state is computed by the pipeline (buildAggregateState)
+  // and emitted as AggregateStateUpdated events at every stage transition.
   private val (hubSink, hubSource): (Sink[FabSimulationEvent, _], Source[FabSimulationEvent, _]) =
     MergeHub.source[FabSimulationEvent]
-      .toMat(BroadcastHub.sink[FabSimulationEvent])(Keep.both)
+      .toMat(BroadcastHub.sink[FabSimulationEvent](bufferSize = 2048))(Keep.both)
       .run()
 
   /** Publish a simulation event to all connected WebSocket clients */
   private def publishEvent(event: FabSimulationEvent): Unit = {
     akka.stream.scaladsl.Source.single(event).runWith(hubSink)
   }
+
+  // Register system-wide publisher so recovery replays have a WebSocket publisher
+  fabDemoService.setSystemWidePublisher(publishEvent)
 
   // Bridge: subscribes EventStream for domain events from FabProcessProjection,
   // maps them to FabSimulationEvents, and pushes to the WebSocket hub
@@ -82,8 +87,8 @@ class FabDemoController @Inject()(
       case GlobalStatusChanged(st, detail, phase) => Json.obj("status" -> st, "detail" -> detail, "phase" -> phase)
       case ScrapEvent(wid, reason) => Json.obj("waferId" -> wid, "reason" -> reason)
       case AggregateStateUpdated(srcLot, rwkLot, wafers) => Json.obj(
-        "sourceLot" -> Json.obj("lotId" -> srcLot.lotId, "status" -> srcLot.status, "waferCount" -> srcLot.waferCount, "passCount" -> srcLot.passCount, "scrapCount" -> srcLot.scrapCount),
-        "reworkLot" -> rwkLot.map(rl => Json.obj("lotId" -> rl.lotId, "status" -> rl.status, "waferCount" -> rl.waferCount, "passCount" -> rl.passCount, "scrapCount" -> rl.scrapCount)),
+        "sourceLot" -> Json.obj("lotId" -> srcLot.lotId, "status" -> srcLot.status, "waferCount" -> srcLot.waferCount, "passCount" -> srcLot.passCount, "scrapCount" -> srcLot.scrapCount, "currentArea" -> srcLot.currentArea),
+        "reworkLot" -> rwkLot.map(rl => Json.obj("lotId" -> rl.lotId, "status" -> rl.status, "waferCount" -> rl.waferCount, "passCount" -> rl.passCount, "scrapCount" -> rl.scrapCount, "currentArea" -> rl.currentArea)),
         "wafers" -> wafers.map(w => Json.obj("waferId" -> w.waferId, "status" -> w.status, "lotId" -> w.lotId, "classification" -> w.classification, "reworkCount" -> w.reworkCount))
       )
     }
@@ -92,7 +97,7 @@ class FabDemoController @Inject()(
   /** Start a demo scenario */
   def startDemo(scenarioId: String) = Action.async {
     fabDemoService.startDemo(scenarioId, publishEvent).map { result =>
-      Ok(Json.obj("success" -> result.success, "message" -> result.message))
+      Ok(Json.obj("success" -> true, "message" -> s"WorkOrder ${result.workOrderId} ${result.phase}", "workOrderId" -> result.workOrderId))
     }
   }
 
@@ -104,7 +109,7 @@ class FabDemoController @Inject()(
   /** Start a dynamic routing demo by product ID */
   def startProductDemo(productId: String) = Action.async {
     fabDemoService.startDemoWithProduct(productId, publishEvent).map { result =>
-      Ok(Json.obj("success" -> result.success, "message" -> result.message))
+      Ok(Json.obj("success" -> true, "message" -> s"WorkOrder ${result.workOrderId} ${result.phase}", "workOrderId" -> result.workOrderId))
     }
   }
 
@@ -128,5 +133,80 @@ class FabDemoController @Inject()(
       "lotReworkLabel" -> ledger("lotReworkLabel").asInstanceOf[String],
       "steps" -> steps
     ))
+  }
+
+  /** Query real aggregate entity state by work order ID */
+  def getEntityState(workOrderId: String) = Action.async {
+    import scala.concurrent.Future
+    fabDemoService.queryEntityState(workOrderId).map { state =>
+      val l = state.lot
+      val lotPhase: String = l.phase.map(_.toString).getOrElse("")
+      val lotProduct: String = l.productId.getOrElse("")
+      val lotIdStr: String = l.lotId.map(_.toString).getOrElse("")
+      val lotFoup: String = l.loadedFoupId.getOrElse("")
+      Ok(Json.obj(
+        "workOrderId" -> state.workOrderId,
+        "sourceLot" -> Json.obj(
+          "phase" -> lotPhase,
+          "productId" -> lotProduct,
+          "lotId" -> lotIdStr,
+          "waferIds" -> l.waferIds.map(_.toString),
+          "waferCount" -> l.waferIds.size,
+          "reservedWafers" -> l.reservedWafers.map { case (tid, wids) =>
+            Json.obj("transferId" -> tid.toString, "waferIds" -> wids.map(_.toString))
+          },
+          "incomingWafers" -> l.incomingWafers.map { case (tid, wids) =>
+            Json.obj("transferId" -> tid.toString, "waferIds" -> wids.map(_.toString))
+          },
+          "completedTransferIds" -> l.completedTransferIds.map(_.toString),
+          "areaVisitHistory" -> l.areaVisitHistory,
+          "routingStepReentry" -> l.routingStepReentry,
+          "loadedFoupId" -> lotFoup,
+          "waferClassifications" -> l.waferClassifications,
+          "completedJobs" -> l.completedJobs.toSeq,
+          "measuredWafers" -> l.measuredWafers.toSeq,
+          "currentStepIndex" -> l.currentStepIndex
+        ),
+        "reworkLot" -> state.reworkLot.map { rl =>
+          val rlPhase: String = rl.phase.map(_.toString).getOrElse("")
+          val rlLotId: String = rl.lotId.map(_.toString).getOrElse("")
+          val rlFoup: String = rl.loadedFoupId.getOrElse("")
+          Json.obj(
+            "phase" -> rlPhase,
+            "lotId" -> rlLotId,
+            "waferIds" -> rl.waferIds.map(_.toString),
+            "waferCount" -> rl.waferIds.size,
+            "reservedWafers" -> rl.reservedWafers.map { case (tid, wids) =>
+              Json.obj("transferId" -> tid.toString, "waferIds" -> wids.map(_.toString))
+            },
+            "incomingWafers" -> rl.incomingWafers.map { case (tid, wids) =>
+              Json.obj("transferId" -> tid.toString, "waferIds" -> wids.map(_.toString))
+            },
+            "completedTransferIds" -> rl.completedTransferIds.map(_.toString),
+            "areaVisitHistory" -> rl.areaVisitHistory,
+            "loadedFoupId" -> rlFoup,
+            "waferClassifications" -> rl.waferClassifications,
+            "completedJobs" -> rl.completedJobs.toSeq,
+            "measuredWafers" -> rl.measuredWafers.toSeq
+          )
+        },
+        "wafers" -> state.wafers.map { case (wid, wc) =>
+          val widStr: String = wc.waferId.getOrElse(wid)
+          val statusStr: String = wc.status.map(_.toString).getOrElse("Unknown")
+          val wLotIdStr: String = wc.lotId.map(_.toString).getOrElse("")
+          Json.obj(
+            "waferId" -> widStr,
+            "status" -> statusStr,
+            "lotId" -> wLotIdStr,
+            "reservedTransfer" -> wc.reservedTransfer.map { case (tid, tgt) =>
+              Json.obj("transferId" -> tid.toString, "targetLotId" -> tgt.toString)
+            },
+            "completedTransferIds" -> wc.completedTransferIds.map(_.toString)
+          )
+        }
+      ))
+    }.recover { case ex =>
+      Ok(Json.obj("error" -> ex.getMessage, "workOrderId" -> workOrderId))
+    }
   }
 }

@@ -46,8 +46,9 @@ case class AggregateStateUpdated(
   wafers: Seq[WaferStateSnapshot]
 ) extends FabSimulationEvent
 
-case class LotStateSnapshot(lotId: String, status: String, waferCount: Int, passCount: Int, scrapCount: Int)
+case class LotStateSnapshot(lotId: String, status: String, waferCount: Int, passCount: Int, scrapCount: Int, currentArea: String = "")
 case class WaferStateSnapshot(waferId: String, status: String, lotId: String, classification: String, reworkCount: Int)
+
 
 // --- Scrap Event (需求1: 报废去向) ---
 case class ScrapEvent(waferId: String, reason: String) extends FabSimulationEvent

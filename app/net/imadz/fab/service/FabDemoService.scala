@@ -1,28 +1,27 @@
 package net.imadz.fab.service
 
 import akka.actor.typed.ActorSystem
-import akka.actor.typed.scaladsl.AskPattern._
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.util.Timeout
 import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
 import net.imadz.application.aggregates.WaferAggregate.WaferEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.aggregates.WaferProtocol._
-import net.imadz.application.aggregates.process.FabProcessAggregate
-import net.imadz.application.aggregates.process.FabProcessProtocol.ProcessConfirmation
+import net.imadz.application.aggregates.WorkOrderAggregate
+import net.imadz.application.aggregates.WorkOrderProtocol.{CreateWorkOrder, WorkOrderConfirmation, PipelineStarter => WorkOrderPipelineStarter}
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
-import net.imadz.fab.chain.{FabChainExecutor, FabDemoPipeline, FabFlowEngine, FabScenarioPipeline}
-import net.imadz.fab.chain.FabChainExecutor.{ChainResult, StartChain}
-import net.imadz.fab.chain.FabDemoPipeline.{FabDemoContext, FabDemoState, WaferInfo}
-import net.imadz.fab.events.FabSimulationEvent
-import net.imadz.fab.model.{EquipmentArea, ProductRouting, ProductRoutingRepository}
+import net.imadz.fab.chain.{FabDemoPipeline, FabFlowEngine, FabScenarioPipeline}
+import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
+import net.imadz.fab.events.{DemoStarted, FabSimulationEvent}
+import net.imadz.fab.model.{Por, PorRepository}
 import net.imadz.fab.protocol.ActorEquipmentAdapter
-import net.imadz.fab.scenario.{DecisionConfig, FabSimulationScenario, StandardScenarios}
+import net.imadz.fab.scenario.{FabSimulationScenario, StandardScenarios}
 import net.imadz.fab.simulation._
 
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -38,12 +37,127 @@ class FabDemoService @Inject()(
   private implicit val ec: ExecutionContext = system.executionContext
   private implicit val timeout: Timeout = 10.seconds
 
+  // Publisher registry for bridging CreateWorkOrder (serializable) to pipeline (needs callback)
+  private val publisherRegistry = new ConcurrentHashMap[String, Any => Unit]()
+
+  // System-wide publisher, set once by FabDemoController at init.
+  // Used by pipelineStarter for both initial runs AND crash-recovery replays,
+  // where no per-request WebSocket publisher is available.
+  @volatile private var systemWidePublisher: Option[FabSimulationEvent => Unit] = None
+
+  def setSystemWidePublisher(publisher: FabSimulationEvent => Unit): Unit = {
+    systemWidePublisher = Some(publisher)
+  }
+
+  // --- Register WorkOrder Aggregate with ClusterSharding (idempotent) ---
+  WorkOrderAggregate.init(sharding, createPipelineStarter())
+
   /**
-   * Start a demo scenario using M2.5+ Chain-aligned FabChainExecutor.
-   * Creates EventSourced Lot + Wafer aggregates, wires FabSagaService for TCC split/merge,
-   * then runs the 11-stage pipeline via FabChainExecutor (EventSourcedBehavior).
+   * Shared PipelineStarter — creates entities, builds context, spawns simulators,
+   * and runs the pipeline. Called both on initial StartChain and on RecoveryCompleted
+   * replay (idempotent via deterministic UUIDs from workOrderId).
    */
-  def startDemo(scenarioId: String, publisher: FabSimulationEvent => Unit): Future[ChainResult] = {
+  private def createPipelineStarter(): WorkOrderPipelineStarter = {
+    (workOrderId: String, productId: String, waferIds: Seq[String], _: Any => Unit) =>
+      // Access systemWidePublisher LAZILY at runtime (not captured at factory-creation time)
+      // so it's available even for crash-recovery replays long after controller init.
+      val publisher: FabSimulationEvent => Unit = systemWidePublisher.getOrElse {
+        val fromRegistry = publisherRegistry.remove(workOrderId)
+        if (fromRegistry != null) fromRegistry.asInstanceOf[FabSimulationEvent => Unit]
+        else (_: FabSimulationEvent) => ()
+      }
+      val stateFut = PorRepository.findByProductId(productId) match {
+        case Some(routing) =>
+          runDynamicPor(workOrderId, productId, routing, waferIds, publisher)
+        case None =>
+          runStaticScenario(workOrderId, productId, waferIds, publisher)
+      }
+      stateFut.map(s => (s.passCount, s.scrapCount, s.wafers.values.count(_.reworkCount > 0)))(ec)
+  }
+
+  /** Execute a dynamic POR work order (creates entities + runs pipeline). */
+  private def runDynamicPor(
+                             workOrderId: String, productId: String, routing: Por, waferIds: Seq[String],
+                             publisher: FabSimulationEvent => Unit
+  ): Future[FabDemoState] = {
+    val syntheticScenario = FabSimulationScenario(
+      scenarioId = productId,
+      name = s"Dynamic: ${routing.productId}",
+      description = s"POR-based dynamic routing (${routing.steps.size} steps, v${routing.version})",
+      lotSize = waferIds.size,
+      waferIds = waferIds,
+      litho = EquipmentConfig("LITHO-01", "LITHO", processingTime = 8.seconds),
+      lithoDetail = LithoConfig(waferCount = waferIds.size),
+      cdSem = EquipmentConfig("CDSEM-01", "METROLOGY", processingTime = 5.seconds),
+      cdSemDetail = CdSemConfig(waferIds = waferIds, targetCdNm = 32.0, waferOutcomes = waferIds.map(_ -> "PASS").toMap),
+      amhs = AmhsConfig(routes = FabFlowEngine.DefaultRoutes.map { case (k, v) => k -> v }, maxConcurrentTransports = 5),
+      stocker = StockerConfig("STOCKER-01", portCount = 4, loadTime = 2.seconds),
+      decision = FabFlowEngine.DefaultDecisionConfig
+    )
+
+    // Deterministic UUIDs from workOrderId for idempotent recovery
+    val waferUUIDs: Map[String, Id] = waferIds.map { wid =>
+      wid -> UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes)
+    }.toMap
+    val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
+    val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-rework-lot".getBytes)
+
+    val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
+    val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
+    val waferRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[WaferCommand]] =
+      waferUUIDs.map { case (wid, uuid) => wid -> sharding.entityRefFor(WaferEntityTypeKey, uuid.toString) }
+
+    val sagaTxFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
+      (srcId, tgtId, wids) => fabSagaService.transferWafers(srcId, tgtId, wids)
+
+    val adapter = new ActorEquipmentAdapter()
+
+    val ignoreLotReply = system.ignoreRef[LotConfirmation]
+    val ignoreWaferReply = system.ignoreRef[WaferConfirmation]
+
+    val ctx = FabDemoContext(
+      scenario = syntheticScenario,
+      foupId = s"FOUP-${routing.productId}",
+      lotRef = lotRef,
+      reworkLotRef = reworkLotRef,
+      waferRefs = waferRefs,
+      waferUUIDs = waferUUIDs,
+      sourceLotId = sourceLotId,
+      reworkLotId = reworkLotId,
+      adapter = adapter,
+      publisher = publisher,
+      ignoreLotReply = ignoreLotReply,
+      ignoreWaferReply = ignoreWaferReply,
+      sagaTx = sagaTxFn,
+      speedMultiplier = 1.0
+    )
+
+    val initialState = FabDemoState(
+      wafers = waferIds.map(wid => wid -> WaferInfo(wid)).toMap
+    )
+
+    publisher(DemoStarted(productId, routing.productId, waferIds.size, waferIds))
+
+    val pipelineFn = FabFlowEngine.runRouting(routing, FabFlowEngine.DefaultDecisionConfig) _
+
+    // Create entities (idempotent) then run pipeline
+    for {
+      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.values.toSet, ref))
+      _ <- reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Set.empty, ref))
+      _ <- Future.sequence(waferUUIDs.map { case (_, uuid) =>
+        val waferRef = sharding.entityRefFor(WaferEntityTypeKey, uuid.toString)
+        waferRef.ask[WaferConfirmation](ref => CreateWafer(sourceLotId, ref))
+      })
+      _ = spawnDynamicSimulators(routing, adapter, publisher, waferIds)
+      result <- pipelineFn(initialState, ctx)
+    } yield result
+  }
+
+  /** Execute a static scenario work order. */
+  private def runStaticScenario(
+    workOrderId: String, scenarioId: String, waferIds: Seq[String],
+    publisher: FabSimulationEvent => Unit
+  ): Future[FabDemoState] = {
     val scenario = scenarioId match {
       case "photo-cell-5wafer" => StandardScenarios.photoCell5Wafer
       case "send-ahead-pilot"  => StandardScenarios.sendAheadPilot
@@ -54,18 +168,14 @@ class FabDemoService @Inject()(
     }
     val isRework = scenarioId == "photo-cell-5wafer"
 
-    // Generate unique UUIDs for this run
-    val runKey = UUID.randomUUID().toString.take(8)
     val waferUUIDs: Map[String, Id] = scenario.waferIds.map { wid =>
-      wid -> UUID.nameUUIDFromBytes(s"$runKey-$wid".getBytes)
+      wid -> UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes)
     }.toMap
-    val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-source-lot".getBytes)
-    val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-rework-lot".getBytes)
-
-    // Child lots for new scenarios
-    val pilotLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-pilot-lot".getBytes)
-    val sampleLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-sample-lot".getBytes)
-    val holdLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-hold-lot".getBytes)
+    val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
+    val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-rework-lot".getBytes)
+    val pilotLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-pilot-lot".getBytes)
+    val sampleLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-sample-lot".getBytes)
+    val holdLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-hold-lot".getBytes)
 
     val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
     val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
@@ -78,96 +188,90 @@ class FabDemoService @Inject()(
     val sagaTxFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
       (srcId, tgtId, wids) => fabSagaService.transferWafers(srcId, tgtId, wids)
 
-    // Create source Lot + scenario-specific child Lots + Wafers
+    val adapter = new ActorEquipmentAdapter()
+
+    val ignoreLotReply = system.ignoreRef[LotConfirmation]
+    val ignoreWaferReply = system.ignoreRef[WaferConfirmation]
+
+    val ctx = FabDemoContext(
+      scenario = scenario,
+      foupId = s"FOUP-${scenario.scenarioId}",
+      lotRef = lotRef,
+      reworkLotRef = reworkLotRef,
+      waferRefs = waferRefs,
+      waferUUIDs = waferUUIDs,
+      sourceLotId = sourceLotId,
+      reworkLotId = reworkLotId,
+      adapter = adapter,
+      publisher = publisher,
+      ignoreLotReply = ignoreLotReply,
+      ignoreWaferReply = ignoreWaferReply,
+      sagaTx = sagaTxFn,
+      speedMultiplier = 1.0,
+      childLotRefs = Map(
+        "pilot" -> pilotLotRef,
+        "sample" -> sampleLotRef,
+        "hold" -> holdLotRef
+      ),
+      childLotIds = Map(
+        "pilot" -> pilotLotId,
+        "sample" -> sampleLotId,
+        "hold" -> holdLotId
+      )
+    )
+
+    val initialState = FabDemoState(
+      wafers = scenario.waferIds.map(wid => wid -> WaferInfo(wid)).toMap
+    )
+
+    publisher(DemoStarted(scenario.scenarioId, scenario.name, scenario.lotSize, scenario.waferIds))
+    spawnSimulators(scenario, adapter, publisher)
+
+    // Create entities (idempotent)
     val childLotFutures: Seq[Future[LotConfirmation]] = scenarioId match {
       case "photo-cell-5wafer" =>
-        Seq(reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$runKey", Set.empty, ref)))
+        Seq(reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Set.empty, ref)))
       case "send-ahead-pilot" =>
-        Seq(pilotLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-PILOT-$runKey", Set.empty, ref)))
+        Seq(pilotLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-PILOT-$workOrderId", Set.empty, ref)))
       case "sampling-demo" =>
-        Seq(sampleLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SAMPLE-$runKey", Set.empty, ref)))
+        Seq(sampleLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SAMPLE-$workOrderId", Set.empty, ref)))
       case "hold-release" =>
-        Seq(holdLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-HOLD-$runKey", Set.empty, ref)))
-      case _ => Seq.empty // scrap-downgrade / dynamic products: no child lots
+        Seq(holdLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-HOLD-$workOrderId", Set.empty, ref)))
+      case _ => Seq.empty
     }
-    val createEntities: Future[Unit] = for {
-      _ <- lotRef.ask[LotConfirmation](ref =>
-        CreateLot(s"FAB-$runKey", waferUUIDs.values.toSet, ref)
-      )
+
+    val pipelineFn = if (isRework) FabDemoPipeline.runPipeline _ else FabScenarioPipeline.runPipeline _
+
+    for {
+      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.values.toSet, ref))
       _ <- Future.sequence(childLotFutures)
       _ <- Future.sequence(waferUUIDs.map { case (_, uuid) =>
         val waferRef = sharding.entityRefFor(WaferEntityTypeKey, uuid.toString)
         waferRef.ask[WaferConfirmation](ref => CreateWafer(sourceLotId, ref))
       })
-    } yield ()
+      result <- pipelineFn(initialState, ctx)
+    } yield result
+  }
 
-    // After entities are created, start the chain executor
-    createEntities.flatMap { _ =>
-      val processId = UUID.randomUUID().toString
-      val processRef = sharding.entityRefFor(FabProcessAggregate.ProcessEntityTypeKey, processId)
-      val adapter = new ActorEquipmentAdapter()
-
-      // Fire-and-forget reply targets
-      val ignoreReply = system.systemActorOf(
-        akka.actor.typed.scaladsl.Behaviors.ignore[ProcessConfirmation],
-        s"proc-ignore-$runKey"
-      )
-      val ignoreLotReply = system.systemActorOf(
-        akka.actor.typed.scaladsl.Behaviors.ignore[LotConfirmation],
-        s"lot-ignore-$runKey"
-      )
-      val ignoreWaferReply = system.systemActorOf(
-        akka.actor.typed.scaladsl.Behaviors.ignore[WaferConfirmation],
-        s"wafer-ignore-$runKey"
-      )
-
-      val ctx = FabDemoContext(
-        scenario = scenario,
-        foupId = s"FOUP-${scenario.scenarioId}",
-        processRef = processRef,
-        lotRef = lotRef,
-        reworkLotRef = reworkLotRef,
-        waferRefs = waferRefs,
-        waferUUIDs = waferUUIDs,
-        sourceLotId = sourceLotId,
-        reworkLotId = reworkLotId,
-        adapter = adapter,
-        publisher = publisher,
-        ignoreReply = ignoreReply,
-        ignoreLotReply = ignoreLotReply,
-        ignoreWaferReply = ignoreWaferReply,
-        sagaTx = sagaTxFn,
-        speedMultiplier = 1.0,
-        childLotRefs = Map(
-          "pilot" -> pilotLotRef,
-          "sample" -> sampleLotRef,
-          "hold" -> holdLotRef
-        ),
-        childLotIds = Map(
-          "pilot" -> pilotLotId,
-          "sample" -> sampleLotId,
-          "hold" -> holdLotId
-        )
-      )
-
-      val initialState = FabDemoState(
-        wafers = scenario.waferIds.map(wid => wid -> WaferInfo(wid)).toMap
-      )
-
-      // Publish DemoStarted before launching chain
-      publisher(net.imadz.fab.events.DemoStarted(scenario.scenarioId, scenario.name, scenario.lotSize, scenario.waferIds))
-
-      // Spawn simulators (same as before)
-      spawnSimulators(scenario, adapter, publisher)
-
-      val pipelineFn = if (isRework) FabDemoPipeline.runPipeline _ else FabScenarioPipeline.runPipeline _
-      val executor = system.systemActorOf(
-        FabChainExecutor(runKey, initialState, ctx, pipelineFn),
-        s"fab-chain-${scenarioId}-${System.currentTimeMillis()}"
-      )
-
-      executor.ask[ChainResult](ref => StartChain(ref))
+  /**
+   * Start a demo scenario using M2.5+ Chain-aligned FabChainExecutor.
+   * Creates EventSourced Lot + Wafer aggregates, wires FabSagaService for TCC split/merge,
+   * then runs the 11-stage pipeline via FabChainExecutor (EventSourcedBehavior).
+   */
+  def startDemo(scenarioId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
+    val workOrderId = UUID.randomUUID().toString
+    val scenario = scenarioId match {
+      case "photo-cell-5wafer" => StandardScenarios.photoCell5Wafer
+      case "send-ahead-pilot"  => StandardScenarios.sendAheadPilot
+      case "scrap-downgrade"   => StandardScenarios.scrapDowngrade
+      case "sampling-demo"     => StandardScenarios.samplingDemo
+      case "hold-release"      => StandardScenarios.holdRelease
+      case _                   => StandardScenarios.photoCell5Wafer
     }
+
+    publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
+    val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
+    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(scenarioId, scenario.waferIds, replyTo))
   }
 
   private def spawnSimulators(
@@ -210,107 +314,23 @@ class FabDemoService @Inject()(
    * spawns simulators for all equipment areas used in the routing,
    * then runs the dynamic FabFlowEngine via FabChainExecutor.
    */
-  def startDemoWithProduct(productId: String, publisher: FabSimulationEvent => Unit): Future[ChainResult] = {
-    val routing = ProductRoutingRepository.findByProductId(productId)
+  def startDemoWithProduct(productId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
+    PorRepository.findByProductId(productId)
       .getOrElse(throw new IllegalArgumentException(s"Unknown product: $productId"))
-
-    // Synthetic scenario for FabDemoContext compatibility
     val waferIds = (1 to 5).map(i => s"WAFER-$i")
-    val syntheticScenario = FabSimulationScenario(
-      scenarioId = productId,
-      name = s"Dynamic: ${routing.productId}",
-      description = s"POR-based dynamic routing (${routing.steps.size} steps, v${routing.version})",
-      lotSize = 5,
-      waferIds = waferIds,
-      litho = EquipmentConfig("LITHO-01", "LITHO", processingTime = 8.seconds),
-      lithoDetail = LithoConfig(waferCount = 5),
-      cdSem = EquipmentConfig("CDSEM-01", "METROLOGY", processingTime = 5.seconds),
-      cdSemDetail = CdSemConfig(waferIds = waferIds, targetCdNm = 32.0, waferOutcomes = waferIds.map(_ -> "PASS").toMap),
-      amhs = AmhsConfig(routes = FabFlowEngine.DefaultRoutes.map { case (k, v) => k -> v }, maxConcurrentTransports = 5),
-      stocker = StockerConfig("STOCKER-01", portCount = 4, loadTime = 2.seconds),
-      decision = FabFlowEngine.DefaultDecisionConfig
-    )
+    val workOrderId = UUID.randomUUID().toString
 
-    val runKey = UUID.randomUUID().toString.take(8)
-    val waferUUIDs: Map[String, Id] = waferIds.map { wid =>
-      wid -> UUID.nameUUIDFromBytes(s"$runKey-$wid".getBytes)
-    }.toMap
-    val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-source-lot".getBytes)
-    val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$runKey-rework-lot".getBytes)
-
-    val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
-    val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
-    val waferRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[WaferCommand]] =
-      waferUUIDs.map { case (wid, uuid) => wid -> sharding.entityRefFor(WaferEntityTypeKey, uuid.toString) }
-
-    val sagaTxFn: (Id, Id, Set[Id]) => Future[FabSagaConfirmation] =
-      (srcId, tgtId, wids) => fabSagaService.transferWafers(srcId, tgtId, wids)
-
-    val createEntities: Future[Unit] = for {
-      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$runKey", waferUUIDs.values.toSet, ref))
-      _ <- reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$runKey", Set.empty, ref))
-      _ <- Future.sequence(waferUUIDs.map { case (_, uuid) =>
-        val waferRef = sharding.entityRefFor(WaferEntityTypeKey, uuid.toString)
-        waferRef.ask[WaferConfirmation](ref => CreateWafer(sourceLotId, ref))
-      })
-    } yield ()
-
-    createEntities.flatMap { _ =>
-      val processId = UUID.randomUUID().toString
-      val processRef = sharding.entityRefFor(FabProcessAggregate.ProcessEntityTypeKey, processId)
-      val adapter = new ActorEquipmentAdapter()
-
-      val ignoreReply = system.systemActorOf(
-        akka.actor.typed.scaladsl.Behaviors.ignore[ProcessConfirmation], s"proc-ignore-$runKey")
-      val ignoreLotReply = system.systemActorOf(
-        akka.actor.typed.scaladsl.Behaviors.ignore[LotConfirmation], s"lot-ignore-$runKey")
-      val ignoreWaferReply = system.systemActorOf(
-        akka.actor.typed.scaladsl.Behaviors.ignore[WaferConfirmation], s"wafer-ignore-$runKey")
-
-      val ctx = FabDemoContext(
-        scenario = syntheticScenario,
-        foupId = s"FOUP-${routing.productId}",
-        processRef = processRef,
-        lotRef = lotRef,
-        reworkLotRef = reworkLotRef,
-        waferRefs = waferRefs,
-        waferUUIDs = waferUUIDs,
-        sourceLotId = sourceLotId,
-        reworkLotId = reworkLotId,
-        adapter = adapter,
-        publisher = publisher,
-        ignoreReply = ignoreReply,
-        ignoreLotReply = ignoreLotReply,
-        ignoreWaferReply = ignoreWaferReply,
-        sagaTx = sagaTxFn,
-        speedMultiplier = 1.0
-      )
-
-      val initialState = FabDemoState(
-        wafers = waferIds.map(wid => wid -> WaferInfo(wid)).toMap
-      )
-
-      publisher(net.imadz.fab.events.DemoStarted(productId, routing.productId, 5, waferIds))
-
-      // Spawn simulators for all areas used in routing + AMHS + CDSEM + STOCKER
-      spawnDynamicSimulators(routing, adapter, publisher, waferIds)
-
-      val pipelineFn = FabFlowEngine.runRouting(routing, FabFlowEngine.DefaultDecisionConfig) _
-      val executor = system.systemActorOf(
-        FabChainExecutor(runKey, initialState, ctx, pipelineFn),
-        s"fab-chain-${routing.productId}-${System.currentTimeMillis()}"
-      )
-
-      executor.ask[ChainResult](ref => StartChain(ref))
-    }
+    publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
+    val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
+    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(productId, waferIds, replyTo))
   }
 
   /** Spawn generic equipment simulators for all areas used in a routing. */
   private def spawnDynamicSimulators(
-    routing: ProductRouting,
-    adapter: ActorEquipmentAdapter,
-    publisher: FabSimulationEvent => Unit,
-    waferIds: Seq[String]
+                                      routing: Por,
+                                      adapter: ActorEquipmentAdapter,
+                                      publisher: FabSimulationEvent => Unit,
+                                      waferIds: Seq[String]
   ): Unit = {
     val areaIds = routing.steps.map(_.equipmentArea.areaId).distinct
     val equipIds = areaIds.flatMap(aid => FabFlowEngine.AreaToEquipmentId.get(aid))
@@ -368,7 +388,7 @@ class FabDemoService @Inject()(
       Map("id" -> "sampling-demo", "name" -> "Metrology Sampling (6 wafers)", "type" -> "sampling"),
       Map("id" -> "hold-release", "name" -> "Hold & Release (5 wafers)", "type" -> "hold")
     )
-    val dynamicProducts = ProductRoutingRepository.listProducts.map { r =>
+    val dynamicProducts = PorRepository.listProducts.map { r =>
       Map("id" -> r.productId, "name" -> s"Dynamic: ${r.productId} (${r.steps.size} steps)", "type" -> "dynamic-routing")
     }
     staticScenarios ++ dynamicProducts
@@ -381,8 +401,8 @@ class FabDemoService @Inject()(
       case "scrap-downgrade"   => (scrapLedger,      "Scrap & Downgrade — Direct Scrap, no child lot", "—")
       case "sampling-demo"     => (samplingLedger,   "Metrology Sampling — 2 sampled, rest skipped", "Sample")
       case "hold-release"      => (holdReleaseLedger,"Hold & Release — Borderline → Hold → Review → Release", "Hold")
-      case productId if ProductRoutingRepository.findByProductId(productId).isDefined =>
-        val routing = ProductRoutingRepository.findByProductId(productId).get
+      case productId if PorRepository.findByProductId(productId).isDefined =>
+        val routing = PorRepository.findByProductId(productId).get
         (generateRoutingLedger(routing), s"Dynamic POR: ${routing.productId} (${routing.steps.size} steps)", "—")
       case _ => (photoCellLedger, "Photo Cell 5-Wafer — 2 PASS + 2 Rework → PASS + 1 SCRAP", "Rework")
     }
@@ -485,7 +505,7 @@ class FabDemoService @Inject()(
   // Dynamic POR Ledger Generator
   // ===========================================================================
 
-  private def generateRoutingLedger(routing: ProductRouting): Seq[Map[String, String]] = {
+  private def generateRoutingLedger(routing: Por): Seq[Map[String, String]] = {
     val measureAreas = Set("LITHO", "ETCH", "MET")
     var seq = 0
     var prevArea = "STOCKER"
@@ -525,4 +545,61 @@ class FabDemoService @Inject()(
 
     buf.result()
   }
+
+  /**
+   * Query real aggregate entity state by work order ID.
+   * Uses deterministic UUIDs to reconstruct entity refs and sends
+   * GetLotState / GetWaferState commands via ClusterSharding ask pattern.
+   */
+  def queryEntityState(workOrderId: String): Future[EntityStateSnapshot] = {
+    import net.imadz.application.aggregates.LotProtocol.GetLotState
+    import net.imadz.application.aggregates.WaferProtocol.GetWaferState
+    import java.util.UUID
+
+    val sourceLotUUID = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
+    val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotUUID.toString)
+
+    lotRef.ask[LotConfirmation](GetLotState(_)).flatMap { lotConf =>
+      // Map wafer UUIDs back from workOrderId + waferId (deterministic)
+      val waferIds: Set[String] = lotConf.waferIds.map(_.toString)
+      val reworkLotUUID = UUID.nameUUIDFromBytes(s"$workOrderId-rework-lot".getBytes)
+      val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotUUID.toString)
+
+      // Query rework lot if it exists
+      val reworkLotFuture: Future[Option[LotConfirmation]] = reworkLotRef
+        .ask[LotConfirmation](GetLotState(_))
+        .map { conf =>
+          if (conf.waferIds.nonEmpty) Some(conf) else None
+        }
+        .recover { case _ => None }
+
+      // Query all wafers in the source lot
+      val waferFutures: Seq[Future[(String, WaferConfirmation)]] = waferIds.toSeq.map { wid =>
+        val waferUUID = UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes)
+        val waferRef = sharding.entityRefFor(WaferEntityTypeKey, waferUUID.toString)
+        waferRef.ask[WaferConfirmation](GetWaferState(_))
+          .map(wc => wid -> wc)
+          .recover { case _ => wid -> WaferConfirmation(error = None) }
+      }
+
+      Future.sequence(waferFutures).flatMap { wafers =>
+        reworkLotFuture.map { reworkLot =>
+          EntityStateSnapshot(
+            workOrderId = workOrderId,
+            lot = lotConf,
+            reworkLot = reworkLot,
+            wafers = wafers.toMap
+          )
+        }
+      }
+    }
+  }
+
+  case class EntityStateSnapshot(
+    workOrderId: String,
+    lot: LotConfirmation,
+    reworkLot: Option[LotConfirmation],
+    wafers: Map[String, WaferConfirmation]
+  )
+
 }

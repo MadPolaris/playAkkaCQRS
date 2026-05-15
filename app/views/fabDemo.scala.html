@@ -223,7 +223,6 @@
     <a href="/">@Messages("fab.nav.home")</a>
     <a href="/saga">@Messages("fab.nav.saga")</a>
     <a href="/dag">@Messages("fab.nav.dag")</a>
-    <a href="/m25-demo">@Messages("fab.nav.m25")</a>
     <a href="/m3-demo">@Messages("fab.nav.m3")</a>
     <a href="/fab-demo" class="active">@Messages("fab.nav.fabdemo")</a>
     @if(messages.lang.code == "zh") {
@@ -457,15 +456,21 @@
 
   <!-- Aggregate State Panel -->
   <div class="aggregate-panel" id="aggregatePanel">
-    <div class="agg-header">
-      <h3>@Messages("fab.aggregate_title")</h3>
-      <button onclick="toggleAggregatePanel()" title="Toggle panel">@Messages("fab.aggregate_collapse")</button>
+    <div class="agg-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3>@Messages("fab.aggregate_title")</h3>
+        <button onclick="toggleAggregatePanel()" title="Toggle panel">@Messages("fab.aggregate_collapse")</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input id="entityWorkOrderInput" type="text" placeholder="WorkOrder ID" style="background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:2px 6px;font-size:11px;border-radius:3px;width:220px" />
+        <button onclick="fetchEntityState()" title="Query real entity state from ClusterSharding" style="font-size:11px;padding:2px 8px">⟳ Entity State</button>
+      </div>
     </div>
     <div id="aggregateContent">
       <table class="agg-tree-table" id="aggTreeTable">
         <thead><tr>@Messages("fab.aggregate_cols").split("\\|").map { col => <th>@col</th> }</tr></thead>
         <tbody id="aggTreeBody">
-	      <tr><td colspan="4" style="color:var(--fg-muted)">@Messages("fab.aggregate_placeholder")</td></tr>
+	      <tr><td colspan="5" style="color:var(--fg-muted)">@Messages("fab.aggregate_placeholder")</td></tr>
         </tbody>
       </table>
     </div>

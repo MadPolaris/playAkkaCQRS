@@ -12,18 +12,17 @@ import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
 import net.imadz.application.aggregates.WaferAggregate.WaferEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol.LotCommand
 import net.imadz.application.aggregates.WaferProtocol.WaferCommand
-import net.imadz.application.aggregates.{LotAggregate, WaferAggregate}
-import net.imadz.application.aggregates.process.{FabProcessAggregate, FabProcessProtocol}
-import net.imadz.application.aggregates.process.FabProcessProtocol.FabProcessCommand
-import net.imadz.application.projection.{FabLotProjection, FabProcessProjection, FabSagaTransactionProjection, FabWaferProjection}
+import net.imadz.application.aggregates.{LotAggregate, WaferAggregate, WorkOrderAggregate, WorkOrderProtocol}
+import WorkOrderProtocol.WorkOrderCommand
+import net.imadz.application.projection.{FabLotProjection, FabSagaTransactionProjection, FabWaferProjection, WorkOrderProjection}
 import net.imadz.application.aggregates.repository.{LotRepository, WaferRepository}
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.{FabSagaProtocol, FabSagaTransactor, FabTransactionContext}
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id
 import net.imadz.common.serialization.SerializationExtension
-import net.imadz.domain.entities.{FabProcessEntity, LotEntity, WaferEntity}
-import net.imadz.domain.entities.behaviors.{FabProcessEventHandler, LotEventHandler, WaferEventHandler}
+import net.imadz.domain.entities.{LotEntity, WaferEntity}
+import net.imadz.domain.entities.behaviors.{LotEventHandler, WaferEventHandler}
 import net.imadz.infra.saga.SagaTransactionCoordinator
 import net.imadz.infrastructure.persistence._
 import net.imadz.infrastructure.persistence.strategies.FabSerializationStrategies
@@ -85,29 +84,11 @@ trait FabBootstrap {
           .snapshotAdapter(new WaferSnapshotAdapter)
       })
 
-  // --- Fab Process Aggregate ---
-  def initFabProcessAggregate(sharding: ClusterSharding): Unit = {
-    val behaviorFactory: EntityContext[FabProcessCommand] => Behavior[FabProcessCommand] = { context =>
-      val i = math.abs(context.entityId.hashCode % FabProcessAggregate.tags.size)
-      val selectedTag = FabProcessAggregate.tags(i)
-      applyProcess(context.entityId, selectedTag)
-    }
-    sharding.init(Entity(FabProcessAggregate.ProcessEntityTypeKey)(behaviorFactory))
+  // --- Work Order Aggregate ---
+  def initWorkOrderAggregate(sharding: ClusterSharding): Unit = {
+    // WorkOrder.init is called from FabDemoService, which provides the pipelineStarter
+    // This method is reserved for future use when WorkOrder becomes self-contained
   }
-
-  private def applyProcess(processId: String, tag: String): Behavior[FabProcessCommand] =
-    Behaviors.logMessages(LogOptions().withLogger(LoggerFactory.getLogger("iMadz")).withLevel(Level.INFO),
-      Behaviors.setup { actorContext =>
-        EventSourcedBehavior(
-          persistenceId = PersistenceId(FabProcessAggregate.ProcessEntityTypeKey.name, processId),
-          emptyState = FabProcessEntity.empty(processId),
-          commandHandler = FabProcessAggregate.commandHandler(actorContext),
-          eventHandler = FabProcessEventHandler.apply
-        ).withTagger(_ => Set(tag))
-          .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 50, keepNSnapshots = 3))
-          .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))
-          .eventAdapter(new ProcessEventAdapter)
-      })
 
   // --- Fab Saga Transactor ---
   def initFabSagaTransactor(
@@ -140,12 +121,12 @@ trait FabBootstrap {
     )
   }
 
-  // --- Fab Process Projection ---
-  def initFabProcessProjection(system: ActorSystem[_]): Unit = {
+  // --- Work Order Projection ---
+  def initWorkOrderProjection(system: ActorSystem[_]): Unit = {
     ShardedDaemonProcess(system).init(
-      name = FabProcessProjection.projectionName,
-      numberOfInstances = FabProcessAggregate.tags.size,
-      behaviorFactory = index => ProjectionBehavior(FabProcessProjection.createProjection(system, index)),
+      name = WorkOrderProjection.projectionName,
+      numberOfInstances = WorkOrderAggregate.tags.size,
+      behaviorFactory = index => ProjectionBehavior(WorkOrderProjection.createProjection(system, index)),
       settings = ShardedDaemonProcessSettings(system),
       stopMessage = Some(ProjectionBehavior.Stop)
     )

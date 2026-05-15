@@ -65,10 +65,9 @@ class ApplicationBootstrap @Inject()(
     sharding = sharding,
     repository = creditBalanceRepository)
 
-  // --- 4. 初始化 Fab Lot / Wafer / Process 聚合根 ---
+  // --- 4. 初始化 Fab Lot / Wafer 聚合根 (WorkOrder 由 FabDemoService 触发初始化) ---
   initLotAggregate(sharding)
   initWaferAggregate(sharding)
-  initFabProcessAggregate(sharding)
 
   // --- 5. 初始化 Fab Saga Coordinator + Transactor ---
   initFabSagaCoordinator(
@@ -87,7 +86,7 @@ class ApplicationBootstrap @Inject()(
 
   // --- 6. 初始化投影 (Projection) ---
   initMonthlySummaryProjection(system, sharding, monthlyRepository)
-  initFabProcessProjection(system)
+  initWorkOrderProjection(system)
   initFabLotProjection(system)
   initFabWaferProjection(system)
   initFabSagaTransactionProjection(system)

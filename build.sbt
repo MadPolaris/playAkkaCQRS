@@ -103,10 +103,31 @@ lazy val sagaCore = (project in file("saga-core"))
     )
   )
 
+lazy val dagEngineCore = (project in file("dag-engine-core"))
+  .dependsOn(commonCore)
+  .settings(
+    commonSettings,
+    name := "dag-engine-core",
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
+      "com.typesafe.akka" %% "akka-persistence-typed" % akkaVersion,
+      "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion
+    )
+  )
+
+lazy val fabSimulation = (project in file("fab-simulation"))
+  .settings(
+    commonSettings,
+    name := "fab-simulation",
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion
+    )
+  )
+
 lazy val root = (project in file("."))
   .enablePlugins(PlayScala, JavaAppPackaging, DockerPlugin)
-  .dependsOn(commonCore, sagaCore)
-  .aggregate(commonCore, sagaCore)
+  .dependsOn(commonCore, sagaCore, dagEngineCore, fabSimulation)
+  .aggregate(commonCore, sagaCore, dagEngineCore, fabSimulation)
   .settings(
     commonSettings,
     publish / skip := true,

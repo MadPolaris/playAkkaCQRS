@@ -15,7 +15,7 @@ import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent, ProcessEve
  * and bridges domain events to the WebSocket hub.
  *
  * Domain events are classified into 4 logical layers:
- *   Layer 0: Chain / Orchestration (ChainStarted, ChainCompleted, ChainFailed)
+ *   Layer 0: Chain / Orchestration (WorkOrderAccepted, WorkOrderCompleted, WorkOrderFailed)
  *   Layer 1: Saga / Transaction      (TransactionStarted, StepOngoing, StepCompleted, ...)
  *   Layer 2: Aggregate / Entity      (LotCreated, WaferTransferCommitted, LotSealed, ...)
  *   Layer 3: Process / Execution     (ProcessStarted, FoupLoaded, TransportStarted, ...)
@@ -38,7 +38,8 @@ object FabDemoEventBridge {
       Behaviors.receiveMessage {
         case WrappedDomain(FabDomainEventEnvelope(aggType, aggId, event)) =>
           val layer = aggType match {
-            case "Chain"              => 0
+            case "FabChain"           => 0
+            case "WorkOrder"          => 0 // WorkOrder lifecycle = orchestration layer
             case "FabSagaTransaction" => 1
             case "FabProcess"         => 3
             case _                    => 2 // Lot, Wafer → Aggregate layer

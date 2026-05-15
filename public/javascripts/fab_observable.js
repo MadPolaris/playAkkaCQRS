@@ -6,7 +6,7 @@
  *
  * Exports on window:
  *   _rxStreams  — 18 typed event streams
- *   _rxReducers — domainEvent, aggregate, scrap reducers
+ *   _rxReducers — domainEvent, aggregate reducers
  *   _rxSubscribe(observable, handler) — subscribe with lifecycle
  *   _rxDestroy() — tear down all subscriptions (call on demo restart)
  *   _rxInit()   — initialize the root WebSocket stream
@@ -32,10 +32,11 @@
       };
       ws.onerror = function(e) {
         console.warn('WebSocket error (will retry):', e);
+        subscriber.error(e || new Error('WebSocket error'));
       };
-      ws.onclose = function() {
-        console.log('WebSocket closed, reconnecting in 3s...');
-        subscriber.complete();
+      ws.onclose = function(e) {
+        console.log('WebSocket closed (code=' + e.code + '), reconnecting in 3s...');
+        subscriber.error(new Error('WebSocket closed'));
       };
       return function teardown() {
         ws.close();
@@ -134,6 +135,8 @@
     },
 
     aggregate: function aggregateReducer(model, data) {
+      // data = AggregateStateUpdated: {sourceLot, reworkLot, wafers[]}
+      // Accumulate authoritative snapshots from the pipeline's buildAggregateState
       var lots = Object.assign({}, model.lots);
       var wafers = Object.assign({}, model.wafers);
 
@@ -145,6 +148,7 @@
             lotId: srcLot.lotId, productId: srcLot.lotId,
             status: srcLot.status, waferCount: srcLot.waferCount,
             passCount: srcLot.passCount, scrapCount: srcLot.scrapCount,
+            currentArea: srcLot.currentArea || '',
             waferIds: []
           };
         } else {
@@ -153,6 +157,7 @@
           sl.waferCount = srcLot.waferCount;
           sl.passCount = srcLot.passCount;
           sl.scrapCount = srcLot.scrapCount;
+          sl.currentArea = srcLot.currentArea || '';
         }
       }
 
@@ -164,12 +169,20 @@
             lotId: reworkLot.lotId, productId: reworkLot.lotId,
             status: reworkLot.status, waferCount: reworkLot.waferCount,
             passCount: reworkLot.passCount || 0, scrapCount: reworkLot.scrapCount || 0,
+            currentArea: reworkLot.currentArea || '',
             waferIds: []
           };
+        } else {
+          var rl = lots[reworkLot.lotId];
+          rl.status = reworkLot.status;
+          rl.waferCount = reworkLot.waferCount;
+          rl.passCount = reworkLot.passCount;
+          rl.scrapCount = reworkLot.scrapCount;
+          rl.currentArea = reworkLot.currentArea || '';
         }
       }
 
-      // Wafers
+      // Wafers — accumulate all seen wafer IDs
       (data.wafers || []).forEach(function(w) {
         if (!wafers[w.waferId]) {
           wafers[w.waferId] = {
@@ -202,6 +215,7 @@
           ew.reworkCount = w.reworkCount;
         }
       });
+
 
       return { lots: lots, wafers: wafers };
     }

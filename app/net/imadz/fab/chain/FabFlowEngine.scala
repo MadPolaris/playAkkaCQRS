@@ -2,29 +2,24 @@ package net.imadz.fab.chain
 
 import net.imadz.application.aggregates.LotProtocol.{LotConfirmation, SealLot}
 import net.imadz.application.aggregates.WaferProtocol.{ScrapWafer, WaferConfirmation}
-import net.imadz.application.aggregates.process.FabProcessProtocol._
+import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.common.CommonTypes.Id
-import net.imadz.fab.chain.FabDemoPipeline.{FabDemoContext, FabDemoState, WaferInfo}
+import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.events._
-import net.imadz.fab.model.{EquipmentArea, ProductRouting, RoutingStep}
+import net.imadz.fab.model.{EquipmentArea, Por, PorStep}
 import net.imadz.fab.protocol.{ProcessRecipe, TransferFoup}
 import net.imadz.fab.scenario.DecisionConfig
 
 import java.util.UUID
-import scala.concurrent.ExecutionContext
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 
 /**
- * Dynamic flow engine — executes a [[ProductRouting]] step by step,
+ * Dynamic flow engine — executes a [[Por]] step by step,
  * delegating runtime decisions to [[DynamicFlowAssembler]].
  *
- * Contrast with [[FabScenarioPipeline]]:
- *   - FabScenarioPipeline: static List[PipelineStage] per scenario
- *   - FabFlowEngine:        while-loop over ProductRouting.steps, dynamic
- *
- * Compatible with [[FabChainExecutor]] via the same function signature:
- *   (FabDemoState, FabDemoContext) => Future[FabDemoState]
+ * Stage functions delegate to [[PipelineStages]] for shared logic;
+ * only dynamic routing (while-loop + DynamicFlowAssembler) remains here.
  */
 object FabFlowEngine {
 
@@ -39,15 +34,9 @@ object FabFlowEngine {
 
   /** Equipment area → equipment ID mapping (simulation) */
   val AreaToEquipmentId: Map[String, String] = Map(
-    "CLEAN" -> "CLEAN-01",
-    "DIFF"  -> "DIFF-01",
-    "LITHO" -> "LITHO-01",
-    "ETCH"  -> "ETCH-01",
-    "IMPL"  -> "IMPL-01",
-    "DEP"   -> "DEP-01",
-    "CMP"   -> "CMP-01",
-    "MET"   -> "CDSEM-01",
-    "DRY"   -> "DRY-01",
+    "CLEAN" -> "CLEAN-01", "DIFF" -> "DIFF-01", "LITHO" -> "LITHO-01",
+    "ETCH"  -> "ETCH-01",  "IMPL" -> "IMPL-01", "DEP"   -> "DEP-01",
+    "CMP"   -> "CMP-01",   "MET"  -> "CDSEM-01", "DRY"   -> "DRY-01",
     "LOG"   -> "LOG-01"
   )
 
@@ -60,33 +49,27 @@ object FabFlowEngine {
   /** Default AMHS routes (all area pairs connect with 2s transport) */
   val DefaultRoutes: Map[(String, String), FiniteDuration] = {
     val areaIds = Seq("STOCKER") ++ EquipmentArea.all.map(_.areaId)
-    (for {
-      from <- areaIds
-      to <- areaIds
-      if from != to
-    } yield (from, to) -> 2.seconds).toMap
+    (for { from <- areaIds; to <- areaIds; if from != to } yield (from, to) -> 2.seconds).toMap
   }
 
   // ============================================================================
   // Main entry point
   // ============================================================================
 
-  def runRouting(routing: ProductRouting, spec: DecisionConfig = DefaultDecisionConfig)(
+  def runRouting(routing: Por, spec: DecisionConfig = DefaultDecisionConfig)(
     initialState: FabDemoState, ctx: FabDemoContext
   ): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
-    // Initialize state with routing tracking
     val init = initialState.copy(
-      currentRoutingStep = initialState.currentRoutingStep,
+      currentRoutingStep = 0,
       routingStepReentry = initialState.routingStepReentry,
       areaVisitHistory = initialState.areaVisitHistory
     )
-
     for {
-      s1  <- loadFoup(init, ctx, routing)
-      s2  <- executeSteps(s1, ctx, routing, spec)
-      s3  <- transportToStocker(s2, ctx, routing)
-      s4  <- sealComplete(s3, ctx, routing)
+      s1 <- loadFoup(init, ctx, routing)
+      s2 <- executeSteps(s1, ctx, routing, spec)
+      s3 <- transportToStocker(s2, ctx, routing)
+      s4 <- sealComplete(s3, ctx, routing)
     } yield s4
   }
 
@@ -95,38 +78,35 @@ object FabFlowEngine {
   // ============================================================================
 
   private def executeSteps(
-    state: FabDemoState, ctx: FabDemoContext, routing: ProductRouting, spec: DecisionConfig
+    state: FabDemoState, ctx: FabDemoContext, routing: Por, spec: DecisionConfig
   ): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
 
     def loop(s: FabDemoState): Future[FabDemoState] = {
-      if (s.currentRoutingStep >= routing.steps.length) {
-        Future.successful(s)
-      } else {
+      if (s.currentRoutingStep >= routing.steps.length) Future.successful(s)
+      else {
         val step = routing.steps(s.currentRoutingStep)
         val prevAreaId = s.areaVisitHistory.lastOption.getOrElse("STOCKER")
         val targetAreaId = step.equipmentArea.areaId
         val equipId = AreaToEquipmentId.getOrElse(targetAreaId, s"$targetAreaId-01")
         val reentryIdx = DynamicFlowAssembler.calculateReentryIndex(targetAreaId, s.areaVisitHistory)
 
-        emitLedger(s, s"Step ${s.currentRoutingStep + 1}/${routing.steps.length}: $targetAreaId (reentry=$reentryIdx) — ${step.recipeId}", ctx)
+        PipelineStages.emitLedger(s, s"Step ${s.currentRoutingStep + 1}/${routing.steps.length}: $targetAreaId (reentry=$reentryIdx) — ${step.recipeId}", ctx)
 
         for {
-          s1 <- transport(s, ctx, prevAreaId, targetAreaId)
-          s2 <- atEquipment(s1, ctx, targetAreaId, equipId)
-          s3 <- processStep(s2, ctx, equipId, step)
+          s1 <- PipelineStages.transport(s, ctx, prevAreaId, targetAreaId)
+          s2 <- PipelineStages.atEquipment(s1, ctx, targetAreaId, equipId)
+          s3 <- PipelineStages.process(s2, ctx, equipId, step.recipeId, targetAreaId)
           s4 <- if (MeasureAreas.contains(targetAreaId)) {
             measureAndClassify(s3, ctx, step, routing, spec)
           } else {
-            // Non-measurement step: all active wafers auto-PASS
             val next = s3.copy(
               currentRoutingStep = s3.currentRoutingStep + 1,
               areaVisitHistory = s3.areaVisitHistory :+ targetAreaId,
               routingStepReentry = s3.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
               ledgerSeq = s3.ledgerSeq + 1
             )
-            ctx.publisher(LedgerStepAdvanced(s3.ledgerSeq, s"Step ${s3.currentRoutingStep + 1}/" +
-              s"${routing.steps.length}: $targetAreaId — no measurement, auto-advance"))
+            ctx.publisher(LedgerStepAdvanced(s3.ledgerSeq, s"Step ${s3.currentRoutingStep + 1}/${routing.steps.length}: $targetAreaId — no measurement, auto-advance"))
             Future.successful(next)
           }
           s5 <- loop(s4)
@@ -138,84 +118,36 @@ object FabFlowEngine {
   }
 
   // ============================================================================
-  // Stage functions (same patterns as FabScenarioPipeline)
+  // Dynamic-specific stages
   // ============================================================================
 
-  private def loadFoup(state: FabDemoState, ctx: FabDemoContext, routing: ProductRouting): Future[FabDemoState] = {
-    val s = emitLedger(state, s"PhaseLoad: Load FOUP — ${routing.productId} (${routing.steps.size} steps)", ctx)
+  private def loadFoup(state: FabDemoState, ctx: FabDemoContext, routing: Por): Future[FabDemoState] = {
+    val s = PipelineStages.emitLedger(state, s"PhaseLoad: Load FOUP — ${routing.productId} (${routing.steps.size} steps)", ctx)
     ctx.publisher(GlobalStatusChanged("LOADING", s"Starting ${routing.productId}", "PhaseLoad"))
-    ctx.processRef ! StartProcess(routing.productId, state.wafers.keySet, state.wafers.size, ctx.ignoreReply)
-    ctx.processRef ! RecordFoupLoaded(ctx.foupId, StockerEquipId, ctx.ignoreReply)
-    ctx.publisher(FoupStateChanged(ctx.foupId, "LOADING", activeCount(state), 0, "STOCKER",
-      lotId = routing.productId))
+    ctx.lotRef ! RecordFoupLoaded(ctx.foupId, StockerEquipId, ctx.ignoreLotReply)
+    ctx.publisher(FoupStateChanged(ctx.foupId, "LOADING", PipelineStages.activeCount(state), 0, "STOCKER", lotId = routing.productId))
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, StockerEquipId, "STOCKER-PORT-1"))
     ctx.publisher(EquipmentStateChanged(StockerEquipId, "STOCKER", "Idle", None))
     publishAggregateState(s, ctx)
-    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
-  }
-
-  private def transport(state: FabDemoState, ctx: FabDemoContext, from: String, to: String): Future[FabDemoState] = {
-    val routeKey = from -> to
-    val routeMs = DefaultRoutes.get(routeKey).map(_.toMillis).getOrElse(2000L)
-    val scaledMs = (routeMs / ctx.speedMultiplier).toLong
-    val s = emitLedger(state, s"Transport: $from → $to (${scaledMs}ms)", ctx)
-    ctx.publisher(GlobalStatusChanged("TRANSPORTING", s"$from → $to", "PhaseTransport"))
-    ctx.processRef ! RecordTransportStarted(ctx.foupId, from, to, scaledMs, ctx.ignoreReply)
-    ctx.publisher(FoupInTransit(ctx.foupId, from, to, scaledMs / 2))
-    ctx.publisher(FoupStateChanged(ctx.foupId, "IN_TRANSIT", activeCount(state), 0, "AMHS",
-      lotId = ctx.scenario.scenarioId))
-    ctx.adapter.sendCommand("AMHS", TransferFoup(ctx.foupId, from, to)).map(_ =>
-      s.copy(ledgerSeq = s.ledgerSeq + 1)
-    )(ctx.ec)
-  }
-
-  private def atEquipment(state: FabDemoState, ctx: FabDemoContext, area: String, equipId: String): Future[FabDemoState] = {
-    val s = emitLedger(state, s"Arrive: $equipId ($area)", ctx)
-    ctx.publisher(GlobalStatusChanged("AT_EQP", s"FOUP at $area", s"PhaseAt$area"))
-    ctx.processRef ! RecordTransportCompleted(ctx.foupId, equipId, ctx.ignoreReply)
-    ctx.publisher(FoupArrivedAtPort(ctx.foupId, equipId, s"$equipId-PORT-1"))
-    ctx.publisher(FoupStateChanged(ctx.foupId, "AT_EQUIPMENT", activeCount(state), 0, area,
-      lotId = ctx.scenario.scenarioId))
-    ctx.publisher(EquipmentStateChanged(equipId, area, "Idle", None))
-    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
-  }
-
-  private def processStep(state: FabDemoState, ctx: FabDemoContext, equipId: String, step: RoutingStep): Future[FabDemoState] = {
-    val s = emitLedger(state, s"Process: ${step.recipeId} on $equipId", ctx)
-    ctx.publisher(GlobalStatusChanged("PROCESSING", s"$equipId running ${step.recipeId}", "PhaseProcess"))
-    val scaledMs = (step.expectedDuration.toMillis / ctx.speedMultiplier).toLong
-    ctx.processRef ! RecordEquipmentJobStarted(equipId, step.recipeId, ctx.ignoreReply)
-    ctx.publisher(EquipmentStateChanged(equipId, step.equipmentArea.areaId, "Busy", Some(s"job-${step.recipeId}")))
-    ctx.publisher(ProcessingStarted(equipId, step.recipeId, scaledMs))
-    ctx.adapter.sendCommand(equipId, ProcessRecipe(step.recipeId)).map {
-      case net.imadz.fab.protocol.JobCompleted(jobId, _, _) =>
-        ctx.processRef ! RecordEquipmentJobCompleted(equipId, jobId, success = true, ctx.ignoreReply)
-        ctx.publisher(ProcessingCompleted(equipId, jobId, success = true, ""))
-        ctx.publisher(EquipmentStateChanged(equipId, step.equipmentArea.areaId, "Idle", None))
-        s.copy(ledgerSeq = s.ledgerSeq + 1)
-      case _ => s.copy(ledgerSeq = s.ledgerSeq + 1)
-    }(ctx.ec)
+    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = "STOCKER"))
   }
 
   private def measureAndClassify(
-    state: FabDemoState, ctx: FabDemoContext, step: RoutingStep,
-    routing: ProductRouting, spec: DecisionConfig
+    state: FabDemoState, ctx: FabDemoContext, step: PorStep,
+    routing: Por, spec: DecisionConfig
   ): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
     val targetAreaId = step.equipmentArea.areaId
     val reentryIdx = state.routingStepReentry.getOrElse(targetAreaId, 0)
-
     val scaledMs = (5000L / ctx.speedMultiplier).toLong
 
     for {
-      // Transport to CD-SEM
-      s1 <- transport(state, ctx, targetAreaId, "MET")
-      s2 <- atEquipment(s1, ctx, "MET", CdsemEquipId)
-      // Measure
-      s3 = emitLedger(s2, s"Measure: CD-SEM — ${step.recipeId}", ctx)
+      s1 <- PipelineStages.transport(state, ctx, targetAreaId, "MET")
+      s2 <- PipelineStages.atEquipment(s1, ctx, "MET", CdsemEquipId)
+      s3 = PipelineStages.emitLedger(s2, s"Measure: CD-SEM — ${step.recipeId}", ctx)
       _ = {
         ctx.publisher(GlobalStatusChanged("MEASURING", "CD measurement", "PhaseMeasure"))
-        ctx.processRef ! RecordEquipmentJobStarted(CdsemEquipId, "CD-MEASURE-001", ctx.ignoreReply)
+        ctx.lotRef ! RecordEquipmentJobStarted(CdsemEquipId, "CD-MEASURE-001", ctx.ignoreLotReply)
         ctx.publisher(EquipmentStateChanged(CdsemEquipId, "MET", "Busy", Some("metrology-job")))
         ctx.publisher(ProcessingStarted(CdsemEquipId, "CD-MEASURE-001", scaledMs))
       }
@@ -223,7 +155,7 @@ object FabFlowEngine {
       s4 <- result match {
         case net.imadz.fab.protocol.JobCompleted(jobId, _, net.imadz.fab.protocol.MetrologyResult(_, waferMeasurements)) =>
           Future.successful {
-            ctx.processRef ! RecordEquipmentJobCompleted(CdsemEquipId, jobId, success = true, ctx.ignoreReply)
+            ctx.lotRef ! RecordEquipmentJobCompleted(CdsemEquipId, jobId, success = true, ctx.ignoreLotReply)
             ctx.publisher(ProcessingCompleted(CdsemEquipId, jobId, success = true, ""))
             ctx.publisher(EquipmentStateChanged(CdsemEquipId, "MET", "Idle", None))
             val cdValues: Map[String, Double] = waferMeasurements.map { case (wid, cd) => wid -> cd.measuredNm }
@@ -233,17 +165,16 @@ object FabFlowEngine {
           }
         case _ => Future.successful(s3.copy(ledgerSeq = s3.ledgerSeq + 1))
       }
-      // Classify
       s5 <- classifyAndDecide(s4, ctx, step, routing, spec, reentryIdx, targetAreaId)
     } yield s5
   }
 
   private def classifyAndDecide(
-    state: FabDemoState, ctx: FabDemoContext, step: RoutingStep,
-    routing: ProductRouting, spec: DecisionConfig,
+    state: FabDemoState, ctx: FabDemoContext, step: PorStep,
+    routing: Por, spec: DecisionConfig,
     reentryIdx: Int, targetAreaId: String
   )(implicit ec: ExecutionContext): Future[FabDemoState] = {
-    val s = emitLedger(state, s"Classify: Decision Engine — ${step.stepId}", ctx)
+    val s = PipelineStages.emitLedger(state, s"Classify: Decision Engine — ${step.stepId}", ctx)
     ctx.publisher(GlobalStatusChanged("CLASSIFYING", "Decision Engine", "PhaseClassify"))
 
     var updatedWafers = state.wafers
@@ -254,70 +185,62 @@ object FabFlowEngine {
         val cdValue = info.cdValueHistory.lastOption.getOrElse(32.0)
         val disposition = DynamicFlowAssembler.classifyWafer(cdValue, spec, info.reworkCount)
 
-        ctx.processRef ! RecordWaferMeasured(wid, cdValue, ctx.ignoreReply)
+        ctx.lotRef ! RecordWaferMeasured(wid, cdValue, ctx.ignoreLotReply)
         ctx.publisher(MeasurementResultEvent(wid, cdValue,
           disposition.getClass.getSimpleName.replace("Disposition", "").toUpperCase, spec.upperSpecNm))
 
         disposition match {
           case PassDisposition(_) =>
             updatedWafers += wid -> info.copy(classification = Some("PASS"))
-            ctx.processRef ! RecordWaferClassified(wid, "PASS", info.reworkCount, cdValue, ctx.ignoreReply)
+            ctx.lotRef ! RecordWaferClassified(wid, "PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
             ctx.publisher(DecisionMade(wid, "PASS → Continue", None))
             dispositions += wid -> disposition
           case d: ReworkDisposition =>
             updatedWafers += wid -> info.copy(reworkCount = d.attempt, classification = Some("FAIL"))
-            ctx.processRef ! RecordWaferClassified(wid, "FAIL", d.attempt, cdValue, ctx.ignoreReply)
+            ctx.lotRef ! RecordWaferClassified(wid, "FAIL", d.attempt, cdValue, ctx.ignoreLotReply)
             ctx.publisher(DecisionMade(wid, s"FAIL → Split for Rework (attempt ${d.attempt}/${d.maxRetries})", None))
             dispositions += wid -> d
           case d: ScrapDisposition =>
             updatedWafers += wid -> info.copy(classification = Some("SCRAP"))
-            ctx.processRef ! RecordWaferClassified(wid, "SCRAP", info.reworkCount, cdValue, ctx.ignoreReply)
+            ctx.lotRef ! RecordWaferClassified(wid, "SCRAP", info.reworkCount, cdValue, ctx.ignoreLotReply)
             ctx.publisher(DecisionMade(wid, s"SCRAP: ${d.reason}", None))
             ctx.publisher(ScrapEvent(wid, d.reason))
             dispositions += wid -> d
-            // Send scrap command to wafer aggregate
-            ctx.waferRefs.get(wid).foreach { ref =>
-              ref ! ScrapWafer(d.reason, ctx.ignoreWaferReply)
-            }
+            ctx.waferRefs.get(wid).foreach(ref => ref ! ScrapWafer(d.reason, ctx.ignoreWaferReply))
           case _ => dispositions += wid -> disposition
         }
     }
 
     val decision = DynamicFlowAssembler.decideNextStep(dispositions.toMap, step)
-    ctx.publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", decision.getClass.getSimpleName,
-      s"Step ${step.stepId}: $decision", unresolvedIds(updatedWafers)))
+    ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", decision.getClass.getSimpleName,
+      s"Step ${step.stepId}: $decision", PipelineStages.unresolvedIds(s.copy(wafers = updatedWafers))))
 
     val totalPass = updatedWafers.values.count(_.classification.contains("PASS"))
     val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
-
-    // Publish real-time aggregate state for the aggregate panel UI
     publishAggregateState(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap), ctx)
 
     decision match {
       case AdvanceToNextStep =>
-        val next = s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
+        Future.successful(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
           currentRoutingStep = s.currentRoutingStep + 1,
           areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
           routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
-          ledgerSeq = s.ledgerSeq + 1)
-        Future.successful(next)
+          ledgerSeq = s.ledgerSeq + 1))
 
       case RetryCurrentStep(waferIds, reason) =>
-        val next = s.copy(wafers = updatedWafers,
+        ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "RetryCurrentStep",
+          s"Retrying step ${step.stepId}: $reason", waferIds.toSeq))
+        Future.successful(s.copy(wafers = updatedWafers,
           areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
           routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
-          ledgerSeq = s.ledgerSeq + 1)
-        ctx.publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "RetryCurrentStep",
-          s"Retrying step ${step.stepId}: $reason (wafers: ${waferIds.mkString(",")})", waferIds.toSeq))
-        Future.successful(next) // currentRoutingStep stays same → retry
+          ledgerSeq = s.ledgerSeq + 1))
 
       case ScrapWafersDecision(waferIds, reason) =>
-        val next = s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
+        Future.successful(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
           currentRoutingStep = s.currentRoutingStep + 1,
           areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
           routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
-          ledgerSeq = s.ledgerSeq + 1)
-        Future.successful(next)
+          ledgerSeq = s.ledgerSeq + 1))
 
       case SplitAndRework(waferIds, reason) =>
         val reworkWaferIds = waferIds.toSeq
@@ -326,48 +249,50 @@ object FabFlowEngine {
           case (wid, w) if w.classification.contains("SCRAP") => wid
         }.toSet
 
-        // 1. Persist split intent to Process aggregate BEFORE sagaTx
-        ctx.processRef ! RecordWafersSplitForRework(
-          reworkWaferIds.toSet, scrapWaferIdsInStep, s.iteration + 1, ctx.ignoreReply)
-
-        // 2. Publish Saga PREPARE event (immediate UI feedback)
-        val sagaId = cmdId()
+        ctx.lotRef ! RecordWafersSplitForRework(reworkWaferIds.toSet, scrapWaferIdsInStep, s.iteration + 1, ctx.ignoreLotReply)
+        val sagaId = PipelineStages.cmdId()
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE",
           ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
 
-        // 3. Execute TCC Saga (async, persists to journal, idempotent on retry)
         ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs).map { confirmation =>
           if (confirmation.error.isEmpty) {
             ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
               ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
-            ctx.publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "SplitCompleted",
+            ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "SplitCompleted",
               s"TCC Split committed: ${reworkWaferIds.mkString(",")} → Rework Lot", reworkWaferIds))
+            val rwkSet = reworkWaferIds.toSet
+            val wafersWithSubLot = updatedWafers.map { case (wid, info) =>
+              if (rwkSet.contains(wid)) wid -> info.copy(subLot = Some("rwk"))
+              else wid -> info
+            }
+            val nextState = s.copy(wafers = wafersWithSubLot, currentRoutingStep = s.currentRoutingStep + 1,
+              areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
+              routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
+              ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = Some("rwk"), childLotView = Map("rwk" -> ("Active", reworkWaferIds.size)))
+            ctx.publisher(PipelineStages.buildAggregateState(wafersWithSubLot, ctx, totalPass, totalScrap, sourceLotArea = targetAreaId, childLotView = nextState.childLotView))
+            nextState
           } else {
-            ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "FAILED",
-              ctx.scenario.scenarioId, "", Seq.empty))
+            ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
+            s.copy(wafers = updatedWafers, currentRoutingStep = s.currentRoutingStep + 1,
+              areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
+              routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
+              ledgerSeq = s.ledgerSeq + 1)
           }
-          s.copy(wafers = updatedWafers,
-            currentRoutingStep = s.currentRoutingStep + 1,
-            areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
-            routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
-            ledgerSeq = s.ledgerSeq + 1)
         }(ctx.ec)
 
       case FallbackToArea(area, reason) =>
-        ctx.publisher(OrchestratorCommand(cmdId(), "DECISION-ENGINE", "FallbackToArea",
+        ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "FallbackToArea",
           s"Falling back to $area: $reason", Seq.empty))
-        // Re-execute current step with fallback area
         val fbEquipId = AreaToEquipmentId.getOrElse(area.areaId, s"${area.areaId}-01")
         val fbReentry = DynamicFlowAssembler.calculateReentryIndex(area.areaId, s.areaVisitHistory)
         for {
-          s1 <- transport(s, ctx, s.areaVisitHistory.lastOption.getOrElse("STOCKER"), area.areaId)
-          s2 <- atEquipment(s1, ctx, area.areaId, fbEquipId)
-          s3 <- processStep(s2, ctx, fbEquipId, step.copy(equipmentArea = area))
+          s1 <- PipelineStages.transport(s, ctx, s.areaVisitHistory.lastOption.getOrElse("STOCKER"), area.areaId)
+          s2 <- PipelineStages.atEquipment(s1, ctx, area.areaId, fbEquipId)
+          s3 <- PipelineStages.process(s2, ctx, fbEquipId, step.recipeId, area.areaId)
           s4 <- if (MeasureAreas.contains(area.areaId))
             measureAndClassify(s3, ctx, step.copy(equipmentArea = area), routing, spec)
           else {
-            val next = s3.copy(
-              currentRoutingStep = s3.currentRoutingStep + 1,
+            val next = s3.copy(currentRoutingStep = s3.currentRoutingStep + 1,
               areaVisitHistory = s3.areaVisitHistory :+ area.areaId,
               routingStepReentry = s3.routingStepReentry + (area.areaId -> (fbReentry + 1)),
               ledgerSeq = s3.ledgerSeq + 1)
@@ -376,11 +301,8 @@ object FabFlowEngine {
         } yield s4
 
       case _ =>
-        val next = s.copy(wafers = updatedWafers,
-          currentRoutingStep = s.currentRoutingStep + 1,
-          areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
-          ledgerSeq = s.ledgerSeq + 1)
-        Future.successful(next)
+        Future.successful(s.copy(wafers = updatedWafers, currentRoutingStep = s.currentRoutingStep + 1,
+          areaVisitHistory = s.areaVisitHistory :+ targetAreaId, ledgerSeq = s.ledgerSeq + 1))
     }
   }
 
@@ -388,58 +310,30 @@ object FabFlowEngine {
   // Final transport + seal
   // ============================================================================
 
-  private def transportToStocker(state: FabDemoState, ctx: FabDemoContext, routing: ProductRouting): Future[FabDemoState] = {
+  private def transportToStocker(state: FabDemoState, ctx: FabDemoContext, routing: Por): Future[FabDemoState] = {
     val lastArea = state.areaVisitHistory.lastOption.getOrElse("MET")
-    transport(state, ctx, lastArea, "STOCKER")
+    PipelineStages.transport(state, ctx, lastArea, "STOCKER")
   }
 
-  private def sealComplete(state: FabDemoState, ctx: FabDemoContext, routing: ProductRouting): Future[FabDemoState] = {
-    val s = emitLedger(state, s"PhaseComplete: All ${routing.steps.size} steps done — ${routing.productId}", ctx)
+  private def sealComplete(state: FabDemoState, ctx: FabDemoContext, routing: Por): Future[FabDemoState] = {
+    val s = PipelineStages.emitLedger(state, s"PhaseComplete: All ${routing.steps.size} steps done — ${routing.productId}", ctx)
     ctx.publisher(GlobalStatusChanged("COMPLETED", s"${routing.productId} completed: ${state.passCount} PASS, ${state.scrapCount} SCRAP", "PhaseComplete"))
     ctx.lotRef ! SealLot(ctx.ignoreLotReply)
-    ctx.processRef ! CompleteProcess(routing.productId, state.passCount, state.scrapCount, 0, ctx.ignoreReply)
+    ctx.lotRef ! CompleteProcess(routing.productId, state.passCount, state.scrapCount, 0, ctx.ignoreLotReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "COMPLETED", 0, 0, "STOCKER", lotId = routing.productId))
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, StockerEquipId, "STOCKER-PORT-1"))
     ctx.publisher(LotUpdated(routing.productId, ctx.scenario.lotSize, state.scrapCount,
       (1 to routing.steps.size).map(i => s"Step-$i").toList, state.passCount, 0))
     ctx.publisher(DemoCompleted(routing.productId, ctx.scenario.lotSize, state.passCount, 0, state.scrapCount))
-    publishAggregateState(state, ctx, lotStatus = "Sealed")
-    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+    publishAggregateState(s, ctx, lotStatus = "Sealed")
+    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = "STOCKER"))
   }
 
   // ============================================================================
   // Helpers
   // ============================================================================
 
-  private def activeCount(state: FabDemoState): Int =
-    state.wafers.values.count(w => w.classification.isEmpty || w.classification.contains("FAIL"))
-
-  private def unresolvedIds(wafers: Map[String, WaferInfo]): Seq[String] =
-    wafers.values.filter(w => w.classification.isEmpty || w.classification.contains("FAIL")).map(_.waferId).toSeq
-
-  private def cmdId(): String = UUID.randomUUID().toString.take(8)
-
-  private def emitLedger(state: FabDemoState, name: String, ctx: FabDemoContext): FabDemoState = {
-    ctx.publisher(LedgerStepAdvanced(state.ledgerSeq, name))
-    state
-  }
-
-  /** Publish real-time AggregateStateUpdated for the aggregate panel.
-   *  This is a direct pipeline publish (same pattern as FabScenarioPipeline),
-   *  separate from the Projection→EventStream→Bridge domain-event path.
-   */
   private def publishAggregateState(state: FabDemoState, ctx: FabDemoContext, lotStatus: String = "Active"): Unit = {
-    val lotId = ctx.scenario.scenarioId
-    val sourceLot = LotStateSnapshot(lotId, lotStatus, ctx.scenario.lotSize, state.passCount, state.scrapCount)
-    val wafers = state.wafers.map { case (wid, info) =>
-      val cls = info.classification.getOrElse("Pending")
-      val status = cls match {
-        case "SCRAP" => "Scrapped"
-        case "PASS" | "FAIL" => "Active"
-        case _ => "Active"
-      }
-      WaferStateSnapshot(wid, status, lotId, cls, info.reworkCount)
-    }.toSeq
-    ctx.publisher(AggregateStateUpdated(sourceLot, None, wafers))
+    ctx.publisher(PipelineStages.buildAggregateState(state.wafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = state.childLotView))
   }
 }

@@ -20,16 +20,19 @@ object FabProcessEventHandler {
     case WaferMeasured(_, _) => state
 
     case WaferClassified(waferId, classification, reworkCount, cdValue) =>
-      val entry = WaferClassResult(classification, cdValue, reworkCount)
-      val passInc = if (classification == "PASS") 1 else 0
-      val scrapInc = if (classification == "SCRAP") 1 else 0
-      val rwkInc = if (reworkCount > 0) 1 else 0
-      state.copy(
-        waferClassifications = state.waferClassifications + (waferId -> entry),
-        passCount = state.passCount + passInc,
-        scrapCount = state.scrapCount + scrapInc,
-        reworkCount = state.reworkCount + rwkInc
-      )
+      if (state.waferClassifications.contains(waferId)) state
+      else {
+        val entry = WaferClassResult(classification, cdValue, reworkCount)
+        val passInc = if (classification == "PASS") 1 else 0
+        val scrapInc = if (classification == "SCRAP") 1 else 0
+        val rwkInc = if (reworkCount > 0) 1 else 0
+        state.copy(
+          waferClassifications = state.waferClassifications + (waferId -> entry),
+          passCount = state.passCount + passInc,
+          scrapCount = state.scrapCount + scrapInc,
+          reworkCount = state.reworkCount + rwkInc
+        )
+      }
 
     case WafersSplitForRework(_, _, _) => state
 

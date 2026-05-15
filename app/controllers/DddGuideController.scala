@@ -26,18 +26,6 @@ class DddGuideController @Inject()(val controllerComponents: ControllerComponent
     Ok(views.html.dagDemo())
   }
 
-  def m25Explore() = Action { implicit request: Request[AnyContent] =>
-    Ok(views.html.m25())
-  }
-
-  def m25En() = Action { implicit request: Request[AnyContent] =>
-    Ok(views.html.m25_en())
-  }
-
-  def m25Demo() = Action {
-    Ok(views.html.m25Demo())
-  }
-
   def m3Explore() = Action { implicit request: Request[AnyContent] =>
     Ok(views.html.m3())
   }

@@ -28,7 +28,11 @@ object WaferProtocol {
   case class SkipWafer(reason: String, replyTo: ActorRef[WaferConfirmation]) extends WaferCommand
 
   // --- Replies ---
-  case class WaferConfirmation(error: Option[iMadzError], status: Option[WaferStatus] = None, lotId: Option[Id] = None) extends CborSerializable
+  case class WaferConfirmation(error: Option[iMadzError], status: Option[WaferStatus] = None, lotId: Option[Id] = None,
+                            // Full state fields populated by GetWaferState
+                            waferId: Option[String] = None,
+                            reservedTransfer: Option[(Id, Id)] = None,
+                            completedTransferIds: Set[Id] = Set.empty) extends CborSerializable
   case class TransferConfirmation(transferId: Id, error: Option[iMadzError]) extends CborSerializable
 
   // --- Handler Type ---

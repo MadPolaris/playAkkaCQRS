@@ -6,7 +6,7 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, RetentionCriteria}
 import akka.util.Timeout
 import net.imadz.application.services.transactor.FabSagaProtocol._
-import net.imadz.application.services.transactor.{FabTransactionContext, SourceLotParticipant, TargetLotParticipant, WaferTransferParticipant}
+import net.imadz.application.services.transactor.{FabSagaTransactor, FabTransactionContext, SourceLotParticipant, TargetLotParticipant, WaferTransferParticipant}
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.entities.FabSagaTransactionEntity._
@@ -50,7 +50,7 @@ object FabSagaTransactorBehaviors {
         eventHandler = (state, event) => state.applyEvent(event)
       )
         .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
-        .withTagger(_ => Set(s"fabsaga-${math.abs(id.hashCode % 5)}"))
+        .withTagger(_ => Set(FabSagaTransactor.tags(math.abs(id.hashCode % FabSagaTransactor.tags.size))))
         .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
     }
   }

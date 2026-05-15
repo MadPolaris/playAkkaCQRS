@@ -1,6 +1,6 @@
 package net.imadz.fab.chain
 
-import net.imadz.fab.model.{EquipmentArea, RoutingStep}
+import net.imadz.fab.model.{EquipmentArea, PorStep}
 import net.imadz.fab.scenario.DecisionConfig
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -17,7 +17,7 @@ class DynamicFlowAssemblerSpec extends AnyWordSpec with Matchers {
     reworkRecipeId = "REWORK-LITHO-001"
   )
 
-  val exampleStep = RoutingStep(
+  val exampleStep = PorStep(
     stepId = "op-030",
     equipmentArea = EquipmentArea.Lithography,
     recipeId = "LITHO-28-001",

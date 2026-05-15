@@ -60,7 +60,7 @@
     // --- Global Status ---
     sub(S.globalStatus$, updateGlobalStatus);
 
-    // --- Aggregate State (scan reducer) ---
+    // --- Aggregate State (RxJS scan over pipeline AggregateStateUpdated snapshots) ---
     var aggModel$ = S.aggregateState$.pipe(
       rxjs.operators.scan(window._rxReducers.aggregate, {lots: {}, wafers: {}})
     );
@@ -681,20 +681,37 @@
   // ===================================================================
   // Aggregate State Panel (pure render from model)
   // ===================================================================
+  function formatAreaName(areaId) {
+    if (!areaId) return '';
+    var map = {
+      'STOCKER': 'Stocker', 'LITHO': 'Litho', 'CDSEM': 'CD-SEM',
+      'MET': 'Metrology', 'CLEAN': 'Wet Clean', 'DIFF': 'Diffusion',
+      'ETCH': 'Etch', 'IMPL': 'Implant', 'DEP': 'Deposition',
+      'CMP': 'CMP', 'DRY': 'Drying', 'LOG': 'Logistics',
+      'METROLOGY': 'Metrology', 'AMHS': 'AMHS'
+    };
+    // If it's a transport path like "STOCKER → LITHO", show as-is with AMHS prefix
+    if (areaId.indexOf('→') >= 0) return 'AMHS: ' + areaId;
+    return map[areaId] || areaId;
+  }
+
   function renderAggregatePanel(model) {
     var tbody = document.getElementById('aggTreeBody');
+    // model = scan(aggregateReducer) → {lots: {lotId: {...}}, wafers: {waferId: {...}}}
     var lotIds = Object.keys(model.lots);
     if (lotIds.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
       return;
     }
 
     var rows = '';
     lotIds.forEach(function(lotId) {
       var lot = model.lots[lotId];
+      var areaDisplay = formatAreaName(lot.currentArea);
       rows += '<tr class="lot-row">' +
         '<td>Lot: ' + (lot.productId || lotId) + '</td>' +
         '<td>' + (lot.status || 'Active') + '</td>' +
+        '<td>' + (areaDisplay || '-') + '</td>' +
         '<td colspan="2">Wafers: ' + (lot.waferCount || 0) +
         ' | Pass: ' + (lot.passCount || 0) +
         ' | Scrap: ' + (lot.scrapCount || 0) + '</td>' +
@@ -707,6 +724,7 @@
         rows += '<tr class="wafer-row">' +
           '<td>' + (w.waferId || wid).substring(0, 8) + '</td>' +
           '<td class="' + stCls + '">' + (w.status || 'Active') + '</td>' +
+          '<td></td>' +
           '<td class="' + clsCls + '">' + (w.classification || 'Pending') + '</td>' +
           '<td>' + (w.reworkCount || 0) + '</td>' +
           '</tr>';
@@ -931,7 +949,7 @@
     document.getElementById('deSidebar').classList.remove('open');
 
     // Reset aggregate panel
-    document.getElementById('aggTreeBody').innerHTML = '<tr><td colspan="4" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
+    document.getElementById('aggTreeBody').innerHTML = '<tr><td colspan="5" style="color:var(--fg-muted)">' + ((window.__i18n && window.__i18n.aggregate_placeholder) || 'Waiting for Lot creation...') + '</td></tr>';
 
     // Re-init rx subscriptions for the new demo
     window._rxInit();
@@ -963,6 +981,11 @@
       .then(function(r) { return r.json(); })
       .then(function(data) {
         addTimelineEntry({type:'DemoStarted', data: 'Scenario: ' + data.message});
+        if (data.workOrderId) {
+          window._currentWorkOrderId = data.workOrderId;
+          var woInput = document.getElementById('entityWorkOrderInput');
+          if (woInput) woInput.value = data.workOrderId;
+        }
       });
   };
 
@@ -1050,6 +1073,124 @@
       el.style.display = 'inline';
       el.style.color = stepName.indexOf('auto-advance') >= 0 ? 'var(--fg-muted)' : 'var(--amber)';
     }
+  }
+
+  // ===================================================================
+  // Init
+  // ===================================================================
+  var scenarioTypeLabels = {
+    'rework': 'Rework', 'send-ahead': 'Send-Ahead',
+    'scrap': 'Scrap', 'sampling': 'Sampling', 'hold': 'Hold/Release'
+  };
+
+  window.fetchEntityState = function() {
+    var input = document.getElementById('entityWorkOrderInput');
+    var workOrderId = input && input.value ? input.value : (window._currentWorkOrderId || '');
+    if (!workOrderId) {
+      alert('No WorkOrder ID. Start a demo first, or enter an ID manually.');
+      return;
+    }
+    // Show loading
+    var modal = document.getElementById('entityStateModal');
+    if (!modal) { createEntityModal(); modal = document.getElementById('entityStateModal'); }
+    var body = document.getElementById('entityStateModalBody');
+    body.innerHTML = '<div style="padding:16px;color:var(--amber)">Querying entity state for: ' + workOrderId + '...</div>';
+    modal.style.display = 'flex';
+
+    fetch('/api/fab-demo/entity-state/' + encodeURIComponent(workOrderId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.error) { body.innerHTML = '<div style="padding:16px;color:var(--red)">Error: ' + data.error + '</div>'; return; }
+        renderEntityState(data);
+      })
+      .catch(function(err) {
+        body.innerHTML = '<div style="padding:16px;color:var(--red)">Fetch failed: ' + err.message + '</div>';
+      });
+  };
+
+
+  function closeEntityModal() { document.getElementById("entityStateModal").style.display = "none"; }
+  function createEntityModal() {
+    var modal = document.createElement('div');
+    modal.id = 'entityStateModal';
+    modal.style.cssText = 'display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:9999;align-items:center;justify-content:center';
+    modal.innerHTML = '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;max-width:900px;width:95%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.5)">' +
+      '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)">' +
+        '<h3 style="margin:0;font-size:14px;color:var(--amber)">🔍 Entity State (ClusterSharding)</h3>' +
+        '<button onclick="closeEntityModal()" style="background:none;border:none;color:var(--fg-muted);font-size:20px;cursor:pointer">&times;</button>' +
+      '</div>' +
+      '<div id="entityStateModalBody" style="overflow-y:auto;padding:12px 16px;flex:1"></div>' +
+    '</div>';
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.style.display = 'none'; });
+    document.body.appendChild(modal);
+  }
+
+  function renderEntityState(data) {
+    var h = '';
+    function ff(v) { return v === undefined || v === null || v === '' ? '<span style="color:var(--fg-muted)">—</span>' : v; }
+    function arr(a) { if (!a || a.length === 0) return '<span style="color:var(--fg-muted)">[]</span>'; return a.map(function(x) { return typeof x === 'object' ? JSON.stringify(x) : x; }).join(', '); }
+    function obj(o) { if (!o || Object.keys(o).length === 0) return '<span style="color:var(--fg-muted)">{}</span>'; return JSON.stringify(o, null, 1); }
+    function tbl(rows) { var s = '<table style="font-size:11px;width:100%;border-collapse:collapse">'; rows.forEach(function(r) { s += '<tr><td style="padding:2px 8px 2px 0;color:var(--fg-muted);white-space:nowrap;vertical-align:top">' + r[0] + '</td><td style="padding:2px 0;word-break:break-all;font-family:monospace;font-size:11px">' + r[1] + '</td></tr>'; }); s += '</table>'; return s; }
+
+    h += '<div style="margin-bottom:8px;font-size:12px;color:var(--fg-muted)">WorkOrder: <b style="color:var(--fg)">' + data.workOrderId + '</b></div>';
+
+    // Source Lot
+    var sl = data.sourceLot;
+    h += '<details open style="margin-bottom:8px"><summary style="font-weight:700;color:var(--blue);cursor:pointer;font-size:13px">Source Lot</summary>';
+    h += '<div style="padding:4px 0 0 12px">' + tbl([
+      ['phase', '<b>' + sl.phase + '</b>'],
+      ['productId', ff(sl.productId)],
+      ['lotId (UUID)', ff(sl.lotId)],
+      ['waferCount', sl.waferCount],
+      ['waferIds', arr(sl.waferIds)],
+      ['currentStepIndex', sl.currentStepIndex],
+      ['loadedFoupId', ff(sl.loadedFoupId)],
+      ['areaVisitHistory', arr(sl.areaVisitHistory)],
+      ['routingStepReentry', obj(sl.routingStepReentry)],
+      ['completedJobs', arr(sl.completedJobs)],
+      ['measuredWafers', arr(sl.measuredWafers)],
+      ['completedTransferIds', arr(sl.completedTransferIds)],
+      ['reservedWafers (outgoing)', arr(sl.reservedWafers.map(function(r){return r.transferId.substring(0,8)+'→['+r.waferIds.map(function(w){return w.substring(0,8)}).join(',')+']'}))],
+      ['incomingWafers', arr(sl.incomingWafers.map(function(r){return r.transferId.substring(0,8)+'→['+r.waferIds.map(function(w){return w.substring(0,8)}).join(',')+']'}))],
+      ['waferClassifications', obj(sl.waferClassifications)]
+    ]) + '</div></details>';
+
+    // Rework Lot
+    if (data.reworkLot) {
+      var rl = data.reworkLot;
+      h += '<details open style="margin-bottom:8px"><summary style="font-weight:700;color:var(--amber);cursor:pointer;font-size:13px">Rework Lot</summary>';
+      h += '<div style="padding:4px 0 0 12px">' + tbl([
+        ['phase', '<b>' + rl.phase + '</b>'],
+        ['lotId (UUID)', ff(rl.lotId)],
+        ['waferCount', rl.waferCount],
+        ['waferIds', arr(rl.waferIds)],
+        ['loadedFoupId', ff(rl.loadedFoupId)],
+        ['areaVisitHistory', arr(rl.areaVisitHistory)],
+        ['completedJobs', arr(rl.completedJobs)],
+        ['measuredWafers', arr(rl.measuredWafers)],
+        ['completedTransferIds', arr(rl.completedTransferIds)],
+        ['waferClassifications', obj(rl.waferClassifications)]
+      ]) + '</div></details>';
+    }
+
+    // Wafer Entities
+    var waferKeys = Object.keys(data.wafers || {});
+    h += '<details open style="margin-bottom:8px"><summary style="font-weight:700;color:var(--green);cursor:pointer;font-size:13px">Wafer Entities (' + waferKeys.length + ')</summary>';
+    h += '<div style="padding:4px 0 0 12px">';
+    waferKeys.forEach(function(wid) {
+      var w = data.wafers[wid];
+      h += '<details style="margin-bottom:2px"><summary style="font-size:12px;cursor:pointer;font-family:monospace">' + (w.waferId || wid).substring(0, 8) + ' — ' + w.status + '</summary>';
+      h += '<div style="padding:2px 0 0 16px">' + tbl([
+        ['waferId', ff(w.waferId)],
+        ['status', '<b>' + w.status + '</b>'],
+        ['lotId (UUID)', ff(w.lotId)],
+        ['reservedTransfer', w.reservedTransfer ? w.reservedTransfer.transferId.substring(0,8) + ' → ' + w.reservedTransfer.targetLotId.substring(0,8) : '<span style="color:var(--fg-muted)">None</span>'],
+        ['completedTransferIds', arr(w.completedTransferIds)]
+      ]) + '</div></details>';
+    });
+    h += '</div></details>';
+
+    document.getElementById('entityStateModalBody').innerHTML = h;
   }
 
   // ===================================================================

@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package net.imadz.infrastructure.proto;
+
+option java_multiple_files = true;
+
+// --- Events ---
+
+message WorkOrderCreatedPO {
+  string work_order_id = 1;
+  string product_id = 2;
+  repeated string wafer_ids = 3;
+  int32 wafer_count = 4;
+}
+
+message WorkOrderCompletedPO {
+  int32 pass_count = 1;
+  int32 scrap_count = 2;
+  int32 rework_count = 3;
+}
+
+message WorkOrderFailedPO {
+  string error = 1;
+}
+
+// --- Event Union ---
+
+message WorkOrderEventPO {
+  oneof event {
+    WorkOrderCreatedPO work_order_created = 1;
+    WorkOrderCompletedPO work_order_completed = 2;
+    WorkOrderFailedPO work_order_failed = 3;
+  }
+}
+
+// --- State Snapshot ---
+
+message WorkOrderStatePO {
+  string phase = 1;
+  string work_order_id = 2;
+  string product_id = 3;
+  repeated string wafer_ids = 4;
+  int32 pass_count = 5;
+  int32 scrap_count = 6;
+  int32 rework_count = 7;
+  string error = 8;
+}

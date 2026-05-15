@@ -27,6 +27,7 @@ object FabProcessEntity {
   def empty(processId: String): FabProcessState =
     FabProcessState(processId, "", Set.empty, 0, 0, 0, 0, ProcessCreated, Map.empty)
 
+
   sealed trait ProcessPhase extends CborSerializable
   case object ProcessCreated extends ProcessPhase
   case object ProcessActive extends ProcessPhase

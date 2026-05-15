@@ -13,6 +13,7 @@ object LotBehaviors extends LotCommandHelpers {
     directBehaviors(context)(state)
       .orElse(sourceTransferBehaviors(context)(state))
       .orElse(targetTransferBehaviors(context)(state))
+      .orElse(equipmentReportBehaviors(context)(state))
       .apply(command)
 
   // Group 1: Lifecycle & Direct
@@ -24,7 +25,20 @@ object LotBehaviors extends LotCommandHelpers {
       runReplyingPolicy(SealLotRule, SealLotHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
 
     case GetLotState(replyTo) =>
-      Effect.reply(replyTo)(LotConfirmation(None, state.waferIds, Some(state.phase)))
+      val classifications = state.waferClassifications.map { case (wid, r) => wid -> r.classification }
+      Effect.reply(replyTo)(LotConfirmation(
+        error = None, waferIds = state.waferIds, phase = Some(state.phase),
+        productId = Some(state.productId), lotId = Some(state.lotId),
+        reservedWafers = state.reservedWafers, incomingWafers = state.incomingWafers,
+        completedTransferIds = state.completedTransferIds,
+        areaVisitHistory = state.areaVisitHistory,
+        routingStepReentry = state.routingStepReentry,
+        loadedFoupId = state.loadedFoupId,
+        waferClassifications = classifications,
+        completedJobs = state.completedJobs,
+        measuredWafers = state.measuredWafers,
+        currentStepIndex = state.currentStepIndex
+      ))
   }
 
   // Group 2: Source lot — reserve/commit/release outgoing wafers
@@ -49,5 +63,76 @@ object LotBehaviors extends LotCommandHelpers {
 
     case cmd: CancelAddWafer =>
       runReplyingPolicy(CancelAddWaferRule, CancelAddWaferHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
+  }
+
+  // Group 4: Equipment reports — idempotent recording
+  private def equipmentReportBehaviors(context: ActorContext[LotCommand])(state: LotState): PartialFunction[LotCommand, Effect[LotEvent, LotState]] = {
+    case cmd: RecordFoupLoaded =>
+      if (state.loadedFoupId.contains(cmd.foupId))
+        Effect.reply(cmd.replyTo)(LotConfirmation(None, phase = Some(state.phase)))
+      else
+        Effect.persist(FoupLoaded(cmd.foupId, cmd.stockerId))
+          .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordTransportStarted =>
+      Effect.persist(TransportStarted(cmd.foupId, cmd.fromArea, cmd.toArea, cmd.estimatedMs))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordTransportCompleted =>
+      Effect.persist(TransportCompleted(cmd.foupId, cmd.equipmentId))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordEquipmentJobStarted =>
+      Effect.persist(EquipmentJobStarted(cmd.equipmentId, cmd.recipeId))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordEquipmentJobCompleted =>
+      if (state.completedJobs.contains(cmd.jobId))
+        Effect.reply(cmd.replyTo)(LotConfirmation(None, phase = Some(state.phase)))
+      else
+        Effect.persist(EquipmentJobCompleted(cmd.equipmentId, cmd.jobId, cmd.success))
+          .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordWaferMeasured =>
+      if (state.measuredWafers.contains(cmd.waferId))
+        Effect.reply(cmd.replyTo)(LotConfirmation(None, phase = Some(state.phase)))
+      else
+        Effect.persist(WaferMeasured(cmd.waferId, cmd.cdNm))
+          .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordWaferClassified =>
+      if (state.waferClassifications.contains(cmd.waferId))
+        Effect.reply(cmd.replyTo)(LotConfirmation(None, phase = Some(state.phase)))
+      else
+        Effect.persist(WaferClassified(cmd.waferId, cmd.classification, cmd.reworkCount, cmd.cdValue))
+          .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordWafersSplitForRework =>
+      Effect.persist(WafersSplitForRework(cmd.reworkWaferIds, cmd.scrapWaferIds, cmd.iteration))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordWafersReworked =>
+      Effect.persist(WafersReworked(cmd.waferIds))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordWafersSentAsPilot =>
+      Effect.persist(WafersSentAsPilot(cmd.waferIds))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordWafersSampled =>
+      Effect.persist(WafersSampled(cmd.sampleIds, cmd.skipIds))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordWafersHeld =>
+      Effect.persist(WafersHeld(cmd.waferIds, cmd.reason))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordWafersReleased =>
+      Effect.persist(WafersReleased(cmd.waferIds))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: CompleteProcess =>
+      Effect.persist(ProcessCompleted(cmd.lotId, cmd.passCount, cmd.scrapCount, cmd.reworkCount))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
   }
 }

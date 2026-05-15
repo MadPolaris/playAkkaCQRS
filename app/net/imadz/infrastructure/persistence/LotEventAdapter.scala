@@ -20,6 +20,20 @@ class LotEventAdapter extends EventAdapter[LotEvent, LotEventPO.Event] with LotP
     case evt: PhaseStarted => LotEventPO.Event.PhaseStarted(PhaseStartedConv.toProto(evt))
     case evt: PhaseCompleted => LotEventPO.Event.PhaseCompleted(PhaseCompletedConv.toProto(evt))
     case evt: LotSealed => LotEventPO.Event.LotSealed(LotSealedConv.toProto(evt))
+    case evt: FoupLoaded => LotEventPO.Event.FoupLoaded(FoupLoadedConv.toProto(evt))
+    case evt: TransportStarted => LotEventPO.Event.TransportStarted(TransportStartedConv.toProto(evt))
+    case evt: TransportCompleted => LotEventPO.Event.TransportCompleted(TransportCompletedConv.toProto(evt))
+    case evt: EquipmentJobStarted => LotEventPO.Event.EquipmentJobStarted(EquipmentJobStartedConv.toProto(evt))
+    case evt: EquipmentJobCompleted => LotEventPO.Event.EquipmentJobCompleted(EquipmentJobCompletedConv.toProto(evt))
+    case evt: WaferMeasured => LotEventPO.Event.WaferMeasured(WaferMeasuredConv.toProto(evt))
+    case evt: WaferClassified => LotEventPO.Event.WaferClassified(WaferClassifiedConv.toProto(evt))
+    case evt: WafersSplitForRework => LotEventPO.Event.WafersSplitForRework(WafersSplitForReworkConv.toProto(evt))
+    case evt: WafersReworked => LotEventPO.Event.WafersReworked(WafersReworkedConv.toProto(evt))
+    case evt: WafersSentAsPilot => LotEventPO.Event.WafersSentAsPilot(WafersSentAsPilotConv.toProto(evt))
+    case evt: WafersSampled => LotEventPO.Event.WafersSampled(WafersSampledConv.toProto(evt))
+    case evt: WafersHeld => LotEventPO.Event.WafersHeld(WafersHeldConv.toProto(evt))
+    case evt: WafersReleased => LotEventPO.Event.WafersReleased(WafersReleasedConv.toProto(evt))
+    case evt: ProcessCompleted => LotEventPO.Event.ProcessCompleted(ProcessCompletedConv.toProto(evt))
   }
 
   override def fromJournal(p: LotEventPO.Event, manifest: String): EventSeq[LotEvent] = p match {
@@ -33,6 +47,20 @@ class LotEventAdapter extends EventAdapter[LotEvent, LotEventPO.Event] with LotP
     case LotEventPO.Event.PhaseStarted(po) => EventSeq.single(PhaseStartedConv.fromProto(po))
     case LotEventPO.Event.PhaseCompleted(po) => EventSeq.single(PhaseCompletedConv.fromProto(po))
     case LotEventPO.Event.LotSealed(po) => EventSeq.single(LotSealedConv.fromProto(po))
+    case LotEventPO.Event.FoupLoaded(po) => EventSeq.single(FoupLoadedConv.fromProto(po))
+    case LotEventPO.Event.TransportStarted(po) => EventSeq.single(TransportStartedConv.fromProto(po))
+    case LotEventPO.Event.TransportCompleted(po) => EventSeq.single(TransportCompletedConv.fromProto(po))
+    case LotEventPO.Event.EquipmentJobStarted(po) => EventSeq.single(EquipmentJobStartedConv.fromProto(po))
+    case LotEventPO.Event.EquipmentJobCompleted(po) => EventSeq.single(EquipmentJobCompletedConv.fromProto(po))
+    case LotEventPO.Event.WaferMeasured(po) => EventSeq.single(WaferMeasuredConv.fromProto(po))
+    case LotEventPO.Event.WaferClassified(po) => EventSeq.single(WaferClassifiedConv.fromProto(po))
+    case LotEventPO.Event.WafersSplitForRework(po) => EventSeq.single(WafersSplitForReworkConv.fromProto(po))
+    case LotEventPO.Event.WafersReworked(po) => EventSeq.single(WafersReworkedConv.fromProto(po))
+    case LotEventPO.Event.WafersSentAsPilot(po) => EventSeq.single(WafersSentAsPilotConv.fromProto(po))
+    case LotEventPO.Event.WafersSampled(po) => EventSeq.single(WafersSampledConv.fromProto(po))
+    case LotEventPO.Event.WafersHeld(po) => EventSeq.single(WafersHeldConv.fromProto(po))
+    case LotEventPO.Event.WafersReleased(po) => EventSeq.single(WafersReleasedConv.fromProto(po))
+    case LotEventPO.Event.ProcessCompleted(po) => EventSeq.single(ProcessCompletedConv.fromProto(po))
     case LotEventPO.Event.Empty => EventSeq.empty
   }
 }

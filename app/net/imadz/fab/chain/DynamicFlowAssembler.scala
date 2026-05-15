@@ -1,6 +1,6 @@
 package net.imadz.fab.chain
 
-import net.imadz.fab.model.{EquipmentArea, RoutingStep}
+import net.imadz.fab.model.{EquipmentArea, PorStep}
 import net.imadz.fab.scenario.DecisionConfig
 
 /**
@@ -68,7 +68,7 @@ object DynamicFlowAssembler {
    *
    * Priority: SCRAP > HOLD > REWORK > ADVANCE
    */
-  def decideNextStep(dispositions: Map[String, WaferDisposition], step: RoutingStep): StepDecision = {
+  def decideNextStep(dispositions: Map[String, WaferDisposition], step: PorStep): StepDecision = {
     if (dispositions.isEmpty) return AdvanceToNextStep
 
     val scraps = dispositions.collect { case (wid, d: ScrapDisposition) => wid -> d }
@@ -97,7 +97,7 @@ object DynamicFlowAssembler {
    * @param unavailableAreas set of area IDs that are currently unavailable
    * @return Some(fallback) if a fallback is available, None otherwise
    */
-  def selectFallbackArea(step: RoutingStep, unavailableAreas: Set[String]): Option[EquipmentArea] =
+  def selectFallbackArea(step: PorStep, unavailableAreas: Set[String]): Option[EquipmentArea] =
     step.fallbackAreas.find(fb => !unavailableAreas.contains(fb.areaId))
 
   /**
