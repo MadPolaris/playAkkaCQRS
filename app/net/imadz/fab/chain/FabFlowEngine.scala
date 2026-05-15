@@ -127,7 +127,6 @@ object FabFlowEngine {
     ctx.publisher(FoupStateChanged(ctx.foupId, "LOADING", PipelineStages.activeCount(state), 0, "STOCKER", lotId = routing.productId))
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, StockerEquipId, "STOCKER-PORT-1"))
     ctx.publisher(EquipmentStateChanged(StockerEquipId, "STOCKER", "Idle", None))
-    publishAggregateState(s, ctx)
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = "STOCKER"))
   }
 
@@ -215,7 +214,6 @@ object FabFlowEngine {
 
     val totalPass = updatedWafers.values.count(_.classification.contains("PASS"))
     val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
-    publishAggregateState(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap), ctx)
 
     decision match {
       case AdvanceToNextStep =>
@@ -267,7 +265,6 @@ object FabFlowEngine {
               areaVisitHistory = s.areaVisitHistory :+ targetAreaId,
               routingStepReentry = s.routingStepReentry + (targetAreaId -> (reentryIdx + 1)),
               ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = Some("rwk"), childLotView = Map("rwk" -> ("Active", reworkWaferIds.size)))
-            ctx.publisher(PipelineStages.buildAggregateState(wafersWithSubLot, ctx, totalPass, totalScrap, sourceLotArea = targetAreaId, childLotView = nextState.childLotView))
             nextState
           } else {
             ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
@@ -323,7 +320,6 @@ object FabFlowEngine {
     ctx.publisher(LotUpdated(routing.productId, ctx.scenario.lotSize, state.scrapCount,
       (1 to routing.steps.size).map(i => s"Step-$i").toList, state.passCount, 0))
     ctx.publisher(DemoCompleted(routing.productId, ctx.scenario.lotSize, state.passCount, 0, state.scrapCount))
-    publishAggregateState(s, ctx, lotStatus = "Sealed")
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = "STOCKER"))
   }
 
@@ -331,7 +327,4 @@ object FabFlowEngine {
   // Helpers
   // ============================================================================
 
-  private def publishAggregateState(state: FabDemoState, ctx: FabDemoContext, lotStatus: String = "Active"): Unit = {
-    ctx.publisher(PipelineStages.buildAggregateState(state.wafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = state.childLotView))
-  }
 }

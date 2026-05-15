@@ -32,13 +32,6 @@ object PipelineStages {
     ctx.lotRef ! RecordFoupLoaded(ctx.foupId, ctx.scenario.stocker.equipmentId, ctx.ignoreLotReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "LOADING", activeCount(state), 0, "STOCKER", lotId = ctx.scenario.scenarioId))
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, ctx.scenario.stocker.equipmentId, "STOCKER-PORT-1"))
-    ctx.publisher(AggregateStateUpdated(
-      LotStateSnapshot(ctx.scenario.scenarioId, "Active", ctx.scenario.lotSize, state.passCount, state.scrapCount, "STOCKER"),
-      Seq.empty,
-      state.wafers.map { case (wid, info) =>
-        WaferStateSnapshot(wid, "Active", ctx.scenario.scenarioId, info.classification.getOrElse("Pending"), 0)
-      }.toSeq
-    ))
     Future.successful(state.copy(ledgerSeq = state.ledgerSeq + 1, currentArea = "STOCKER"))
   }
 
@@ -55,9 +48,7 @@ object PipelineStages {
     ctx.publisher(FoupStateChanged(ctx.foupId, "IN_TRANSIT", activeCount(state), 0, "AMHS", lotId = ctx.scenario.scenarioId))
         val areaTransit = s"$from → $to"
     ctx.adapter.sendCommand("AMHS", TransferFoup(ctx.foupId, from, to)).map { _ =>
-      val ns = s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = areaTransit)
-      ctx.publisher(buildAggregateState(ns.wafers, ctx, ns.passCount, ns.scrapCount, sourceLotArea = areaTransit, childLotView = ns.childLotView))
-      ns
+      s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = areaTransit)
     }(ctx.ec)
   }
 
@@ -73,7 +64,6 @@ object PipelineStages {
     val areaType = if (area == "LITHO") "LITHO" else if (area == "MET" || area == "CDSEM") "METROLOGY" else area
     ctx.publisher(EquipmentStateChanged(equipId, areaType, "Idle", None))
     val newState = s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = area)
-    ctx.publisher(buildAggregateState(state.wafers, ctx, state.passCount, state.scrapCount, sourceLotArea = area, childLotView = state.childLotView))
     Future.successful(newState)
   }
 
@@ -92,7 +82,6 @@ object PipelineStages {
         ctx.lotRef ! RecordEquipmentJobCompleted(equipId, jobId, success = true, ctx.ignoreLotReply)
         ctx.publisher(ProcessingCompleted(equipId, jobId, success = true, ""))
         ctx.publisher(EquipmentStateChanged(equipId, areaType, "Idle", None))
-        ctx.publisher(buildAggregateState(s.wafers, ctx, s.passCount, s.scrapCount, sourceLotArea = s.currentArea, childLotView = s.childLotView))
         s.copy(ledgerSeq = s.ledgerSeq + 1)
       case _ => s.copy(ledgerSeq = s.ledgerSeq + 1)
     }(ctx.ec)
@@ -117,7 +106,6 @@ object PipelineStages {
         val newWafers = s.wafers.map { case (wid, info) =>
           wid -> info.copy(cdValueHistory = info.cdValueHistory ++ cdValues.get(wid).toList)
         }
-        ctx.publisher(buildAggregateState(newWafers, ctx, s.passCount, s.scrapCount, sourceLotArea = s.currentArea, childLotView = s.childLotView))
         s.copy(ledgerSeq = s.ledgerSeq + 1, wafers = newWafers)
       case _ => s.copy(ledgerSeq = s.ledgerSeq + 1)
     }(ctx.ec)
@@ -148,7 +136,6 @@ object PipelineStages {
     ctx.publisher(LotUpdated(ctx.scenario.scenarioId, ctx.scenario.lotSize, state.scrapCount,
       (1 to state.iteration + 1).map(i => s"Completed-$i").toList, state.passCount, totalRework))
     ctx.publisher(DemoCompleted(ctx.scenario.scenarioId, ctx.scenario.lotSize, state.passCount, totalRework, state.scrapCount))
-    ctx.publisher(buildAggregateState(state.wafers, ctx, state.passCount, state.scrapCount, sourceLotArea = "STOCKER", childLotView = state.childLotView))
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = "STOCKER"))
   }
 
@@ -174,33 +161,4 @@ object PipelineStages {
     state
   }
 
-  def buildAggregateState(wafers: Map[String, WaferInfo], ctx: FabDemoContext,
-                          totalPass: Int, totalScrap: Int,
-                          childLotStatuses: Map[String, (String, Int)] = Map.empty,
-                          sourceLotArea: String = "",
-                          childLotView: Map[String, (String, Int)] = Map.empty): AggregateStateUpdated = {
-    val srcLotId = ctx.scenario.scenarioId
-    val sourceLot = LotStateSnapshot(srcLotId, "Active", ctx.scenario.lotSize, totalPass, totalScrap, sourceLotArea)
-
-    // Auto-detect child lots from wafers' subLot values
-    val detectedChildLots: Map[String, (String, Int)] = wafers.values
-      .flatMap(_.subLot)
-      .groupBy(identity)
-      .map { case (key, infos) => key -> ("Active", infos.size) }
-        // childLotView persists after merge (subLot cleared) so child lot shows as Merged/terminal
-    val mergedChildLots = detectedChildLots ++ childLotView ++ childLotStatuses
-    val childLots = mergedChildLots.map { case (key, (status, count)) =>
-      LotStateSnapshot(s"$srcLotId-${key.toUpperCase}", status, count, 0, 0, sourceLotArea)
-    }.toList
-
-    val waferSnapshots = wafers.map { case (wid, info) =>
-      val waferLot = info.subLot.map(k => s"$srcLotId-${k.toUpperCase}").getOrElse(srcLotId)
-      WaferStateSnapshot(wid,
-        status = if (info.classification.contains("SCRAP")) "Scrapped"
-                 else if (info.classification.contains("HOLD")) "OnHold"
-                 else "Active",
-        lotId = waferLot, classification = info.classification.getOrElse("Pending"), reworkCount = info.reworkCount)
-    }.toSeq
-    AggregateStateUpdated(sourceLot, childLots, waferSnapshots)
-  }
 }

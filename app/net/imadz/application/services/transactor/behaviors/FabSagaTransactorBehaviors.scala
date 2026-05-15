@@ -50,7 +50,7 @@ object FabSagaTransactorBehaviors {
         eventHandler = (state, event) => state.applyEvent(event)
       )
         .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
-        .withTagger(_ => Set(FabSagaTransactor.tags(math.abs(id.hashCode % FabSagaTransactor.tags.size))))
+        .withTagger(_ => Set(FabSagaTransactor.tags(math.abs(id.hashCode % FabSagaTransactor.tags.size)), "fab-view"))
         .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1))
     }
   }

@@ -5,7 +5,8 @@ import akka.actor.typed.scaladsl.adapter._
 import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
 import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent}
-import net.imadz.fab.projection.FabDemoEventBridge
+import akka.projection.ProjectionBehavior
+import net.imadz.fab.projection.{FabDemoEventBridge, FabDemoViewProjection}
 import net.imadz.fab.service.FabDemoService
 import play.api.i18n.{I18nSupport, Lang}
 import play.api.libs.json.Json
@@ -25,8 +26,8 @@ class FabDemoController @Inject()(
   private implicit val typedSystem: ActorSystem[Nothing] = classicSystem.toTyped
 
   // WebSocket event hub — pure pass-through, no aggregation.
-  // Aggregate state is computed by the pipeline (buildAggregateState)
-  // and emitted as AggregateStateUpdated events at every stage transition.
+  // Aggregate state is computed by FabDemoViewProjection (CQRS read-side)
+  // and emitted as AggregateStateUpdated events driven by real journal events.
   private val (hubSink, hubSource): (Sink[FabSimulationEvent, _], Source[FabSimulationEvent, _]) =
     MergeHub.source[FabSimulationEvent]
       .toMat(BroadcastHub.sink[FabSimulationEvent](bufferSize = 2048))(Keep.both)
@@ -47,6 +48,13 @@ class FabDemoController @Inject()(
     "fab-demo-event-bridge"
   )
 
+  // CQRS view projection: subscribes "fab-view" tagged journal events,
+  // reconstructs AggregateStateUpdated from real events, pushes to WebSocket hub
+  typedSystem.systemActorOf(
+    ProjectionBehavior(FabDemoViewProjection.createProjection(typedSystem, publishEvent)),
+    "fab-demo-view-projection"
+  )
+
   /** Render the Fab demo page */
   def index() = Action { implicit request =>
     val langParam = request.getQueryString("lang").getOrElse("")
@@ -55,7 +63,8 @@ class FabDemoController @Inject()(
     Ok(views.html.fabDemo()(messages))
   }
 
-  /** WebSocket endpoint for real-time simulation events */
+  /** WebSocket endpoint for real-time simulation events.
+   * Frontend applies its own bufferTime(100ms) batching via RxJS. */
   def socket: WebSocket = WebSocket.accept[String, String] { _ =>
     Flow.fromSinkAndSource(Sink.ignore, hubSource.map { event =>
       val typeName = event.getClass.getSimpleName.replace("$", "")

@@ -139,7 +139,6 @@ object FabDemoPipeline {
 
     ctx.publisher(LotUpdated(ctx.scenario.scenarioId, ctx.scenario.lotSize, totalScrap,
       (1 to state.iteration + 1).map(i => s"Pass-$i").toList, totalPass, totalRework))
-    ctx.publisher(PipelineStages.buildAggregateState(updatedWafers, ctx, totalPass, totalScrap, sourceLotArea = state.currentArea, childLotView = state.childLotView))
 
     if (reworkWafers.nonEmpty) {
       ctx.lotRef ! RecordWafersSplitForRework(reworkWafers.toSet, scrapWafers.toSet, state.iteration, ctx.ignoreLotReply)
@@ -216,7 +215,6 @@ object FabDemoPipeline {
           else wid -> info
         }
         val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = Some("rwk"), childLotView = Map("rwk" -> ("Active", reworkWaferIds.size)))
-        ctx.publisher(PipelineStages.buildAggregateState(updatedWafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = state.childLotView))
         finalState
       } else {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
@@ -264,7 +262,6 @@ object FabDemoPipeline {
               else wid -> info
             }
             val finalState = s.copy(wafers = mergedWafers, ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = None, childLotView = Map("rwk" -> ("Merged", 0)))
-            ctx.publisher(PipelineStages.buildAggregateState(mergedWafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
             finalState
           } else {
             ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
@@ -308,8 +305,6 @@ object FabDemoPipeline {
         }
         val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1,
           childLotView = state.childLotView + ("scrap" -> ("Scrapped", scrapWaferIds.size)))
-        ctx.publisher(PipelineStages.buildAggregateState(updatedWafers, ctx, state.passCount, state.scrapCount,
-          sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
         finalState
       } else {
         ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))

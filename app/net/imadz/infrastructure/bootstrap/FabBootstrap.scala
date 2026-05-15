@@ -50,7 +50,7 @@ trait FabBootstrap {
           emptyState = LotEntity.empty(lotId),
           commandHandler = LotAggregate.commandHandler(actorContext),
           eventHandler = LotEventHandler.apply
-        ).withTagger(_ => Set(tag))
+        ).withTagger(_ => Set(tag, "fab-view"))
           .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
           .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))
           .eventAdapter(new LotEventAdapter)

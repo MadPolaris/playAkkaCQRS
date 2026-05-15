@@ -205,7 +205,6 @@ object FabScenarioPipeline {
     val totalPass = updatedWafers.values.count(w => !w.classification.contains("SCRAP") && !w.classification.contains("HOLD"))
     val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
     ctx.publisher(LotUpdated(ctx.scenario.scenarioId, ctx.scenario.lotSize, totalScrap, List("Completed"), totalPass, 0))
-    ctx.publisher(PipelineStages.buildAggregateState(updatedWafers, ctx, totalPass, totalScrap, sourceLotArea = state.currentArea, childLotView = state.childLotView))
 
     Future.successful(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
       ledgerSeq = s.ledgerSeq + 1, pilotPassed = pilotPassed, spawnedChildLotKey = spawnedChild))
@@ -250,7 +249,6 @@ object FabScenarioPipeline {
           else wid -> info
         }
         val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1, childLotView = Map(lotKey -> ("Active", finalMoveIds.size)))
-        ctx.publisher(PipelineStages.buildAggregateState(updatedWafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
         finalState
       } else {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "FAILED", "", "", Seq.empty))
@@ -288,7 +286,6 @@ object FabScenarioPipeline {
           else wid -> info
         }
         val finalState = s.copy(wafers = mergedWafers, ledgerSeq = s.ledgerSeq + 1, childLotView = Map(lotKey -> ("Merged", 0)))
-        ctx.publisher(PipelineStages.buildAggregateState(mergedWafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
         finalState
       } else {
         val errMsg = confirmation.error.getOrElse("unknown")

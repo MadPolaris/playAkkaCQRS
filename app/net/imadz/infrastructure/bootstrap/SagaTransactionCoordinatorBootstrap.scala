@@ -47,7 +47,7 @@ trait SagaTransactionCoordinatorBootstrap extends ForSaga {
               case (state, akka.persistence.typed.RecoveryCompleted) =>
                 SagaTransactionCoordinatorRecoveryHandler.onRecoveryCompleted(actorContext, timers, state, (key, _) =>
                   createStepExecutor(actorContext, context, key, system), 5.minutes)
-            }.withTagger(_ => Set(tag))
+            }.withTagger(_ => Set(tag, "fab-view"))
               .eventAdapter(new SagaTransactionCoordinatorEventAdapter(system))
               .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
               .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))
