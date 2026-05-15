@@ -1,9 +1,9 @@
 package net.imadz.infrastructure.persistence.converters
 
-import net.imadz.application.aggregates.repository.{LotRepository, WaferRepository}
-import net.imadz.application.services.transactor.{SourceLotParticipant, TargetLotParticipant, WaferTransferParticipant}
+import net.imadz.application.aggregates.repository.LotRepository
+import net.imadz.application.services.transactor.{SourceLotParticipant, TargetLotParticipant}
 import net.imadz.common.serialization.PrimitiveConverter
-import net.imadz.infrastructure.proto.fab_saga_participant.{SourceLotParticipantPO, TargetLotParticipantPO, WaferTransferParticipantPO}
+import net.imadz.infrastructure.proto.fab_saga_participant.{SourceLotParticipantPO, TargetLotParticipantPO}
 
 import scala.concurrent.ExecutionContext
 
@@ -12,11 +12,13 @@ trait FabSagaProtoConverters extends PrimitiveConverter {
   case class SourceLotParticipantConv(lotRepository: LotRepository)(implicit ec: ExecutionContext) extends ProtoConverter[SourceLotParticipant, SourceLotParticipantPO] {
     override def toProto(d: SourceLotParticipant): SourceLotParticipantPO = SourceLotParticipantPO(
       sourceLotId = IdConv.toProto(d.sourceLotId),
-      waferIds = d.waferIds.map(IdConv.toProto).toSeq
+      waferIds = d.waferIds.map(IdConv.toProto).toSeq,
+      waferNames = d.waferNames.toSeq
     )
     override def fromProto(p: SourceLotParticipantPO): SourceLotParticipant = SourceLotParticipant(
       sourceLotId = IdConv.fromProto(p.sourceLotId),
-      waferIds = p.waferIds.map(IdConv.fromProto).toSet
+      waferIds = p.waferIds.map(IdConv.fromProto).toSet,
+      waferNames = p.waferNames.toSet
     )
   }
 
@@ -28,17 +30,6 @@ trait FabSagaProtoConverters extends PrimitiveConverter {
     override def fromProto(p: TargetLotParticipantPO): TargetLotParticipant = TargetLotParticipant(
       targetLotId = IdConv.fromProto(p.targetLotId),
       waferIds = p.waferIds.map(IdConv.fromProto).toSet
-    )
-  }
-
-  case class WaferTransferParticipantConv(waferRepository: WaferRepository)(implicit ec: ExecutionContext) extends ProtoConverter[WaferTransferParticipant, WaferTransferParticipantPO] {
-    override def toProto(d: WaferTransferParticipant): WaferTransferParticipantPO = WaferTransferParticipantPO(
-      waferId = IdConv.toProto(d.waferId),
-      targetLotId = IdConv.toProto(d.targetLotId)
-    )
-    override def fromProto(p: WaferTransferParticipantPO): WaferTransferParticipant = WaferTransferParticipant(
-      waferId = IdConv.fromProto(p.waferId),
-      targetLotId = IdConv.fromProto(p.targetLotId)
     )
   }
 }

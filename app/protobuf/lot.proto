@@ -26,18 +26,26 @@ message WaferClassResultPO {
 
 // --- Events ---
 
+message WaferNameEntryPO {
+  string wafer_id = 1;  // UUID
+  string name = 2;      // "WAFER-1"
+}
+
 message LotCreatedPO {
   string product_id = 1;
-  repeated string wafer_ids = 2;
+  repeated string wafer_ids = 2;          // deprecated — kept for backward compat
+  repeated WaferNameEntryPO wafer_names = 3;
 }
 
 message WaferRemovalReservedPO {
   string transfer_id = 1;
   repeated string wafer_ids = 2;
+  repeated string wafer_names = 3;
 }
 
 message WaferRemovalCommittedPO {
   string transfer_id = 1;
+  repeated string wafer_names = 2;
 }
 
 message WaferRemovalReleasedPO {

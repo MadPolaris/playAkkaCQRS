@@ -2,7 +2,6 @@ package net.imadz.fab.model
 
 import akka.actor.typed.ActorRef
 import net.imadz.application.aggregates.LotProtocol.{LotCommand, LotConfirmation}
-import net.imadz.application.aggregates.WaferProtocol.{WaferCommand, WaferConfirmation}
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.events.FabSimulationEvent
@@ -55,16 +54,16 @@ object FabExecutionModel {
     foupId: String,
     lotRef: akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand],
     reworkLotRef: akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand],
-    waferRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[WaferCommand]],
     waferUUIDs: Map[String, Id],
     sourceLotId: Id,
     reworkLotId: Id,
     adapter: ActorEquipmentAdapter,
     publisher: FabSimulationEvent => Unit,
     ignoreLotReply: ActorRef[LotConfirmation],
-    ignoreWaferReply: ActorRef[WaferConfirmation],
-    sagaTx: (Id, Id, Set[Id]) => Future[FabSagaConfirmation],
+    sagaTx: (Id, Id, Set[Id], Set[String]) => Future[FabSagaConfirmation],
     speedMultiplier: Double,
+    scrapLotRef: Option[akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand]] = None,
+    scrapLotId: Option[Id] = None,
     childLotRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand]] = Map.empty,
     childLotIds: Map[String, Id] = Map.empty
   )(implicit val ec: ExecutionContext)

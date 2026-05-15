@@ -26,21 +26,21 @@ class FabSagaService @Inject()(classicSystem: akka.actor.ActorSystem, transactio
   private implicit val ec: ExecutionContext = system.executionContext
   implicit val scheduler: Scheduler = system.scheduler
 
-  def transferWafers(sourceLotId: Id, targetLotId: Id, waferIds: Set[Id]): Future[FabSagaConfirmation] = {
+  def transferWafers(sourceLotId: Id, targetLotId: Id, waferIds: Set[Id], waferNames: Set[String] = Set.empty): Future[FabSagaConfirmation] = {
     val transactionId = Id.gen
     val ref = transactionRepository.findTransactionById(transactionId)
-    ref.ask(ref => InitiateWaferTransfer(sourceLotId, targetLotId, waferIds, ref))
+    ref.ask(ref => InitiateWaferTransfer(sourceLotId, targetLotId, waferIds, waferNames, ref))
   }
 
-  def splitLot(sourceLotId: Id, targetLotId: Id, waferIds: Set[Id]): Future[FabSagaConfirmation] = {
+  def splitLot(sourceLotId: Id, targetLotId: Id, waferIds: Set[Id], waferNames: Set[String] = Set.empty): Future[FabSagaConfirmation] = {
     val transactionId = Id.gen
     val ref = transactionRepository.findTransactionById(transactionId)
-    ref.ask(ref => InitiateLotSplit(sourceLotId, targetLotId, waferIds, ref))
+    ref.ask(ref => InitiateLotSplit(sourceLotId, targetLotId, waferIds, waferNames, ref))
   }
 
-  def mergeLots(sourceLotIds: List[Id], targetLotId: Id, waferIds: Set[Id]): Future[FabSagaConfirmation] = {
+  def mergeLots(sourceLotIds: List[Id], targetLotId: Id, waferIds: Set[Id], waferNames: Set[String] = Set.empty): Future[FabSagaConfirmation] = {
     val transactionId = Id.gen
     val ref = transactionRepository.findTransactionById(transactionId)
-    ref.ask(ref => InitiateLotMerge(sourceLotIds, targetLotId, waferIds, ref))
+    ref.ask(ref => InitiateLotMerge(sourceLotIds, targetLotId, waferIds, waferNames, ref))
   }
 }

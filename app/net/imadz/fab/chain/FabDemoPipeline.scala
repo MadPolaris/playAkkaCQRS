@@ -1,7 +1,6 @@
 package net.imadz.fab.chain
 
 import net.imadz.application.aggregates.LotProtocol.{LotCommand, LotConfirmation, SealLot}
-import net.imadz.application.aggregates.WaferProtocol._
 import net.imadz.application.aggregates.LotProtocol.LotCommand
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
@@ -11,6 +10,7 @@ import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, Wafe
 import net.imadz.fab.protocol._
 import net.imadz.fab.scenario.{DecisionConfig, FabSimulationScenario}
 
+import akka.util.Timeout
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -39,7 +39,9 @@ object FabDemoPipeline {
       s7  <- PipelineStages.measure(s6, ctx, ctx.scenario.cdSem.equipmentId)
       s8  <- classify(s7, ctx)
       s9  <- maybeRework(s8, ctx)
-      s10 <- PipelineStages.transport(s9, ctx, "CDSEM", "STOCKER")
+      s9b <- handleScrap(s9, ctx)
+      _   <- validateNoFailWafers(s9b)
+      s10 <- PipelineStages.transport(s9b, ctx, "CDSEM", "STOCKER")
       s11 <- PipelineStages.sealComplete(s10, ctx)
     } yield s11
   }
@@ -71,38 +73,38 @@ object FabDemoPipeline {
       if (info.reworkCount > 0) {
         updatedWafers += wid -> info.copy(classification = Some("PASS"))
         passWafers :+= wid
-        ctx.lotRef ! RecordWaferMeasured(wid, cdValue, ctx.ignoreLotReply)
-        ctx.lotRef ! RecordWaferClassified(wid, "PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
+        ctx.lotRef ! RecordWaferMeasured(ctx.waferUUIDs(wid), cdValue, ctx.ignoreLotReply)
+        ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
         ctx.publisher(MeasurementResultEvent(wid, cdValue, "PASS", decisionConfig.upperSpecNm))
         ctx.publisher(DecisionMade(wid, "Rework → PASS", None))
       } else {
         val cls = PipelineStages.classifyCd(cdValue, decisionConfig)
-        ctx.lotRef ! RecordWaferMeasured(wid, cdValue, ctx.ignoreLotReply)
+        ctx.lotRef ! RecordWaferMeasured(ctx.waferUUIDs(wid), cdValue, ctx.ignoreLotReply)
         ctx.publisher(MeasurementResultEvent(wid, cdValue, cls, decisionConfig.upperSpecNm))
         cls match {
           case "PASS" =>
             updatedWafers += wid -> info.copy(classification = Some("PASS"))
             passWafers :+= wid
-            ctx.lotRef ! RecordWaferClassified(wid, "PASS", 0, cdValue, ctx.ignoreLotReply)
+            ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", 0, cdValue, ctx.ignoreLotReply)
             ctx.publisher(DecisionMade(wid, "PASS → Continue", None))
           case "BORDERLINE" =>
             if (info.reworkCount == 0) {
               updatedWafers += wid -> info.copy(classification = Some("PASS"))
               passWafers :+= wid
-              ctx.lotRef ! RecordWaferClassified(wid, "PASS", 0, cdValue, ctx.ignoreLotReply)
+              ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", 0, cdValue, ctx.ignoreLotReply)
               ctx.publisher(DecisionMade(wid, "BORDERLINE → Conditional Pass", None))
             } else {
               val nc = info.reworkCount + 1
               if (nc >= maxRework) {
                 updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("SCRAP"))
                 scrapWafers :+= wid
-                ctx.lotRef ! RecordWaferClassified(wid, "SCRAP", nc, cdValue, ctx.ignoreLotReply)
+                ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"SCRAP", nc, cdValue, ctx.ignoreLotReply)
                 ctx.publisher(DecisionMade(wid, s"BORDERLINE → Max Rework($nc) → SCRAP", None))
                 ctx.publisher(ScrapEvent(wid, s"Max rework($nc) exceeded"))
               } else {
                 updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("FAIL"))
                 reworkWafers :+= wid
-                ctx.lotRef ! RecordWaferClassified(wid, "FAIL", nc, cdValue, ctx.ignoreLotReply)
+                ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"FAIL", nc, cdValue, ctx.ignoreLotReply)
                 ctx.publisher(DecisionMade(wid, s"BORDERLINE → Rework (attempt $nc/$maxRework)", None))
               }
             }
@@ -111,28 +113,25 @@ object FabDemoPipeline {
             if (nc >= maxRework) {
               updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("SCRAP"))
               scrapWafers :+= wid
-              ctx.lotRef ! RecordWaferClassified(wid, "SCRAP", nc, cdValue, ctx.ignoreLotReply)
+              ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"SCRAP", nc, cdValue, ctx.ignoreLotReply)
               ctx.publisher(DecisionMade(wid, s"FAIL → Max Rework($nc) → SCRAP", None))
               ctx.publisher(ScrapEvent(wid, s"Max rework($nc) exceeded"))
             } else {
               updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("FAIL"))
               reworkWafers :+= wid
-              ctx.lotRef ! RecordWaferClassified(wid, "FAIL", nc, cdValue, ctx.ignoreLotReply)
+              ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"FAIL", nc, cdValue, ctx.ignoreLotReply)
               ctx.publisher(DecisionMade(wid, s"FAIL → Rework (attempt $nc/$maxRework)", None))
             }
           case "SCRAP" =>
             updatedWafers += wid -> info.copy(classification = Some("SCRAP"))
             scrapWafers :+= wid
-            ctx.lotRef ! RecordWaferClassified(wid, "SCRAP", 0, cdValue, ctx.ignoreLotReply)
+            ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"SCRAP", 0, cdValue, ctx.ignoreLotReply)
             ctx.publisher(DecisionMade(wid, "SCRAP → Terminate", None))
             ctx.publisher(ScrapEvent(wid, s"CD=$cdValue nm → SCRAP"))
         }
       }
     }
 
-    scrapWafers.foreach { wid =>
-      ctx.waferRefs.get(wid).foreach(ref => ref ! ScrapWafer("CD measurement out of spec", ctx.ignoreWaferReply))
-    }
 
     val totalPass = updatedWafers.values.count(_.classification.contains("PASS"))
     val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
@@ -165,18 +164,28 @@ object FabDemoPipeline {
       val newIter = state.iteration + 1
       val reworkState = state.copy(iteration = newIter)
       implicit val ec: ExecutionContext = ctx.ec
+      val reworkCtx = ctx.copy(lotRef = ctx.reworkLotRef)
       for {
         s1 <- sagaSplit(reworkState, ctx)
-        s2 <- PipelineStages.transport(s1, ctx, "CDSEM", "LITHO")
-        s3 <- PipelineStages.atEquipment(s2, ctx, "LITHO", ctx.scenario.litho.equipmentId)
-        s4 <- lithoProcess(s3, ctx)
-        s5 <- PipelineStages.transport(s4, ctx, "LITHO", "CDSEM")
-        s6 <- PipelineStages.atEquipment(s5, ctx, "CDSEM", ctx.scenario.cdSem.equipmentId)
-        s7 <- PipelineStages.measure(s6, ctx, ctx.scenario.cdSem.equipmentId)
-        s8 <- classify(s7, ctx)
+        s2 <- PipelineStages.transport(s1, reworkCtx, "CDSEM", "LITHO")
+        s3 <- PipelineStages.atEquipment(s2, reworkCtx, "LITHO", ctx.scenario.litho.equipmentId)
+        s4 <- lithoProcess(s3, reworkCtx)
+        s5 <- PipelineStages.transport(s4, reworkCtx, "LITHO", "CDSEM")
+        s6 <- PipelineStages.atEquipment(s5, reworkCtx, "CDSEM", ctx.scenario.cdSem.equipmentId)
+        s7 <- PipelineStages.measure(s6, reworkCtx, ctx.scenario.cdSem.equipmentId)
+        s8 <- classify(s7, reworkCtx)
         s9 <- sagaMerge(s8, ctx)
       } yield s9
     }
+  }
+
+  private def validateNoFailWafers(state: FabDemoState): Future[Unit] = {
+    val failWafers = state.wafers.collect { case (wid, w) if w.classification.contains("FAIL") => wid }.toSeq
+    if (failWafers.nonEmpty)
+      Future.failed(new IllegalStateException(
+        s"Pipeline halted: ${failWafers.size} unresolved FAIL wafers: ${failWafers.mkString(",")}"))
+    else
+      Future.successful(())
   }
 
   // ====================================================================
@@ -195,7 +204,7 @@ object FabDemoPipeline {
     ctx.publisher(FoupStateChanged(ctx.foupId, "SPLITTING", PipelineStages.activeCount(state), reworkWaferIds.size, "CDSEM",
       lotId = ctx.scenario.scenarioId, reworkLotId = s"${ctx.scenario.scenarioId}-RWK"))
 
-    ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs).map { confirmation =>
+    ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet).map { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
           ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
@@ -217,31 +226,90 @@ object FabDemoPipeline {
   }
 
   private def sagaMerge(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
+    implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, "PhaseMerge: Saga MergeLot (TCC)", ctx)
     ctx.publisher(GlobalStatusChanged("MERGING", "Saga TCC merge — wafers → source lot", "PhaseMerge"))
 
-    val reworkWaferIds = state.wafers.filter { case (_, w) => w.classification.contains("FAIL") }.keys.toSeq
-    val mergeWaferUUIDs: Set[Id] = reworkWaferIds.flatMap(ctx.waferUUIDs.get).toSet
+    ctx.reworkLotRef.ask[LotConfirmation](ref => GetLotState(ref)).flatMap { reworkState =>
+      val passWaferIds = reworkState.waferClassifications.collect {
+        case (wid, cls) if cls == "PASS" => wid
+      }.toSeq
 
-    val sagaId = s"SAGA-MERGE-${state.iteration}"
-    ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE",
-      s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, reworkWaferIds))
+      if (passWaferIds.isEmpty) {
+        ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeSkipped",
+          "No PASS wafers in rework lot to merge", Seq.empty))
+        Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+      } else {
+        val mergeWaferUUIDs: Set[Id] = passWaferIds.flatMap(ctx.waferUUIDs.get).toSet
 
-    ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, mergeWaferUUIDs).map { confirmation =>
+        val sagaId = s"SAGA-MERGE-${state.iteration}"
+        ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE",
+          s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferIds))
+
+        ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, mergeWaferUUIDs, passWaferIds.toSet).map { confirmation =>
+          if (confirmation.error.isEmpty) {
+            ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED",
+              s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferIds))
+            ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeCompleted",
+              s"TCC Merge: ${passWaferIds.mkString(",")} → Source Lot", passWaferIds))
+            passWaferIds.foreach { wid =>
+              state.wafers.get(wid).foreach { info =>
+                val cdValue = info.cdValueHistory.lastOption.getOrElse(0.0)
+                ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
+              }
+            }
+            val passSet = passWaferIds.toSet
+            val mergedWafers = state.wafers.map { case (wid, info) =>
+              if (passSet.contains(wid)) wid -> info.copy(classification = Some("PASS"), subLot = None)
+              else wid -> info
+            }
+            val finalState = s.copy(wafers = mergedWafers, ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = None, childLotView = Map("rwk" -> ("Merged", 0)))
+            ctx.publisher(PipelineStages.buildAggregateState(mergedWafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
+            finalState
+          } else {
+            ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
+            s.copy(ledgerSeq = s.ledgerSeq + 1)
+          }
+        }(ctx.ec)
+      }
+    }(ctx.ec)
+  }
+
+  // ====================================================================
+  // Scrap handling
+  // ====================================================================
+  private def handleScrap(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
+    val scrapWafers = state.wafers.filter { case (_, w) => w.classification.contains("SCRAP") }.keys.toSeq
+    if (scrapWafers.isEmpty || ctx.scrapLotId.isEmpty) Future.successful(state)
+    else sagaScrap(state, ctx, scrapWafers)
+  }
+
+  private def sagaScrap(state: FabDemoState, ctx: FabDemoContext, scrapWaferIds: Seq[String]): Future[FabDemoState] = {
+    val s = PipelineStages.emitLedger(state, "PhaseScrap: Saga Scrap (TCC)", ctx)
+    ctx.publisher(GlobalStatusChanged("SCRAPPING", "Saga TCC — scrap wafers", "PhaseScrap"))
+
+    val scrapLotId = ctx.scrapLotId.get
+    val scrapWaferUUIDs: Set[Id] = scrapWaferIds.flatMap(ctx.waferUUIDs.get).toSet
+
+    val scrapLotIdStr = scrapLotId.toString
+    ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "PREPARE",
+      ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
+
+    ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet).map { confirmation =>
       if (confirmation.error.isEmpty) {
-        ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED",
-          s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, reworkWaferIds))
-        ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeCompleted",
-          s"TCC Merge: ${reworkWaferIds.mkString(",")} → Source Lot", reworkWaferIds))
-        val mergedWafers = state.wafers.map { case (wid, info) =>
-          if (info.classification.contains("FAIL")) wid -> info.copy(classification = Some("PASS"), subLot = None)
-          else wid -> info
-        }
-        val finalState = s.copy(wafers = mergedWafers, ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = None, childLotView = Map("rwk" -> ("Merged", 0)))
-        ctx.publisher(PipelineStages.buildAggregateState(mergedWafers, ctx, state.passCount, state.scrapCount, sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
+        ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "COMMITTED",
+          ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
+        ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "ScrapCompleted",
+          s"TCC Scrap: ${scrapWaferIds.mkString(",")} → Scrap Lot", scrapWaferIds))
+        val scrapSet = scrapWaferIds.toSet
+        val remainingWafers = state.wafers.filterKeys(wid => !scrapSet.contains(wid)).toMap
+        val finalState = s.copy(wafers = remainingWafers, ledgerSeq = s.ledgerSeq + 1,
+          childLotView = state.childLotView + ("scrap" -> ("Scrapped", scrapWaferIds.size)))
+        ctx.publisher(PipelineStages.buildAggregateState(remainingWafers, ctx, state.passCount, state.scrapCount,
+          sourceLotArea = state.currentArea, childLotView = finalState.childLotView))
         finalState
       } else {
-        ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
+        ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
         s.copy(ledgerSeq = s.ledgerSeq + 1)
       }
     }(ctx.ec)

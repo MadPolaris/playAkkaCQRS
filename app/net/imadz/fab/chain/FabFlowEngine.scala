@@ -1,7 +1,6 @@
 package net.imadz.fab.chain
 
 import net.imadz.application.aggregates.LotProtocol.{LotConfirmation, SealLot}
-import net.imadz.application.aggregates.WaferProtocol.{ScrapWafer, WaferConfirmation}
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
@@ -185,28 +184,27 @@ object FabFlowEngine {
         val cdValue = info.cdValueHistory.lastOption.getOrElse(32.0)
         val disposition = DynamicFlowAssembler.classifyWafer(cdValue, spec, info.reworkCount)
 
-        ctx.lotRef ! RecordWaferMeasured(wid, cdValue, ctx.ignoreLotReply)
+        ctx.lotRef ! RecordWaferMeasured(ctx.waferUUIDs(wid), cdValue, ctx.ignoreLotReply)
         ctx.publisher(MeasurementResultEvent(wid, cdValue,
           disposition.getClass.getSimpleName.replace("Disposition", "").toUpperCase, spec.upperSpecNm))
 
         disposition match {
           case PassDisposition(_) =>
             updatedWafers += wid -> info.copy(classification = Some("PASS"))
-            ctx.lotRef ! RecordWaferClassified(wid, "PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
+            ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
             ctx.publisher(DecisionMade(wid, "PASS → Continue", None))
             dispositions += wid -> disposition
           case d: ReworkDisposition =>
             updatedWafers += wid -> info.copy(reworkCount = d.attempt, classification = Some("FAIL"))
-            ctx.lotRef ! RecordWaferClassified(wid, "FAIL", d.attempt, cdValue, ctx.ignoreLotReply)
+            ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"FAIL", d.attempt, cdValue, ctx.ignoreLotReply)
             ctx.publisher(DecisionMade(wid, s"FAIL → Split for Rework (attempt ${d.attempt}/${d.maxRetries})", None))
             dispositions += wid -> d
           case d: ScrapDisposition =>
             updatedWafers += wid -> info.copy(classification = Some("SCRAP"))
-            ctx.lotRef ! RecordWaferClassified(wid, "SCRAP", info.reworkCount, cdValue, ctx.ignoreLotReply)
+            ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"SCRAP", info.reworkCount, cdValue, ctx.ignoreLotReply)
             ctx.publisher(DecisionMade(wid, s"SCRAP: ${d.reason}", None))
             ctx.publisher(ScrapEvent(wid, d.reason))
             dispositions += wid -> d
-            ctx.waferRefs.get(wid).foreach(ref => ref ! ScrapWafer(d.reason, ctx.ignoreWaferReply))
           case _ => dispositions += wid -> disposition
         }
     }
@@ -254,7 +252,7 @@ object FabFlowEngine {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE",
           ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
 
-        ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs).map { confirmation =>
+        ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet).map { confirmation =>
           if (confirmation.error.isEmpty) {
             ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
               ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))

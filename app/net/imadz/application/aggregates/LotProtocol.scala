@@ -12,12 +12,12 @@ object LotProtocol {
   sealed trait LotCommand extends CborSerializable
 
   // Lifecycle
-  case class CreateLot(productId: String, waferIds: Set[Id], replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  case class CreateLot(productId: String, waferNames: Map[Id, String], replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class GetLotState(replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class SealLot(replyTo: ActorRef[LotConfirmation]) extends LotCommand
 
   // Source lot (outgoing wafer reservation — for Saga)
-  case class ReserveWaferRemoval(transferId: Id, waferIds: Set[Id], replyTo: ActorRef[WaferRemovalConfirmation]) extends LotCommand
+  case class ReserveWaferRemoval(transferId: Id, waferIds: Set[Id], waferNames: Set[String], replyTo: ActorRef[WaferRemovalConfirmation]) extends LotCommand
   case class CommitWaferRemoval(transferId: Id, replyTo: ActorRef[WaferRemovalConfirmation]) extends LotCommand
   case class ReleaseReservedWafer(transferId: Id, replyTo: ActorRef[WaferRemovalConfirmation]) extends LotCommand
 
@@ -32,8 +32,8 @@ object LotProtocol {
   case class RecordTransportCompleted(foupId: String, equipmentId: String, replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordEquipmentJobStarted(equipmentId: String, recipeId: String, replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordEquipmentJobCompleted(equipmentId: String, jobId: String, success: Boolean, replyTo: ActorRef[LotConfirmation]) extends LotCommand
-  case class RecordWaferMeasured(waferId: String, cdNm: Double, replyTo: ActorRef[LotConfirmation]) extends LotCommand
-  case class RecordWaferClassified(waferId: String, classification: String, reworkCount: Int, cdValue: Double, replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  case class RecordWaferMeasured(waferId: Id, cdNm: Double, replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  case class RecordWaferClassified(waferId: Id, classification: String, reworkCount: Int, cdValue: Double, replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWafersSplitForRework(reworkWaferIds: Set[String], scrapWaferIds: Set[String], iteration: Int, replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWafersReworked(waferIds: Set[String], replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWafersSentAsPilot(waferIds: Set[String], replyTo: ActorRef[LotConfirmation]) extends LotCommand

@@ -6,7 +6,7 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, RetentionCriteria}
 import akka.util.Timeout
 import net.imadz.application.services.transactor.FabSagaProtocol._
-import net.imadz.application.services.transactor.{FabSagaTransactor, FabTransactionContext, SourceLotParticipant, TargetLotParticipant, WaferTransferParticipant}
+import net.imadz.application.services.transactor.{FabSagaTransactor, FabTransactionContext, SourceLotParticipant, TargetLotParticipant}
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.entities.FabSagaTransactionEntity._
@@ -67,7 +67,7 @@ object FabSagaTransactorBehaviors {
 
     val event = TransactionInitiated(cmd.sourceLotId, cmd.targetLotId, cmd.waferIds, System.currentTimeMillis())
     Effect.persist(event).thenRun { _ =>
-      val steps = createTransferSteps(cmd.sourceLotId, cmd.targetLotId, cmd.waferIds)
+      val steps = createTransferSteps(cmd.sourceLotId, cmd.targetLotId, cmd.waferIds, cmd.waferNames)
       val transactionId = state.id.getOrElse(id)
       implicit val timeout: Timeout = 30.seconds
 
@@ -95,7 +95,7 @@ object FabSagaTransactorBehaviors {
 
     val event = TransactionInitiated(cmd.sourceLotId, cmd.targetLotId, cmd.waferIds, System.currentTimeMillis())
     Effect.persist(event).thenRun { _ =>
-      val steps = createTransferSteps(cmd.sourceLotId, cmd.targetLotId, cmd.waferIds)
+      val steps = createTransferSteps(cmd.sourceLotId, cmd.targetLotId, cmd.waferIds, cmd.waferNames)
       val transactionId = state.id.getOrElse(id)
       implicit val timeout: Timeout = 30.seconds
 
@@ -205,38 +205,29 @@ object FabSagaTransactorBehaviors {
 
   // --- Step Generation (TCC Pattern) ---
   def createTransferSteps(
-    sourceLotId: Id, targetLotId: Id, waferIds: Set[Id]
+    sourceLotId: Id, targetLotId: Id, waferIds: Set[Id], waferNames: Set[String] = Set.empty
   )(implicit ec: ExecutionContext): List[SagaTransactionStep[iMadzError, String, FabTransactionContext]] = {
 
-    val sourcePart = SourceLotParticipant(sourceLotId, waferIds)
+    val sourcePart = SourceLotParticipant(sourceLotId, waferIds, waferNames)
     val targetPart = TargetLotParticipant(targetLotId, waferIds)
 
-    // Prepare phase: source reserve (group 1) -> target reserve (group 1) -> wafer reserves (group 2, parallel)
+    // Prepare phase: source reserve + target reserve (group 1, sequential)
     val prepareSteps = List(
       SagaTransactionStep("reserve-source-lot", PreparePhase, sourcePart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 1),
       SagaTransactionStep("reserve-target-lot", PreparePhase, targetPart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 1)
-    ) ++ waferIds.zipWithIndex.map { case (wid, i) =>
-      val waferPart = WaferTransferParticipant(wid, targetLotId)
-      SagaTransactionStep(s"reserve-wafer-$i", PreparePhase, waferPart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 2)
-    }
+    )
 
-    // Commit phase: wafer commits (group 2, parallel) -> source commit -> target commit
-    val commitSteps = waferIds.zipWithIndex.map { case (wid, i) =>
-      val waferPart = WaferTransferParticipant(wid, targetLotId)
-      SagaTransactionStep(s"commit-wafer-$i", CommitPhase, waferPart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 2)
-    } ++ List(
+    // Commit phase: source commit + target commit (group 1, sequential)
+    val commitSteps = List(
       SagaTransactionStep("commit-source-lot", CommitPhase, sourcePart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 1),
       SagaTransactionStep("commit-target-lot", CommitPhase, targetPart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 1)
     )
 
-    // Compensate phase: reverse order — target cancel -> source release -> wafer releases (parallel)
+    // Compensate phase: reverse order — target cancel + source release (group 1, sequential)
     val compensateSteps = List(
       SagaTransactionStep("cancel-target-lot", CompensatePhase, targetPart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 1),
       SagaTransactionStep("release-source-lot", CompensatePhase, sourcePart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 1)
-    ) ++ waferIds.zipWithIndex.map { case (wid, i) =>
-      val waferPart = WaferTransferParticipant(wid, targetLotId)
-      SagaTransactionStep(s"release-wafer-$i", CompensatePhase, waferPart, maxRetries = 5, timeoutDuration = 30.seconds, retryWhenRecoveredOngoing = true, stepGroup = 2)
-    }
+    )
 
     prepareSteps ++ commitSteps ++ compensateSteps
   }

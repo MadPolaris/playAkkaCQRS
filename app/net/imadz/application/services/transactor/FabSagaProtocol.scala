@@ -15,6 +15,7 @@ object FabSagaProtocol {
     sourceLotId: Id,
     targetLotId: Id,
     waferIds: Set[Id],
+    waferNames: Set[String] = Set.empty,
     replyTo: ActorRef[FabSagaConfirmation]
   ) extends FabSagaCommand
 
@@ -22,6 +23,7 @@ object FabSagaProtocol {
     sourceLotId: Id,
     targetLotId: Id,
     waferIds: Set[Id],
+    waferNames: Set[String] = Set.empty,
     replyTo: ActorRef[FabSagaConfirmation]
   ) extends FabSagaCommand
 
@@ -29,6 +31,7 @@ object FabSagaProtocol {
     sourceLotIds: List[Id],
     targetLotId: Id,
     waferIds: Set[Id],
+    waferNames: Set[String] = Set.empty,
     replyTo: ActorRef[FabSagaConfirmation]
   ) extends FabSagaCommand
 

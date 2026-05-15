@@ -1,7 +1,6 @@
 package net.imadz.fab.chain
 
 import net.imadz.application.aggregates.LotProtocol.{LotCommand, LotConfirmation, SealLot}
-import net.imadz.application.aggregates.WaferProtocol.{ScrapWafer, WaferCommand, WaferConfirmation}
 import net.imadz.application.aggregates.LotProtocol.LotCommand
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
@@ -140,6 +139,7 @@ object PipelineStages {
   def sealComplete(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = emitLedger(state, "PhaseComplete: Lot sealed", ctx)
     ctx.publisher(GlobalStatusChanged("COMPLETED", "Demo completed", "PhaseComplete"))
+    ctx.lotRef ! RecordTransportCompleted(ctx.foupId, ctx.scenario.stocker.equipmentId, ctx.ignoreLotReply)
     ctx.lotRef ! SealLot(ctx.ignoreLotReply)
     val totalRework = state.wafers.values.count(_.reworkCount > 0)
     ctx.lotRef ! CompleteProcess(ctx.scenario.scenarioId, state.passCount, state.scrapCount, totalRework, ctx.ignoreLotReply)

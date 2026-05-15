@@ -190,18 +190,14 @@ class FabDemoController @Inject()(
             "measuredWafers" -> rl.measuredWafers.toSeq
           )
         },
-        "wafers" -> state.wafers.map { case (wid, wc) =>
-          val widStr: String = wc.waferId.getOrElse(wid)
-          val statusStr: String = wc.status.map(_.toString).getOrElse("Unknown")
-          val wLotIdStr: String = wc.lotId.map(_.toString).getOrElse("")
+        "wafers" -> l.waferIds.map { wid =>
+          val widStr = wid.toString
+          val classification = l.waferClassifications.getOrElse(widStr, "Pending")
           Json.obj(
             "waferId" -> widStr,
-            "status" -> statusStr,
-            "lotId" -> wLotIdStr,
-            "reservedTransfer" -> wc.reservedTransfer.map { case (tid, tgt) =>
-              Json.obj("transferId" -> tid.toString, "targetLotId" -> tgt.toString)
-            },
-            "completedTransferIds" -> wc.completedTransferIds.map(_.toString)
+            "status" -> (if (classification == "SCRAP") "Scrapped" else "Active"),
+            "lotId" -> lotIdStr,
+            "classification" -> classification
           )
         }
       ))

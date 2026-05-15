@@ -6,27 +6,51 @@ import net.imadz.common.CborSerializable
 object LotEntity {
 
   // @formatter:off
-  // State
+  // --- Wafer status (from deleted WaferEntity, now in-process within Lot) ---
+  sealed trait WaferStatus extends CborSerializable
+  case object WaferActive extends WaferStatus
+  case object WaferOnHold extends WaferStatus
+  case object WaferScrapped extends WaferStatus
+  case object WaferSkipped extends WaferStatus
+
+  // --- Wafer intrinsic state (single source of truth) ---
+  case class WaferState(
+    name: String,
+    status: WaferStatus = WaferActive,
+    classification: Option[String] = None, // PASS/FAIL — None before first classify
+    reworkCount: Int = 0,
+    cdValue: Option[Double] = None,       // latest CD measurement
+    measured: Boolean = false
+  ) {
+    def isScrapped: Boolean = status == WaferScrapped
+    def isActive: Boolean = status == WaferActive
+  }
+
+  // --- Lot aggregate state ---
   case class LotState(
     lotId: Id,
     productId: String,
-    waferIds: Set[Id],                  // currently owned wafers
-    reservedWafers: Map[Id, Set[Id]],   // outgoing: transferId -> waferIds being removed
-    incomingWafers: Map[Id, Set[Id]],   // incoming: transferId -> waferIds being added
-    phase: LotPhase,
-    completedTransferIds: Set[Id] = Set.empty, // committed transfer ids for idempotency
-    // Process execution tracking
-    currentStepIndex: Int = 0,
-    areaVisitHistory: List[String] = Nil,
-    routingStepReentry: Map[String, Int] = Map.empty,
-    // Idempotency guards for equipment reports
-    loadedFoupId: Option[String] = None,
-    completedJobs: Set[String] = Set.empty,
-    measuredWafers: Set[String] = Set.empty,
-    waferClassifications: Map[String, WaferClassResult] = Map.empty
-  )
+    wafers: Map[Id, WaferState] = Map.empty, // UUID → wafer — single source for all wafer attributes
+    // Saga TCC reservation state (distributed transaction bookkeeping, not wafer attributes)
+    reservedWafers: Map[Id, Set[Id]] = Map.empty,
+    reservedWaferNames: Map[Id, Set[String]] = Map.empty,
+    incomingWafers: Map[Id, Set[Id]] = Map.empty,
+    phase: LotPhase = Empty,
+    completedTransferIds: Set[Id] = Set.empty,
+    loadedFoupId: Option[String] = None
+  ) {
+    // --- Derived views (computed on-demand, no cache) ---
+    def waferIds: Set[Id] = wafers.keySet
+    def measuredWafers: Set[String] = wafers.collect { case (_, ws) if ws.measured => ws.name }.toSet
+    def waferClassifications: Map[String, WaferClassResult] =
+      wafers.collect { case (_, ws) if ws.classification.isDefined =>
+        ws.name -> WaferClassResult(ws.classification.get, ws.cdValue.getOrElse(0.0), ws.reworkCount)
+      }
+    def waferNameById(id: Id): Option[String] = wafers.get(id).map(_.name)
+    def waferIdByName(name: String): Option[Id] = wafers.collectFirst { case (id, ws) if ws.name == name => id }
+  }
 
-  def empty(lotId: Id): LotState = LotState(lotId, "", Set.empty, Map.empty, Map.empty, Empty)
+  def empty(lotId: Id): LotState = LotState(lotId = lotId, productId = "")
 
   case class WaferClassResult(
     classification: String,
@@ -43,9 +67,9 @@ object LotEntity {
 
   // Event
   sealed trait LotEvent extends CborSerializable
-  case class LotCreated(productId: String, waferIds: Set[Id]) extends LotEvent
-  case class WaferRemovalReserved(transferId: Id, waferIds: Set[Id]) extends LotEvent
-  case class WaferRemovalCommitted(transferId: Id) extends LotEvent
+  case class LotCreated(productId: String, waferNames: Map[Id, String]) extends LotEvent
+  case class WaferRemovalReserved(transferId: Id, waferIds: Set[Id], waferNames: Set[String]) extends LotEvent
+  case class WaferRemovalCommitted(transferId: Id, waferNames: Set[String]) extends LotEvent
   case class WaferRemovalReleased(transferId: Id) extends LotEvent
   case class WaferAdditionReserved(transferId: Id, waferIds: Set[Id]) extends LotEvent
   case class WaferAdditionCommitted(transferId: Id) extends LotEvent
@@ -59,8 +83,8 @@ object LotEntity {
   case class TransportCompleted(foupId: String, equipmentId: String) extends LotEvent
   case class EquipmentJobStarted(equipmentId: String, recipeId: String) extends LotEvent
   case class EquipmentJobCompleted(equipmentId: String, jobId: String, success: Boolean) extends LotEvent
-  case class WaferMeasured(waferId: String, cdNm: Double) extends LotEvent
-  case class WaferClassified(waferId: String, classification: String, reworkCount: Int, cdValue: Double) extends LotEvent
+  case class WaferMeasured(waferId: Id, cdNm: Double) extends LotEvent
+  case class WaferClassified(waferId: Id, classification: String, reworkCount: Int, cdValue: Double) extends LotEvent
   case class WafersSplitForRework(reworkWaferIds: Set[String], scrapWaferIds: Set[String], iteration: Int) extends LotEvent
   case class WafersReworked(waferIds: Set[String]) extends LotEvent
   case class WafersSentAsPilot(waferIds: Set[String]) extends LotEvent

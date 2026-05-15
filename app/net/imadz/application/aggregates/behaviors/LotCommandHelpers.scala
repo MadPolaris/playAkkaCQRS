@@ -7,10 +7,10 @@ import net.imadz.domain.entities.LotEntity._
 
 trait LotCommandHelpers {
 
-  implicit object CreateLotHelper extends CommandHelper[CreateLot, LotState, (String, Set[Id]), LotConfirmation] {
-    override def toParam(state: LotState, command: CreateLot): (String, Set[Id]) = (command.productId, command.waferIds)
-    override def createFailureReply(param: (String, Set[Id]))(error: iMadzError): LotConfirmation = LotConfirmation(Some(error))
-    override def createSuccessReply(param: (String, Set[Id]))(state: LotState): LotConfirmation = LotConfirmation(None, state.waferIds, Some(state.phase))
+  implicit object CreateLotHelper extends CommandHelper[CreateLot, LotState, (String, Map[Id, String]), LotConfirmation] {
+    override def toParam(state: LotState, command: CreateLot): (String, Map[Id, String]) = (command.productId, command.waferNames)
+    override def createFailureReply(param: (String, Map[Id, String]))(error: iMadzError): LotConfirmation = LotConfirmation(Some(error))
+    override def createSuccessReply(param: (String, Map[Id, String]))(state: LotState): LotConfirmation = LotConfirmation(None, state.waferIds, Some(state.phase))
   }
 
   implicit object SealLotHelper extends CommandHelper[SealLot, LotState, Unit, LotConfirmation] {
@@ -19,10 +19,10 @@ trait LotCommandHelpers {
     override def createSuccessReply(param: Unit)(state: LotState): LotConfirmation = LotConfirmation(None, state.waferIds, Some(state.phase))
   }
 
-  implicit object ReserveWaferRemovalHelper extends CommandHelper[ReserveWaferRemoval, LotState, (Id, Set[Id]), WaferRemovalConfirmation] {
-    override def toParam(state: LotState, command: ReserveWaferRemoval): (Id, Set[Id]) = (command.transferId, command.waferIds)
-    override def createFailureReply(param: (Id, Set[Id]))(error: iMadzError): WaferRemovalConfirmation = WaferRemovalConfirmation(param._1, Some(error))
-    override def createSuccessReply(param: (Id, Set[Id]))(state: LotState): WaferRemovalConfirmation = WaferRemovalConfirmation(param._1, None)
+  implicit object ReserveWaferRemovalHelper extends CommandHelper[ReserveWaferRemoval, LotState, (Id, Set[Id], Set[String]), WaferRemovalConfirmation] {
+    override def toParam(state: LotState, command: ReserveWaferRemoval): (Id, Set[Id], Set[String]) = (command.transferId, command.waferIds, command.waferNames)
+    override def createFailureReply(param: (Id, Set[Id], Set[String]))(error: iMadzError): WaferRemovalConfirmation = WaferRemovalConfirmation(param._1, Some(error))
+    override def createSuccessReply(param: (Id, Set[Id], Set[String]))(state: LotState): WaferRemovalConfirmation = WaferRemovalConfirmation(param._1, None)
   }
 
   implicit object CommitWaferRemovalHelper extends CommandHelper[CommitWaferRemoval, LotState, Id, WaferRemovalConfirmation] {

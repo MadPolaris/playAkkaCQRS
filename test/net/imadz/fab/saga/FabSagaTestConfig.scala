@@ -7,14 +7,11 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
 import com.typesafe.config.ConfigFactory
 import net.imadz.application.aggregates.LotProtocol.LotCommand
-import net.imadz.application.aggregates.WaferProtocol.WaferCommand
-import net.imadz.application.aggregates.{LotAggregate, WaferAggregate}
+import net.imadz.application.aggregates.LotAggregate
 import net.imadz.common.CommonTypes.Id
 import net.imadz.domain.entities.LotEntity
 import net.imadz.domain.entities.LotEntity.{LotEvent, LotState}
-import net.imadz.domain.entities.WaferEntity
-import net.imadz.domain.entities.WaferEntity.{WaferEvent, WaferState}
-import net.imadz.domain.entities.behaviors.{LotEventHandler, WaferEventHandler}
+import net.imadz.domain.entities.behaviors.LotEventHandler
 
 import java.util.UUID
 
@@ -59,20 +56,5 @@ object FabSagaTestConfig {
     EventSourcedBehaviorTestKit[LotCommand, LotEvent, LotState](system, behavior)
   }
 
-  /** Create an EventSourcedBehaviorTestKit for a Wafer aggregate */
-  def createWaferTestKit(waferId: Id)(implicit system: ActorSystem[_]): EventSourcedBehaviorTestKit[WaferCommand, WaferEvent, WaferState] = {
-    val behavior: Behavior[WaferCommand] = Behaviors.setup[WaferCommand] { ctx =>
-      EventSourcedBehavior(
-        persistenceId = PersistenceId("Wafer", waferId.toString),
-        emptyState = WaferEntity.empty(waferId),
-        commandHandler = WaferAggregate.commandHandler(ctx),
-        eventHandler = WaferEventHandler.apply
-      )
-    }
-    EventSourcedBehaviorTestKit[WaferCommand, WaferEvent, WaferState](system, behavior)
-  }
-
-  /** Generate deterministic wafer IDs for test scenarios */
-  def waferId(i: Int): Id = UUID.nameUUIDFromBytes(s"test-wafer-$i".getBytes)
   def lotId(name: String): Id = UUID.nameUUIDFromBytes(s"test-lot-$name".getBytes)
 }

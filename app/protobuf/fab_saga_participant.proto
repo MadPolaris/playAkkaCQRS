@@ -8,6 +8,7 @@ option java_multiple_files = true;
 message SourceLotParticipantPO {
   string source_lot_id = 1;
   repeated string wafer_ids = 2;
+  repeated string wafer_names = 3;
 }
 
 // Saga participant: reserves/commits/cancels wafers into the target lot
@@ -16,8 +17,3 @@ message TargetLotParticipantPO {
   repeated string wafer_ids = 2;
 }
 
-// Saga participant: reserves/commits/releases ownership transfer for a single wafer
-message WaferTransferParticipantPO {
-  string wafer_id = 1;
-  string target_lot_id = 2;
-}

@@ -5,23 +5,23 @@ import net.imadz.domain.entities.LotEntity._
 
 object LotInvariants {
 
-  implicit object CreateLotRule extends InvariantRule[LotEvent, LotState, (String, Set[Id])] {
-    def apply(state: LotState, param: (String, Set[Id])): Either[iMadzError, List[LotEvent]] = {
-      val (productId, waferIds) = param
+  implicit object CreateLotRule extends InvariantRule[LotEvent, LotState, (String, Map[Id, String])] {
+    def apply(state: LotState, param: (String, Map[Id, String])): Either[iMadzError, List[LotEvent]] = {
+      val (productId, waferNames) = param
       if (state.phase != Empty)
         Left(iMadzError("LOT_001", s"Lot ${state.lotId} already created, cannot create again"))
       else if (productId.isEmpty)
         Left(iMadzError("LOT_002", "Product ID must not be empty"))
-      else if (waferIds.size > 25)
-        Left(iMadzError("LOT_004", s"Lot cannot exceed FOUP capacity of 25 wafers, got ${waferIds.size}"))
+      else if (waferNames.size > 25)
+        Left(iMadzError("LOT_004", s"Lot cannot exceed FOUP capacity of 25 wafers, got ${waferNames.size}"))
       else
-        Right(List(LotCreated(productId, waferIds)))
+        Right(List(LotCreated(productId, waferNames)))
     }
   }
 
-  implicit object ReserveWaferRemovalRule extends InvariantRule[LotEvent, LotState, (Id, Set[Id])] {
-    def apply(state: LotState, param: (Id, Set[Id])): Either[iMadzError, List[LotEvent]] = {
-      val (transferId, waferIds) = param
+  implicit object ReserveWaferRemovalRule extends InvariantRule[LotEvent, LotState, (Id, Set[Id], Set[String])] {
+    def apply(state: LotState, param: (Id, Set[Id], Set[String])): Either[iMadzError, List[LotEvent]] = {
+      val (transferId, waferIds, waferNames) = param
 
       // Idempotency: if transferId already exists in reservedWafers
       if (state.reservedWafers.contains(transferId))
@@ -42,7 +42,7 @@ object LotInvariants {
       if (alreadyReserved.nonEmpty)
         return Left(iMadzError("LOT_012", s"Wafers $alreadyReserved already reserved for another transfer"))
 
-      Right(List(WaferRemovalReserved(transferId, waferIds)))
+      Right(List(WaferRemovalReserved(transferId, waferIds, waferNames)))
     }
   }
 
@@ -50,7 +50,7 @@ object LotInvariants {
     def apply(state: LotState, param: Id): Either[iMadzError, List[LotEvent]] = {
       val transferId = param
       if (state.reservedWafers.contains(transferId))
-        Right(List(WaferRemovalCommitted(transferId)))
+        Right(List(WaferRemovalCommitted(transferId, state.reservedWaferNames.getOrElse(transferId, Set.empty))))
       else if (state.completedTransferIds.contains(transferId))
         Right(Nil) // already committed — idempotent
       else

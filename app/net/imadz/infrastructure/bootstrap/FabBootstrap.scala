@@ -9,20 +9,18 @@ import akka.projection.ProjectionBehavior
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{EventSourcedBehavior, RetentionCriteria}
 import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
-import net.imadz.application.aggregates.WaferAggregate.WaferEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol.LotCommand
-import net.imadz.application.aggregates.WaferProtocol.WaferCommand
-import net.imadz.application.aggregates.{LotAggregate, WaferAggregate, WorkOrderAggregate, WorkOrderProtocol}
+import net.imadz.application.aggregates.{LotAggregate, WorkOrderAggregate, WorkOrderProtocol}
 import WorkOrderProtocol.WorkOrderCommand
-import net.imadz.application.projection.{FabLotProjection, FabSagaTransactionProjection, FabWaferProjection, WorkOrderProjection}
-import net.imadz.application.aggregates.repository.{LotRepository, WaferRepository}
+import net.imadz.application.projection.{FabLotProjection, FabSagaTransactionProjection, WorkOrderProjection}
+import net.imadz.application.aggregates.repository.LotRepository
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.{FabSagaProtocol, FabSagaTransactor, FabTransactionContext}
 import net.imadz.common.CommonTypes.Id
 import net.imadz.common.Id
 import net.imadz.common.serialization.SerializationExtension
-import net.imadz.domain.entities.{LotEntity, WaferEntity}
-import net.imadz.domain.entities.behaviors.{LotEventHandler, WaferEventHandler}
+import net.imadz.domain.entities.LotEntity
+import net.imadz.domain.entities.behaviors.LotEventHandler
 import net.imadz.infra.saga.SagaTransactionCoordinator
 import net.imadz.infrastructure.persistence._
 import net.imadz.infrastructure.persistence.strategies.FabSerializationStrategies
@@ -59,31 +57,6 @@ trait FabBootstrap {
           .snapshotAdapter(new LotSnapshotAdapter)
       })
 
-  // --- Wafer Aggregate ---
-  def initWaferAggregate(sharding: ClusterSharding): Unit = {
-    val behaviorFactory: EntityContext[WaferCommand] => Behavior[WaferCommand] = { context =>
-      val i = math.abs(context.entityId.hashCode % WaferAggregate.tags.size)
-      val selectedTag = WaferAggregate.tags(i)
-      applyWafer(Id.of(context.entityId), selectedTag)
-    }
-    sharding.init(Entity(WaferAggregate.WaferEntityTypeKey)(behaviorFactory))
-  }
-
-  private def applyWafer(waferId: Id, tag: String): Behavior[WaferCommand] =
-    Behaviors.logMessages(LogOptions().withLogger(LoggerFactory.getLogger("iMadz")).withLevel(Level.INFO),
-      Behaviors.setup { actorContext =>
-        EventSourcedBehavior(
-          persistenceId = PersistenceId(WaferEntityTypeKey.name, waferId.toString),
-          emptyState = WaferEntity.empty(waferId),
-          commandHandler = WaferAggregate.commandHandler(actorContext),
-          eventHandler = WaferEventHandler.apply
-        ).withTagger(_ => Set(tag))
-          .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100, keepNSnapshots = 3))
-          .onPersistFailure(SupervisorStrategy.restartWithBackoff(200.millis, 5.seconds, 0.1).withStashCapacity(100))
-          .eventAdapter(new WaferEventAdapter)
-          .snapshotAdapter(new WaferSnapshotAdapter)
-      })
-
   // --- Work Order Aggregate ---
   def initWorkOrderAggregate(sharding: ClusterSharding): Unit = {
     // WorkOrder.init is called from FabDemoService, which provides the pipelineStarter
@@ -94,13 +67,12 @@ trait FabBootstrap {
   def initFabSagaTransactor(
     coordinatorEntityKey: EntityTypeKey[SagaTransactionCoordinator.Command],
     sharding: ClusterSharding,
-    lotRepository: LotRepository,
-    waferRepository: WaferRepository
+    lotRepository: LotRepository
   ): Unit = {
     val behaviorFactory: EntityContext[FabSagaProtocol.FabSagaCommand] => Behavior[FabSagaProtocol.FabSagaCommand] = { context =>
       val transactionId = context.entityId
       val coordinator = sharding.entityRefFor(coordinatorEntityKey, transactionId)
-      FabSagaTransactor.apply(transactionId, coordinator, FabTransactionContext(lotRepository, waferRepository))
+      FabSagaTransactor.apply(transactionId, coordinator, FabTransactionContext(lotRepository))
     }
     sharding.init(Entity(FabSagaTransactor.entityTypeKey)(behaviorFactory))
   }
@@ -109,13 +81,12 @@ trait FabBootstrap {
   def initFabSagaCoordinator(
     sharding: ClusterSharding,
     lotRepository: LotRepository,
-    waferRepository: WaferRepository,
     system: ExtendedActorSystem,
     sagaTransactionCoordinatorBootstrap: SagaTransactionCoordinatorBootstrap
   ): Unit = {
     sagaTransactionCoordinatorBootstrap.initSagaTransactionCoordinatorAggregate[FabTransactionContext](
       sharding = sharding,
-      context = FabTransactionContext(lotRepository, waferRepository),
+      context = FabTransactionContext(lotRepository),
       entityTypeKey = FabSagaService.fabSagaCoordinatorKey,
       system = system
     )
@@ -143,17 +114,6 @@ trait FabBootstrap {
     )
   }
 
-  // --- Fab Wafer Projection ---
-  def initFabWaferProjection(system: ActorSystem[_]): Unit = {
-    ShardedDaemonProcess(system).init(
-      name = FabWaferProjection.projectionName,
-      numberOfInstances = WaferAggregate.tags.size,
-      behaviorFactory = index => ProjectionBehavior(FabWaferProjection.createProjection(system, index)),
-      settings = ShardedDaemonProcessSettings(system),
-      stopMessage = Some(ProjectionBehavior.Stop)
-    )
-  }
-
   // --- Fab Saga Transaction Projection ---
   def initFabSagaTransactionProjection(system: ActorSystem[_]): Unit = {
     ShardedDaemonProcess(system).init(
@@ -168,11 +128,9 @@ trait FabBootstrap {
   // --- Serialization ---
   def registerFabSerializationStrategies(
     serializationExtension: SerializationExtension,
-    lotRepository: LotRepository,
-    waferRepository: WaferRepository
+    lotRepository: LotRepository
   )(implicit ec: ExecutionContext): Unit = {
     serializationExtension.registerStrategy(FabSerializationStrategies.SourceLotStrategy(lotRepository))
     serializationExtension.registerStrategy(FabSerializationStrategies.TargetLotStrategy(lotRepository))
-    serializationExtension.registerStrategy(FabSerializationStrategies.WaferTransferStrategy(waferRepository))
   }
 }

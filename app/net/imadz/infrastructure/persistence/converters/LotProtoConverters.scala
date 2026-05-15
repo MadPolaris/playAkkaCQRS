@@ -21,18 +21,44 @@ trait LotProtoConverters extends PrimitiveConverter {
 
   // --- Existing Events ---
   object LotCreatedConv extends ProtoConverter[LotCreated, LotCreatedPO] {
-    override def toProto(e: LotCreated): LotCreatedPO = LotCreatedPO(productId = e.productId, waferIds = e.waferIds.map(IdConv.toProto).toSeq)
-    override def fromProto(p: LotCreatedPO): LotCreated = LotCreated(productId = p.productId, waferIds = p.waferIds.map(IdConv.fromProto).toSet)
+    override def toProto(e: LotCreated): LotCreatedPO = LotCreatedPO(
+      productId = e.productId,
+      waferIds = e.waferNames.keys.map(IdConv.toProto).toSeq,
+      waferNames = e.waferNames.map { case (id, name) => WaferNameEntryPO(waferId = IdConv.toProto(id), name = name) }.toSeq
+    )
+    override def fromProto(p: LotCreatedPO): LotCreated = {
+      val waferNames: Map[Id, String] = if (p.waferNames.nonEmpty) {
+        p.waferNames.map(e => IdConv.fromProto(e.waferId) -> e.name).toMap
+      } else {
+        // Backward compat: old journal without names
+        p.waferIds.map(id => IdConv.fromProto(id) -> "").toMap
+      }
+      LotCreated(productId = p.productId, waferNames = waferNames)
+    }
   }
 
   object WaferRemovalReservedConv extends ProtoConverter[WaferRemovalReserved, WaferRemovalReservedPO] {
-    override def toProto(e: WaferRemovalReserved): WaferRemovalReservedPO = WaferRemovalReservedPO(transferId = IdConv.toProto(e.transferId), waferIds = e.waferIds.map(IdConv.toProto).toSeq)
-    override def fromProto(p: WaferRemovalReservedPO): WaferRemovalReserved = WaferRemovalReserved(transferId = IdConv.fromProto(p.transferId), waferIds = p.waferIds.map(IdConv.fromProto).toSet)
+    override def toProto(e: WaferRemovalReserved): WaferRemovalReservedPO = WaferRemovalReservedPO(
+      transferId = IdConv.toProto(e.transferId),
+      waferIds = e.waferIds.map(IdConv.toProto).toSeq,
+      waferNames = e.waferNames.toSeq
+    )
+    override def fromProto(p: WaferRemovalReservedPO): WaferRemovalReserved = WaferRemovalReserved(
+      transferId = IdConv.fromProto(p.transferId),
+      waferIds = p.waferIds.map(IdConv.fromProto).toSet,
+      waferNames = p.waferNames.toSet
+    )
   }
 
   object WaferRemovalCommittedConv extends ProtoConverter[WaferRemovalCommitted, WaferRemovalCommittedPO] {
-    override def toProto(e: WaferRemovalCommitted): WaferRemovalCommittedPO = WaferRemovalCommittedPO(transferId = IdConv.toProto(e.transferId))
-    override def fromProto(p: WaferRemovalCommittedPO): WaferRemovalCommitted = WaferRemovalCommitted(transferId = IdConv.fromProto(p.transferId))
+    override def toProto(e: WaferRemovalCommitted): WaferRemovalCommittedPO = WaferRemovalCommittedPO(
+      transferId = IdConv.toProto(e.transferId),
+      waferNames = e.waferNames.toSeq
+    )
+    override def fromProto(p: WaferRemovalCommittedPO): WaferRemovalCommitted = WaferRemovalCommitted(
+      transferId = IdConv.fromProto(p.transferId),
+      waferNames = p.waferNames.toSet
+    )
   }
 
   object WaferRemovalReleasedConv extends ProtoConverter[WaferRemovalReleased, WaferRemovalReleasedPO] {
@@ -96,14 +122,17 @@ trait LotProtoConverters extends PrimitiveConverter {
     override def fromProto(p: EquipmentJobCompletedPO): EquipmentJobCompleted = EquipmentJobCompleted(equipmentId = p.equipmentId, jobId = p.jobId, success = p.success)
   }
 
+  private def parseWaferId(s: String): Id =
+    try { java.util.UUID.fromString(s) } catch { case _: IllegalArgumentException => java.util.UUID.nameUUIDFromBytes(s.getBytes) }
+
   object WaferMeasuredConv extends ProtoConverter[WaferMeasured, WaferMeasuredPO] {
-    override def toProto(e: WaferMeasured): WaferMeasuredPO = WaferMeasuredPO(waferId = e.waferId, cdNm = e.cdNm)
-    override def fromProto(p: WaferMeasuredPO): WaferMeasured = WaferMeasured(waferId = p.waferId, cdNm = p.cdNm)
+    override def toProto(e: WaferMeasured): WaferMeasuredPO = WaferMeasuredPO(waferId = IdConv.toProto(e.waferId), cdNm = e.cdNm)
+    override def fromProto(p: WaferMeasuredPO): WaferMeasured = WaferMeasured(waferId = parseWaferId(p.waferId), cdNm = p.cdNm)
   }
 
   object WaferClassifiedConv extends ProtoConverter[WaferClassified, WaferClassifiedPO] {
-    override def toProto(e: WaferClassified): WaferClassifiedPO = WaferClassifiedPO(waferId = e.waferId, classification = e.classification, reworkCount = e.reworkCount, cdValue = e.cdValue)
-    override def fromProto(p: WaferClassifiedPO): WaferClassified = WaferClassified(waferId = p.waferId, classification = p.classification, reworkCount = p.reworkCount, cdValue = p.cdValue)
+    override def toProto(e: WaferClassified): WaferClassifiedPO = WaferClassifiedPO(waferId = IdConv.toProto(e.waferId), classification = e.classification, reworkCount = e.reworkCount, cdValue = e.cdValue)
+    override def fromProto(p: WaferClassifiedPO): WaferClassified = WaferClassified(waferId = parseWaferId(p.waferId), classification = p.classification, reworkCount = p.reworkCount, cdValue = p.cdValue)
   }
 
   object WafersSplitForReworkConv extends ProtoConverter[WafersSplitForRework, WafersSplitForReworkPO] {
@@ -151,33 +180,43 @@ trait LotProtoConverters extends PrimitiveConverter {
       incomingWafers = toProtoMap(s.incomingWafers, IdConv, WaferIdSetConv),
       phase = s.phase.toString,
       completedTransferIds = s.completedTransferIds.map(IdConv.toProto).toSeq,
-      currentStepIndex = s.currentStepIndex,
-      areaVisitHistory = s.areaVisitHistory,
-      routingStepReentry = s.routingStepReentry.map { case (k, v) => IntEntry(key = k, value = v) }.toSeq,
       loadedFoupId = s.loadedFoupId.getOrElse(""),
-      completedJobs = s.completedJobs.toSeq,
       measuredWafers = s.measuredWafers.toSeq,
       waferClassifications = s.waferClassifications.map { case (wid, r) =>
         WaferClassResultPO(waferId = wid, classification = r.classification, cdValueNm = r.cdValueNm, reworkCount = r.reworkCount)
       }.toSeq
     )
 
-    override def fromProto(p: LotStatePO): LotState = LotState(
-      lotId = IdConv.fromProto(p.lotId),
-      productId = p.productId,
-      waferIds = p.waferIds.map(IdConv.fromProto).toSet,
-      reservedWafers = fromProtoMap(p.reservedWafers, IdConv, WaferIdSetConv),
-      incomingWafers = fromProtoMap(p.incomingWafers, IdConv, WaferIdSetConv),
-      phase = parsePhase(p.phase),
-      completedTransferIds = p.completedTransferIds.map(IdConv.fromProto).toSet,
-      currentStepIndex = p.currentStepIndex,
-      areaVisitHistory = p.areaVisitHistory.toList,
-      routingStepReentry = p.routingStepReentry.map(e => e.key -> e.value).toMap,
-      loadedFoupId = if (p.loadedFoupId.isEmpty) None else Some(p.loadedFoupId),
-      completedJobs = p.completedJobs.toSet,
-      measuredWafers = p.measuredWafers.toSet,
-      waferClassifications = p.waferClassifications.map { r => r.waferId -> WaferClassResultConv.fromProto(r) }.toMap
-    )
+    override def fromProto(p: LotStatePO): LotState = {
+      // Reconstruct unified wafers map from old-style snapshot fields
+      val classMap = p.waferClassifications.map(r => r.waferId -> WaferClassResultConv.fromProto(r)).toMap
+      val measuredSet = p.measuredWafers.toSet
+      val waferIds = p.waferIds.map(IdConv.fromProto)
+      val waferEntries: Map[Id, WaferState] = if (waferIds.nonEmpty) {
+        waferIds.zipWithIndex.map { case (id, idx) =>
+          // Try to match by index into classification list; fall back to empty name
+          val name = if (idx < p.waferIds.size) s"WAFER-${idx + 1}" else id.toString.take(8)
+          val cls = classMap.get(name)
+          id -> WaferState(
+            name = name,
+            classification = cls.map(_.classification),
+            reworkCount = cls.map(_.reworkCount).getOrElse(0),
+            cdValue = cls.map(_.cdValueNm),
+            measured = measuredSet.contains(name)
+          )
+        }.toMap
+      } else Map.empty
+      LotState(
+        lotId = IdConv.fromProto(p.lotId),
+        productId = p.productId,
+        wafers = waferEntries,
+        reservedWafers = fromProtoMap(p.reservedWafers, IdConv, WaferIdSetConv),
+        incomingWafers = fromProtoMap(p.incomingWafers, IdConv, WaferIdSetConv),
+        phase = parsePhase(p.phase),
+        completedTransferIds = p.completedTransferIds.map(IdConv.fromProto).toSet,
+        loadedFoupId = if (p.loadedFoupId.isEmpty) None else Some(p.loadedFoupId)
+      )
+    }
 
     private def parsePhase(s: String): LotPhase = s match {
       case "Empty" => Empty; case "Active" => Active; case "Sealed" => Sealed; case "Completed" => Completed; case _ => Empty

@@ -4,7 +4,7 @@ import akka.actor.ExtendedActorSystem
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
-import net.imadz.application.aggregates.repository.{CreditBalanceRepository, LotRepository, WaferRepository}
+import net.imadz.application.aggregates.repository.{CreditBalanceRepository, LotRepository}
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.application.services.{FabSagaService, MoneyTransferService}
 import net.imadz.application.services.transactor.MoneyTransferContext
@@ -26,8 +26,7 @@ class ApplicationBootstrap @Inject()(
                                       // 注入各个 Bootstrap 所需的 Repository
                                       creditBalanceRepository: CreditBalanceRepository,
                                       monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
-                                      lotRepository: LotRepository,
-                                      waferRepository: WaferRepository
+                                      lotRepository: LotRepository
                                     ) extends CreditBalanceBootstrap
   with TransactionBootstrap
   with SagaTransactionCoordinatorBootstrap
@@ -44,7 +43,7 @@ class ApplicationBootstrap @Inject()(
   serializationExtension.registerStrategy(net.imadz.application.services.transactor.ShowcaseStrategy)
 
   // 注册 Fab Saga 序列化策略
-  registerFabSerializationStrategies(serializationExtension, lotRepository, waferRepository)
+  registerFabSerializationStrategies(serializationExtension, lotRepository)
 
   serializationExtension.validateStrategies()
 
@@ -65,30 +64,26 @@ class ApplicationBootstrap @Inject()(
     sharding = sharding,
     repository = creditBalanceRepository)
 
-  // --- 4. 初始化 Fab Lot / Wafer 聚合根 (WorkOrder 由 FabDemoService 触发初始化) ---
+  // --- 4. 初始化 Fab Lot 聚合根 (WorkOrder 由 FabDemoService 触发初始化) ---
   initLotAggregate(sharding)
-  initWaferAggregate(sharding)
 
   // --- 5. 初始化 Fab Saga Coordinator + Transactor ---
   initFabSagaCoordinator(
     sharding = sharding,
     lotRepository = lotRepository,
-    waferRepository = waferRepository,
     system = classicSystem.asInstanceOf[ExtendedActorSystem],
     sagaTransactionCoordinatorBootstrap = this
   )
   initFabSagaTransactor(
     coordinatorEntityKey = FabSagaService.fabSagaCoordinatorKey,
     sharding = sharding,
-    lotRepository = lotRepository,
-    waferRepository = waferRepository
+    lotRepository = lotRepository
   )
 
   // --- 6. 初始化投影 (Projection) ---
   initMonthlySummaryProjection(system, sharding, monthlyRepository)
   initWorkOrderProjection(system)
   initFabLotProjection(system)
-  initFabWaferProjection(system)
   initFabSagaTransactionProjection(system)
 
   println("🚀 [ApplicationBootstrap] All CQRS components initialized successfully.")

@@ -2,18 +2,16 @@ package net.imadz.fab.saga
 
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import net.imadz.application.aggregates.LotProtocol._
-import net.imadz.application.aggregates.WaferProtocol._
 import net.imadz.domain.entities.LotEntity.{Active => LotActive, _}
-import net.imadz.domain.entities.WaferEntity.{Active => WaferActive, Skipped, _}
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
 import java.util.UUID
 
 /**
- * Integration test for Metrology Sampling scenario:
- *   Lot(6 wafers) → Split 2 wafers → Sample lot → Measure → PASS → Merge
- *   4 wafers Skipped (don't go through measurement)
+ * Metrology Sampling scenario: 2-participant TCC (Source Lot + Sample Lot).
+ *   Lot(6 wafers) -> Split 2 wafers -> Sample lot -> Measure -> PASS -> Merge
+ *   4 wafers Skipped (sample/skip recorded via RecordWafersSampled on Lot)
  */
 class SamplingScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testConfig)
   with AnyWordSpecLike with BeforeAndAfterAll {
@@ -30,41 +28,21 @@ class SamplingScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.t
   private val sampleWafers = Set(w1, w2)
   private val skipWafers = Set(w3, w4, w5, w6)
 
-  // ===================================================================
-  // Happy Path: Split sample → Measure → Merge
-  // ===================================================================
-
   "Metrology Sampling" should {
-    "split 2 wafers to sample lot via TCC" in {
+    "split 2 wafers to sample lot via 2-participant TCC" in {
       val sKit = FabSagaTestConfig.createLotTestKit(sourceLotId)
       val smpKit = FabSagaTestConfig.createLotTestKit(sampleLotId)
-      val w1Kit = FabSagaTestConfig.createWaferTestKit(w1)
-      val w2Kit = FabSagaTestConfig.createWaferTestKit(w2)
       val txId = UUID.randomUUID()
 
       // Setup: source with 6 wafers, empty sample lot
       sKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SRC", allSixWafers, r))
       smpKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SMP", Set.empty, r))
 
-      // Create sample wafers
-      for (wid <- sampleWafers) {
-        val wk = FabSagaTestConfig.createWaferTestKit(wid)
-        wk.runCommand[WaferConfirmation](r => CreateWafer(sourceLotId, r))
-      }
-
       // --- Prepare Phase ---
       sKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, sampleWafers, r))
       smpKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(txId, sampleWafers, r))
-      for (wid <- sampleWafers) {
-        val wk = FabSagaTestConfig.createWaferTestKit(wid)
-        wk.runCommand[TransferConfirmation](r => ReserveTransfer(txId, sampleLotId, r))
-      }
 
       // --- Commit Phase ---
-      for (wid <- sampleWafers) {
-        val wk = FabSagaTestConfig.createWaferTestKit(wid)
-        wk.runCommand[TransferConfirmation](r => CommitTransfer(txId, sampleLotId, r))
-      }
       sKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(txId, r))
       smpKit.runCommand[WaferAdditionConfirmation](r => CommitAddWafer(txId, r))
 
@@ -74,18 +52,18 @@ class SamplingScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.t
       smpKit.getState().waferIds should contain allOf (w1, w2)
     }
 
-    "skip remaining 4 wafers from measurement" in {
-      for (wid <- skipWafers) {
-        val wk = FabSagaTestConfig.createWaferTestKit(wid)
-        wk.runCommand[WaferConfirmation](r => CreateWafer(sourceLotId, r))
+    "record skipped wafers on lot via RecordWafersSampled" in {
+      val sKit = FabSagaTestConfig.createLotTestKit(sourceLotId)
 
-        val result = wk.runCommand[WaferConfirmation](r =>
-          SkipWafer("sampling: metrology skipped", r))
+      sKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SRC2", allSixWafers, r))
 
-        result.reply.error shouldBe None
-        result.events should contain(WaferSkipped("sampling: metrology skipped"))
-        result.state.status shouldBe Skipped
-      }
+      // Record sampling: W1,W2 sampled, W3-W6 skipped
+      val sampleIds = Set(w1.toString, w2.toString)
+      val skipIds = Set(w3.toString, w4.toString, w5.toString, w6.toString)
+      val result = sKit.runCommand[LotConfirmation](r =>
+        RecordWafersSampled(sampleIds, skipIds, r))
+
+      result.reply.error shouldBe None
     }
 
     "merge sample wafers back after measurement passes" in {
@@ -95,29 +73,13 @@ class SamplingScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.t
 
       // Setup: source with 4 wafers (skipped), sample with 2 wafers
       sKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SRC", skipWafers, r))
-      for (wid <- skipWafers) {
-        val wk = FabSagaTestConfig.createWaferTestKit(wid)
-        wk.runCommand[WaferConfirmation](r => CreateWafer(sourceLotId, r))
-      }
       smpKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SMP", sampleWafers, r))
-      for (wid <- sampleWafers) {
-        val wk = FabSagaTestConfig.createWaferTestKit(wid)
-        wk.runCommand[WaferConfirmation](r => CreateWafer(sampleLotId, r))
-      }
 
       // --- Prepare Phase (Merge) ---
       sKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(mergeTxId, sampleWafers, r))
       smpKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(mergeTxId, sampleWafers, r))
-      for (wid <- sampleWafers) {
-        val wk = FabSagaTestConfig.createWaferTestKit(wid)
-        wk.runCommand[TransferConfirmation](r => ReserveTransfer(mergeTxId, sourceLotId, r))
-      }
 
       // --- Commit Phase ---
-      for (wid <- sampleWafers) {
-        val wk = FabSagaTestConfig.createWaferTestKit(wid)
-        wk.runCommand[TransferConfirmation](r => CommitTransfer(mergeTxId, sourceLotId, r))
-      }
       smpKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(mergeTxId, r))
       sKit.runCommand[WaferAdditionConfirmation](r => CommitAddWafer(mergeTxId, r))
 
@@ -125,30 +87,6 @@ class SamplingScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.t
       sKit.getState().waferIds should have size 6
       sKit.getState().waferIds should contain allOf (w1, w2, w3, w4, w5, w6)
       smpKit.getState().waferIds shouldBe empty
-    }
-
-    "reject skip on already skipped wafer" in {
-      val w3Kit = FabSagaTestConfig.createWaferTestKit(w3)
-      w3Kit.runCommand[WaferConfirmation](r => CreateWafer(sourceLotId, r))
-      w3Kit.runCommand[WaferConfirmation](r => SkipWafer("first skip", r))
-
-      val result = w3Kit.runCommand[WaferConfirmation](r =>
-        SkipWafer("double skip attempt", r))
-
-      result.reply.error shouldBe defined
-      result.reply.error.get.code shouldBe "WFR_040"
-    }
-
-    "reject skip on scrapped wafer" in {
-      val w4Kit = FabSagaTestConfig.createWaferTestKit(w4)
-      w4Kit.runCommand[WaferConfirmation](r => CreateWafer(sourceLotId, r))
-      w4Kit.runCommand[WaferConfirmation](r => ScrapWafer("defect", r))
-
-      val result = w4Kit.runCommand[WaferConfirmation](r =>
-        SkipWafer("skip scrapped", r))
-
-      result.reply.error shouldBe defined
-      result.reply.error.get.code shouldBe "WFR_041"
     }
   }
 

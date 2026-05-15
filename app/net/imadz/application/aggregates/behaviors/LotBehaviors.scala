@@ -31,13 +31,9 @@ object LotBehaviors extends LotCommandHelpers {
         productId = Some(state.productId), lotId = Some(state.lotId),
         reservedWafers = state.reservedWafers, incomingWafers = state.incomingWafers,
         completedTransferIds = state.completedTransferIds,
-        areaVisitHistory = state.areaVisitHistory,
-        routingStepReentry = state.routingStepReentry,
         loadedFoupId = state.loadedFoupId,
         waferClassifications = classifications,
-        completedJobs = state.completedJobs,
-        measuredWafers = state.measuredWafers,
-        currentStepIndex = state.currentStepIndex
+        measuredWafers = state.measuredWafers
       ))
   }
 
@@ -87,21 +83,19 @@ object LotBehaviors extends LotCommandHelpers {
         .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
 
     case cmd: RecordEquipmentJobCompleted =>
-      if (state.completedJobs.contains(cmd.jobId))
-        Effect.reply(cmd.replyTo)(LotConfirmation(None, phase = Some(state.phase)))
-      else
-        Effect.persist(EquipmentJobCompleted(cmd.equipmentId, cmd.jobId, cmd.success))
-          .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+      Effect.persist(EquipmentJobCompleted(cmd.equipmentId, cmd.jobId, cmd.success))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
 
     case cmd: RecordWaferMeasured =>
-      if (state.measuredWafers.contains(cmd.waferId))
+      if (state.wafers.get(cmd.waferId).exists(_.measured))
         Effect.reply(cmd.replyTo)(LotConfirmation(None, phase = Some(state.phase)))
       else
         Effect.persist(WaferMeasured(cmd.waferId, cmd.cdNm))
           .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
 
     case cmd: RecordWaferClassified =>
-      if (state.waferClassifications.contains(cmd.waferId))
+      val existing = state.wafers.get(cmd.waferId).flatMap(_.classification)
+      if (existing.contains(cmd.classification) && state.wafers.get(cmd.waferId).exists(_.reworkCount == cmd.reworkCount))
         Effect.reply(cmd.replyTo)(LotConfirmation(None, phase = Some(state.phase)))
       else
         Effect.persist(WaferClassified(cmd.waferId, cmd.classification, cmd.reworkCount, cmd.cdValue))

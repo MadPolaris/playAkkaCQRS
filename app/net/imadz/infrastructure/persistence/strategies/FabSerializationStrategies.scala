@@ -1,11 +1,11 @@
 package net.imadz.infrastructure.persistence.strategies
 
-import net.imadz.application.aggregates.repository.{LotRepository, WaferRepository}
-import net.imadz.application.services.transactor.{SourceLotParticipant, TargetLotParticipant, WaferTransferParticipant}
+import net.imadz.application.aggregates.repository.LotRepository
+import net.imadz.application.services.transactor.{SourceLotParticipant, TargetLotParticipant}
 import net.imadz.infra.saga.SagaParticipant
 import net.imadz.infra.saga.serialization.SagaParticipantSerializerStrategy
 import net.imadz.infrastructure.persistence.converters.FabSagaProtoConverters
-import net.imadz.infrastructure.proto.fab_saga_participant.{SourceLotParticipantPO, TargetLotParticipantPO, WaferTransferParticipantPO}
+import net.imadz.infrastructure.proto.fab_saga_participant.{SourceLotParticipantPO, TargetLotParticipantPO}
 
 import scala.concurrent.ExecutionContext
 
@@ -45,25 +45,6 @@ object FabSerializationStrategies {
 
     override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _, _] = {
       val po = TargetLotParticipantPO.parseFrom(bytes)
-      conv.fromProto(po)
-    }
-  }
-
-  case class WaferTransferStrategy(waferRepository: WaferRepository)(implicit executionContext: ExecutionContext)
-    extends SagaParticipantSerializerStrategy with FabSagaProtoConverters {
-
-    override def manifest: String = "WaferTransferParticipantPO"
-    override def participantClass: Class[_] = classOf[WaferTransferParticipant]
-
-    private val conv: WaferTransferParticipantConv = WaferTransferParticipantConv(waferRepository)
-
-    override def toBinary(participant: SagaParticipant[_, _, _]): Array[Byte] = {
-      val p = participant.asInstanceOf[WaferTransferParticipant]
-      conv.toProto(p).toByteArray
-    }
-
-    override def fromBinary(bytes: Array[Byte]): SagaParticipant[_, _, _] = {
-      val po = WaferTransferParticipantPO.parseFrom(bytes)
       conv.fromProto(po)
     }
   }

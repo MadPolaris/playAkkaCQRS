@@ -4,22 +4,33 @@ import net.imadz.domain.entities.LotEntity._
 
 object LotEventHandler {
   def apply: LotEventHandler = (state, event) => event match {
-    case LotCreated(productId, waferIds) =>
-      state.copy(productId = productId, waferIds = waferIds, phase = Active)
+    case LotCreated(productId, waferNames) =>
+      state.copy(
+        productId = productId,
+        wafers = waferNames.map { case (id, name) => id -> WaferState(name = name) },
+        phase = Active
+      )
 
-    case WaferRemovalReserved(transferId, waferIds) =>
-      state.copy(reservedWafers = state.reservedWafers + (transferId -> waferIds))
+    case WaferRemovalReserved(transferId, waferIds, waferNames) =>
+      state.copy(
+        reservedWafers = state.reservedWafers + (transferId -> waferIds),
+        reservedWaferNames = state.reservedWaferNames + (transferId -> waferNames)
+      )
 
-    case WaferRemovalCommitted(transferId) =>
+    case WaferRemovalCommitted(transferId, _) =>
       val removedWafers = state.reservedWafers.getOrElse(transferId, Set.empty)
       state.copy(
-        waferIds = state.waferIds -- removedWafers,
+        wafers = state.wafers -- removedWafers,
         reservedWafers = state.reservedWafers - transferId,
+        reservedWaferNames = state.reservedWaferNames - transferId,
         completedTransferIds = state.completedTransferIds + transferId
       )
 
     case WaferRemovalReleased(transferId) =>
-      state.copy(reservedWafers = state.reservedWafers - transferId)
+      state.copy(
+        reservedWafers = state.reservedWafers - transferId,
+        reservedWaferNames = state.reservedWaferNames - transferId
+      )
 
     case WaferAdditionReserved(transferId, waferIds) =>
       state.copy(incomingWafers = state.incomingWafers + (transferId -> waferIds))
@@ -27,7 +38,7 @@ object LotEventHandler {
     case WaferAdditionCommitted(transferId) =>
       val addedWafers = state.incomingWafers.getOrElse(transferId, Set.empty)
       state.copy(
-        waferIds = state.waferIds ++ addedWafers,
+        wafers = state.wafers ++ addedWafers.map(id => id -> WaferState(name = id.toString.take(8))),
         incomingWafers = state.incomingWafers - transferId,
         completedTransferIds = state.completedTransferIds + transferId
       )
@@ -41,7 +52,6 @@ object LotEventHandler {
     case LotSealed() =>
       state.copy(phase = Sealed)
 
-    // Process execution events (equipment reports)
     case FoupLoaded(foupId, _) =>
       if (state.loadedFoupId.isDefined) state
       else state.copy(loadedFoupId = Some(foupId))
@@ -49,21 +59,25 @@ object LotEventHandler {
     case TransportStarted(_, _, _, _) => state
     case TransportCompleted(_, _) => state
     case EquipmentJobStarted(_, _) => state
+    case EquipmentJobCompleted(_, _, _) => state
 
-    case EquipmentJobCompleted(_, jobId, _) =>
-      if (state.completedJobs.contains(jobId)) state
-      else state.copy(completedJobs = state.completedJobs + jobId)
-
-    case WaferMeasured(waferId, _) =>
-      if (state.measuredWafers.contains(waferId)) state
-      else state.copy(measuredWafers = state.measuredWafers + waferId)
+    case WaferMeasured(waferId, cdNm) =>
+      state.wafers.get(waferId) match {
+        case Some(ws) => state.copy(wafers = state.wafers + (waferId -> ws.copy(measured = true, cdValue = Some(cdNm))))
+        case None => state
+      }
 
     case WaferClassified(waferId, classification, reworkCount, cdValue) =>
-      if (state.waferClassifications.contains(waferId)) state
-      else state.copy(
-        waferClassifications = state.waferClassifications + (waferId ->
-          WaferClassResult(classification, cdValue, reworkCount))
-      )
+      state.wafers.get(waferId) match {
+        case Some(ws) => state.copy(wafers = state.wafers + (waferId -> ws.copy(
+          classification = Some(classification),
+          reworkCount = reworkCount,
+          cdValue = Some(cdValue),
+          measured = true,
+          status = if (classification == "SCRAP") WaferScrapped else ws.status
+        )))
+        case None => state
+      }
 
     case WafersSplitForRework(_, _, _) => state
     case WafersReworked(_) => state

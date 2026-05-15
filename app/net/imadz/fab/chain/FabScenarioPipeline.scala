@@ -1,7 +1,6 @@
 package net.imadz.fab.chain
 
 import net.imadz.application.aggregates.LotProtocol.{LotCommand, LotConfirmation, SealLot}
-import net.imadz.application.aggregates.WaferProtocol._
 import net.imadz.application.aggregates.LotProtocol.LotCommand
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
@@ -162,7 +161,7 @@ object FabScenarioPipeline {
     state.wafers.filter { case (_, w) => w.classification.isEmpty }.foreach { case (wid, info) =>
       val cdValue = info.cdValueHistory.lastOption.getOrElse(32.0)
       val cls = PipelineStages.classifyCd(cdValue, ctx.scenario.decision)
-      ctx.lotRef ! RecordWaferMeasured(wid, cdValue, ctx.ignoreLotReply)
+      ctx.lotRef ! RecordWaferMeasured(ctx.waferUUIDs(wid), cdValue, ctx.ignoreLotReply)
       ctx.publisher(MeasurementResultEvent(wid, cdValue, cls, ctx.scenario.decision.upperSpecNm))
 
       scenId match {
@@ -198,12 +197,9 @@ object FabScenarioPipeline {
           updatedWafers += wid -> info.copy(classification = Some(cls))
           if (cls == "SCRAP") scrapWafers :+= wid
       }
-      ctx.lotRef ! RecordWaferClassified(wid, cls, 0, cdValue, ctx.ignoreLotReply)
+      ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),cls, 0, cdValue, ctx.ignoreLotReply)
     }
 
-    scrapWafers.foreach { wid =>
-      ctx.waferRefs.get(wid).foreach(ref => ref ! ScrapWafer("Classified as SCRAP", ctx.ignoreWaferReply))
-    }
 
     val totalPass = updatedWafers.values.count(w => !w.classification.contains("SCRAP") && !w.classification.contains("HOLD"))
     val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
@@ -219,20 +215,23 @@ object FabScenarioPipeline {
     ctx.publisher(GlobalStatusChanged("SPLITTING", s"Saga TCC split → $lotKey", "PhaseSplit"))
     val childLotId = ctx.childLotIds.getOrElse(lotKey, ctx.reworkLotId)
     val childLotRef = ctx.childLotRefs.getOrElse(lotKey, ctx.reworkLotRef)
-    val wafersToMove = state.wafers.filter { case (_, info) =>
+    val waferEntries = state.wafers.filter { case (_, info) =>
       info.subLot.contains(lotKey) || lotKey == state.spawnedChildLotKey.getOrElse("")
-    }.flatMap { case (wid, _) => ctx.waferUUIDs.get(wid) }.toSet
-    val moveIds = if (wafersToMove.nonEmpty) wafersToMove else {
+    }
+    val moveIds = waferEntries.flatMap { case (wid, _) => ctx.waferUUIDs.get(wid) }.toSet
+    val moveNames = waferEntries.keys.toSet
+    val finalMoveIds = if (moveIds.nonEmpty) moveIds else {
       lotKey match {
         case "pilot"  => ctx.scenario.waferIds.take(1).flatMap(ctx.waferUUIDs.get).toSet
         case "sample" => ctx.scenario.waferIds.take(2).flatMap(ctx.waferUUIDs.get).toSet
         case _ => Set.empty[Id]
       }
     }
+    val finalMoveNames = if (moveNames.nonEmpty) moveNames else Set.empty[String]
     val sagaId = s"SAGA-SPLIT-$lotKey-${state.iteration}"
     val rwkLotName = s"${ctx.scenario.scenarioId}-${lotKey.toUpperCase}"
-    ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE", ctx.scenario.scenarioId, rwkLotName, moveIds.toSeq.map(_.toString)))
-    ctx.sagaTx(ctx.sourceLotId, childLotId, moveIds).map { confirmation =>
+    ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE", ctx.scenario.scenarioId, rwkLotName, finalMoveIds.toSeq.map(_.toString)))
+    ctx.sagaTx(ctx.sourceLotId, childLotId, finalMoveIds, finalMoveNames).map { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED", ctx.scenario.scenarioId, rwkLotName, moveIds.toSeq.map(_.toString)))
         val updatedWafers = state.wafers.map { case (wid, info) =>
@@ -254,24 +253,27 @@ object FabScenarioPipeline {
     val s = PipelineStages.emitLedger(state, s"PhaseMerge: Saga Merge ← $lotKey", ctx)
     ctx.publisher(GlobalStatusChanged("MERGING", s"Saga Merge ← $lotKey", "PhaseMerge"))
     val childLotId = ctx.childLotIds.getOrElse(lotKey, ctx.reworkLotId)
-    val wafersToMove = state.wafers.filter { case (_, info) => info.subLot.contains(lotKey) }
-      .flatMap { case (wid, _) => ctx.waferUUIDs.get(wid) }.toSet
-    val moveIds = if (wafersToMove.nonEmpty) wafersToMove else {
+    val waferEntries = state.wafers.filter { case (_, info) => info.subLot.contains(lotKey) }
+    val moveIds = waferEntries.flatMap { case (wid, _) => ctx.waferUUIDs.get(wid) }.toSet
+    val moveNames = waferEntries.keys.toSet
+    val (finalMoveIds, finalMoveNames) = if (moveIds.nonEmpty) (moveIds, moveNames) else {
       lotKey match {
-        case "pilot"  => ctx.scenario.waferIds.take(1).flatMap(ctx.waferUUIDs.get).toSet
-        case "sample" => ctx.scenario.waferIds.take(2).flatMap(ctx.waferUUIDs.get).toSet
-        case "hold"   => state.wafers.filter(_._2.subLot.contains("hold")).flatMap { case (wid, _) => ctx.waferUUIDs.get(wid) }.toSet
-        case _ => Set.empty[Id]
+        case "pilot"  => (ctx.scenario.waferIds.take(1).flatMap(ctx.waferUUIDs.get).toSet, ctx.scenario.waferIds.take(1).toSet)
+        case "sample" => (ctx.scenario.waferIds.take(2).flatMap(ctx.waferUUIDs.get).toSet, ctx.scenario.waferIds.take(2).toSet)
+        case "hold"   =>
+          val hw = state.wafers.filter(_._2.subLot.contains("hold"))
+          (hw.flatMap { case (wid, _) => ctx.waferUUIDs.get(wid) }.toSet, hw.keys.toSet)
+        case _ => (Set.empty[Id], Set.empty[String])
       }
     }
     val sagaId = s"SAGA-MERGE-$lotKey-${state.iteration}"
     val rwkLotName = s"${ctx.scenario.scenarioId}-${lotKey.toUpperCase}"
-    ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE", rwkLotName, ctx.scenario.scenarioId, moveIds.toSeq.map(_.toString)))
-    ctx.sagaTx(childLotId, ctx.sourceLotId, moveIds).map { confirmation =>
+    ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE", rwkLotName, ctx.scenario.scenarioId, finalMoveIds.toSeq.map(_.toString)))
+    ctx.sagaTx(childLotId, ctx.sourceLotId, finalMoveIds, finalMoveNames).map { confirmation =>
       if (confirmation.error.isEmpty) {
-        ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED", rwkLotName, ctx.scenario.scenarioId, moveIds.toSeq.map(_.toString)))
+        ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED", rwkLotName, ctx.scenario.scenarioId, finalMoveIds.toSeq.map(_.toString)))
         val mergedWafers = state.wafers.map { case (wid, info) =>
-          if (moveIds.contains(ctx.waferUUIDs.getOrElse(wid, java.util.UUID.nameUUIDFromBytes("none".getBytes))))
+          if (finalMoveIds.contains(ctx.waferUUIDs.getOrElse(wid, java.util.UUID.nameUUIDFromBytes("none".getBytes))))
             wid -> info.copy(subLot = None, classification = Some("PASS"))
           else wid -> info
         }
@@ -294,7 +296,6 @@ object FabScenarioPipeline {
   private def scrapWafers(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseScrap: Scrap classified wafers", ctx)
     state.wafers.filter(_._2.classification.contains("SCRAP")).keys.foreach { wid =>
-      ctx.waferRefs.get(wid).foreach(ref => ref ! ScrapWafer("CD out of spec", ctx.ignoreWaferReply))
       ctx.publisher(ScrapEvent(wid, "CD out of spec → SCRAP"))
     }
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
@@ -303,9 +304,6 @@ object FabScenarioPipeline {
   private def holdWafers(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseHold: Hold for engineering review", ctx)
     ctx.publisher(GlobalStatusChanged("HOLDING", "Engineering review", "PhaseHold"))
-    state.wafers.filter(_._2.subLot.contains("hold")).keys.foreach { wid =>
-      ctx.waferRefs.get(wid).foreach(ref => ref ! HoldWafer("Borderline CD — review required", ctx.ignoreWaferReply))
-    }
     val holdIds = state.wafers.filter(_._2.subLot.contains("hold")).keys.toSet
     ctx.lotRef ! RecordWafersHeld(holdIds, "Borderline CD", ctx.ignoreLotReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "HELD", PipelineStages.activeCount(state), holdIds.size, "CDSEM",
@@ -316,9 +314,6 @@ object FabScenarioPipeline {
   private def releaseWafers(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseRelease: Release held wafers", ctx)
     ctx.publisher(GlobalStatusChanged("RELEASING", "Review passed, releasing", "PhaseRelease"))
-    state.wafers.filter(_._2.subLot.contains("hold")).keys.foreach { wid =>
-      ctx.waferRefs.get(wid).foreach(ref => ref ! ReleaseHold(ctx.ignoreWaferReply))
-    }
     val holdIds = state.wafers.filter(_._2.subLot.contains("hold")).keys.toSet
     ctx.lotRef ! RecordWafersReleased(holdIds, ctx.ignoreLotReply)
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, reviewApproved = true))
