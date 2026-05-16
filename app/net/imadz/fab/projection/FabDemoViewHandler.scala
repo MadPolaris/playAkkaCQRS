@@ -19,6 +19,9 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
 
   // Per-lot view state keyed by lotId (UUID string)
   private val lotStates = mutable.Map.empty[String, LotViewState]
+  // Global wafer name registry: UUID string → human-readable name (e.g. "WAFER-1")
+  // Populated on LotCreated so child lots can resolve names consistently during Saga TCC transfers
+  private val waferRegistry = mutable.Map.empty[String, String]
 
   override def process(session: ScalikeJdbcSession, envelope: EventEnvelope[Any]): Unit = {
     envelope.event match {
@@ -34,16 +37,23 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
 
   private def handleLotEvent(lotId: String, event: LotEvent): Unit = {
     event match {
-      case LotCreated(_, waferNames) =>
+      case LotCreated(productId, waferNames, parentLotId, splitReason) =>
+        // Always create view state — child lots with empty wafers are first-class entities
+        // with parent-child relationships, not anonymous containers.
         val nameToUuid: Map[String, String] = waferNames.map { case (id, name) => name -> id.toString }
         val uuidToName: Map[String, String] = waferNames.map { case (id, name) => id.toString -> name }
+        waferNames.foreach { case (id, name) => waferRegistry(id.toString) = name }
         lotStates(lotId) = LotViewState(
           lotId = lotId,
           waferCount = waferNames.size,
           uuidToName = mutable.Map.from(uuidToName),
-          nameToUuid = mutable.Map.from(nameToUuid)
+          nameToUuid = mutable.Map.from(nameToUuid),
+          parentLotId = parentLotId.map(_.toString),
+          splitReason = splitReason.map(sr => splitReasonKey(sr))
         )
         publishLotState(lotId)
+        // Cascade to parent so its childLots reflect the new child
+        parentLotId.foreach(pid => publishLotState(pid.toString))
 
       case WaferClassified(waferId, classification, reworkCount, _) =>
         lotStates.get(lotId).foreach { state =>
@@ -59,36 +69,9 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
           publishLotState(lotId)
         }
 
-      case WafersSplitForRework(reworkWaferIds, scrapWaferIds, _) =>
-        lotStates.get(lotId).foreach { state =>
-          reworkWaferIds.foreach { name => state.waferSubLots(name) = "rwk" }
-          scrapWaferIds.foreach { name => state.waferSubLots(name) = "scrap" }
-          publishLotState(lotId)
-        }
-
-      case WafersSentAsPilot(waferIds) =>
-        lotStates.get(lotId).foreach { state =>
-          waferIds.foreach { name => state.waferSubLots(name) = "pilot" }
-          publishLotState(lotId)
-        }
-
-      case WafersSampled(sampleIds, _) =>
-        lotStates.get(lotId).foreach { state =>
-          sampleIds.foreach { name => state.waferSubLots(name) = "sample" }
-          publishLotState(lotId)
-        }
-
-      case WafersHeld(waferIds, _) =>
-        lotStates.get(lotId).foreach { state =>
-          waferIds.foreach { name => state.waferSubLots(name) = "hold" }
-          publishLotState(lotId)
-        }
-
-      case WafersReleased(waferIds) =>
-        lotStates.get(lotId).foreach { state =>
-          waferIds.foreach { name => state.waferSubLots.remove(name) }
-          publishLotState(lotId)
-        }
+      // Split/grouping events are no-ops here: child lot identity comes from LotCreated.parentLotId+splitReason
+      // Wafer movement between lots is handled by WaferRemovalCommitted/WaferAdditionCommitted
+      case WafersSplitForRework(_, _, _) | WafersSentAsPilot(_) | WafersSampled(_, _) | WafersHeld(_, _) | WafersReleased(_) => ()
 
       case WafersReworked(waferIds) =>
         lotStates.get(lotId).foreach { state =>
@@ -98,14 +81,41 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
           publishLotState(lotId)
         }
 
-      case WaferRemovalCommitted(_, waferNames) =>
+      case WaferAdditionReserved(transferId, waferIds) =>
         lotStates.get(lotId).foreach { state =>
-          waferNames.foreach { name => state.waferSubLots.remove(name) }
-          publishLotState(lotId)
+          state.pendingIncomingWafers(transferId.toString) = waferIds.map(_.toString)
         }
 
-      case WaferAdditionCommitted(_) =>
-        lotStates.get(lotId).foreach { _ => publishLotState(lotId) }
+      case WaferRemovalCommitted(_, waferNames) =>
+        lotStates.get(lotId).foreach { state =>
+          waferNames.foreach { name =>
+            state.nameToUuid.remove(name).foreach { uuid =>
+              state.uuidToName.remove(uuid)
+            }
+          }
+          state.waferCount = state.uuidToName.size
+          publishLotState(lotId)
+          state.parentLotId.foreach(pid => publishLotState(pid)) // cascade to parent
+        }
+
+      case WaferAdditionCommitted(transferId) =>
+        lotStates.get(lotId).foreach { state =>
+          state.pendingIncomingWafers.remove(transferId.toString).foreach { waferUuids =>
+            waferUuids.foreach { uuid =>
+              val name = waferRegistry.getOrElse(uuid, uuid.take(8))
+              state.uuidToName(uuid) = name
+              state.nameToUuid(name) = uuid
+            }
+          }
+          state.waferCount = state.uuidToName.size
+          publishLotState(lotId)
+          state.parentLotId.foreach(pid => publishLotState(pid)) // cascade to parent
+        }
+
+      case WaferAdditionCanceled(transferId) =>
+        lotStates.get(lotId).foreach { state =>
+          state.pendingIncomingWafers.remove(transferId.toString)
+        }
 
       case LotSealed() =>
         lotStates.get(lotId).foreach { state =>
@@ -139,31 +149,41 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
 
   private def publishLotState(lotId: String): Unit = {
     lotStates.get(lotId).foreach { state =>
-      val childLots = state.waferSubLots
-        .groupBy(_._2)
-        .map { case (subLotKey, wafers) =>
+      val displayLotId = state.parentLotId match {
+        case Some(parentId) =>
+          val suffix = state.splitReason.map(_.toUpperCase).getOrElse("CHILD")
+          s"${parentId.take(8)}-$suffix"
+        case None => state.lotId.take(8)
+      }
+
+      // Child lots are derived from actual child LotViewStates (those whose parentLotId == this lotId)
+      val childLots = lotStates.collect {
+        case (_, childState) if childState.parentLotId.contains(lotId) =>
+          val suffix = childState.splitReason.map(_.toUpperCase).getOrElse("CHILD")
           LotStateSnapshot(
-            s"${state.lotId}-${subLotKey.toUpperCase}",
-            "Active", wafers.size, 0, 0, state.currentArea
+            s"${state.lotId.take(8)}-$suffix",
+            childState.status,
+            childState.waferCount,
+            childState.passCount,
+            childState.scrapCount,
+            childState.currentArea
           )
-        }.toSeq
+      }.toSeq
 
       val sourceLot = LotStateSnapshot(
-        state.lotId.take(8), // truncated UUID for display
+        displayLotId,
         state.status, state.waferCount, state.passCount, state.scrapCount, state.currentArea
       )
 
       val wafers = state.uuidToName.keys.map { uuid =>
         val name = state.uuidToName(uuid)
-        val subLot = state.waferSubLots.get(name)
-        val waferLot = subLot.map(k => s"${state.lotId}-${k.toUpperCase}").getOrElse(state.lotId.take(8))
         val classification = state.waferClassifications.getOrElse(name, "Pending")
         WaferStateSnapshot(
           waferId = name,
           status = if (classification == "SCRAP") "Scrapped"
           else if (classification == "HOLD") "OnHold"
           else "Active",
-          lotId = waferLot,
+          lotId = displayLotId,
           classification = classification,
           reworkCount = state.waferReworks.getOrElse(name, 0)
         )
@@ -173,10 +193,18 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
     }
   }
 
+  private def splitReasonKey(sr: SplitReason): String = sr match {
+    case ReworkSplit => "rwk"
+    case ScrapSplit => "scrap"
+    case PilotSplit => "pilot"
+    case SampleSplit => "sample"
+    case HoldSplit => "hold"
+  }
+
   private case class LotViewState(
     lotId: String,
     var status: String = "Active",
-    waferCount: Int = 0,
+    var waferCount: Int = 0,
     var passCount: Int = 0,
     var scrapCount: Int = 0,
     var currentArea: String = "",
@@ -184,6 +212,8 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
     nameToUuid: mutable.Map[String, String] = mutable.Map.empty,
     waferClassifications: mutable.Map[String, String] = mutable.Map.empty,
     waferReworks: mutable.Map[String, Int] = mutable.Map.empty,
-    waferSubLots: mutable.Map[String, String] = mutable.Map.empty
+    pendingIncomingWafers: mutable.Map[String, Set[String]] = mutable.Map.empty,
+    parentLotId: Option[String] = None,
+    splitReason: Option[String] = None
   )
 }

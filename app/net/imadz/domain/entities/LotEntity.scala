@@ -37,7 +37,9 @@ object LotEntity {
     incomingWafers: Map[Id, Set[Id]] = Map.empty,
     phase: LotPhase = Empty,
     completedTransferIds: Set[Id] = Set.empty,
-    loadedFoupId: Option[String] = None
+    loadedFoupId: Option[String] = None,
+    parentLotId: Option[Id] = None,
+    splitReason: Option[SplitReason] = None
   ) {
     // --- Derived views (computed on-demand, no cache) ---
     def waferIds: Set[Id] = wafers.keySet
@@ -50,6 +52,14 @@ object LotEntity {
   }
 
   def empty(lotId: Id): LotState = LotState(lotId = lotId, productId = "")
+
+  // --- Split reason: why a child lot exists ---
+  sealed trait SplitReason extends CborSerializable
+  case object ReworkSplit extends SplitReason
+  case object ScrapSplit extends SplitReason
+  case object PilotSplit extends SplitReason
+  case object SampleSplit extends SplitReason
+  case object HoldSplit extends SplitReason
 
   case class WaferClassResult(
     classification: String,
@@ -66,7 +76,7 @@ object LotEntity {
 
   // Event
   sealed trait LotEvent extends CborSerializable
-  case class LotCreated(productId: String, waferNames: Map[Id, String]) extends LotEvent
+  case class LotCreated(productId: String, waferNames: Map[Id, String], parentLotId: Option[Id] = None, splitReason: Option[SplitReason] = None) extends LotEvent
   case class WaferRemovalReserved(transferId: Id, waferIds: Set[Id], waferNames: Set[String]) extends LotEvent
   case class WaferRemovalCommitted(transferId: Id, waferNames: Set[String]) extends LotEvent
   case class WaferRemovalReleased(transferId: Id) extends LotEvent

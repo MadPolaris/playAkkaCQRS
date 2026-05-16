@@ -35,6 +35,8 @@ message LotCreatedPO {
   string product_id = 1;
   repeated string wafer_ids = 2;          // deprecated — kept for backward compat
   repeated WaferNameEntryPO wafer_names = 3;
+  string parent_lot_id = 4;               // empty if this is a source lot
+  string split_reason = 5;                // "rework"|"scrap"|"pilot"|"sample"|"hold" — empty if source lot
 }
 
 message WaferRemovalReservedPO {
@@ -201,4 +203,6 @@ message LotStatePO {
   repeated string completed_jobs = 12;
   repeated string measured_wafers = 13;
   repeated WaferClassResultPO wafer_classifications = 14;
+  string parent_lot_id = 15;
+  string split_reason = 16;
 }

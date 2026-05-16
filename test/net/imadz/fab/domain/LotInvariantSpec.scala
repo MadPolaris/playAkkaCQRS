@@ -14,33 +14,42 @@ class LotInvariantSpec extends AnyWordSpec with Matchers {
   val lotId = UUID.randomUUID()
   val wafer1 = UUID.randomUUID()
   val wafer2 = UUID.randomUUID()
-  val activeState = LotState(lotId, "PROD-A", Set(wafer1, wafer2), Map.empty, Map.empty, Active)
+  val activeState = LotState(lotId, "PROD-A", Map(wafer1 -> WaferState("WAFER-1"), wafer2 -> WaferState("WAFER-2")), Map.empty, Map.empty, phase = Active)
 
   // --- CreateLot Rule ---
   "CreateLotRule" should {
     "accept valid create request" in {
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Set(wafer1)))
-      result.map(_.head) shouldBe Right(LotCreated("PROD-A", Set(wafer1)))
+      val waferMap = Map(wafer1 -> "WAFER-1")
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", waferMap, None, None))
+      result.map(_.head) shouldBe Right(LotCreated("PROD-A", waferMap))
     }
 
     "reject empty productId" in {
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("", Set(wafer1)))
+      val waferMap = Map(wafer1 -> "WAFER-1")
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("", waferMap, None, None))
       result shouldBe Left(iMadzError("LOT_002", "Product ID must not be empty"))
     }
 
     "reject if lot already created" in {
-      val result = LotInvariants.CreateLotRule(activeState, ("PROD-B", Set(wafer1)))
+      val waferMap = Map(wafer1 -> "WAFER-1")
+      val result = LotInvariants.CreateLotRule(activeState, ("PROD-B", waferMap, None, None))
       result shouldBe Left(iMadzError("LOT_001", s"Lot $lotId already created, cannot create again"))
     }
 
     "allow empty wafer list for child lot creation" in {
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Set.empty))
-      result shouldBe Right(List(LotCreated("PROD-A", Set.empty)))
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Map.empty, None, None))
+      result shouldBe Right(List(LotCreated("PROD-A", Map.empty)))
+    }
+
+    "allow child lot creation with parentLotId and splitReason" in {
+      val parentId = UUID.randomUUID()
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Map.empty, Some(parentId), Some(ReworkSplit)))
+      result shouldBe Right(List(LotCreated("PROD-A", Map.empty, Some(parentId), Some(ReworkSplit))))
     }
 
     "reject > 25 wafers" in {
-      val tooMany = (1 to 26).map(_ => UUID.randomUUID()).toSet
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", tooMany))
+      val tooMany = (1 to 26).map(i => UUID.randomUUID() -> s"WAFER-$i").toMap
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", tooMany, None, None))
       result.isLeft shouldBe true
       result.left.get.code shouldBe "LOT_004"
     }
@@ -50,21 +59,21 @@ class LotInvariantSpec extends AnyWordSpec with Matchers {
   "ReserveWaferRemovalRule" should {
     "reserve wafers that belong to the lot" in {
       val transferId = UUID.randomUUID()
-      val result = LotInvariants.ReserveWaferRemovalRule(activeState, (transferId, Set(wafer1)))
-      result shouldBe Right(List(WaferRemovalReserved(transferId, Set(wafer1))))
+      val result = LotInvariants.ReserveWaferRemovalRule(activeState, (transferId, Set(wafer1), Set("WAFER-1")))
+      result shouldBe Right(List(WaferRemovalReserved(transferId, Set(wafer1), Set("WAFER-1"))))
     }
 
     "be idempotent on same transferId" in {
       val transferId = UUID.randomUUID()
       val state = activeState.copy(reservedWafers = Map(transferId -> Set(wafer1)))
-      val result = LotInvariants.ReserveWaferRemovalRule(state, (transferId, Set(wafer1)))
+      val result = LotInvariants.ReserveWaferRemovalRule(state, (transferId, Set(wafer1), Set("WAFER-1")))
       result shouldBe Right(Nil)
     }
 
     "reject wafers not in lot" in {
       val transferId = UUID.randomUUID()
       val unknownWafer = UUID.randomUUID()
-      val result = LotInvariants.ReserveWaferRemovalRule(activeState, (transferId, Set(unknownWafer)))
+      val result = LotInvariants.ReserveWaferRemovalRule(activeState, (transferId, Set(unknownWafer), Set("UNKNOWN")))
       result.isLeft shouldBe true
       result.left.get.code shouldBe "LOT_011"
     }
@@ -72,7 +81,7 @@ class LotInvariantSpec extends AnyWordSpec with Matchers {
     "reject if lot not active" in {
       val transferId = UUID.randomUUID()
       val emptyState = LotEntity.empty(lotId)
-      val result = LotInvariants.ReserveWaferRemovalRule(emptyState, (transferId, Set(wafer1)))
+      val result = LotInvariants.ReserveWaferRemovalRule(emptyState, (transferId, Set(wafer1), Set("WAFER-1")))
       result.isLeft shouldBe true
       result.left.get.code shouldBe "LOT_010"
     }
@@ -81,7 +90,7 @@ class LotInvariantSpec extends AnyWordSpec with Matchers {
       val t1 = UUID.randomUUID()
       val t2 = UUID.randomUUID()
       val state = activeState.copy(reservedWafers = Map(t1 -> Set(wafer1)))
-      val result = LotInvariants.ReserveWaferRemovalRule(state, (t2, Set(wafer1)))
+      val result = LotInvariants.ReserveWaferRemovalRule(state, (t2, Set(wafer1), Set("WAFER-1")))
       result.isLeft shouldBe true
       result.left.get.code shouldBe "LOT_012"
     }

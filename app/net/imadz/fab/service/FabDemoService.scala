@@ -5,6 +5,7 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.util.Timeout
 import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol._
+import net.imadz.domain.entities.LotEntity.{HoldSplit, PilotSplit, ReworkSplit, SampleSplit, ScrapSplit}
 import net.imadz.application.aggregates.WorkOrderAggregate
 import net.imadz.application.aggregates.WorkOrderProtocol.{CreateWorkOrder, WorkOrderConfirmation, PipelineStarter => WorkOrderPipelineStarter}
 import net.imadz.application.services.FabSagaService
@@ -136,7 +137,7 @@ class FabDemoService @Inject()(
     // Create entities (idempotent) then run pipeline
     for {
       _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref))
-      _ <- reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Map.empty, ref))
+      _ <- reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ReworkSplit)))
       _ = spawnDynamicSimulators(routing, adapter, publisher, waferIds)
       result <- pipelineFn(initialState, ctx)
     } yield result
@@ -221,17 +222,17 @@ class FabDemoService @Inject()(
     val childLotFutures: Seq[Future[LotConfirmation]] = scenarioId match {
       case "photo-cell-5wafer" =>
         Seq(
-          reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Map.empty, ref)),
-          scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref))
+          reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ReworkSplit))),
+          scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ScrapSplit)))
         )
       case "send-ahead-pilot" =>
-        Seq(pilotLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-PILOT-$workOrderId", Map.empty, ref)))
+        Seq(pilotLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-PILOT-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(PilotSplit))))
       case "sampling-demo" =>
-        Seq(sampleLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SAMPLE-$workOrderId", Map.empty, ref)))
+        Seq(sampleLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SAMPLE-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(SampleSplit))))
       case "hold-release" =>
-        Seq(holdLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-HOLD-$workOrderId", Map.empty, ref)))
+        Seq(holdLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-HOLD-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(HoldSplit))))
       case "scrap-downgrade" =>
-        Seq(scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref)))
+        Seq(scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ScrapSplit))))
       case _ => Seq.empty
     }
 
@@ -557,7 +558,7 @@ class FabDemoService @Inject()(
         val ref = sharding.entityRefFor(LotEntityTypeKey, uuid.toString)
         ref.ask[LotConfirmation](GetLotState(_))
           .map { conf =>
-            if (conf.waferIds.nonEmpty || conf.phase.nonEmpty) Some(key -> conf) else None
+            if (conf.waferIds.nonEmpty || conf.productId.exists(_.nonEmpty)) Some(key -> conf) else None
           }
           .recover { case _ => None }
       }

@@ -4,7 +4,7 @@ import akka.actor.typed.ActorRef
 import akka.persistence.typed.scaladsl.Effect
 import net.imadz.common.CborSerializable
 import net.imadz.common.CommonTypes.{Id, iMadzError}
-import net.imadz.domain.entities.LotEntity.{LotEvent, LotPhase, LotState}
+import net.imadz.domain.entities.LotEntity.{LotEvent, LotPhase, LotState, SplitReason}
 
 object LotProtocol {
 
@@ -12,7 +12,7 @@ object LotProtocol {
   sealed trait LotCommand extends CborSerializable
 
   // Lifecycle
-  case class CreateLot(productId: String, waferNames: Map[Id, String], replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  case class CreateLot(productId: String, waferNames: Map[Id, String], replyTo: ActorRef[LotConfirmation], parentLotId: Option[Id] = None, splitReason: Option[SplitReason] = None) extends LotCommand
   case class GetLotState(replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class SealLot(replyTo: ActorRef[LotConfirmation]) extends LotCommand
 

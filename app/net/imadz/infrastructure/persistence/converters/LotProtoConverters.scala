@@ -19,12 +19,32 @@ trait LotProtoConverters extends PrimitiveConverter {
       WaferClassResult(classification = p.classification, cdValueNm = p.cdValueNm, reworkCount = p.reworkCount)
   }
 
+  // --- SplitReason helpers ---
+  private def splitReasonToString(sr: Option[SplitReason]): String = sr match {
+    case Some(ReworkSplit) => "rework"
+    case Some(ScrapSplit) => "scrap"
+    case Some(PilotSplit) => "pilot"
+    case Some(SampleSplit) => "sample"
+    case Some(HoldSplit) => "hold"
+    case None => ""
+  }
+  private def stringToSplitReason(s: String): Option[SplitReason] = s match {
+    case "rework" => Some(ReworkSplit)
+    case "scrap" => Some(ScrapSplit)
+    case "pilot" => Some(PilotSplit)
+    case "sample" => Some(SampleSplit)
+    case "hold" => Some(HoldSplit)
+    case _ => None
+  }
+
   // --- Existing Events ---
   object LotCreatedConv extends ProtoConverter[LotCreated, LotCreatedPO] {
     override def toProto(e: LotCreated): LotCreatedPO = LotCreatedPO(
       productId = e.productId,
       waferIds = e.waferNames.keys.map(IdConv.toProto).toSeq,
-      waferNames = e.waferNames.map { case (id, name) => WaferNameEntryPO(waferId = IdConv.toProto(id), name = name) }.toSeq
+      waferNames = e.waferNames.map { case (id, name) => WaferNameEntryPO(waferId = IdConv.toProto(id), name = name) }.toSeq,
+      parentLotId = e.parentLotId.map(IdConv.toProto).getOrElse(""),
+      splitReason = splitReasonToString(e.splitReason)
     )
     override def fromProto(p: LotCreatedPO): LotCreated = {
       val waferNames: Map[Id, String] = if (p.waferNames.nonEmpty) {
@@ -33,7 +53,12 @@ trait LotProtoConverters extends PrimitiveConverter {
         // Backward compat: old journal without names
         p.waferIds.map(id => IdConv.fromProto(id) -> "").toMap
       }
-      LotCreated(productId = p.productId, waferNames = waferNames)
+      LotCreated(
+        productId = p.productId,
+        waferNames = waferNames,
+        parentLotId = if (p.parentLotId.isEmpty) None else Some(IdConv.fromProto(p.parentLotId)),
+        splitReason = stringToSplitReason(p.splitReason)
+      )
     }
   }
 
@@ -190,7 +215,9 @@ trait LotProtoConverters extends PrimitiveConverter {
       measuredWafers = s.measuredWafers.map(IdConv.toProto).toSeq,
       waferClassifications = s.waferClassifications.map { case (id, r) =>
         WaferClassResultPO(waferId = IdConv.toProto(id), classification = r.classification, cdValueNm = r.cdValueNm, reworkCount = r.reworkCount)
-      }.toSeq
+      }.toSeq,
+      parentLotId = s.parentLotId.map(IdConv.toProto).getOrElse(""),
+      splitReason = splitReasonToString(s.splitReason)
     )
 
     override def fromProto(p: LotStatePO): LotState = {
@@ -218,7 +245,9 @@ trait LotProtoConverters extends PrimitiveConverter {
         incomingWafers = fromProtoMap(p.incomingWafers, IdConv, WaferIdSetConv),
         phase = parsePhase(p.phase),
         completedTransferIds = p.completedTransferIds.map(IdConv.fromProto).toSet,
-        loadedFoupId = if (p.loadedFoupId.isEmpty) None else Some(p.loadedFoupId)
+        loadedFoupId = if (p.loadedFoupId.isEmpty) None else Some(p.loadedFoupId),
+        parentLotId = if (p.parentLotId.isEmpty) None else Some(IdConv.fromProto(p.parentLotId)),
+        splitReason = stringToSplitReason(p.splitReason)
       )
     }
 
