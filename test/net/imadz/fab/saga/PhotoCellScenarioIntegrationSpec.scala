@@ -29,7 +29,8 @@ class PhotoCellScenarioIntegrationSpec extends ScalaTestWithActorTestKit(FabSaga
     w5 = UUID.randomUUID()
   }
 
-  private def allFiveWafers: Set[UUID] = Set(w1, w2, w3, w4, w5)
+  private def allFiveWafers: Map[UUID, String] = Map(w1 -> "W1", w2 -> "W2", w3 -> "W3", w4 -> "W4", w5 -> "W5")
+  private def allFiveWafersSet: Set[UUID] = Set(w1, w2, w3, w4, w5)
 
   "Photo Cell Scenario A (All PASS)" should {
     "create source lot with 5 wafers and seal" in {
@@ -43,9 +44,9 @@ class PhotoCellScenarioIntegrationSpec extends ScalaTestWithActorTestKit(FabSaga
       created.state.waferIds should have size 5
 
       // Classify all as PASS
-      for (wid <- allFiveWafers) {
+      for (wid <- allFiveWafersSet) {
         lotKit.runCommand[LotConfirmation](r =>
-          RecordWaferClassified(wid.toString, "PASS", 0, 30.0, r))
+          RecordWaferClassified(wid, "PASS", 0, 30.0, r))
       }
 
       val sealed_ = lotKit.runCommand[LotConfirmation](r => SealLot(r))
@@ -62,11 +63,11 @@ class PhotoCellScenarioIntegrationSpec extends ScalaTestWithActorTestKit(FabSaga
       val splitTxId = UUID.randomUUID()
 
       sLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-CELL-B", allFiveWafers, r))
-      rLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-RWK", Set.empty, r))
+      rLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-RWK", Map.empty, r))
 
       // --- TCC Prepare Phase ---
       val reserveOut = sLotKit.runCommand[WaferRemovalConfirmation](r =>
-        ReserveWaferRemoval(splitTxId, Set(w3), r))
+        ReserveWaferRemoval(splitTxId, Set(w3), Set("W3"), r))
       reserveOut.reply.error shouldBe None
       sLotKit.getState().waferIds should contain(w3)
 
@@ -94,12 +95,12 @@ class PhotoCellScenarioIntegrationSpec extends ScalaTestWithActorTestKit(FabSaga
       val returnTxId = UUID.randomUUID()
 
       // Setup: source with 4 wafers, rework with W3
-      sLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-CELL-B2", Set(w1, w2, w4, w5), r))
-      rLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-RWK-B", Set(w3), r))
+      sLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-CELL-B2", Map(w1 -> "W1", w2 -> "W2", w4 -> "W4", w5 -> "W5"), r))
+      rLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-RWK-B", Map(w3 -> "W3"), r))
 
       // Return W3: rework -> source
       sLotKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(returnTxId, Set(w3), r))
-      rLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(returnTxId, Set(w3), r))
+      rLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(returnTxId, Set(w3), Set("W3"), r))
 
       rLotKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(returnTxId, r))
       val commitBack = sLotKit.runCommand[WaferAdditionConfirmation](r => CommitAddWafer(returnTxId, r))
@@ -116,25 +117,81 @@ class PhotoCellScenarioIntegrationSpec extends ScalaTestWithActorTestKit(FabSaga
       val scrapLotId = UUID.randomUUID()
       val rLotKit = FabSagaTestConfig.createLotTestKit(scrapLotId)
 
-      rLotKit.runCommand[LotConfirmation](r => CreateLot("RWK-SCRAP", Set(w3), r))
+      rLotKit.runCommand[LotConfirmation](r => CreateLot("RWK-SCRAP", Map(w3 -> "W3"), r))
 
       val scrapResult = rLotKit.runCommand[LotConfirmation](r =>
-        RecordWaferClassified(w3.toString, "SCRAP", 2, 50.0, r))
+        RecordWaferClassified(w3, "SCRAP", 2, 50.0, r))
       scrapResult.reply.error shouldBe None
-      scrapResult.state.waferClassifications should contain key w3.toString
-      scrapResult.state.waferClassifications(w3.toString).classification shouldBe "SCRAP"
+      scrapResult.state.waferClassifications should contain key w3
+      scrapResult.state.waferClassifications(w3).classification shouldBe "SCRAP"
     }
 
     "idempotent: repeat classification on scrapped wafer" in {
       val rLotKit = FabSagaTestConfig.createLotTestKit(reworkLotId)
 
-      rLotKit.runCommand[LotConfirmation](r => CreateLot("RWK-IDM", Set(w3), r))
-      rLotKit.runCommand[LotConfirmation](r => RecordWaferClassified(w3.toString, "SCRAP", 0, 45.0, r))
+      rLotKit.runCommand[LotConfirmation](r => CreateLot("RWK-IDM", Map(w3 -> "W3"), r))
+      rLotKit.runCommand[LotConfirmation](r => RecordWaferClassified(w3, "SCRAP", 0, 45.0, r))
 
       val idemResult = rLotKit.runCommand[LotConfirmation](r =>
-        RecordWaferClassified(w3.toString, "SCRAP", 0, 45.0, r))
+        RecordWaferClassified(w3, "SCRAP", 0, 45.0, r))
       idemResult.reply.error shouldBe None
       idemResult.events shouldBe empty
+    }
+  }
+
+  "Photo Cell Scenario D (Scrap via Sage TCC)" should {
+    "transfer SCRAP-classified wafer from source to scrap child lot via 2-participant TCC" in {
+      val sLotKit = FabSagaTestConfig.createLotTestKit(sourceLotId)
+      val scrapLotId = UUID.randomUUID()
+      val cLotKit = FabSagaTestConfig.createLotTestKit(scrapLotId)
+      val txId = UUID.randomUUID()
+
+      sLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-SCRAP-SRC", allFiveWafers, r))
+      cLotKit.runCommand[LotConfirmation](r =>
+        CreateLot("PHOTO-SCRAP-LOT", Map.empty, r,
+          parentLotId = Some(sourceLotId), splitReason = Some(ScrapSplit)))
+
+      // Classify W3 as SCRAP
+      sLotKit.runCommand[LotConfirmation](r => RecordWaferClassified(w3, "SCRAP", 2, 50.0, r))
+
+      // TCC Prepare
+      sLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), Set("W3"), r))
+      cLotKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(txId, Set(w3), r))
+
+      // TCC Commit: source lot removes
+      val commitOut = sLotKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(txId, r))
+      commitOut.reply.error shouldBe None
+      sLotKit.getState().waferIds should not contain w3
+      sLotKit.getState().waferIds should have size 4
+
+      // TCC Commit: scrap lot receives
+      val commitIn = cLotKit.runCommand[WaferAdditionConfirmation](r => CommitAddWafer(txId, r))
+      commitIn.reply.error shouldBe None
+      cLotKit.getState().waferIds should contain(w3)
+      cLotKit.getState().phase shouldBe LotActive
+    }
+
+    "auto-seal scrap child lot when wafer is removed back (compensate/release)" in {
+      val sLotKit = FabSagaTestConfig.createLotTestKit(sourceLotId)
+      val scrapLotId = UUID.randomUUID()
+      val cLotKit = FabSagaTestConfig.createLotTestKit(scrapLotId)
+      val txId = UUID.randomUUID()
+
+      // Create child lot with wafers and parentLotId
+      cLotKit.runCommand[LotConfirmation](r =>
+        CreateLot("PHOTO-SCRAP-CLD", Map(w3 -> "W3"), r,
+          parentLotId = Some(sourceLotId), splitReason = Some(ScrapSplit)))
+      cLotKit.getState().phase shouldBe LotActive
+
+      // Reserve + Commit removal of all wafers
+      cLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), Set("W3"), r))
+      val result = cLotKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(txId, r))
+
+      result.reply.error shouldBe None
+      result.state.waferIds shouldBe empty
+      result.events should contain(WaferRemovalCommitted(txId, Set("W3")))
+      // Auto-seal when child lot is depleted
+      result.state.phase shouldBe Sealed
     }
   }
 
@@ -145,10 +202,10 @@ class PhotoCellScenarioIntegrationSpec extends ScalaTestWithActorTestKit(FabSaga
       val txId = UUID.randomUUID()
 
       sLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-COMP", allFiveWafers, r))
-      rLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-RWK-COMP", Set.empty, r))
+      rLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-RWK-COMP", Map.empty, r))
 
       // Prepare Phase
-      sLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), r))
+      sLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), Set("W3"), r))
       rLotKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(txId, Set(w3), r))
 
       // Compensate
@@ -170,9 +227,9 @@ class PhotoCellScenarioIntegrationSpec extends ScalaTestWithActorTestKit(FabSaga
 
       sLotKit.runCommand[LotConfirmation](r => CreateLot("PHOTO-IDEM", allFiveWafers, r))
 
-      sLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), r))
+      sLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), Set("W3"), r))
 
-      val retryLot = sLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), r))
+      val retryLot = sLotKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), Set("W3"), r))
       retryLot.reply.error shouldBe None
       retryLot.events shouldBe empty
     }

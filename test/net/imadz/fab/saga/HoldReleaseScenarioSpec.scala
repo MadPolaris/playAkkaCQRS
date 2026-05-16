@@ -29,20 +29,28 @@ class HoldReleaseScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfi
     w5 = UUID.randomUUID()
   }
 
+  private def waferName(uuid: UUID): String = {
+    if (uuid == w1) "W1" else if (uuid == w2) "W2"
+    else if (uuid == w3) "W3" else if (uuid == w4) "W4"
+    else if (uuid == w5) "W5" else "UNKNOWN"
+  }
+
+  private def waferNames(uuids: Set[UUID]): Set[String] = uuids.map(waferName)
+
   "Hold & Release" should {
     "split W1 to hold lot, place on hold, release, merge back" in {
       val sKit = FabSagaTestConfig.createLotTestKit(sourceLotId)
       val hKit = FabSagaTestConfig.createLotTestKit(holdLotId)
       val splitTxId = UUID.randomUUID()
       val mergeTxId = UUID.randomUUID()
-      val allFive = Set(w1, w2, w3, w4, w5)
+      val allFive = Map(w1 -> "W1", w2 -> "W2", w3 -> "W3", w4 -> "W4", w5 -> "W5")
 
       // Setup
       sKit.runCommand[LotConfirmation](r => CreateLot("HOLD-SRC", allFive, r))
-      hKit.runCommand[LotConfirmation](r => CreateLot("HOLD-HLD", Set.empty, r))
+      hKit.runCommand[LotConfirmation](r => CreateLot("HOLD-HLD", Map.empty, r))
 
       // --- Split: TCC transfer W1 to hold lot (2-participant) ---
-      sKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(splitTxId, Set(w1), r))
+      sKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(splitTxId, Set(w1), Set("W1"), r))
       hKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(splitTxId, Set(w1), r))
 
       sKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(splitTxId, r))
@@ -53,17 +61,17 @@ class HoldReleaseScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfi
 
       // --- Place on hold via Lot event ---
       val holdResult = hKit.runCommand[LotConfirmation](r =>
-        RecordWafersHeld(Set(w1.toString), "borderline CD measurement", r))
+        RecordWafersHeld(Set("W1"), "borderline CD measurement", r))
       holdResult.reply.error shouldBe None
 
       // --- Release ---
       val releaseResult = hKit.runCommand[LotConfirmation](r =>
-        RecordWafersReleased(Set(w1.toString), r))
+        RecordWafersReleased(Set("W1"), r))
       releaseResult.reply.error shouldBe None
 
       // --- Merge back ---
       sKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(mergeTxId, Set(w1), r))
-      hKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(mergeTxId, Set(w1), r))
+      hKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(mergeTxId, Set(w1), Set("W1"), r))
 
       hKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(mergeTxId, r))
       sKit.runCommand[WaferAdditionConfirmation](r => CommitAddWafer(mergeTxId, r))
@@ -76,13 +84,13 @@ class HoldReleaseScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfi
     "record wafers held and scrapped on lot" in {
       val hKit = FabSagaTestConfig.createLotTestKit(holdLotId)
 
-      hKit.runCommand[LotConfirmation](r => CreateLot("HOLD-FAIL", Set(w1), r))
-      hKit.runCommand[LotConfirmation](r => RecordWafersHeld(Set(w1.toString), "CD out of spec", r))
+      hKit.runCommand[LotConfirmation](r => CreateLot("HOLD-FAIL", Map(w1 -> "W1"), r))
+      hKit.runCommand[LotConfirmation](r => RecordWafersHeld(Set("W1"), "CD out of spec", r))
 
       // Record SCRAP classification as replacement for scrap command
       hKit.runCommand[LotConfirmation](r =>
-        RecordWaferClassified(w1.toString, "SCRAP", 0, 50.0, r))
-      hKit.getState().waferClassifications.get(w1.toString).map(_.classification) shouldBe Some("SCRAP")
+        RecordWaferClassified(w1, "SCRAP", 0, 50.0, r))
+      hKit.getState().waferClassifications.get(w1).map(_.classification) shouldBe Some("SCRAP")
     }
 
     "TCC compensate: cancel addition and release source reservation" in {
@@ -90,10 +98,10 @@ class HoldReleaseScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfi
       val hKit = FabSagaTestConfig.createLotTestKit(holdLotId)
       val txId = UUID.randomUUID()
 
-      sKit.runCommand[LotConfirmation](r => CreateLot("HOLD-COMP", Set(w1, w2), r))
-      hKit.runCommand[LotConfirmation](r => CreateLot("HOLD-CMP", Set.empty, r))
+      sKit.runCommand[LotConfirmation](r => CreateLot("HOLD-COMP", Map(w1 -> "W1", w2 -> "W2"), r))
+      hKit.runCommand[LotConfirmation](r => CreateLot("HOLD-CMP", Map.empty, r))
 
-      sKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w1), r))
+      sKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w1), Set("W1"), r))
       hKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(txId, Set(w1), r))
 
       // Compensate

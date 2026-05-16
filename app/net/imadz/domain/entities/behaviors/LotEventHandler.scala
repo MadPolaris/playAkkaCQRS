@@ -21,11 +21,13 @@ object LotEventHandler {
 
     case WaferRemovalCommitted(transferId, _) =>
       val removedWafers = state.reservedWafers.getOrElse(transferId, Set.empty)
+      val newWafers = state.wafers -- removedWafers
       state.copy(
-        wafers = state.wafers -- removedWafers,
+        wafers = newWafers,
         reservedWafers = state.reservedWafers - transferId,
         reservedWaferNames = state.reservedWaferNames - transferId,
-        completedTransferIds = state.completedTransferIds + transferId
+        completedTransferIds = state.completedTransferIds + transferId,
+        phase = if (newWafers.isEmpty && state.parentLotId.isDefined) Sealed else state.phase
       )
 
     case WaferRemovalReleased(transferId) =>

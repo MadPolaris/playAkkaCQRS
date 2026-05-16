@@ -51,6 +51,13 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
           parentLotId = parentLotId.map(_.toString),
           splitReason = splitReason.map(sr => splitReasonKey(sr))
         )
+        // Register child lot in shared registry for Entity State queries
+        (parentLotId, splitReason) match {
+          case (Some(pid), Some(sr)) =>
+            FabDemoViewProjection.childLotRegistry.put(
+              pid.toString + ":" + splitReasonKey(sr), lotId)
+          case _ => ()
+        }
         publishLotState(lotId)
         // Cascade to parent so its childLots reflect the new child
         parentLotId.foreach(pid => publishLotState(pid.toString))
@@ -92,8 +99,15 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
             state.nameToUuid.remove(name).foreach { uuid =>
               state.uuidToName.remove(uuid)
             }
+            state.waferClassifications.remove(name)
+            state.waferReworks.remove(name)
           }
           state.waferCount = state.uuidToName.size
+          state.passCount = state.waferClassifications.values.count(_ == "PASS")
+          state.scrapCount = state.waferClassifications.values.count(_ == "SCRAP")
+          if (state.uuidToName.isEmpty && state.parentLotId.isDefined) {
+            state.status = "Sealed"
+          }
           publishLotState(lotId)
           state.parentLotId.foreach(pid => publishLotState(pid)) // cascade to parent
         }

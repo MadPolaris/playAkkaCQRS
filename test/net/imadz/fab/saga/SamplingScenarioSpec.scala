@@ -24,9 +24,14 @@ class SamplingScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.t
   private val w4 = UUID.nameUUIDFromBytes("SMP-W4".getBytes)
   private val w5 = UUID.nameUUIDFromBytes("SMP-W5".getBytes)
   private val w6 = UUID.nameUUIDFromBytes("SMP-W6".getBytes)
-  private val allSixWafers = Set(w1, w2, w3, w4, w5, w6)
+  private val allSixWafers = Map(w1 -> "W1", w2 -> "W2", w3 -> "W3", w4 -> "W4", w5 -> "W5", w6 -> "W6")
   private val sampleWafers = Set(w1, w2)
-  private val skipWafers = Set(w3, w4, w5, w6)
+  private val skipWafers = Map(w3 -> "W3", w4 -> "W4", w5 -> "W5", w6 -> "W6")
+
+  private def name(wafers: Set[UUID]): Set[String] = wafers.map { u =>
+    if (u == w1) "W1" else if (u == w2) "W2" else if (u == w3) "W3"
+    else if (u == w4) "W4" else if (u == w5) "W5" else if (u == w6) "W6" else "?"
+  }
 
   "Metrology Sampling" should {
     "split 2 wafers to sample lot via 2-participant TCC" in {
@@ -36,10 +41,10 @@ class SamplingScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.t
 
       // Setup: source with 6 wafers, empty sample lot
       sKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SRC", allSixWafers, r))
-      smpKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SMP", Set.empty, r))
+      smpKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SMP", Map.empty, r))
 
       // --- Prepare Phase ---
-      sKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, sampleWafers, r))
+      sKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, sampleWafers, name(sampleWafers), r))
       smpKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(txId, sampleWafers, r))
 
       // --- Commit Phase ---
@@ -73,11 +78,11 @@ class SamplingScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.t
 
       // Setup: source with 4 wafers (skipped), sample with 2 wafers
       sKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SRC", skipWafers, r))
-      smpKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SMP", sampleWafers, r))
+      smpKit.runCommand[LotConfirmation](r => CreateLot("SAMPLING-SMP", Map(w1 -> "W1", w2 -> "W2"), r))
 
       // --- Prepare Phase (Merge) ---
       sKit.runCommand[WaferAdditionConfirmation](r => ReserveAddWafer(mergeTxId, sampleWafers, r))
-      smpKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(mergeTxId, sampleWafers, r))
+      smpKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(mergeTxId, sampleWafers, name(sampleWafers), r))
 
       // --- Commit Phase ---
       smpKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(mergeTxId, r))

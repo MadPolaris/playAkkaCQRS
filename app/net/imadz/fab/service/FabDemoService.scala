@@ -100,9 +100,11 @@ class FabDemoService @Inject()(
     }.toMap
     val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
     val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-rework-lot".getBytes)
+    val scrapLotId: Id  = UUID.nameUUIDFromBytes(s"$workOrderId-scrap-lot".getBytes)
 
     val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
     val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
+    val scrapLotRef = sharding.entityRefFor(LotEntityTypeKey, scrapLotId.toString)
 
     val sagaTxFn: (Id, Id, Set[Id], Set[String]) => Future[FabSagaConfirmation] =
       (srcId, tgtId, wids, names) => fabSagaService.transferWafers(srcId, tgtId, wids, names)
@@ -123,7 +125,11 @@ class FabDemoService @Inject()(
       publisher = publisher,
       ignoreLotReply = ignoreLotReply,
       sagaTx = sagaTxFn,
-      speedMultiplier = 1.0
+      speedMultiplier = 1.0,
+      scrapLotRef = Some(scrapLotRef),
+      scrapLotId = Some(scrapLotId),
+      childLotRefs = Map("scrap" -> scrapLotRef),
+      childLotIds = Map("scrap" -> scrapLotId)
     )
 
     val initialState = FabDemoState(
@@ -138,6 +144,7 @@ class FabDemoService @Inject()(
     for {
       _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref))
       _ <- reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ReworkSplit)))
+      _ <- scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ScrapSplit)))
       _ = spawnDynamicSimulators(routing, adapter, publisher, waferIds)
       result <- pipelineFn(initialState, ctx)
     } yield result
@@ -540,27 +547,41 @@ class FabDemoService @Inject()(
 
   /**
    * Query real aggregate entity state by work order ID.
-   * Uses deterministic UUIDs to reconstruct entity refs and sends
-   * GetLotState / GetWaferState commands via ClusterSharding ask pattern.
+   *
+   * Uses the FabDemoViewProjection shared childLotRegistry (populated by the
+   * projection handler on LotCreated) to locate child lots by their real UUIDs,
+   * falling back to deterministic UUIDs for scenarios run before the registry existed.
    */
   def queryEntityState(workOrderId: String): Future[EntityStateSnapshot] = {
     import net.imadz.application.aggregates.LotProtocol.GetLotState
+    import net.imadz.fab.projection.FabDemoViewProjection
     import java.util.UUID
 
     val sourceLotUUID = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
     val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotUUID.toString)
 
-    val childLotKeys = Seq("rework", "scrap", "pilot", "sample", "hold")
+    // Display key → (registry reason key, deterministic UUID suffix)
+    val childLotSpecs = Seq(
+      ("rework", "rwk", "rework"),
+      ("scrap",  "scrap", "scrap"),
+      ("pilot",  "pilot", "pilot"),
+      ("sample", "sample", "sample"),
+      ("hold",   "hold", "hold")
+    )
 
     lotRef.ask[LotConfirmation](GetLotState(_)).flatMap { lotConf =>
-      val childLotFutures: Seq[Future[Option[(String, LotConfirmation)]]] = childLotKeys.map { key =>
-        val uuid = UUID.nameUUIDFromBytes(s"$workOrderId-$key-lot".getBytes)
-        val ref = sharding.entityRefFor(LotEntityTypeKey, uuid.toString)
-        ref.ask[LotConfirmation](GetLotState(_))
-          .map { conf =>
-            if (conf.waferIds.nonEmpty || conf.productId.exists(_.nonEmpty)) Some(key -> conf) else None
-          }
-          .recover { case _ => None }
+      val childLotFutures: Seq[Future[Option[(String, LotConfirmation)]]] = childLotSpecs.map {
+        case (displayKey, reasonKey, detSuffix) =>
+          // Prefer real UUID from projection registry, fall back to deterministic
+          val registryKey = sourceLotUUID.toString + ":" + reasonKey
+          val realId = Option(FabDemoViewProjection.childLotRegistry.get(registryKey))
+            .getOrElse(UUID.nameUUIDFromBytes(s"$workOrderId-$detSuffix-lot".getBytes).toString)
+          val ref = sharding.entityRefFor(LotEntityTypeKey, realId)
+          ref.ask[LotConfirmation](GetLotState(_))
+            .map { conf =>
+              if (conf.waferIds.nonEmpty || conf.productId.exists(_.nonEmpty)) Some(displayKey -> conf) else None
+            }
+            .recover { case _ => None }
       }
 
       Future.sequence(childLotFutures).map { results =>

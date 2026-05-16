@@ -240,7 +240,7 @@ object FabScenarioPipeline {
     val sagaId = s"SAGA-SPLIT-$lotKey-${state.iteration}"
     val rwkLotName = s"${ctx.scenario.scenarioId}-${lotKey.toUpperCase}"
     ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE", ctx.scenario.scenarioId, rwkLotName, finalMoveIds.toSeq.map(_.toString)))
-    ctx.sagaTx(ctx.sourceLotId, childLotId, finalMoveIds, finalMoveNames).map { confirmation =>
+    ctx.sagaTx(ctx.sourceLotId, childLotId, finalMoveIds, finalMoveNames).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED", ctx.scenario.scenarioId, rwkLotName, finalMoveIds.toSeq.map(_.toString)))
         val updatedWafers = state.wafers.map { case (wid, info) =>
@@ -249,10 +249,11 @@ object FabScenarioPipeline {
           else wid -> info
         }
         val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1, childLotView = Map(lotKey -> ("Active", finalMoveIds.size)))
-        finalState
+        Future.successful(finalState)
       } else {
-        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "FAILED", "", "", Seq.empty))
-        s.copy(ledgerSeq = s.ledgerSeq + 1)
+        val errMsg = confirmation.error.getOrElse("unknown")
+        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", s"FAILED: $errMsg", "", "", Seq.empty))
+        Future.failed(new IllegalStateException(s"Saga $sagaId SplitLot failed: $errMsg"))
       }
     }(ctx.ec)
   }
@@ -277,7 +278,7 @@ object FabScenarioPipeline {
     val sagaId = s"SAGA-MERGE-$lotKey-${state.iteration}"
     val rwkLotName = s"${ctx.scenario.scenarioId}-${lotKey.toUpperCase}"
     ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE", rwkLotName, ctx.scenario.scenarioId, finalMoveIds.toSeq.map(_.toString)))
-    ctx.sagaTx(childLotId, ctx.sourceLotId, finalMoveIds, finalMoveNames).map { confirmation =>
+    ctx.sagaTx(childLotId, ctx.sourceLotId, finalMoveIds, finalMoveNames).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED", rwkLotName, ctx.scenario.scenarioId, finalMoveIds.toSeq.map(_.toString)))
         val mergedWafers = state.wafers.map { case (wid, info) =>
@@ -286,16 +287,11 @@ object FabScenarioPipeline {
           else wid -> info
         }
         val finalState = s.copy(wafers = mergedWafers, ledgerSeq = s.ledgerSeq + 1, childLotView = Map(lotKey -> ("Merged", 0)))
-        finalState
+        Future.successful(finalState)
       } else {
         val errMsg = confirmation.error.getOrElse("unknown")
         ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", s"FAILED: $errMsg", rwkLotName, ctx.scenario.scenarioId, moveIds.toSeq.map(_.toString)))
-        val mergedWafers = state.wafers.map { case (wid, info) =>
-          if (moveIds.contains(ctx.waferUUIDs.getOrElse(wid, java.util.UUID.nameUUIDFromBytes("none".getBytes))))
-            wid -> info.copy(subLot = None, classification = Some("PASS"))
-          else wid -> info
-        }
-        s.copy(wafers = mergedWafers, ledgerSeq = s.ledgerSeq + 1)
+        Future.failed(new IllegalStateException(s"Saga $sagaId MergeLot failed: $errMsg"))
       }
     }(ctx.ec)
   }

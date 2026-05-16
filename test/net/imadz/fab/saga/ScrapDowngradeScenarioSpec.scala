@@ -19,7 +19,7 @@ class ScrapDowngradeScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestCo
   private val w1 = UUID.nameUUIDFromBytes("SCRAP-W1".getBytes)
   private val w2 = UUID.nameUUIDFromBytes("SCRAP-W2".getBytes)
   private val w3 = UUID.nameUUIDFromBytes("SCRAP-W3".getBytes)
-  private val threeWafers = Set(w1, w2, w3)
+  private val threeWafers = Map(w1 -> "SCRAP-W1", w2 -> "SCRAP-W2", w3 -> "SCRAP-W3")
 
   "Scrap & Downgrade" should {
     "record scrapped wafer classification on lot" in {
@@ -31,10 +31,10 @@ class ScrapDowngradeScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestCo
 
       // Record SCRAP classification
       val scrapResult = sKit.runCommand[LotConfirmation](r =>
-        RecordWaferClassified("SCRAP-W1", "SCRAP", 0, 32.0, r))
+        RecordWaferClassified(w1, "SCRAP", 0, 32.0, r))
       scrapResult.reply.error shouldBe None
-      scrapResult.state.waferClassifications should contain key "SCRAP-W1"
-      scrapResult.state.waferClassifications("SCRAP-W1").classification shouldBe "SCRAP"
+      scrapResult.state.waferClassifications should contain key w1
+      scrapResult.state.waferClassifications(w1).classification shouldBe "SCRAP"
     }
 
     "classify multiple wafers and track them independently" in {
@@ -42,24 +42,24 @@ class ScrapDowngradeScenarioSpec extends ScalaTestWithActorTestKit(FabSagaTestCo
 
       sKit.runCommand[LotConfirmation](r => CreateLot("SCRAP-PROD2", threeWafers, r))
 
-      sKit.runCommand[LotConfirmation](r => RecordWaferClassified("SCRAP-W1", "PASS", 0, 30.0, r))
-      sKit.runCommand[LotConfirmation](r => RecordWaferClassified("SCRAP-W2", "FAIL", 0, 36.0, r))
-      sKit.runCommand[LotConfirmation](r => RecordWaferClassified("SCRAP-W3", "SCRAP", 0, 40.0, r))
+      sKit.runCommand[LotConfirmation](r => RecordWaferClassified(w1, "PASS", 0, 30.0, r))
+      sKit.runCommand[LotConfirmation](r => RecordWaferClassified(w2, "FAIL", 0, 36.0, r))
+      sKit.runCommand[LotConfirmation](r => RecordWaferClassified(w3, "SCRAP", 0, 40.0, r))
 
       val state = sKit.getState()
-      state.waferClassifications("SCRAP-W1").classification shouldBe "PASS"
-      state.waferClassifications("SCRAP-W2").classification shouldBe "FAIL"
-      state.waferClassifications("SCRAP-W3").classification shouldBe "SCRAP"
+      state.waferClassifications(w1).classification shouldBe "PASS"
+      state.waferClassifications(w2).classification shouldBe "FAIL"
+      state.waferClassifications(w3).classification shouldBe "SCRAP"
     }
 
     "idempotent: repeat classification yields same result" in {
       val sKit = FabSagaTestConfig.createLotTestKit(sourceLotId)
 
       sKit.runCommand[LotConfirmation](r => CreateLot("SCRAP-IDM", threeWafers, r))
-      sKit.runCommand[LotConfirmation](r => RecordWaferClassified("SCRAP-W1", "SCRAP", 0, 35.0, r))
+      sKit.runCommand[LotConfirmation](r => RecordWaferClassified(w1, "SCRAP", 0, 35.0, r))
 
       val retry = sKit.runCommand[LotConfirmation](r =>
-        RecordWaferClassified("SCRAP-W1", "SCRAP", 0, 35.0, r))
+        RecordWaferClassified(w1, "SCRAP", 0, 35.0, r))
       retry.reply.error shouldBe None
       retry.events shouldBe empty
     }

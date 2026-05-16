@@ -18,6 +18,11 @@ object FabDemoViewProjection {
   val projectionName = "FabDemoView"
   val Tag = "fab-view"
 
+  // Shared registry: parentLotUUID:childKey → childLotUUID
+  // Populated by FabDemoViewHandler on LotCreated events with parentLotId.
+  // Used by FabDemoService.queryEntityState to avoid guessing child lot UUIDs.
+  val childLotRegistry = new java.util.concurrent.ConcurrentHashMap[String, String]()
+
   def createProjection(
     system: ActorSystem[_],
     publishToUI: FabSimulationEvent => Unit

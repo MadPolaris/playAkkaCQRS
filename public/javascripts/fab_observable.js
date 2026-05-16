@@ -175,26 +175,11 @@
             waferId: w.waferId, status: w.status, lotId: w.lotId,
             classification: w.classification, reworkCount: w.reworkCount
           };
-          var lot = lots[w.lotId];
-          if (lot && lot.waferIds.indexOf(w.waferId) < 0) {
-            lot.waferIds.push(w.waferId);
-            lot.waferCount = lot.waferIds.length;
-          }
         } else {
           var ew = wafers[w.waferId];
           // Handle lot transfer
           if (ew.lotId !== w.lotId) {
-            var oldLot = lots[ew.lotId];
-            if (oldLot) {
-              oldLot.waferIds = oldLot.waferIds.filter(function(id) { return id !== w.waferId; });
-              oldLot.waferCount = oldLot.waferIds.length;
-            }
             ew.lotId = w.lotId;
-            var newLot = lots[w.lotId];
-            if (newLot && newLot.waferIds.indexOf(w.waferId) < 0) {
-              newLot.waferIds.push(w.waferId);
-              newLot.waferCount = newLot.waferIds.length;
-            }
           }
           ew.status = w.status;
           ew.classification = w.classification;
@@ -202,6 +187,24 @@
         }
       });
 
+      // Reconcile lot wafer membership from authoritative wafer state.
+      // Wafers removed via Saga TCC (WaferRemovalCommitted) won't appear
+      // in the incoming data.wafers for the source lot, so we rebuild
+      // each lot's waferIds by scanning the full wafer registry.
+      Object.keys(lots).forEach(function(lotId) {
+        lots[lotId].waferIds = [];
+      });
+      Object.keys(wafers).forEach(function(wid) {
+        var w = wafers[wid];
+        var lot = lots[w.lotId];
+        if (lot) {
+          lot.waferIds.push(w.waferId);
+        }
+      });
+      // Update waferCount and passCount/scrapCount from authoritative lot data
+      Object.keys(lots).forEach(function(lotId) {
+        lots[lotId].waferCount = lots[lotId].waferIds.length;
+      });
 
       return { lots: lots, wafers: wafers };
     }

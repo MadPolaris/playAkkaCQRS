@@ -203,7 +203,7 @@ object FabDemoPipeline {
     ctx.publisher(FoupStateChanged(ctx.foupId, "SPLITTING", PipelineStages.activeCount(state), reworkWaferIds.size, "CDSEM",
       lotId = ctx.scenario.scenarioId, reworkLotId = s"${ctx.scenario.scenarioId}-RWK"))
 
-    ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet).map { confirmation =>
+    ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
           ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
@@ -215,10 +215,11 @@ object FabDemoPipeline {
           else wid -> info
         }
         val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = Some("rwk"), childLotView = Map("rwk" -> ("Active", reworkWaferIds.size)))
-        finalState
+        Future.successful(finalState)
       } else {
-        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
-        s.copy(ledgerSeq = s.ledgerSeq + 1)
+        val errMsg = confirmation.error.getOrElse("unknown")
+        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
+        Future.failed(new IllegalStateException(s"Saga $sagaId SplitLot failed: $errMsg"))
       }
     }(ctx.ec)
   }
@@ -244,7 +245,7 @@ object FabDemoPipeline {
         ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE",
           s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
 
-        ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, passWaferUUIDs.toSet, passWaferNames.toSet).map { confirmation =>
+        ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, passWaferUUIDs.toSet, passWaferNames.toSet).flatMap { confirmation =>
           if (confirmation.error.isEmpty) {
             ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED",
               s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
@@ -262,10 +263,11 @@ object FabDemoPipeline {
               else wid -> info
             }
             val finalState = s.copy(wafers = mergedWafers, ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = None, childLotView = Map("rwk" -> ("Merged", 0)))
-            finalState
+            Future.successful(finalState)
           } else {
-            ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
-            s.copy(ledgerSeq = s.ledgerSeq + 1)
+            val errMsg = confirmation.error.getOrElse("unknown")
+            ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
+            Future.failed(new IllegalStateException(s"Saga $sagaId MergeLot failed: $errMsg"))
           }
         }(ctx.ec)
       }
@@ -292,7 +294,7 @@ object FabDemoPipeline {
     ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "PREPARE",
       ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
 
-    ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet).map { confirmation =>
+    ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "COMMITTED",
           ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
@@ -305,10 +307,11 @@ object FabDemoPipeline {
         }
         val finalState = s.copy(wafers = updatedWafers, ledgerSeq = s.ledgerSeq + 1,
           childLotView = state.childLotView + ("scrap" -> ("Scrapped", scrapWaferIds.size)))
-        finalState
+        Future.successful(finalState)
       } else {
-        ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "FAILED", ctx.scenario.scenarioId, "", Seq.empty))
-        s.copy(ledgerSeq = s.ledgerSeq + 1)
+        val errMsg = confirmation.error.getOrElse("unknown")
+        ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
+        Future.failed(new IllegalStateException(s"Saga SAGA-SCRAP ScrapLot failed: $errMsg"))
       }
     }(ctx.ec)
   }

@@ -3,7 +3,7 @@ package net.imadz.fab.domain
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.domain.entities.LotEntity
-import net.imadz.domain.entities.LotEntity.{Active, LotCreated, LotSealed, LotState, WaferAdditionCanceled, WaferAdditionCommitted, WaferAdditionReserved, WaferRemovalCommitted, WaferRemovalReleased, WaferRemovalReserved}
+import net.imadz.domain.entities.LotEntity.{Active, LotCreated, LotSealed, LotState, Sealed, WaferAdditionCanceled, WaferAdditionCommitted, WaferAdditionReserved, WaferRemovalCommitted, WaferRemovalReleased, WaferRemovalReserved}
 import net.imadz.fab.saga.FabSagaTestConfig
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
@@ -19,7 +19,8 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
   private val w3 = UUID.randomUUID()
   private val w4 = UUID.randomUUID()
   private val w5 = UUID.randomUUID()
-  private val fiveWafers = Set(w1, w2, w3, w4, w5)
+  private val fiveWafers = Map(w1 -> "WAFER-1", w2 -> "WAFER-2", w3 -> "WAFER-3", w4 -> "WAFER-4", w5 -> "WAFER-5")
+  private val fiveWafersSet = Set(w1, w2, w3, w4, w5)
 
   private var lotTestKit = FabSagaTestConfig.createLotTestKit(lotId)
 
@@ -37,25 +38,25 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
         CreateLot("PHOTO-CELL-A", fiveWafers, replyTo))
 
       result.reply.error shouldBe None
-      result.reply.waferIds shouldBe fiveWafers
+      result.reply.waferIds shouldBe fiveWafersSet
       result.reply.phase shouldBe Some(Active)
 
       result.events should have size 1
       result.events.head shouldBe a[LotCreated]
 
       result.state.phase shouldBe Active
-      result.state.waferIds shouldBe fiveWafers
+      result.state.waferIds shouldBe fiveWafersSet
       result.state.productId shouldBe "PHOTO-CELL-A"
     }
 
     "reject create on already created lot" in {
       // First create succeeds
       lotTestKit.runCommand[LotConfirmation](replyTo =>
-        CreateLot("P1", Set(w1), replyTo))
+        CreateLot("P1", Map(w1 -> "WAFER-1"), replyTo))
 
       // Second create must fail
       val result = lotTestKit.runCommand[LotConfirmation](replyTo =>
-        CreateLot("P2", Set(w2), replyTo))
+        CreateLot("P2", Map(w2 -> "WAFER-2"), replyTo))
 
       result.reply.error shouldBe defined
       result.reply.error.get.code shouldBe "LOT_001"
@@ -63,7 +64,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
     }
 
     "reject lot with > 25 wafers" in {
-      val tooMany = (1 to 26).map(_ => UUID.randomUUID()).toSet
+      val tooMany = (1 to 26).map(i => UUID.randomUUID() -> s"WAFER-$i").toMap
       val result = lotTestKit.runCommand[LotConfirmation](replyTo =>
         CreateLot("P1", tooMany, replyTo))
 
@@ -73,7 +74,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
 
     "allow empty lot for child lot creation" in {
       val result = lotTestKit.runCommand[LotConfirmation](replyTo =>
-        CreateLot("P1", Set.empty, replyTo))
+        CreateLot("P1", Map.empty, replyTo))
 
       result.reply.error shouldBe None
       result.reply.phase shouldBe Some(Active)
@@ -91,10 +92,10 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
 
       val txId = UUID.randomUUID()
       val result = lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
-        ReserveWaferRemoval(txId, Set(w1, w3), replyTo))
+        ReserveWaferRemoval(txId, Set(w1, w3), Set("WAFER-1", "WAFER-3"), replyTo))
 
       result.reply.error shouldBe None
-      result.events should contain(WaferRemovalReserved(txId, Set(w1, w3)))
+      result.events should contain(WaferRemovalReserved(txId, Set(w1, w3), Set("WAFER-1", "WAFER-3")))
       result.state.reservedWafers should contain key txId
       result.state.reservedWafers(txId) shouldBe Set(w1, w3)
       // wafers still in lot until committed
@@ -106,10 +107,10 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       val txId = UUID.randomUUID()
 
       lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
-        ReserveWaferRemoval(txId, Set(w1), replyTo))
+        ReserveWaferRemoval(txId, Set(w1), Set("WAFER-1"), replyTo))
 
       val result2 = lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
-        ReserveWaferRemoval(txId, Set(w1), replyTo))
+        ReserveWaferRemoval(txId, Set(w1), Set("WAFER-1"), replyTo))
 
       result2.reply.error shouldBe None
       // No new events on idempotent call
@@ -122,7 +123,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       val unknown = UUID.randomUUID()
 
       val result = lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
-        ReserveWaferRemoval(txId, Set(unknown), replyTo))
+        ReserveWaferRemoval(txId, Set(unknown), Set("UNKNOWN"), replyTo))
 
       result.reply.error shouldBe defined
       result.reply.error.get.code shouldBe "LOT_011"
@@ -134,10 +135,10 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       val t2 = UUID.randomUUID()
 
       lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
-        ReserveWaferRemoval(t1, Set(w1), replyTo))
+        ReserveWaferRemoval(t1, Set(w1), Set("WAFER-1"), replyTo))
 
       val result = lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
-        ReserveWaferRemoval(t2, Set(w1), replyTo))
+        ReserveWaferRemoval(t2, Set(w1), Set("WAFER-1"), replyTo))
 
       result.reply.error shouldBe defined
       result.reply.error.get.code shouldBe "LOT_012"
@@ -154,13 +155,13 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       val txId = UUID.randomUUID()
 
       lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
-        ReserveWaferRemoval(txId, Set(w3), replyTo))
+        ReserveWaferRemoval(txId, Set(w3), Set("WAFER-3"), replyTo))
 
       val result = lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
         CommitWaferRemoval(txId, replyTo))
 
       result.reply.error shouldBe None
-      result.events should contain(WaferRemovalCommitted(txId))
+      result.events should contain(WaferRemovalCommitted(txId, Set("WAFER-3")))
       result.state.waferIds should not contain w3
       result.state.waferIds should have size 4
       result.state.reservedWafers should not contain key(txId)
@@ -176,6 +177,29 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       result.reply.error shouldBe defined
       result.reply.error.get.code shouldBe "LOT_013"
     }
+
+    "auto-seal child lot when all wafers are removed" in {
+      val childTestKit = FabSagaTestConfig.createLotTestKit(UUID.randomUUID())
+      val parentId = UUID.randomUUID()
+      val childWafers = Map(w1 -> "WAFER-1", w2 -> "WAFER-2")
+
+      childTestKit.runCommand[LotConfirmation](r =>
+        CreateLot("CHILD-PROD", childWafers, r,
+          parentLotId = Some(parentId), splitReason = Some(LotEntity.ReworkSplit)))
+
+      childTestKit.getState().phase shouldBe Active
+
+      val txId = UUID.randomUUID()
+      childTestKit.runCommand[WaferRemovalConfirmation](r =>
+        ReserveWaferRemoval(txId, Set(w1, w2), Set("WAFER-1", "WAFER-2"), r))
+
+      val result = childTestKit.runCommand[WaferRemovalConfirmation](r =>
+        CommitWaferRemoval(txId, r))
+
+      result.reply.error shouldBe None
+      result.state.waferIds shouldBe empty
+      result.state.phase shouldBe Sealed
+    }
   }
 
   // ===================================================================
@@ -188,7 +212,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       val txId = UUID.randomUUID()
 
       lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
-        ReserveWaferRemoval(txId, Set(w1), replyTo))
+        ReserveWaferRemoval(txId, Set(w1), Set("WAFER-1"), replyTo))
 
       val result = lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
         ReleaseReservedWafer(txId, replyTo))
@@ -232,7 +256,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
 
     "reject when FOUP total would exceed 25" in {
       val manyWafers = (1 to 25).map(_ => UUID.randomUUID()).toSet
-      createLot(Set(w1)) // 1 existing
+      createLot(Map(w1 -> "WAFER-1")) // 1 existing
       val txId = UUID.randomUUID()
 
       val result = lotTestKit.runCommand[WaferAdditionConfirmation](replyTo =>
@@ -335,7 +359,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
     "handle repeat removal commit (no new events)" in {
       createLot(fiveWafers)
       val txId = UUID.randomUUID()
-      lotTestKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), r))
+      lotTestKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w3), Set("WAFER-3"), r))
       lotTestKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(txId, r))
 
       // Repeat commit — idempotent
@@ -365,7 +389,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
     "handle release after already committed (no-op)" in {
       createLot(fiveWafers)
       val txId = UUID.randomUUID()
-      lotTestKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w1), r))
+      lotTestKit.runCommand[WaferRemovalConfirmation](r => ReserveWaferRemoval(txId, Set(w1), Set("WAFER-1"), r))
       lotTestKit.runCommand[WaferRemovalConfirmation](r => CommitWaferRemoval(txId, r))
 
       // Release after commit — idempotent no-op
@@ -415,7 +439,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
         GetLotState(replyTo))
 
       result.reply.error shouldBe None
-      result.reply.waferIds shouldBe fiveWafers
+      result.reply.waferIds shouldBe fiveWafersSet
       result.reply.phase shouldBe Some(Active)
     }
   }
@@ -424,7 +448,7 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
   // Helpers
   // ===================================================================
 
-  private def createLot(wafers: Set[java.util.UUID]): Unit = {
+  private def createLot(wafers: Map[java.util.UUID, String]): Unit = {
     val result = lotTestKit.runCommand[LotConfirmation](replyTo =>
       CreateLot("TEST-PRODUCT", wafers, replyTo))
     require(result.reply.error.isEmpty, s"createLot failed: ${result.reply.error}")

@@ -5,8 +5,7 @@ import akka.actor.typed.eventstream.EventStream
 import akka.actor.typed.scaladsl.Behaviors
 import net.imadz.application.events.SagaProgressEvent
 import net.imadz.domain.entities.FabDomainEventEnvelope
-import net.imadz.domain.entities.FabProcessEntity._
-import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent, ProcessEventMapper}
+import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent}
 
 /**
  * Subscribes to Akka Typed EventStream for [[FabDomainEventEnvelope]]
@@ -33,36 +32,17 @@ object FabDemoEventBridge {
       ctx.system.eventStream ! EventStream.Subscribe(domainAdapter)
       ctx.system.eventStream ! EventStream.Subscribe(sagaAdapter)
 
-      var mappers = Map.empty[String, ProcessEventMapper]
-
       Behaviors.receiveMessage {
         case WrappedDomain(FabDomainEventEnvelope(aggType, aggId, event)) =>
           val layer = aggType match {
             case "FabChain"           => 0
-            case "WorkOrder"          => 0 // WorkOrder lifecycle = orchestration layer
+            case "WorkOrder"          => 0
             case "FabSagaTransaction" => 1
             case "FabProcess"         => 3
-            case _                    => 2 // Lot, Wafer → Aggregate layer
+            case _                    => 2 // Lot, Wafer
           }
           emitDomainEvent(publishToHub, event, aggregateType = aggType,
             aggregateId = aggId, layer = layer)
-
-          // For Process events, also map to UI simulation events via ProcessEventMapper
-          if (layer == 3) {
-            event match {
-              case ProcessStarted(lotId, waferIds, lotSize) =>
-                val mapper = new ProcessEventMapper(lotId, lotId, waferIds.toSeq, lotSize)
-                mappers = mappers + (aggId -> mapper)
-                mapper.mapToFabSimulationEvent(event.asInstanceOf[FabProcessEvent]).foreach(publishToHub)
-
-              case e: FabProcessEvent =>
-                mappers.get(aggId).foreach { mapper =>
-                  mapper.mapToFabSimulationEvent(e).foreach(publishToHub)
-                }
-
-              case _ => () // not a FabProcessEvent (shouldn't happen)
-            }
-          }
           Behaviors.same
 
         case WrappedSaga(event) =>
