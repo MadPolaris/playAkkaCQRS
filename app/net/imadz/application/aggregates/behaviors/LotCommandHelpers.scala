@@ -54,4 +54,17 @@ trait LotCommandHelpers {
     override def createFailureReply(param: Id)(error: iMadzError): WaferAdditionConfirmation = WaferAdditionConfirmation(param, Some(error))
     override def createSuccessReply(param: Id)(state: LotState): WaferAdditionConfirmation = WaferAdditionConfirmation(param, None)
   }
+
+  // RouteCard helpers (M3.5+)
+  implicit object AssignRouteCardHelper extends CommandHelper[AssignRouteCard, LotState, (Seq[String], Option[String], String), LotConfirmation] {
+    override def toParam(state: LotState, command: AssignRouteCard): (Seq[String], Option[String], String) = (command.steps, command.sourcedFrom, command.reason)
+    override def createFailureReply(param: (Seq[String], Option[String], String))(error: iMadzError): LotConfirmation = LotConfirmation(Some(error))
+    override def createSuccessReply(param: (Seq[String], Option[String], String))(state: LotState): LotConfirmation = LotConfirmation(None, state.waferIds, Some(state.phase))
+  }
+
+  implicit object AdvanceRouteCardStepHelper extends CommandHelper[AdvanceRouteCardStep, LotState, Int, LotConfirmation] {
+    override def toParam(state: LotState, command: AdvanceRouteCardStep): Int = command.stepIndex
+    override def createFailureReply(param: Int)(error: iMadzError): LotConfirmation = LotConfirmation(Some(error))
+    override def createSuccessReply(param: Int)(state: LotState): LotConfirmation = LotConfirmation(None, state.waferIds, Some(state.phase))
+  }
 }

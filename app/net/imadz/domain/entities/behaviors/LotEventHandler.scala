@@ -91,5 +91,18 @@ object LotEventHandler {
     case WafersReleased(_) => state
 
     case ProcessCompleted(_, _, _, _) => state
+
+    // RouteCard events (M3.5+)
+    case RouteCardAssigned(steps, sourcedFrom, reason, assignedAt) =>
+      state.copy(routeCard = Some(RouteCard(
+        steps = steps, currentStepIndex = 0,
+        sourcedFrom = sourcedFrom, reason = reason, assignedAt = assignedAt
+      )))
+
+    case RouteCardStepAdvanced(stepIndex) =>
+      state.routeCard match {
+        case Some(card) => state.copy(routeCard = Some(card.copy(currentStepIndex = stepIndex)))
+        case None => state
+      }
   }
 }

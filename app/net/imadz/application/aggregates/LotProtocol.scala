@@ -41,6 +41,9 @@ object LotProtocol {
   case class RecordWafersHeld(waferIds: Set[String], reason: String, replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWafersReleased(waferIds: Set[String], replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class CompleteProcess(lotId: String, passCount: Int, scrapCount: Int, reworkCount: Int, replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  // RouteCard (M3.5+)
+  case class AssignRouteCard(steps: Seq[String], sourcedFrom: Option[String], reason: String, replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  case class AdvanceRouteCardStep(stepIndex: Int, replyTo: ActorRef[LotConfirmation]) extends LotCommand
 
   // --- Replies ---
   case class LotConfirmation(error: Option[iMadzError], waferIds: Set[Id] = Set.empty, phase: Option[LotPhase] = None,

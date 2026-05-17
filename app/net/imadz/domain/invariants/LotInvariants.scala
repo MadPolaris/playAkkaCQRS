@@ -128,4 +128,32 @@ object LotInvariants {
         Right(List(LotSealed()))
     }
   }
+
+  // RouteCard invariants (M3.5+)
+  implicit object AssignRouteCardRule extends InvariantRule[LotEvent, LotState, (Seq[String], Option[String], String)] {
+    def apply(state: LotState, param: (Seq[String], Option[String], String)): Either[iMadzError, List[LotEvent]] = {
+      val (steps, sourcedFrom, reason) = param
+      if (steps.isEmpty) Left(iMadzError("ROUTECARD_001", "RouteCard steps must not be empty"))
+      else if (state.phase != Empty && state.phase != Active)
+        Left(iMadzError("ROUTECARD_002", s"Cannot assign RouteCard in phase ${state.phase}"))
+      else
+        Right(List(RouteCardAssigned(steps, sourcedFrom, reason, System.currentTimeMillis())))
+    }
+  }
+
+  implicit object AdvanceRouteCardStepRule extends InvariantRule[LotEvent, LotState, Int] {
+    def apply(state: LotState, param: Int): Either[iMadzError, List[LotEvent]] = {
+      val stepIndex = param
+      state.routeCard match {
+        case None => Left(iMadzError("ROUTECARD_003", "No RouteCard assigned, cannot advance step"))
+        case Some(card) =>
+          if (stepIndex < 0 || stepIndex > card.steps.length)
+            Left(iMadzError("ROUTECARD_004", s"Step index $stepIndex out of bounds [0, ${card.steps.length}]"))
+          else if (stepIndex <= card.currentStepIndex && card.currentStepIndex > 0)
+            Left(iMadzError("ROUTECARD_005", s"Step already advanced (current=${card.currentStepIndex}, requested=$stepIndex)"))
+          else
+            Right(List(RouteCardStepAdvanced(stepIndex)))
+      }
+    }
+  }
 }

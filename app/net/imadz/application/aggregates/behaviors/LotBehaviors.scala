@@ -127,5 +127,12 @@ object LotBehaviors extends LotCommandHelpers {
     case cmd: CompleteProcess =>
       Effect.persist(ProcessCompleted(cmd.lotId, cmd.passCount, cmd.scrapCount, cmd.reworkCount))
         .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    // RouteCard commands (M3.5+)
+    case cmd: AssignRouteCard =>
+      runReplyingPolicy(AssignRouteCardRule, AssignRouteCardHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
+
+    case cmd: AdvanceRouteCardStep =>
+      runReplyingPolicy(AdvanceRouteCardStepRule, AdvanceRouteCardStepHelper)(state, cmd).replyWithAndPublish(cmd.replyTo)(context)
   }
 }

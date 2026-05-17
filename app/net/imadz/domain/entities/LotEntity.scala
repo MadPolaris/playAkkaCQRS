@@ -39,7 +39,8 @@ object LotEntity {
     completedTransferIds: Set[Id] = Set.empty,
     loadedFoupId: Option[String] = None,
     parentLotId: Option[Id] = None,
-    splitReason: Option[SplitReason] = None
+    splitReason: Option[SplitReason] = None,
+    routeCard: Option[RouteCard] = None   // M3.5+: 随身工艺路线卡
   ) {
     // --- Derived views (computed on-demand, no cache) ---
     def waferIds: Set[Id] = wafers.keySet
@@ -101,6 +102,22 @@ object LotEntity {
   case class WafersHeld(waferIds: Set[String], reason: String) extends LotEvent
   case class WafersReleased(waferIds: Set[String]) extends LotEvent
   case class ProcessCompleted(lotId: String, passCount: Int, scrapCount: Int, reworkCount: Int) extends LotEvent
+
+  // --- RouteCard: Lot随身工艺路线卡 (M3.5+) ---
+  case class RouteCard(
+    steps: Seq[String],          // PipelineStage标识序列
+    currentStepIndex: Int = 0,   // 当前执行位置
+    sourcedFrom: Option[String] = None, // "routeId:v3" 溯源的路线引用
+    reason: String,              // "InitialRoute" | "OCAP-001:Rework" | "PilotSplit" | ...
+    assignedAt: Long
+  )
+  case class RouteCardAssigned(
+    steps: Seq[String],
+    sourcedFrom: Option[String],
+    reason: String,
+    assignedAt: Long
+  ) extends LotEvent
+  case class RouteCardStepAdvanced(stepIndex: Int) extends LotEvent
   // @formatter:on
 
   // Event Handler Extension Point

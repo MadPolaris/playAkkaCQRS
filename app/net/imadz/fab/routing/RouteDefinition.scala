@@ -14,6 +14,16 @@ package net.imadz.fab.routing
  */
 
 // ============================================================================
+// Route Reference (versioned, lightweight)
+// ============================================================================
+
+case class RouteRef(
+  routeId: String,
+  version: Int,
+  commitHash: String = ""    // SHA-256(content) — content integrity check
+)
+
+// ============================================================================
 // Route Definition
 // ============================================================================
 
