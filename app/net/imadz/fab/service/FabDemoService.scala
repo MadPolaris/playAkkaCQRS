@@ -15,6 +15,7 @@ import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, Wafe
 import net.imadz.fab.events.{DemoStarted, FabSimulationEvent}
 import net.imadz.fab.model.{Por, PorRepository}
 import net.imadz.fab.protocol.ActorEquipmentAdapter
+import net.imadz.fab.routing.{RouteCompiler, RoutingRepository}
 import net.imadz.fab.scenario.{FabSimulationScenario, StandardScenarios}
 import net.imadz.fab.simulation._
 
@@ -64,10 +65,12 @@ class FabDemoService @Inject()(
         if (fromRegistry != null) fromRegistry.asInstanceOf[FabSimulationEvent => Unit]
         else (_: FabSimulationEvent) => ()
       }
-      val stateFut = PorRepository.findByProductId(productId) match {
-        case Some(routing) =>
+      val stateFut = (RoutingRepository.getLatest(productId), PorRepository.findByProductId(productId)) match {
+        case (Some(routeDef), _) =>
+          runFromRoute(workOrderId, productId, routeDef, waferIds, publisher)
+        case (None, Some(routing)) =>
           runDynamicPor(workOrderId, productId, routing, waferIds, publisher)
-        case None =>
+        case (None, None) =>
           runStaticScenario(workOrderId, productId, waferIds, publisher)
       }
       stateFut.map(s => (s.passCount, s.scrapCount, s.wafers.values.count(_.reworkCount > 0)))(ec)
@@ -146,6 +149,124 @@ class FabDemoService @Inject()(
       _ = spawnDynamicSimulators(routing, adapter, publisher, waferIds)
       result <- pipelineFn(initialState, ctx)
     } yield result
+  }
+
+  /** Execute a work order from a RouteDefinition (Route Browser "Start" path).
+   * Compiles the RouteDefinition to PipelineStages, creates entities, and runs them. */
+  private def runFromRoute(
+    workOrderId: String, productId: String, routeDef: net.imadz.fab.routing.RouteDefinition,
+    waferIds: Seq[String], publisher: FabSimulationEvent => Unit
+  ): Future[FabDemoState] = {
+    val syntheticScenario = FabSimulationScenario(
+      scenarioId = productId,
+      name = s"Route: ${routeDef.name}",
+      description = s"Route-based execution (${routeDef.nodes.size} nodes, v${routeDef.version})",
+      lotSize = waferIds.size,
+      waferIds = waferIds,
+      litho = EquipmentConfig("LITHO-01", "LITHO", processingTime = 8.seconds),
+      lithoDetail = LithoConfig(waferCount = waferIds.size),
+      cdSem = EquipmentConfig("CDSEM-01", "METROLOGY", processingTime = 5.seconds),
+      cdSemDetail = CdSemConfig(waferIds = waferIds, targetCdNm = 32.0, waferOutcomes = waferIds.map(_ -> "PASS").toMap),
+      amhs = AmhsConfig(routes = FabFlowEngine.DefaultRoutes.map { case (k, v) => k -> v }, maxConcurrentTransports = 5),
+      stocker = StockerConfig("STOCKER-01", portCount = 4, loadTime = 2.seconds),
+      decision = FabFlowEngine.DefaultDecisionConfig
+    )
+
+    val waferUUIDs: Map[String, Id] = waferIds.map { wid =>
+      wid -> UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes)
+    }.toMap
+    val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
+    val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-rework-lot".getBytes)
+    val scrapLotId: Id  = UUID.nameUUIDFromBytes(s"$workOrderId-scrap-lot".getBytes)
+    val pilotLotId: Id  = UUID.nameUUIDFromBytes(s"$workOrderId-pilot-lot".getBytes)
+    val sampleLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-sample-lot".getBytes)
+    val holdLotId: Id   = UUID.nameUUIDFromBytes(s"$workOrderId-hold-lot".getBytes)
+
+    val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
+    val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
+    val scrapLotRef = sharding.entityRefFor(LotEntityTypeKey, scrapLotId.toString)
+    val pilotLotRef = sharding.entityRefFor(LotEntityTypeKey, pilotLotId.toString)
+    val sampleLotRef = sharding.entityRefFor(LotEntityTypeKey, sampleLotId.toString)
+    val holdLotRef = sharding.entityRefFor(LotEntityTypeKey, holdLotId.toString)
+
+    val sagaTxFn: (Id, Id, Set[Id], Set[String]) => Future[FabSagaConfirmation] =
+      (srcId, tgtId, wids, names) => fabSagaService.transferWafers(srcId, tgtId, wids, names)
+
+    val adapter = new ActorEquipmentAdapter()
+    val ignoreLotReply = system.ignoreRef[LotConfirmation]
+
+    val ctx = FabDemoContext(
+      scenario = syntheticScenario,
+      foupId = s"FOUP-${routeDef.productId}",
+      lotRef = lotRef,
+      reworkLotRef = reworkLotRef,
+      waferUUIDs = waferUUIDs,
+      sourceLotId = sourceLotId,
+      reworkLotId = reworkLotId,
+      adapter = adapter,
+      publisher = publisher,
+      ignoreLotReply = ignoreLotReply,
+      sagaTx = sagaTxFn,
+      speedMultiplier = 1.0,
+      scrapLotRef = Some(scrapLotRef),
+      scrapLotId = Some(scrapLotId),
+      childLotRefs = Map(
+        "pilot" -> pilotLotRef,
+        "sample" -> sampleLotRef,
+        "hold" -> holdLotRef,
+        "scrap" -> scrapLotRef
+      ),
+      childLotIds = Map(
+        "pilot" -> pilotLotId,
+        "sample" -> sampleLotId,
+        "hold" -> holdLotId,
+        "scrap" -> scrapLotId
+      )
+    )
+
+    val initialState = FabDemoState(
+      wafers = waferIds.map(wid => wid -> WaferInfo(wid)).toMap
+    )
+
+    val stages = RouteCompiler.compile(routeDef)
+    publisher(DemoStarted(productId, routeDef.name, waferIds.size, waferIds))
+
+    for {
+      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref))
+      _ = spawnMinimalSimulators(adapter, publisher)
+      result <- FabScenarioPipeline.runStages(stages, initialState, ctx)
+    } yield result
+  }
+
+  /** Spawn minimal simulators (Litho + CDSEM + AMHS + Stocker) for route-based execution. */
+  private def spawnMinimalSimulators(
+    adapter: ActorEquipmentAdapter, publisher: FabSimulationEvent => Unit
+  ): Unit = {
+    val lithoActor = system.systemActorOf(
+      new LithographySimulator(LithoConfig(waferCount = 5))(EquipmentConfig("LITHO-01", "LITHO", processingTime = 8.seconds)),
+      s"litho-route-${System.currentTimeMillis()}"
+    )
+    val cdSemActor = system.systemActorOf(
+      new CdSemSimulator(CdSemConfig(waferIds = (1 to 5).map(i => s"WAFER-$i"), targetCdNm = 32.0,
+        waferOutcomes = (1 to 5).map(i => s"WAFER-$i" -> "PASS").toMap))(EquipmentConfig("CDSEM-01", "METROLOGY", processingTime = 5.seconds)),
+      s"cdsem-route-${System.currentTimeMillis()}"
+    )
+    val amhsActor = system.systemActorOf(
+      new AmhsSimulator()(AmhsConfig(routes = FabFlowEngine.DefaultRoutes.map { case (k, v) => k -> v }, maxConcurrentTransports = 5), 1.0),
+      s"amhs-route-${System.currentTimeMillis()}"
+    )
+    val stockerActor = system.systemActorOf(
+      new StockerSimulator()(StockerConfig("STOCKER-01", portCount = 4, loadTime = 2.seconds)),
+      s"stocker-route-${System.currentTimeMillis()}"
+    )
+    adapter.registerSimulator("LITHO-01", lithoActor)
+    adapter.registerSimulator("CDSEM-01", cdSemActor)
+    adapter.registerSimulator("AMHS", amhsActor)
+    adapter.registerSimulator("STOCKER-01", stockerActor)
+
+    publisher(net.imadz.fab.events.EquipmentStateChanged("LITHO-01", "LITHO", "Idle", None))
+    publisher(net.imadz.fab.events.EquipmentStateChanged("CDSEM-01", "METROLOGY", "Idle", None))
+    publisher(net.imadz.fab.events.EquipmentStateChanged("STOCKER-01", "STOCKER", "Idle", None))
   }
 
   /** Execute a static scenario work order. */
@@ -308,6 +429,33 @@ class FabDemoService @Inject()(
     publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
     val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
     ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(productId, waferIds, routeRef = None, replyTo))
+  }
+
+  /** Start a demo from a RouteDefinition in RoutingRepository (Route Browser "Start" button). */
+  def startDemoFromRoute(routeId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
+    net.imadz.fab.projection.FabDemoViewHandler.resetAll()
+    net.imadz.fab.projection.FabDemoViewProjection.resetChildLotRegistry()
+    val routeDef = RoutingRepository.getLatest(routeId)
+      .getOrElse(throw new IllegalArgumentException(s"Unknown route: $routeId"))
+    // Register in PorRepository so it also appears in the Start dropdown
+    PorRepository.register(Por(
+      productId = routeId,
+      steps = routeDef.nodes.collect { case net.imadz.fab.routing.AtomicStep(_, _, op, _) =>
+        net.imadz.fab.model.PorStep(
+          stepId = op.toString.take(20),
+          equipmentArea = net.imadz.fab.model.EquipmentArea.Lithography,
+          recipeId = "DEFAULT",
+          expectedDuration = 10.seconds
+        )
+      },
+      version = routeDef.version
+    ))
+    val waferIds = (1 to 5).map(i => s"WAFER-$i")
+    val workOrderId = UUID.randomUUID().toString
+
+    publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
+    val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
+    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(routeId, waferIds, routeRef = None, replyTo))
   }
 
   /** Spawn generic equipment simulators for all areas used in a routing. */

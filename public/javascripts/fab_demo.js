@@ -1329,6 +1329,7 @@
             '<td style="padding:4px">' +
             '<button onclick="compileRoute(\'' + r.routeId + '\')" style="background:var(--bg-alt);color:var(--accent);border:1px solid var(--border);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px">Compile</button>' +
             '<button onclick="showRouteGraphFor(\'' + r.routeId + '\')" style="background:var(--bg-alt);color:var(--green);border:1px solid var(--border);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px;margin-left:4px">Graph</button>' +
+            '<button onclick="startRoute(\'' + r.routeId + '\')" style="background:var(--accent);color:#fff;border:1px solid var(--accent);padding:2px 8px;border-radius:3px;cursor:pointer;font-size:10px;margin-left:4px">Start</button>' +
             '</td></tr>';
         });
         html += '</tbody></table>';
@@ -1397,6 +1398,59 @@
           .catch(function () {
             content.innerHTML = '<p style="color:var(--red);padding:12px">Cannot render graph for ' + routeId + '</p>';
           });
+      });
+  };
+
+  /** Start a demo directly from a RouteDefinition in the Route Browser */
+  window.startRoute = function (routeId) {
+    state.paused = false;
+    window._demoPaused = false;
+    _resetAllUI();
+    loadScenarioLedger(routeId);
+
+    addTimelineEntry({type: 'Info', data: 'Starting route: ' + routeId});
+
+    fetch('/api/fab-demo/routes/' + encodeURIComponent(routeId) + '/start', { method: 'POST' })
+      .then(function (r) {
+        if (!r.ok) return r.json().then(function (e) { throw new Error(e.error || 'Start failed'); });
+        return r.json();
+      })
+      .then(function (data) {
+        addTimelineEntry({type: 'DemoStarted', data: 'Route: ' + data.message});
+        if (data.workOrderId) {
+          window._currentWorkOrderId = data.workOrderId;
+        }
+        // Refresh the dropdown so this route appears for future starts
+        fetch('/api/fab-demo/scenarios')
+          .then(function (r) { return r.json(); })
+          .then(function (scenarios) {
+            var sel = document.getElementById('scenarioSelect');
+            var existingIds = {};
+            for (var i = 0; i < sel.options.length; i++) {
+              existingIds[sel.options[i].value] = true;
+            }
+            var added = false;
+            scenarios.forEach(function (s) {
+              if (!existingIds[s.id]) {
+                var opt = document.createElement('option');
+                opt.value = s.id;
+                opt.setAttribute('data-type', s.type || '');
+                var typeLabel = s.type ? ' [' + (scenarioTypeLabels[s.type] || s.type) + ']' : '';
+                opt.textContent = s.name + typeLabel;
+                sel.appendChild(opt);
+                added = true;
+              }
+            });
+            if (added) {
+              addTimelineEntry({type: 'Info', data: 'Route ' + routeId + ' added to scenario dropdown'});
+            }
+          });
+        if (typeof showRouteGraph === 'function') {
+          showRouteGraph(routeId, data.workOrderId);
+        }
+      })
+      .catch(function (err) {
+        addTimelineEntry({type: 'Error', data: 'Route start failed: ' + err.message});
       });
   };
 })();

@@ -31,16 +31,19 @@ object RouteCompiler {
     val startNode = route.nodes.find(n => !materialTargets.contains(n.nodeId))
       .getOrElse(route.nodes.head)
 
-    compileFrom(startNode.nodeId, nodeMap, edgesBySource, route)
+    compileFrom(startNode.nodeId, nodeMap, edgesBySource, route, Set.empty)
   }
 
   private def compileFrom(
     nodeId: String,
     nodeMap: Map[String, RouteNode],
     edgesBySource: Map[String, List[RouteEdge]],
-    route: RouteDefinition
+    route: RouteDefinition,
+    visited: Set[String]
   ): Seq[PipelineStage] = {
+    if (visited.contains(nodeId)) return Seq.empty // cycle guard
     nodeMap.get(nodeId).map { node =>
+      val newVisited = visited + nodeId
       val outgoing = edgesBySource(nodeId)
 
       val ownStage: PipelineStage = node match {
@@ -62,11 +65,11 @@ object RouteCompiler {
           val ocapTargets = outgoing.filter(_.edgeType == OcapFlow)
 
           val trueStages: Seq[PipelineStage] = materialTargets.headOption
-            .map(e => compileFrom(e.targetNodeId, nodeMap, edgesBySource, route)).getOrElse(Seq.empty)
+            .map(e => compileFrom(e.targetNodeId, nodeMap, edgesBySource, route, newVisited)).getOrElse(Seq.empty)
 
           val falseStages: Seq[PipelineStage] = exceptionTargets.headOption
-            .map(e => compileFrom(e.targetNodeId, nodeMap, edgesBySource, route))
-            .orElse(materialTargets.drop(1).headOption.map(e => compileFrom(e.targetNodeId, nodeMap, edgesBySource, route)))
+            .map(e => compileFrom(e.targetNodeId, nodeMap, edgesBySource, route, newVisited))
+            .orElse(materialTargets.drop(1).headOption.map(e => compileFrom(e.targetNodeId, nodeMap, edgesBySource, route, newVisited)))
             .getOrElse(Seq.empty)
 
           val ocapStages: Seq[PipelineStage] = ocapTargets.flatMap { edge =>
@@ -101,7 +104,7 @@ object RouteCompiler {
       val nextMaterialEdge = outgoing.find(_.edgeType == MaterialFlow)
       val tail = nextMaterialEdge match {
         case Some(edge) if !node.isInstanceOf[DecisionNode] =>
-          compileFrom(edge.targetNodeId, nodeMap, edgesBySource, route)
+          compileFrom(edge.targetNodeId, nodeMap, edgesBySource, route, newVisited)
         case _ =>
           Seq.empty
       }

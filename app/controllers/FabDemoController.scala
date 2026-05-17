@@ -325,6 +325,13 @@ class FabDemoController @Inject()(
     }
   }
 
+  /** Start a demo from a RouteDefinition (Route Browser "Start" button) */
+  def startRouteDemo(id: String) = Action.async {
+    fabDemoService.startDemoFromRoute(id, publishEvent).map { result =>
+      Ok(Json.obj("success" -> true, "message" -> s"WorkOrder ${result.workOrderId} ${result.phase}", "workOrderId" -> result.workOrderId))
+    }
+  }
+
   /** Seed default routes into Repository (idempotent) */
   def seedDefaultRoutes = Action {
     fabDemoService.seedDefaultRoutes()

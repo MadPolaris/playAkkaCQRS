@@ -8,7 +8,7 @@ import net.imadz.domain.entities.LotEntity.{HoldSplit, PilotSplit, ReworkSplit, 
 import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState}
 import net.imadz.fab.events._
 
-import net.imadz.fab.routing.{OcapEngine, OcapRuleDefinition, SubProcessRef}
+import net.imadz.fab.routing.{OcapEngine, OcapRuleDefinition, ReworkLoop, SendAheadPilot, SubProcessRef}
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
@@ -37,6 +37,11 @@ object FabScenarioPipeline {
     runSequence(stages, initialState, ctx)
   }
 
+  /** Run an arbitrary sequence of PipelineStages. Public entry point for route-based execution. */
+  def runStages(stages: Seq[PipelineStage], init: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
+    runSequence(stages, init, ctx)
+  }
+
   private def runSequence(stages: Seq[PipelineStage], init: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     stages.foldLeft(Future.successful(init)) { (f, stage) =>
       f.flatMap(state => runStage(stage, state, ctx))(ctx.ec)
@@ -61,6 +66,7 @@ object FabScenarioPipeline {
   case object ScrapWafers extends PipelineStage
   case object HoldWafers extends PipelineStage
   case object ReleaseWafers extends PipelineStage
+  case object PostReleaseClassify extends PipelineStage
   case class WaitForReview(durationMs: Long) extends PipelineStage
   case object SealComplete extends PipelineStage
   case class Branch(cond: FabDemoState => Boolean, ifTrue: Seq[PipelineStage], ifFalse: Seq[PipelineStage]) extends PipelineStage
@@ -85,6 +91,7 @@ object FabScenarioPipeline {
       case ScrapWafers          => scrapWafers(state, ctx)
       case HoldWafers           => holdWafers(state, ctx)
       case ReleaseWafers        => releaseWafers(state, ctx)
+      case PostReleaseClassify  => postReleaseClassify(state, ctx)
       case WaitForReview(ms)    => waitForReview(state, ctx, ms)
       case SealComplete         => PipelineStages.sealComplete(state, ctx)
       case Branch(cond, t, f)   => if (cond(state)) runSequence(t, state, ctx) else runSequence(f, state, ctx)
@@ -154,7 +161,7 @@ object FabScenarioPipeline {
       TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
       SagaSplit("hold"), HoldWafers, WaitForReview(15000), ReleaseWafers,
       Branch(_.reviewApproved,
-        Seq(SagaMerge("hold"), Transport("CDSEM", "STOCKER"), SealComplete),
+        Seq(SagaMerge("hold"), PostReleaseClassify, Transport("CDSEM", "STOCKER"), SealComplete),
         Seq(ScrapWafers, Transport("CDSEM", "STOCKER"), SealComplete)))
   }
 
@@ -397,6 +404,20 @@ object FabScenarioPipeline {
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, reviewApproved = true))
   }
 
+  private def postReleaseClassify(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
+    val s = PipelineStages.emitLedger(state, "PhasePostReleaseClassify: Classify released wafers as PASS", ctx)
+    ctx.publisher(GlobalStatusChanged("CLASSIFYING", "Post-release classification", "PhasePostReleaseClassify"))
+    state.wafers.filter { case (_, info) =>
+      info.classification.contains("PASS") && info.subLot.isEmpty
+    }.foreach { case (wid, info) =>
+      ctx.waferUUIDs.get(wid).foreach { uuid =>
+        val cdValue = info.cdValueHistory.lastOption.getOrElse(32.0)
+        ctx.lotRef ! RecordWaferClassified(uuid, "PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
+      }
+    }
+    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+  }
+
   private def waitForReview(state: FabDemoState, ctx: FabDemoContext, durationMs: Long): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, s"PhaseReview: Engineer review (${durationMs / 1000}s)", ctx)
     ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "ENGINEER-REVIEW", "Review",
@@ -417,7 +438,10 @@ object FabScenarioPipeline {
   private def executeSubProcess(state: FabDemoState, ctx: FabDemoContext, ref: SubProcessRef): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, s"PhaseSubProcess: ${ref.subProcessType} (late-binding)", ctx)
     ctx.publisher(GlobalStatusChanged("SUB_PROCESS", s"Executing sub-process: ${ref.subProcessType}", "PhaseSubProcess"))
-    // Stub: SubProcessResolver.resolve(ref) will be wired in Phase 3
-    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+    ref.subProcessType match {
+      case SendAheadPilot => runPilotSubFlow(s, ctx)
+      case ReworkLoop     => Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1)) // TODO: Phase 3
+      case _              => Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+    }
   }
 }

@@ -68,5 +68,6 @@ GET     /api/fab-demo/routes/:id                  controllers.FabDemoController.
 GET     /api/fab-demo/routes/:id/versions         controllers.FabDemoController.listRouteVersions(id: String)
 GET     /api/fab-demo/routes/:id/versions/:v      controllers.FabDemoController.getRouteVersion(id: String, v: Int)
 GET     /api/fab-demo/routes/:id/compile          controllers.FabDemoController.compileRoute(id: String)
+POST    /api/fab-demo/routes/:id/start            controllers.FabDemoController.startRouteDemo(id: String)
 POST    /api/fab-demo/routes/seed                 controllers.FabDemoController.seedDefaultRoutes
 

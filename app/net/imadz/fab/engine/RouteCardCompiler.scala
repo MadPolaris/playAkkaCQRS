@@ -52,6 +52,7 @@ object RouteCardCompiler {
       case ScrapWafers                      => "ScrapWafers"
       case HoldWafers                       => "HoldWafers"
       case ReleaseWafers                    => "ReleaseWafers"
+      case PostReleaseClassify              => "PostReleaseClassify"
       case WaitForReview(durationMs)        => s"WaitForReview:$durationMs"
       case SealComplete                     => "SealComplete"
       case PilotSubFlow                     => "PilotSubFlow"
