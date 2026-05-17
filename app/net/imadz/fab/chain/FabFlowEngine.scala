@@ -1,8 +1,10 @@
 package net.imadz.fab.chain
 
+import akka.util.Timeout
 import net.imadz.application.aggregates.LotProtocol.{LotConfirmation, SealLot}
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.common.CommonTypes.Id
+import net.imadz.domain.entities.LotEntity.{ReworkSplit, ScrapSplit}
 import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.events._
 import net.imadz.fab.model.{EquipmentArea, Por, PorStep}
@@ -239,18 +241,27 @@ object FabFlowEngine {
           ledgerSeq = s.ledgerSeq + 1))
 
       case SplitAndRework(waferIds, reason) =>
+        implicit val timeout: Timeout = 10.seconds
         val reworkWaferIds = waferIds.toSeq
         val reworkWaferUUIDs: Set[Id] = reworkWaferIds.flatMap(ctx.waferUUIDs.get).toSet
         val scrapWaferIdsInStep: Set[String] = updatedWafers.collect {
           case (wid, w) if w.classification.contains("SCRAP") => wid
         }.toSet
 
+        // Lazy-create rework lot (idempotent — no-op if already exists)
+        val createRework: Future[LotConfirmation] =
+          ctx.reworkLotRef.ask[LotConfirmation](ref => CreateLot(
+            s"FAB-REWORK-${ctx.sourceLotId.toString.take(8)}", Map.empty, ref,
+            parentLotId = Some(ctx.sourceLotId), splitReason = Some(ReworkSplit)))
+
         ctx.lotRef ! RecordWafersSplitForRework(reworkWaferIds.toSet, scrapWaferIdsInStep, s.iteration + 1, ctx.ignoreLotReply)
         val sagaId = PipelineStages.cmdId()
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE",
           ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
 
-        ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet).map { confirmation =>
+        createRework.flatMap(_ =>
+          ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet)
+        )(ctx.ec).map { confirmation =>
           if (confirmation.error.isEmpty) {
             ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
               ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))

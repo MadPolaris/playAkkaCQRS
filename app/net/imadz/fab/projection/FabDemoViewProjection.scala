@@ -23,6 +23,9 @@ object FabDemoViewProjection {
   // Used by FabDemoService.queryEntityState to avoid guessing child lot UUIDs.
   val childLotRegistry = new java.util.concurrent.ConcurrentHashMap[String, String]()
 
+  /** Clear child lot registry between demo runs. */
+  def resetChildLotRegistry(): Unit = childLotRegistry.clear()
+
   def createProjection(
     system: ActorSystem[_],
     publishToUI: FabSimulationEvent => Unit

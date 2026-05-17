@@ -1,17 +1,18 @@
 package net.imadz.fab.chain
 
-import net.imadz.application.aggregates.LotProtocol.{LotCommand, LotConfirmation, SealLot}
-import net.imadz.application.aggregates.LotProtocol.LotCommand
+import akka.util.Timeout
+import net.imadz.application.aggregates.LotProtocol.{LotConfirmation, SealLot}
 import net.imadz.application.aggregates.LotProtocol._
-import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
+import net.imadz.domain.entities.LotEntity.{HoldSplit, PilotSplit, ReworkSplit, SampleSplit, ScrapSplit, SplitReason}
+import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState}
 import net.imadz.fab.events._
-import net.imadz.fab.protocol._
-import net.imadz.fab.scenario.FabSimulationScenario
+
+import net.imadz.fab.routing.{OcapRuleDefinition, SubProcessRef}
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 
 /**
  * Multi-scenario Fab pipeline for Send-Ahead, Scrap, Sampling, and Hold/Release scenarios.
@@ -61,6 +62,10 @@ object FabScenarioPipeline {
   case class WaitForReview(durationMs: Long) extends PipelineStage
   case object SealComplete extends PipelineStage
   case class Branch(cond: FabDemoState => Boolean, ifTrue: Seq[PipelineStage], ifFalse: Seq[PipelineStage]) extends PipelineStage
+  case object PilotSubFlow extends PipelineStage
+  // Unified IR extensions (M3.5+)
+  case class OcapEvaluate(rules: List[OcapRuleDefinition]) extends PipelineStage
+  case class ExecuteSubProcess(ref: SubProcessRef) extends PipelineStage
 
   private def runStage(stage: PipelineStage, state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
@@ -79,6 +84,9 @@ object FabScenarioPipeline {
       case WaitForReview(ms)    => waitForReview(state, ctx, ms)
       case SealComplete         => PipelineStages.sealComplete(state, ctx)
       case Branch(cond, t, f)   => if (cond(state)) runSequence(t, state, ctx) else runSequence(f, state, ctx)
+      case PilotSubFlow           => runPilotSubFlow(state, ctx)
+      case OcapEvaluate(rules)    => ocapEvaluate(state, ctx, rules)
+      case ExecuteSubProcess(ref) => executeSubProcess(state, ctx, ref)
     }
   }
 
@@ -100,11 +108,7 @@ object FabScenarioPipeline {
   private def sendAheadStages: Seq[PipelineStage] = {
     val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
     Seq(
-      LoadFoup, SagaSplit("pilot"),
-      Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
-      RunRecipe(equipId, "PILOT-RECIPE-001"),
-      Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
-      Measure(cdSemId), Classify,
+      LoadFoup, SagaSplit("pilot"), PilotSubFlow,
       Branch(_.pilotPassed,
         Seq(SagaMerge("pilot"),
           Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
@@ -155,7 +159,6 @@ object FabScenarioPipeline {
     val scenId = ctx.scenario.scenarioId
     var updatedWafers = state.wafers
     var scrapWafers = Seq.empty[String]
-    var pilotPassed = state.pilotPassed
     var spawnedChild = state.spawnedChildLotKey
 
     state.wafers.filter { case (_, w) => w.classification.isEmpty }.foreach { case (wid, info) =>
@@ -165,16 +168,6 @@ object FabScenarioPipeline {
       ctx.publisher(MeasurementResultEvent(wid, cdValue, cls, ctx.scenario.decision.upperSpecNm))
 
       scenId match {
-        case "send-ahead-pilot" =>
-          if (cls == "PASS" || cls == "BORDERLINE") {
-            updatedWafers += wid -> info.copy(classification = Some("PASS"))
-            pilotPassed = true
-            ctx.publisher(DecisionMade(wid, "Pilot PASS → Merge back", None))
-          } else {
-            updatedWafers += wid -> info.copy(classification = Some("SCRAP"))
-            scrapWafers :+= wid; pilotPassed = false
-            ctx.publisher(DecisionMade(wid, "Pilot FAIL → Scrap", None))
-          }
         case "scrap-downgrade" =>
           updatedWafers += wid -> info.copy(classification = Some(cls),
             subLot = if (cls == "SCRAP") Some("scrap") else None)
@@ -201,20 +194,89 @@ object FabScenarioPipeline {
       ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),cls, 0, cdValue, ctx.ignoreLotReply)
     }
 
-
     val totalPass = updatedWafers.values.count(w => !w.classification.contains("SCRAP") && !w.classification.contains("HOLD"))
     val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
     ctx.publisher(LotUpdated(ctx.scenario.scenarioId, ctx.scenario.lotSize, totalScrap, List("Completed"), totalPass, 0))
 
     Future.successful(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
-      ledgerSeq = s.ledgerSeq + 1, pilotPassed = pilotPassed, spawnedChildLotKey = spawnedChild))
+      ledgerSeq = s.ledgerSeq + 1, spawnedChildLotKey = spawnedChild))
+  }
+
+  // ====================================================================
+  // Send-Ahead pilot sub-flow — uses pilot child lot ref for equipment commands
+  // ====================================================================
+  private def runPilotSubFlow(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
+    implicit val ec: ExecutionContext = ctx.ec
+    val pilotLotRef = ctx.childLotRefs.getOrElse("pilot", ctx.reworkLotRef)
+    val pilotCtx = ctx.copy(lotRef = pilotLotRef)
+    val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
+    for {
+      s1 <- PipelineStages.transport(state, pilotCtx, "STOCKER", "LITHO")
+      s2 <- PipelineStages.atEquipment(s1, pilotCtx, "LITHO", equipId)
+      s3 <- PipelineStages.process(s2, pilotCtx, equipId, "PILOT-RECIPE-001", "LITHO")
+      s4 <- PipelineStages.transport(s3, pilotCtx, "LITHO", "CDSEM")
+      s5 <- PipelineStages.atEquipment(s4, pilotCtx, "METROLOGY", cdSemId)
+      s6 <- PipelineStages.measure(s5, pilotCtx, cdSemId)
+      s7 <- classifyPilotWafer(s6, pilotCtx)
+    } yield s7
+  }
+
+  /** Classify only the pilot wafer (subLot="pilot"), sends commands to pilot lot. */
+  private def classifyPilotWafer(state: FabDemoState, pilotCtx: FabDemoContext): Future[FabDemoState] = {
+    implicit val ec: ExecutionContext = pilotCtx.ec
+    val s = PipelineStages.emitLedger(state, "PhaseClassify: Pilot wafer", pilotCtx)
+    pilotCtx.publisher(GlobalStatusChanged("CLASSIFYING", "Classifying pilot wafer", "PhaseClassify"))
+    var updatedWafers = state.wafers
+    var pilotPassed = false
+
+    state.wafers.filter { case (_, w) =>
+      w.subLot.contains("pilot") && w.classification.isEmpty
+    }.foreach { case (wid, info) =>
+      val cdValue = info.cdValueHistory.lastOption.getOrElse(32.0)
+      val cls = PipelineStages.classifyCd(cdValue, pilotCtx.scenario.decision)
+      pilotCtx.lotRef ! RecordWaferMeasured(pilotCtx.waferUUIDs(wid), cdValue, pilotCtx.ignoreLotReply)
+      pilotCtx.publisher(MeasurementResultEvent(wid, cdValue, cls, pilotCtx.scenario.decision.upperSpecNm))
+
+      if (cls == "PASS" || cls == "BORDERLINE") {
+        updatedWafers += wid -> info.copy(classification = Some("PASS"))
+        pilotPassed = true
+        pilotCtx.publisher(DecisionMade(wid, "Pilot PASS → Merge back", None))
+      } else {
+        updatedWafers += wid -> info.copy(classification = Some("SCRAP"), subLot = Some("scrap"))
+        pilotPassed = false
+        pilotCtx.publisher(DecisionMade(wid, "Pilot FAIL → Scrap", None))
+      }
+      pilotCtx.lotRef ! RecordWaferClassified(pilotCtx.waferUUIDs(wid), cls, 0, cdValue, pilotCtx.ignoreLotReply)
+    }
+
+    val totalPass = updatedWafers.values.count(w => !w.classification.contains("SCRAP") && !w.classification.contains("HOLD"))
+    val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
+    pilotCtx.publisher(LotUpdated(pilotCtx.scenario.scenarioId, pilotCtx.scenario.lotSize, totalScrap, List("Pilot"), totalPass, 0))
+
+    Future.successful(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
+      ledgerSeq = s.ledgerSeq + 1, pilotPassed = pilotPassed))
   }
 
   private def sagaSplit(state: FabDemoState, ctx: FabDemoContext, lotKey: String): Future[FabDemoState] = {
+    implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, s"PhaseSplit: Saga Split → $lotKey", ctx)
     ctx.publisher(GlobalStatusChanged("SPLITTING", s"Saga TCC split → $lotKey", "PhaseSplit"))
     val childLotId = ctx.childLotIds.getOrElse(lotKey, ctx.reworkLotId)
     val childLotRef = ctx.childLotRefs.getOrElse(lotKey, ctx.reworkLotRef)
+
+    // Lazy-create child lot (idempotent — no-op if already exists)
+    val splitReason: SplitReason = lotKey match {
+      case "pilot"  => PilotSplit
+      case "sample" => SampleSplit
+      case "hold"   => HoldSplit
+      case "scrap"  => ScrapSplit
+      case _        => ReworkSplit
+    }
+    val childProductName = s"FAB-${lotKey.toUpperCase}-${ctx.sourceLotId.toString.take(8)}"
+    val createChild: Future[LotConfirmation] =
+      childLotRef.ask[LotConfirmation](ref => CreateLot(childProductName, Map.empty, ref,
+        parentLotId = Some(ctx.sourceLotId), splitReason = Some(splitReason)))
+
     val waferEntries = state.wafers.filter { case (_, info) =>
       info.subLot.contains(lotKey)
     }
@@ -240,7 +302,11 @@ object FabScenarioPipeline {
     val sagaId = s"SAGA-SPLIT-$lotKey-${state.iteration}"
     val rwkLotName = s"${ctx.scenario.scenarioId}-${lotKey.toUpperCase}"
     ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE", ctx.scenario.scenarioId, rwkLotName, finalMoveIds.toSeq.map(_.toString)))
-    ctx.sagaTx(ctx.sourceLotId, childLotId, finalMoveIds, finalMoveNames).flatMap { confirmation =>
+
+    // Create child lot first, then execute TCC transfer (ignoring create result — fails safely if already exists)
+    createChild.flatMap(_ =>
+      ctx.sagaTx(ctx.sourceLotId, childLotId, finalMoveIds, finalMoveNames)
+    )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED", ctx.scenario.scenarioId, rwkLotName, finalMoveIds.toSeq.map(_.toString)))
         val updatedWafers = state.wafers.map { case (wid, info) =>
@@ -327,5 +393,23 @@ object FabScenarioPipeline {
     ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "ENGINEER-REVIEW", "Review",
       s"Reviewing held wafers (${durationMs / 1000}s)", state.wafers.filter(_._2.subLot.contains("hold")).keys.toSeq))
     Future { Thread.sleep(durationMs); s.copy(ledgerSeq = s.ledgerSeq + 1) }(ctx.ec)
+  }
+
+  // ====================================================================
+  // Unified IR extensions (M3.5+ Phase 1 stubs)
+  // ====================================================================
+
+  private def ocapEvaluate(state: FabDemoState, ctx: FabDemoContext, rules: List[OcapRuleDefinition]): Future[FabDemoState] = {
+    val s = PipelineStages.emitLedger(state, "PhaseOCAP: Evaluating OCAP rules", ctx)
+    ctx.publisher(GlobalStatusChanged("OCAP", "Evaluating OCAP rules", "PhaseOCAP"))
+    // Stub: OcapEngine.evaluate(state, ctx, rules) will be wired in Phase 2
+    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+  }
+
+  private def executeSubProcess(state: FabDemoState, ctx: FabDemoContext, ref: SubProcessRef): Future[FabDemoState] = {
+    val s = PipelineStages.emitLedger(state, s"PhaseSubProcess: ${ref.subProcessType} (late-binding)", ctx)
+    ctx.publisher(GlobalStatusChanged("SUB_PROCESS", s"Executing sub-process: ${ref.subProcessType}", "PhaseSubProcess"))
+    // Stub: SubProcessResolver.resolve(ref) will be wired in Phase 3
+    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
   }
 }

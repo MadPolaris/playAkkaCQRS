@@ -5,6 +5,7 @@ import net.imadz.application.aggregates.LotProtocol.LotCommand
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
+import net.imadz.domain.entities.LotEntity.{ReworkSplit, ScrapSplit}
 import net.imadz.fab.events._
 import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.protocol._
@@ -191,8 +192,15 @@ object FabDemoPipeline {
   // Saga TCC stages
   // ====================================================================
   private def sagaSplit(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
+    implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, "PhaseSplit: Saga SplitLot (TCC)", ctx)
     ctx.publisher(GlobalStatusChanged("SPLITTING", "Saga TCC split — rework wafers", "PhaseSplit"))
+
+    // Lazy-create rework lot (idempotent — no-op if already exists)
+    val createRework: Future[LotConfirmation] =
+      ctx.reworkLotRef.ask[LotConfirmation](ref => CreateLot(
+        s"FAB-REWORK-${ctx.sourceLotId.toString.take(8)}", Map.empty, ref,
+        parentLotId = Some(ctx.sourceLotId), splitReason = Some(ReworkSplit)))
 
     val reworkWaferIds = state.wafers.filter { case (_, w) => w.classification.contains("FAIL") }.keys.toSeq
     val reworkWaferUUIDs: Set[Id] = reworkWaferIds.flatMap(ctx.waferUUIDs.get).toSet
@@ -203,7 +211,9 @@ object FabDemoPipeline {
     ctx.publisher(FoupStateChanged(ctx.foupId, "SPLITTING", PipelineStages.activeCount(state), reworkWaferIds.size, "CDSEM",
       lotId = ctx.scenario.scenarioId, reworkLotId = s"${ctx.scenario.scenarioId}-RWK"))
 
-    ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet).flatMap { confirmation =>
+    createRework.flatMap(_ =>
+      ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet)
+    )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
           ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
@@ -284,17 +294,26 @@ object FabDemoPipeline {
   }
 
   private def sagaScrap(state: FabDemoState, ctx: FabDemoContext, scrapWaferIds: Seq[String]): Future[FabDemoState] = {
+    implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, "PhaseScrap: Saga Scrap (TCC)", ctx)
     ctx.publisher(GlobalStatusChanged("SCRAPPING", "Saga TCC — scrap wafers", "PhaseScrap"))
 
     val scrapLotId = ctx.scrapLotId.get
     val scrapWaferUUIDs: Set[Id] = scrapWaferIds.flatMap(ctx.waferUUIDs.get).toSet
 
+    // Lazy-create scrap lot (idempotent — no-op if already exists)
+    val createScrap: Future[LotConfirmation] =
+      ctx.scrapLotRef.get.ask[LotConfirmation](ref => CreateLot(
+        s"FAB-SCRAP-${ctx.sourceLotId.toString.take(8)}", Map.empty, ref,
+        parentLotId = Some(ctx.sourceLotId), splitReason = Some(ScrapSplit)))
+
     val scrapLotIdStr = scrapLotId.toString
     ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "PREPARE",
       ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
 
-    ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet).flatMap { confirmation =>
+    createScrap.flatMap(_ =>
+      ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet)
+    )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "COMMITTED",
           ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))

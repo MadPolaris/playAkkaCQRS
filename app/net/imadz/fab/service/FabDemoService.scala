@@ -5,7 +5,6 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.util.Timeout
 import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol._
-import net.imadz.domain.entities.LotEntity.{HoldSplit, PilotSplit, ReworkSplit, SampleSplit, ScrapSplit}
 import net.imadz.application.aggregates.WorkOrderAggregate
 import net.imadz.application.aggregates.WorkOrderProtocol.{CreateWorkOrder, WorkOrderConfirmation, PipelineStarter => WorkOrderPipelineStarter}
 import net.imadz.application.services.FabSagaService
@@ -141,10 +140,9 @@ class FabDemoService @Inject()(
     val pipelineFn = FabFlowEngine.runRouting(routing, FabFlowEngine.DefaultDecisionConfig) _
 
     // Create entities (idempotent) then run pipeline
+    // Child lots (rework, scrap) are created lazily inside the pipeline's saga split/scrap stages.
     for {
       _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref))
-      _ <- reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ReworkSplit)))
-      _ <- scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ScrapSplit)))
       _ = spawnDynamicSimulators(routing, adapter, publisher, waferIds)
       result <- pipelineFn(initialState, ctx)
     } yield result
@@ -225,29 +223,13 @@ class FabDemoService @Inject()(
     publisher(DemoStarted(scenario.scenarioId, scenario.name, scenario.lotSize, scenario.waferIds))
     spawnSimulators(scenario, adapter, publisher)
 
-    // Create entities (idempotent)
-    val childLotFutures: Seq[Future[LotConfirmation]] = scenarioId match {
-      case "photo-cell-5wafer" =>
-        Seq(
-          reworkLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-REWORK-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ReworkSplit))),
-          scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ScrapSplit)))
-        )
-      case "send-ahead-pilot" =>
-        Seq(pilotLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-PILOT-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(PilotSplit))))
-      case "sampling-demo" =>
-        Seq(sampleLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SAMPLE-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(SampleSplit))))
-      case "hold-release" =>
-        Seq(holdLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-HOLD-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(HoldSplit))))
-      case "scrap-downgrade" =>
-        Seq(scrapLotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-SCRAP-$workOrderId", Map.empty, ref, parentLotId = Some(sourceLotId), splitReason = Some(ScrapSplit))))
-      case _ => Seq.empty
-    }
+    // Child lots are created lazily inside each pipeline's sagaSplit stage,
+    // not upfront — avoids empty child lots appearing in the UI before split.
 
     val pipelineFn = if (isRework) FabDemoPipeline.runPipeline _ else FabScenarioPipeline.runPipeline _
 
     for {
       _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref))
-      _ <- Future.sequence(childLotFutures)
       result <- pipelineFn(initialState, ctx)
     } yield result
   }
@@ -258,6 +240,8 @@ class FabDemoService @Inject()(
    * then runs the 11-stage pipeline via FabChainExecutor (EventSourcedBehavior).
    */
   def startDemo(scenarioId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
+    net.imadz.fab.projection.FabDemoViewHandler.resetAll()
+    net.imadz.fab.projection.FabDemoViewProjection.resetChildLotRegistry()
     val workOrderId = UUID.randomUUID().toString
     val scenario = scenarioId match {
       case "photo-cell-5wafer" => StandardScenarios.photoCell5Wafer
@@ -314,6 +298,8 @@ class FabDemoService @Inject()(
    * then runs the dynamic FabFlowEngine via FabChainExecutor.
    */
   def startDemoWithProduct(productId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
+    net.imadz.fab.projection.FabDemoViewHandler.resetAll()
+    net.imadz.fab.projection.FabDemoViewProjection.resetChildLotRegistry()
     PorRepository.findByProductId(productId)
       .getOrElse(throw new IllegalArgumentException(s"Unknown product: $productId"))
     val waferIds = (1 to 5).map(i => s"WAFER-$i")
@@ -377,6 +363,176 @@ class FabDemoService @Inject()(
     )
     adapter.registerSimulator(stockerId, stockerActor)
     publisher(net.imadz.fab.events.EquipmentStateChanged(stockerId, "STOCKER", "Idle", None))
+  }
+
+  // ===========================================================================
+  // Route Graph (visual flowchart for the demo page)
+  // ===========================================================================
+
+  def getRouteGraph(scenarioId: String): Map[String, Any] = {
+    scenarioId match {
+      case "photo-cell-5wafer" => reworkRouteGraph
+      case "send-ahead-pilot"  => sendAheadRouteGraph
+      case "scrap-downgrade"   => scrapRouteGraph
+      case "sampling-demo"     => samplingRouteGraph
+      case "hold-release"      => holdReleaseRouteGraph
+      case productId if PorRepository.findByProductId(productId).isDefined =>
+        val routing = PorRepository.findByProductId(productId).get
+        generateDynamicRouteGraph(routing)
+      case _ => reworkRouteGraph
+    }
+  }
+
+  private def equipmentNode(id: String, area: String, meta: String = "", x: Int = 0, y: Int = 0, w: Int = 120, h: Int = 52, recipe: String = ""): Map[String, Any] =
+    Map("id" -> id, "type" -> "equipment", "label" -> s"$id\n$area", "meta" -> (if(recipe.nonEmpty) recipe else if (meta.nonEmpty) meta else area),
+      "x" -> x, "y" -> y, "w" -> w, "h" -> h)
+
+  private def transportNode(id: String, from: String, to: String, x: Int, y: Int): Map[String, Any] =
+    Map("id" -> id, "type" -> "transport", "label" -> s"$from→$to", "meta" -> "", "x" -> x, "y" -> y, "w" -> 80, "h" -> 30)
+
+  private def decisionNode(id: String, label: String, x: Int, y: Int): Map[String, Any] =
+    Map("id" -> id, "type" -> "decision", "label" -> label, "meta" -> "", "x" -> x, "y" -> y, "w" -> 100, "h" -> 50)
+
+  private def sagaNode(id: String, sagaType: String, lotKey: String, x: Int, y: Int): Map[String, Any] =
+    Map("id" -> id, "type" -> "saga", "label" -> s"$sagaType\n$lotKey", "meta" -> lotKey, "x" -> x, "y" -> y, "w" -> 84, "h" -> 52,
+      "sagaType" -> sagaType, "lotKey" -> lotKey)
+
+  private def classifyNode(id: String, x: Int, y: Int): Map[String, Any] =
+    Map("id" -> id, "type" -> "classify", "label" -> "Classify", "meta" -> "", "x" -> x, "y" -> y, "w" -> 88, "h" -> 44)
+
+  private def edge(from: String, to: String, label: String = "", edgeType: String = "material"): Map[String, String] =
+    (Map("from" -> from, "to" -> to, "type" -> edgeType) ++ (if(label.nonEmpty) Map("label" -> label) else Map.empty)).asInstanceOf[Map[String, String]]
+
+  // Route: photo-cell-5wafer (Rework)
+  private val reworkRouteGraph: Map[String, Any] = {
+    val y0 = 80; val y1 = 180; val xStep = 160
+    Map("name" -> "Rework (photo-cell-5wafer)", "description" -> "Litho → CDSEM → Classify → Split Rework → Rework Loop → Merge → Seal",
+      "nodes" -> Seq(
+        equipmentNode("n-load","STOCKER-01","STOCKER",20,y0), transportNode("n-t1","STOCKER","LITHO",150,y0),
+        equipmentNode("n-litho","LITHO-01","LITHO",250,y0, w=130, recipe="LITHO-28-001"),
+        transportNode("n-t2","LITHO","CDSEM",400,y0),
+        equipmentNode("n-cdsem","CDSEM-01","MET",500,y0), classifyNode("n-cls",640,y0),
+        sagaNode("n-split","Split","rwk",780,y0), equipmentNode("n-rwk-litho","LITHO-01","LITHO\nREWORK",20,y1, w=130),
+        transportNode("n-rwk-t1","LITHO","CDSEM",170,y1), equipmentNode("n-rwk-cdsem","CDSEM-01","MET",270,y1),
+        classifyNode("n-rwk-cls",410,y1), sagaNode("n-merge","Merge","rwk",530,y1),
+        decisionNode("n-dec","All\nPASS?",680,y1), transportNode("n-t3","CDSEM","STOCKER",800,y1),
+        equipmentNode("n-seal","STOCKER-01","Seal",920,y1)
+      ),
+      "edges" -> Seq(
+        edge("n-load","n-t1"), edge("n-t1","n-litho"), edge("n-litho","n-t2"), edge("n-t2","n-cdsem"),
+        edge("n-cdsem","n-cls"), edge("n-cls","n-split"), edge("n-split","n-rwk-litho"),
+        edge("n-rwk-litho","n-rwk-t1"), edge("n-rwk-t1","n-rwk-cdsem"), edge("n-rwk-cdsem","n-rwk-cls"),
+        edge("n-rwk-cls","n-merge"), edge("n-merge","n-dec"), edge("n-dec","n-t3","PASS", "material"),
+        edge("n-dec","n-rwk-litho","FAIL","exception"), edge("n-t3","n-seal")
+      ))
+  }
+
+  // Route: send-ahead-pilot
+  private val sendAheadRouteGraph: Map[String, Any] = {
+    val y0 = 70; val y1 = 170; val xStep = 150
+    Map("name" -> "Send-Ahead Pilot", "description" -> "Split Pilot → Pilot Litho+CDSEM → Classify → Merge → Main Batch → Seal",
+      "nodes" -> Seq(
+        equipmentNode("n-load","STOCKER-01","STOCKER",20,y0), sagaNode("n-split","Split","pilot",160,y0),
+        transportNode("n-p-t1","STOCKER","LITHO",270,y0), equipmentNode("n-p-litho","LITHO-01","LITHO\nPILOT",370,y0,w=130),
+        transportNode("n-p-t2","LITHO","CDSEM",530,y0), equipmentNode("n-p-cdsem","CDSEM-01","MET",630,y0),
+        classifyNode("n-p-cls",750,y0), sagaNode("n-merge","Merge","pilot",860,y0),
+        decisionNode("n-dec","Pilot\nOK?",980,y0),
+        transportNode("n-m-t1","STOCKER","LITHO",270,y1), equipmentNode("n-m-litho","LITHO-01","LITHO\nMAIN",390,y1,w=130),
+        transportNode("n-m-t2","LITHO","CDSEM",550,y1), equipmentNode("n-m-cdsem","CDSEM-01","MET",670,y1),
+        classifyNode("n-m-cls",790,y1), transportNode("n-m-t3","CDSEM","STOCKER",900,y1),
+        equipmentNode("n-seal","STOCKER-01","Seal",1020,y1)
+      ),
+      "edges" -> Seq(
+        edge("n-load","n-split"), edge("n-split","n-p-t1"), edge("n-p-t1","n-p-litho"), edge("n-p-litho","n-p-t2"),
+        edge("n-p-t2","n-p-cdsem"), edge("n-p-cdsem","n-p-cls"), edge("n-p-cls","n-merge"),
+        edge("n-merge","n-dec"), edge("n-dec","n-m-t1","PASS","material"),
+        edge("n-dec","n-seal","FAIL","exception"), edge("n-m-t1","n-m-litho"),
+        edge("n-m-litho","n-m-t2"), edge("n-m-t2","n-m-cdsem"), edge("n-m-cdsem","n-m-cls"),
+        edge("n-m-cls","n-m-t3"), edge("n-m-t3","n-seal")
+      ))
+  }
+
+  // Route: scrap-downgrade
+  private val scrapRouteGraph: Map[String, Any] = {
+    val y0 = 100
+    Map("name" -> "Scrap & Downgrade", "description" -> "Litho → CDSEM → Classify → Scrap W3 → Seal",
+      "nodes" -> Seq(
+        equipmentNode("n-load","STOCKER-01","STOCKER",20,y0), transportNode("n-t1","STOCKER","LITHO",150,y0),
+        equipmentNode("n-litho","LITHO-01","LITHO",250,y0,w=130,recipe="LITHO-28-001"),
+        transportNode("n-t2","LITHO","CDSEM",400,y0), equipmentNode("n-cdsem","CDSEM-01","MET",500,y0),
+        classifyNode("n-cls",640,y0), sagaNode("n-split","Split","scrap",760,y0),
+        decisionNode("n-dec","Has\nScrap?",880,y0), transportNode("n-t3","CDSEM","STOCKER",1020,y0),
+        equipmentNode("n-seal","STOCKER-01","Seal",1140,y0)
+      ),
+      "edges" -> Seq(
+        edge("n-load","n-t1"), edge("n-t1","n-litho"), edge("n-litho","n-t2"), edge("n-t2","n-cdsem"),
+        edge("n-cdsem","n-cls"), edge("n-cls","n-split"), edge("n-split","n-dec"),
+        edge("n-dec","n-t3","No Scrap","material"), edge("n-dec","n-seal","Scrap→SCP","exception"),
+        edge("n-t3","n-seal")
+      ))
+  }
+
+  // Route: sampling-demo
+  private val samplingRouteGraph: Map[String, Any] = {
+    val y0 = 100
+    Map("name" -> "Metrology Sampling", "description" -> "Split Sample → CDSEM → Classify → Merge → Seal",
+      "nodes" -> Seq(
+        equipmentNode("n-load","STOCKER-01","STOCKER",20,y0), sagaNode("n-split","Split","sample",160,y0),
+        transportNode("n-s-t1","STOCKER","CDSEM",270,y0), equipmentNode("n-cdsem","CDSEM-01","MET",370,y0),
+        classifyNode("n-cls",500,y0), sagaNode("n-merge","Merge","sample",620,y0),
+        transportNode("n-t3","CDSEM","STOCKER",730,y0), equipmentNode("n-seal","STOCKER-01","Seal",850,y0)
+      ),
+      "edges" -> Seq(
+        edge("n-load","n-split"), edge("n-split","n-s-t1"), edge("n-s-t1","n-cdsem"),
+        edge("n-cdsem","n-cls"), edge("n-cls","n-merge"), edge("n-merge","n-t3"),
+        edge("n-t3","n-seal")
+      ))
+  }
+
+  // Route: hold-release
+  private val holdReleaseRouteGraph: Map[String, Any] = {
+    val y0 = 70; val y1 = 170
+    Map("name" -> "Hold & Release", "description" -> "Litho → CDSEM → Classify → Hold → Review → Release → Merge → Seal",
+      "nodes" -> Seq(
+        equipmentNode("n-load","STOCKER-01","STOCKER",20,y0), transportNode("n-t1","STOCKER","LITHO",150,y0),
+        equipmentNode("n-litho","LITHO-01","LITHO",250,y0,w=130,recipe="LITHO-28-001"),
+        transportNode("n-t2","LITHO","CDSEM",400,y0), equipmentNode("n-cdsem","CDSEM-01","MET",500,y0),
+        classifyNode("n-cls",640,y0), sagaNode("n-split","Split","hold",770,y0),
+        Map("id"->"n-hold","type"->"hold","label"->"Hold\nReview","x"->880,"y"->y0,"w"->88,"h"->50),
+        decisionNode("n-dec","OK?",1000,y0),
+        sagaNode("n-merge","Merge","hold",770,y1),
+        transportNode("n-t3","CDSEM","STOCKER",880,y1), equipmentNode("n-seal","STOCKER-01","Seal",1000,y1)
+      ),
+      "edges" -> Seq(
+        edge("n-load","n-t1"), edge("n-t1","n-litho"), edge("n-litho","n-t2"), edge("n-t2","n-cdsem"),
+        edge("n-cdsem","n-cls"), edge("n-cls","n-split"), edge("n-split","n-hold"),
+        edge("n-hold","n-dec"), edge("n-dec","n-merge","PASS","material"),
+        edge("n-dec","n-seal","SCRAP","exception"), edge("n-merge","n-t3"), edge("n-t3","n-seal")
+      ))
+  }
+
+  private def generateDynamicRouteGraph(routing: Por): Map[String, Any] = {
+    val y = 100; var x = 20; val dx = 140
+    val buf = scala.collection.mutable.ListBuffer.empty[Map[String, Any]]
+    buf += equipmentNode("n-load", "STOCKER-01", "STOCKER", x, y); x += dx
+    routing.steps.foreach { step =>
+      val equipId = net.imadz.fab.chain.FabFlowEngine.AreaToEquipmentId.getOrElse(step.equipmentArea.areaId, s"${step.equipmentArea.areaId}-01")
+      buf += transportNode(s"n-t-${step.stepId}", "prev", step.equipmentArea.areaId, x, y); x += 80
+      buf += equipmentNode(s"n-${step.stepId}", equipId, s"${step.equipmentArea.areaId}\n${step.recipeId}", x, y, w = 130)
+      x += dx
+    }
+    buf += transportNode("n-t-seal", "prev", "STOCKER", x, y); x += 80
+    buf += equipmentNode("n-seal", "STOCKER-01", "Seal", x, y)
+
+    val edgesBuf = scala.collection.mutable.ListBuffer.empty[Map[String, String]]
+    val nodeIds = buf.map(_("id")).toSeq
+    nodeIds.sliding(2).foreach {
+      case Seq(a, b) => edgesBuf += edge(a.toString, b.toString)
+      case _ => ()
+    }
+    Map("name" -> s"Dynamic: ${routing.productId}",
+      "description" -> s"${routing.steps.size} steps, v${routing.version}",
+      "nodes" -> buf.toSeq, "edges" -> edgesBuf.toSeq)
   }
 
   def getScenarios: Seq[Map[String, String]] = {
@@ -579,7 +735,9 @@ class FabDemoService @Inject()(
           val ref = sharding.entityRefFor(LotEntityTypeKey, realId)
           ref.ask[LotConfirmation](GetLotState(_))
             .map { conf =>
-              if (conf.waferIds.nonEmpty || conf.productId.exists(_.nonEmpty)) Some(displayKey -> conf) else None
+              // Only show child lots that actually contain wafers —
+              // empty sealed lots (post-merge) and not-yet-filled lots are hidden.
+              if (conf.waferIds.nonEmpty) Some(displayKey -> conf) else None
             }
             .recover { case _ => None }
       }

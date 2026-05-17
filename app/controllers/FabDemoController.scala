@@ -122,6 +122,46 @@ class FabDemoController @Inject()(
     }
   }
 
+  /** Get the route graph visualization data for a scenario.
+   * Returns nodes (equipment, transport, decision, saga, classify, hold)
+   * and edges (material, exception) with x/y layout for SVG rendering. */
+  def getRouteGraph(scenarioId: String) = Action {
+    val graph = fabDemoService.getRouteGraph(scenarioId)
+    val graphNodes = graph("nodes").asInstanceOf[Seq[Map[String, Any]]]
+    val graphEdges = graph("edges").asInstanceOf[Seq[Map[String, String]]]
+
+    val nodes = graphNodes.map { n =>
+      Json.obj(
+        "id" -> n("id").toString,
+        "type" -> n("type").toString,
+        "label" -> n("label").toString,
+        "meta" -> n.getOrElse("meta", "").toString,
+        "x" -> n("x").asInstanceOf[Int],
+        "y" -> n("y").asInstanceOf[Int],
+        "w" -> n.getOrElse("w", 100).asInstanceOf[Int],
+        "h" -> n.getOrElse("h", 44).asInstanceOf[Int],
+        "sagaType" -> n.getOrElse("sagaType", "").toString,
+        "lotKey" -> n.getOrElse("lotKey", "").toString
+      )
+    }
+    val edges = graphEdges.map { e =>
+      val lbl = e.getOrElse("label", "")
+      val typ = e.getOrElse("type", "material")
+      Json.obj(
+        "from" -> e("from"),
+        "to" -> e("to"),
+        "label" -> lbl,
+        "type" -> typ
+      )
+    }
+    Ok(Json.obj(
+      "name" -> graph("name").toString,
+      "description" -> graph("description").toString,
+      "nodes" -> nodes,
+      "edges" -> edges
+    ))
+  }
+
   /** Get scenario event-sourcing ledger (time-line of expected events per aggregate) */
   def getScenarioLedger(scenarioId: String) = Action {
     val ledger = fabDemoService.getScenarioLedger(scenarioId)

@@ -11,6 +11,18 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
 
+import java.util.concurrent.atomic.AtomicBoolean
+
+object FabDemoViewHandler {
+  private val pendingReset = new AtomicBoolean(false)
+
+  /** Signal that state should be cleared before processing the next event.
+   * Safe to call from any thread — actual clearing happens in the projection thread. */
+  def resetAll(): Unit = {
+    pendingReset.set(true)
+  }
+}
+
 class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
   extends JdbcHandler[EventEnvelope[Any], ScalikeJdbcSession] {
 
@@ -24,6 +36,10 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
   private val waferRegistry = mutable.Map.empty[String, String]
 
   override def process(session: ScalikeJdbcSession, envelope: EventEnvelope[Any]): Unit = {
+    if (FabDemoViewHandler.pendingReset.compareAndSet(true, false)) {
+      lotStates.clear()
+      waferRegistry.clear()
+    }
     envelope.event match {
       case lotEvent: LotEventPO.Event =>
         val lotId = envelope.persistenceId.split("\\|", 2).lastOption.getOrElse(envelope.persistenceId)

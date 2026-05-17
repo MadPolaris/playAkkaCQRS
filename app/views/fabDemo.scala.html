@@ -66,21 +66,27 @@
     /* Aggregate State Panel (需求5: 业务聚合状态) */
     .aggregate-panel {
       background: var(--bg-alt); border-bottom: 1px solid var(--border);
-      padding: 6px 16px; max-height: 220px; overflow-y: auto;
       font-family: 'SF Mono','Fira Code',monospace; font-size: 0.68rem;
-      transition: max-height 0.3s, padding 0.3s;
     }
-    .aggregate-panel.collapsed { max-height: 0; padding: 0 16px; overflow: hidden; border-bottom: none; }
-    .aggregate-panel .agg-header {
-      display: flex; align-items: center; gap: 12px; margin-bottom: 4px;
-      position: sticky; top: 0; background: var(--bg-alt); z-index: 1;
+    .aggregate-panel .panel-content {
+      padding: 6px 16px; max-height: 220px; overflow-y: auto;
+      transition: max-height 0.35s ease, padding 0.3s;
     }
-    .aggregate-panel .agg-header h3 { font-size: 0.75rem; font-weight: 700; color: var(--fg-muted); }
-    .aggregate-panel .agg-header button {
+    .aggregate-panel.collapsed .panel-content {
+      max-height: 0; padding: 0 16px; overflow: hidden;
+    }
+    .aggregate-panel .panel-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 0;
+      padding: 6px 16px; background: var(--bg-alt); z-index: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    .aggregate-panel.collapsed .panel-header { border-bottom: none; }
+    .aggregate-panel .panel-header h3 { font-size: 0.75rem; font-weight: 700; color: var(--fg-muted); }
+    .aggregate-panel .panel-header button {
       background: none; border: 1px solid var(--border); color: var(--fg-muted);
       font-size: 0.6rem; padding: 1px 8px; border-radius: 3px; cursor: pointer;
     }
-    .aggregate-panel .agg-header button:hover { color: var(--fg); border-color: var(--fg-muted); }
+    .aggregate-panel .panel-header button:hover { color: var(--fg); border-color: var(--fg-muted); }
     .agg-lot-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 4px; }
     .agg-lot-row .lot-card {
       background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
@@ -456,7 +462,7 @@
 
   <!-- Aggregate State Panel -->
   <div class="aggregate-panel" id="aggregatePanel">
-    <div class="agg-header" style="justify-content:space-between">
+    <div class="panel-header" style="justify-content:space-between">
       <div style="display:flex;align-items:center;gap:8px">
         <h3>@Messages("fab.aggregate_title")</h3>
         <button onclick="toggleAggregatePanel()" title="Toggle panel">@Messages("fab.aggregate_collapse")</button>
@@ -466,13 +472,27 @@
         <button onclick="fetchEntityState()" title="Query real entity state from ClusterSharding" style="font-size:11px;padding:2px 8px">⟳ Entity State</button>
       </div>
     </div>
-    <div id="aggregateContent">
+    <div class="panel-content" id="aggregateContent">
       <table class="agg-tree-table" id="aggTreeTable">
         <thead><tr>@Messages("fab.aggregate_cols").split("\\|").map { col => <th>@col</th> }</tr></thead>
         <tbody id="aggTreeBody">
 	      <tr><td colspan="5" style="color:var(--fg-muted)">@Messages("fab.aggregate_placeholder")</td></tr>
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- Route Graph Panel -->
+  <div class="aggregate-panel" id="routeGraphPanel">
+    <div class="panel-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3>🗺 Route Graph</h3>
+        <button onclick="toggleRouteGraphPanel()" title="Toggle panel">▲ Collapse</button>
+      </div>
+      <span id="routeGraphScenario" style="font-size:10px;color:var(--fg-muted)"></span>
+    </div>
+    <div class="panel-content" id="routeGraphContent" style="width:100%; min-height:140px; overflow-x:auto">
+      <p style="color:var(--fg-muted);font-size:12px;padding:20px">Select a scenario to view its route.</p>
     </div>
   </div>
 
@@ -591,6 +611,7 @@ window.__i18n = {
 </script>
 <script src="https://unpkg.com/rxjs@@7/dist/bundles/rxjs.umd.min.js"></script>
 <script src="@routes.Assets.versioned("javascripts/fab_observable.js")" type="text/javascript"></script>
+<script src="@routes.Assets.versioned("javascripts/route_graph.js")" type="text/javascript"></script>
 <script src="@routes.Assets.versioned("javascripts/fab_demo.js")" type="text/javascript"></script>
 </body>
 </html>

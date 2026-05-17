@@ -39,12 +39,11 @@ class CdSemSimulator(
 
   private def generateCdValue(category: String): Double = {
     val target = config.targetCdNm
-    val spread = config.spreadNm
     category match {
-      case "PASS"       => target + rng.nextGaussian() * spread
-      case "BORDERLINE" => target + config.borderlineOffsetNm + rng.nextGaussian() * spread * 0.5
-      case "FAIL"       => target + config.failOffsetNm + rng.nextGaussian() * spread * 0.7
-      case "SCRAP"      => target * config.scrapFactor + rng.nextGaussian() * spread
+      case "PASS"       => target
+      case "BORDERLINE" => target + config.borderlineOffsetNm
+      case "FAIL"       => target + config.failOffsetNm
+      case "SCRAP"      => target * config.scrapFactor
       case _            => target
     }
   }

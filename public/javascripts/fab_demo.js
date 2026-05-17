@@ -735,16 +735,37 @@
 
   window.toggleAggregatePanel = function() {
     var panel = document.getElementById('aggregatePanel');
-    var btn = panel.querySelector('.agg-header button');
-    if (state.aggregatePanelOpen) {
-      panel.classList.add('collapsed');
-      btn.textContent = (window.__i18n && window.__i18n.lang === 'zh') ? '▼ 展开' : '▼ Expand';
-      state.aggregatePanelOpen = false;
-    } else {
+    var btn = panel.querySelector('.panel-header button');
+    if (panel.classList.contains('collapsed')) {
       panel.classList.remove('collapsed');
       btn.textContent = (window.__i18n && window.__i18n.lang === 'zh') ? '▲ 折叠' : '▲ Collapse';
-      state.aggregatePanelOpen = true;
+    } else {
+      panel.classList.add('collapsed');
+      btn.textContent = (window.__i18n && window.__i18n.lang === 'zh') ? '▼ 展开' : '▼ Expand';
     }
+  };
+
+  window.toggleRouteGraphPanel = function() {
+    var panel = document.getElementById('routeGraphPanel');
+    var btn = panel.querySelector('.panel-header button');
+    if (panel.classList.contains('collapsed')) {
+      panel.classList.remove('collapsed');
+      btn.textContent = '▲ Collapse';
+    } else {
+      panel.classList.add('collapsed');
+      btn.textContent = '▼ Expand';
+    }
+  };
+
+  /** Load the route graph for a scenario and optionally highlight a step */
+  window.showRouteGraph = function(scenarioId, workOrderId) {
+    document.getElementById('routeGraphScenario').textContent = scenarioId;
+    var container = document.getElementById('routeGraphContent');
+    if (typeof loadRouteGraph === 'function') {
+      loadRouteGraph(scenarioId, container);
+    }
+    // Store work order for step highlighting
+    state._routeWorkOrder = workOrderId;
   };
 
   // ===================================================================
@@ -986,6 +1007,10 @@
           var woInput = document.getElementById('entityWorkOrderInput');
           if (woInput) woInput.value = data.workOrderId;
         }
+        // Load the route graph for visual context
+        if (typeof showRouteGraph === 'function') {
+          showRouteGraph(scenarioId, data.workOrderId);
+        }
       });
   };
 
@@ -1044,13 +1069,25 @@
       });
   }
 
+  /** Map ledger phase names to route graph node IDs for visual highlighting */
+  var _phaseToNode = {
+    'Load': 'n-load', 'Transport': null, 'AtEqp': null, 'Process': null,
+    'Decide': 'n-cls', 'Split': 'n-split', 'Merge': 'n-merge',
+    'Rework': 'n-rwk-litho', 'Hold': 'n-hold',
+    'Measure': 'n-cdsem', 'Complete': 'n-seal'
+  };
+
   function highlightLedgerRow(stepSeq) {
     var rows = document.querySelectorAll('#ledgerBody tr');
+    var currentPhase = null;
     rows.forEach(function(row) {
       var rowSeq = parseInt(row.getAttribute('data-seq'));
       if (rowSeq === stepSeq) {
         row.classList.add('active');
         row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // Extract phase from the phase column
+        var phaseCell = row.querySelector('td:last-child');
+        if (phaseCell) currentPhase = phaseCell.textContent.trim();
       } else if (rowSeq < stepSeq) {
         row.classList.add('done');
         row.classList.remove('active');
@@ -1058,6 +1095,10 @@
         row.classList.remove('active', 'done');
       }
     });
+    // Highlight route graph node
+    if (currentPhase && _phaseToNode[currentPhase] && typeof highlightRouteNode === 'function') {
+      highlightRouteNode(_phaseToNode[currentPhase]);
+    }
   }
 
   function updateStepProgress(stepName) {
