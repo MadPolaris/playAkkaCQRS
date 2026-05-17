@@ -496,6 +496,27 @@
     </div>
   </div>
 
+  <!-- Route Browser Panel (M3.5+) -->
+  <div class="aggregate-panel" id="routeBrowserPanel">
+    <div class="panel-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3>📋 Route Browser</h3>
+        <button onclick="toggleRouteBrowserPanel()" title="Toggle panel">▲ Collapse</button>
+      </div>
+      <span style="font-size:10px;color:var(--fg-muted)">Defined routes in RoutingRepository</span>
+    </div>
+    <div class="panel-content" id="routeBrowserContent" style="width:100%; padding:8px">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <button onclick="seedRoutes()" style="background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">🌱 Seed Default Routes</button>
+        <button onclick="fetchRouteList()" style="background:var(--bg-alt);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">🔄 Refresh List</button>
+      </div>
+      <div id="routeList" style="font-size:11px;color:var(--fg-muted)">
+        <p>Click "Seed Default Routes" to populate, then "Refresh List" to view.</p>
+      </div>
+      <div id="routeStepsPreview" style="font-size:11px;margin-top:8px;padding:8px;background:var(--bg-alt);border-radius:4px;display:none"></div>
+    </div>
+  </div>
+
   <!-- Bottom Panel -->
   <div class="bottom-panel">
     <div class="timeline" id="timeline">
