@@ -95,6 +95,7 @@ class FabDemoController @Inject()(
         "data" -> data, "timestamp" -> ts, "layer" -> layer)
       case GlobalStatusChanged(st, detail, phase) => Json.obj("status" -> st, "detail" -> detail, "phase" -> phase)
       case ScrapEvent(wid, reason) => Json.obj("waferId" -> wid, "reason" -> reason)
+      case OcapActionTriggered(rid, rname, atype, detail, wafers) => Json.obj("ruleId" -> rid, "ruleName" -> rname, "actionType" -> atype, "detail" -> detail, "affectedWafers" -> wafers)
       case AggregateStateUpdated(srcLot, childLots, wafers) => Json.obj(
         "sourceLot" -> Json.obj("lotId" -> srcLot.lotId, "status" -> srcLot.status, "waferCount" -> srcLot.waferCount, "passCount" -> srcLot.passCount, "scrapCount" -> srcLot.scrapCount, "currentArea" -> srcLot.currentArea),
         "childLots" -> childLots.map(cl => Json.obj("lotId" -> cl.lotId, "status" -> cl.status, "waferCount" -> cl.waferCount, "passCount" -> cl.passCount, "scrapCount" -> cl.scrapCount, "currentArea" -> cl.currentArea)),

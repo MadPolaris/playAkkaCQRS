@@ -50,6 +50,15 @@ case class LotStateSnapshot(lotId: String, status: String, waferCount: Int, pass
 case class WaferStateSnapshot(waferId: String, status: String, lotId: String, classification: String, reworkCount: Int)
 
 
+// --- OCAP ---
+case class OcapActionTriggered(
+  ruleId: String,
+  ruleName: String,
+  actionType: String,       // HOLD | REWORK | SCRAP | NOTIFY | ADJUST_RECIPE | COMPOSITE
+  detail: String,
+  affectedWafers: Seq[String] = Seq.empty
+) extends FabSimulationEvent
+
 // --- Scrap Event (需求1: 报废去向) ---
 case class ScrapEvent(waferId: String, reason: String) extends FabSimulationEvent
 

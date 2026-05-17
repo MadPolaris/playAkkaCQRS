@@ -125,39 +125,7 @@ object RouteCompiler {
   }
 
   /** Evaluate a condition expression against the current Fab state.
-   *  Returns true if the condition is met. */
-  private def evaluateCondition(cond: ConditionExpression, state: FabDemoState): Boolean = {
-    cond match {
-      case MeasurementCondition(metric, op, lower, upper, scope) =>
-        val values: Iterable[Double] = metric match {
-          case "cd_nm" => state.wafers.values.flatMap(_.cdValueHistory.lastOption)
-          case _       => state.wafers.values.flatMap(_.cdValueHistory.lastOption)
-        }
-        if (values.isEmpty) false
-        else {
-          val test = scope match {
-            case AllWafers => values.forall(v => compareOp(v, op, lower, upper))
-            case AnyWafer  => values.exists(v => compareOp(v, op, lower, upper))
-            case SlotRange(from, to) =>
-              values.zipWithIndex.filter { case (_, i) => i >= from && i <= to }
-                .forall { case (v, _) => compareOp(v, op, lower, upper) }
-          }
-          test
-        }
-
-      case AggregateCondition(conditions, logic) =>
-        logic match {
-          case And => conditions.forall(c => evaluateCondition(c, state))
-          case Or  => conditions.exists(c => evaluateCondition(c, state))
-          case Not => !conditions.forall(c => evaluateCondition(c, state))
-        }
-    }
-  }
-
-  private def compareOp(value: Double, op: ComparisonOp, lower: Double, upper: Double): Boolean = op match {
-    case GreaterThan  => value > lower
-    case LessThan     => value < upper
-    case WithinRange  => value >= lower && value <= upper
-    case OutsideRange => value < lower || value > upper
-  }
+   *  Delegates to [[ConditionEvaluator]]. */
+  private def evaluateCondition(cond: ConditionExpression, state: FabDemoState): Boolean =
+    ConditionEvaluator.evaluate(cond, state)
 }

@@ -8,7 +8,7 @@ import net.imadz.domain.entities.LotEntity.{HoldSplit, PilotSplit, ReworkSplit, 
 import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState}
 import net.imadz.fab.events._
 
-import net.imadz.fab.routing.{OcapRuleDefinition, SubProcessRef}
+import net.imadz.fab.routing.{OcapEngine, OcapRuleDefinition, SubProcessRef}
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
@@ -401,9 +401,8 @@ object FabScenarioPipeline {
 
   private def ocapEvaluate(state: FabDemoState, ctx: FabDemoContext, rules: List[OcapRuleDefinition]): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseOCAP: Evaluating OCAP rules", ctx)
-    ctx.publisher(GlobalStatusChanged("OCAP", "Evaluating OCAP rules", "PhaseOCAP"))
-    // Stub: OcapEngine.evaluate(state, ctx, rules) will be wired in Phase 2
-    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+    ctx.publisher(GlobalStatusChanged("OCAP", s"Evaluating ${rules.size} OCAP rule(s)", "PhaseOCAP"))
+    OcapEngine.evaluate(s, ctx, rules)(ctx.ec)
   }
 
   private def executeSubProcess(state: FabDemoState, ctx: FabDemoContext, ref: SubProcessRef): Future[FabDemoState] = {
