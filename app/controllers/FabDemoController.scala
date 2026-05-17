@@ -7,9 +7,11 @@ import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
 import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent}
 import akka.projection.ProjectionBehavior
 import net.imadz.fab.projection.{FabDemoEventBridge, FabDemoViewProjection}
+import net.imadz.fab.engine.RouteCardCompiler
+import net.imadz.fab.routing._
 import net.imadz.fab.service.FabDemoService
 import play.api.i18n.{I18nSupport, Lang}
-import play.api.libs.json.Json
+import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.{BaseController, ControllerComponents, WebSocket}
 
 import javax.inject.Inject
@@ -257,5 +259,159 @@ class FabDemoController @Inject()(
     }.recover { case ex =>
       Ok(Json.obj("error" -> ex.getMessage, "workOrderId" -> workOrderId))
     }
+  }
+
+  // ====================================================================
+  // Route CRUD (M3.5+)
+  // ====================================================================
+
+  /** List all route IDs with latest version info */
+  def listRoutes = Action {
+    val routeIds = RoutingRepository.listRouteIds()
+    val routes = routeIds.map { rid =>
+      RoutingRepository.getLatest(rid).map { r =>
+        Json.obj("routeId" -> r.routeId, "version" -> r.version, "name" -> r.name,
+          "productId" -> r.productId, "nodeCount" -> r.nodes.size, "edgeCount" -> r.edges.size)
+      }
+    }
+    Ok(Json.obj("routes" -> Json.toJson(routes.flatten)))
+  }
+
+  /** Get latest version of a route definition */
+  def getRoute(id: String) = Action {
+    RoutingRepository.getLatest(id) match {
+      case Some(r) => Ok(routeDefToJson(r))
+      case None    => NotFound(Json.obj("error" -> s"Route $id not found"))
+    }
+  }
+
+  /** List all versions of a route */
+  def listRouteVersions(id: String) = Action {
+    val versions = RoutingRepository.listVersions(id)
+    Ok(Json.obj("routeId" -> id, "versions" -> versions))
+  }
+
+  /** Get a specific version of a route */
+  def getRouteVersion(id: String, version: Int) = Action {
+    RoutingRepository.get(id, version) match {
+      case Some(r) => Ok(routeDefToJson(r))
+      case None    => NotFound(Json.obj("error" -> s"Route $id v$version not found"))
+    }
+  }
+
+  /** Publish a new RouteDefinition */
+  def publishRoute = Action(parse.json) { request =>
+    val json = request.body
+    try {
+      val route = parseRouteDef(json)
+      val published = RoutingRepository.publish(route)
+      Created(Json.obj("success" -> true, "routeId" -> published.routeId, "version" -> published.version))
+    } catch {
+      case ex: Exception => BadRequest(Json.obj("error" -> ex.getMessage))
+    }
+  }
+
+  /** Compile a route to preview the steps */
+  def compileRoute(id: String) = Action {
+    RoutingRepository.getLatest(id) match {
+      case Some(route) =>
+        val stages = RouteCompiler.compile(route)
+        val steps = stages.map { s =>
+          val name = s.getClass.getSimpleName.replace("$", "")
+          name
+        }
+        Ok(Json.obj("routeId" -> id, "version" -> route.version, "stepCount" -> stages.size, "steps" -> steps))
+      case None => NotFound(Json.obj("error" -> s"Route $id not found"))
+    }
+  }
+
+  /** Seed default routes into Repository (idempotent) */
+  def seedDefaultRoutes = Action {
+    fabDemoService.seedDefaultRoutes()
+    Ok(Json.obj("success" -> true, "routes" -> RoutingRepository.listRouteIds()))
+  }
+
+  private def routeDefToJson(r: RouteDefinition): JsValue = Json.obj(
+    "routeId" -> r.routeId, "version" -> r.version, "name" -> r.name,
+    "productId" -> r.productId, "description" -> r.description,
+    "nodeCount" -> r.nodes.size, "edgeCount" -> r.edges.size,
+    "ocapRuleCount" -> r.ocapRules.size
+  )
+
+  private def parseRouteDef(json: JsValue): RouteDefinition = {
+    val routeId = (json \ "routeId").as[String]
+    val productId = (json \ "productId").as[String]
+    val version = (json \ "version").asOpt[Int].getOrElse(0)
+    val name = (json \ "name").as[String]
+    val desc = (json \ "description").asOpt[String].getOrElse("")
+    // Parse nodes from JSON
+    val nodes = (json \ "nodes").as[Seq[JsValue]].map { n =>
+      val ntype = (n \ "type").as[String]
+      val nid = (n \ "nodeId").as[String]
+      val label = (n \ "label").as[String]
+      ntype match {
+        case "atomic" =>
+          val opType = parseAtomicOp((n \ "operationType").as[String])
+          val config = (n \ "config").asOpt[Map[String, String]].getOrElse(Map.empty)
+          AtomicStep(nid, label, opType, config)
+        case "decision" =>
+          val condJson = (n \ "condition").as[JsValue]
+          val metric = (condJson \ "metric").as[String]
+          val op = parseComparisonOp((condJson \ "operator").as[String])
+          val lower = (condJson \ "lowerBound").as[Double]
+          val upper = (condJson \ "upperBound").as[Double]
+          DecisionNode(nid, label, MeasurementCondition(metric, op, lower, upper))
+        case "saga" =>
+          val sagaType = (n \ "sagaType").as[String] match {
+            case "split" => SagaSplitOp; case "merge" => SagaMergeOp
+          }
+          val lotKey = (n \ "lotKey").as[String]
+          SagaStep(nid, label, sagaType, lotKey, FixedCount(1))
+        case "subprocess" =>
+          val subType = (n \ "subProcessType").as[String] match {
+            case "send-ahead-pilot" => SendAheadPilot
+            case "rework-loop"     => ReworkLoop
+            case "hold-release"    => HoldRelease
+            case "sampling"        => Sampling
+            case "scrap-downgrade" => ScrapDowngrade
+          }
+          val params = (n \ "params").asOpt[Map[String, String]].getOrElse(Map.empty)
+          SubProcessRef(nid, label, subType, params)
+        case _ => AtomicStep(nid, label, LoadFoupOp)
+      }
+    }.toList
+    // Parse edges
+    val edges = (json \ "edges").as[Seq[JsValue]].map { e =>
+      RouteEdge(
+        edgeId = (e \ "edgeId").as[String],
+        sourceNodeId = (e \ "source").as[String],
+        targetNodeId = (e \ "target").as[String],
+        edgeType = (e \ "type").asOpt[String].getOrElse("material") match {
+          case "material" => MaterialFlow; case "exception" => ExceptionFlow
+          case "ocap" => OcapFlow; case _ => MaterialFlow
+        },
+        label = (e \ "label").asOpt[String].getOrElse("")
+      )
+    }.toList
+    RouteDefinition(routeId, productId, version, name, desc, nodes, edges, Nil)
+  }
+
+  private def parseAtomicOp(s: String): AtomicOperationType = s match {
+    case "LoadFoupOp"     => LoadFoupOp
+    case "TransportOp"    => TransportOp
+    case "AtEquipmentOp"  => AtEquipmentOp
+    case "TrackInOp"      => TrackInOp
+    case "TrackOutOp"     => TrackOutOp
+    case "RunRecipeOp"    => RunRecipeOp
+    case "MeasureOp"      => MeasureOp
+    case "ClassifyOp"     => ClassifyOp
+    case "SealCompleteOp" => SealCompleteOp
+    case "HoldWafersOp"   => HoldWafersOp
+    case "ReleaseWafersOp"=> ReleaseWafersOp
+  }
+
+  private def parseComparisonOp(s: String): ComparisonOp = s match {
+    case "GreaterThan" => GreaterThan; case "LessThan" => LessThan
+    case "WithinRange" => WithinRange; case "OutsideRange" => OutsideRange
   }
 }

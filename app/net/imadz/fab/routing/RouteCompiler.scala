@@ -123,6 +123,7 @@ object RouteCompiler {
       case SealCompleteOp   => SealComplete
       case HoldWafersOp     => HoldWafers
       case ReleaseWafersOp  => ReleaseWafers
+      case ScrapWafersOp    => ScrapWafers
     }
   }
 

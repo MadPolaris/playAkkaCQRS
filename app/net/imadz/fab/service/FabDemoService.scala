@@ -752,6 +752,186 @@ class FabDemoService @Inject()(
     }
   }
 
+  /** Seed all 5 default RouteDefinitions into RoutingRepository (idempotent). */
+  def seedDefaultRoutes(): Unit = {
+    import net.imadz.fab.routing._
+
+    // 1. Basic Rework route
+    RoutingRepository.publish(RouteDefinition(
+      routeId = "PHOTOCELL-5WAFER", productId = "PHOTOCELL-5WAFER", version = 1,
+      name = "Photo Cell 5-Wafer Rework", description = "Basic litho→measure→classify with rework loop",
+      nodes = List(
+        AtomicStep("n1", "Load FOUP", LoadFoupOp),
+        AtomicStep("n2", "Transport→LITHO", TransportOp, Map("from"->"STOCKER","to"->"LITHO")),
+        AtomicStep("n3", "At LITHO-01", AtEquipmentOp, Map("area"->"LITHO","equipId"->"LITHO-01")),
+        AtomicStep("n4", "TrackIn LITHO", TrackInOp, Map("equipId"->"LITHO-01")),
+        AtomicStep("n5", "Run Litho Recipe", RunRecipeOp, Map("equipId"->"LITHO-01","recipeId"->"LITHO-28-001")),
+        AtomicStep("n6", "TrackOut LITHO", TrackOutOp, Map("equipId"->"LITHO-01")),
+        AtomicStep("n7", "Transport→CDSEM", TransportOp, Map("from"->"LITHO","to"->"CDSEM")),
+        AtomicStep("n8", "At CDSEM-01", AtEquipmentOp, Map("area"->"METROLOGY","equipId"->"CDSEM-01")),
+        AtomicStep("n9", "TrackIn CDSEM", TrackInOp, Map("equipId"->"CDSEM-01")),
+        AtomicStep("n10", "Measure CD", MeasureOp, Map("equipId"->"CDSEM-01")),
+        AtomicStep("n11", "TrackOut CDSEM", TrackOutOp, Map("equipId"->"CDSEM-01")),
+        AtomicStep("n12", "Classify", ClassifyOp),
+        DecisionNode("n13", "All Passed?", MeasurementCondition("cd_nm", WithinRange, 28.0, 34.0, AllWafers)),
+        SubProcessRef("n14", "Rework Loop", ReworkLoop, Map("maxReworkCount"->"2","reworkRecipeId"->"REWORK-LITHO-001")),
+        AtomicStep("n15", "Transport→Stocker", TransportOp, Map("from"->"CDSEM","to"->"STOCKER")),
+        AtomicStep("n16", "Seal Complete", SealCompleteOp)
+      ),
+      edges = List(
+        RouteEdge("e1","n1","n2"), RouteEdge("e2","n2","n3"), RouteEdge("e3","n3","n4"),
+        RouteEdge("e4","n4","n5"), RouteEdge("e5","n5","n6"), RouteEdge("e6","n6","n7"),
+        RouteEdge("e7","n7","n8"), RouteEdge("e8","n8","n9"), RouteEdge("e9","n9","n10"),
+        RouteEdge("e10","n10","n11"), RouteEdge("e11","n11","n12"), RouteEdge("e12","n12","n13"),
+        RouteEdge("e13","n13","n15", label = "all PASS"),
+        RouteEdge("e14","n13","n14", edgeType = ExceptionFlow, label = "FAIL/BORDERLINE"),
+        RouteEdge("e15","n14","n10", label = "rework→re-measure"),
+        RouteEdge("e16","n15","n16")
+      ),
+      ocapRules = List(
+        OcapRuleDefinition("OCAP-001","Borderline→Rework",
+          MeasurementCondition("cd_nm",WithinRange,34.0,36.0,AnyWafer),
+          OcapComposite(List(OcapRework("REWORK-LITHO-001",2),OcapNotify("CD borderline","area-engineer"))),priority=1),
+        OcapRuleDefinition("OCAP-002","FarOut→Scrap",
+          MeasurementCondition("cd_nm",GreaterThan,42.0,0.0,AnyWafer),
+          OcapScrap("CD far out of spec"),priority=0)
+      )
+    ))
+
+    // 2. Send-Ahead Pilot
+    RoutingRepository.publish(RouteDefinition(
+      routeId = "SEND-AHEAD-PILOT", productId = "LOGIC-28NM-A", version = 1,
+      name = "Send-Ahead Pilot", description = "Split pilot wafer, verify CD, then process main lot",
+      nodes = List(
+        AtomicStep("n1","Load FOUP",LoadFoupOp),
+        SagaStep("n2","Split Pilot",SagaSplitOp,"pilot",FixedCount(1)),
+        SubProcessRef("n3","Pilot Litho+Measure",SendAheadPilot,Map("pilotRecipeId"->"LITHO-28-001")),
+        DecisionNode("n4","Pilot CD OK?",MeasurementCondition("cd_nm",WithinRange,28.0,34.0,AllWafers)),
+        SagaStep("n5","Merge Pilot Back",SagaMergeOp,"pilot",FixedCount(1)),
+        AtomicStep("n6","Transport→LITHO",TransportOp,Map("from"->"STOCKER","to"->"LITHO")),
+        AtomicStep("n7","At LITHO-01",AtEquipmentOp,Map("area"->"LITHO","equipId"->"LITHO-01")),
+        AtomicStep("n8","TrackIn",TrackInOp,Map("equipId"->"LITHO-01")),
+        AtomicStep("n9","Run Litho",RunRecipeOp,Map("equipId"->"LITHO-01","recipeId"->"LITHO-28-001")),
+        AtomicStep("n10","TrackOut",TrackOutOp,Map("equipId"->"LITHO-01")),
+        AtomicStep("n11","Transport→CDSEM",TransportOp,Map("from"->"LITHO","to"->"CDSEM")),
+        AtomicStep("n12","At CDSEM",AtEquipmentOp,Map("area"->"METROLOGY","equipId"->"CDSEM-01")),
+        AtomicStep("n13","TrackIn CD",TrackInOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n14","Measure",MeasureOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n15","TrackOut CD",TrackOutOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n16","Classify",ClassifyOp),
+        AtomicStep("n17","Transport→Stocker",TransportOp,Map("from"->"CDSEM","to"->"STOCKER")),
+        AtomicStep("n18","Seal",SealCompleteOp),
+        AtomicStep("n19","Scrap",ScrapWafersOp,Map.empty)
+      ),
+      edges = List(
+        RouteEdge("e1","n1","n2"),RouteEdge("e2","n2","n3"),RouteEdge("e3","n3","n4"),
+        RouteEdge("e4","n4","n5",label="pilot PASS"),RouteEdge("e5","n5","n6"),
+        RouteEdge("e6","n6","n7"),RouteEdge("e7","n7","n8"),RouteEdge("e8","n8","n9"),
+        RouteEdge("e9","n9","n10"),RouteEdge("e10","n10","n11"),RouteEdge("e11","n11","n12"),
+        RouteEdge("e12","n12","n13"),RouteEdge("e13","n13","n14"),RouteEdge("e14","n14","n15"),
+        RouteEdge("e15","n15","n16"),RouteEdge("e16","n16","n17"),RouteEdge("e17","n17","n18"),
+        RouteEdge("e18","n4","n19",edgeType=ExceptionFlow,label="pilot FAIL"),
+        RouteEdge("e19","n19","n18")
+      )
+    ))
+
+    // 3. Scrap Downgrade
+    RoutingRepository.publish(RouteDefinition(
+      routeId = "SCRAP-DOWNGRADE", productId = "LOGIC-28NM-A", version = 1,
+      name = "Scrap Downgrade", description = "Litho→measure: classify SCRAP wafers→split to scrap lot",
+      nodes = List(
+        AtomicStep("n1","Load FOUP",LoadFoupOp),
+        AtomicStep("n2","Transport→LITHO",TransportOp,Map("from"->"STOCKER","to"->"LITHO")),
+        AtomicStep("n3","At LITHO-01",AtEquipmentOp,Map("area"->"LITHO","equipId"->"LITHO-01")),
+        AtomicStep("n4","TrackIn",TrackInOp,Map("equipId"->"LITHO-01")),
+        AtomicStep("n5","Run Litho",RunRecipeOp,Map("equipId"->"LITHO-01","recipeId"->"LITHO-28-001")),
+        AtomicStep("n6","TrackOut",TrackOutOp,Map("equipId"->"LITHO-01")),
+        AtomicStep("n7","Transport→CDSEM",TransportOp,Map("from"->"LITHO","to"->"CDSEM")),
+        AtomicStep("n8","At CDSEM",AtEquipmentOp,Map("area"->"METROLOGY","equipId"->"CDSEM-01")),
+        AtomicStep("n9","TrackIn CD",TrackInOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n10","Measure",MeasureOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n11","TrackOut CD",TrackOutOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n12","Classify",ClassifyOp),
+        SagaStep("n13","Split Scrap",SagaSplitOp,"scrap",FixedCount(1)),
+        AtomicStep("n14","Scrap Wafers",ScrapWafersOp,Map.empty),
+        AtomicStep("n15","Transport→Stocker",TransportOp,Map("from"->"CDSEM","to"->"STOCKER")),
+        AtomicStep("n16","Seal",SealCompleteOp)
+      ),
+      edges = List(
+        RouteEdge("e1","n1","n2"),RouteEdge("e2","n2","n3"),RouteEdge("e3","n3","n4"),
+        RouteEdge("e4","n4","n5"),RouteEdge("e5","n5","n6"),RouteEdge("e6","n6","n7"),
+        RouteEdge("e7","n7","n8"),RouteEdge("e8","n8","n9"),RouteEdge("e9","n9","n10"),
+        RouteEdge("e10","n10","n11"),RouteEdge("e11","n11","n12"),RouteEdge("e12","n12","n13"),
+        RouteEdge("e13","n13","n14"),RouteEdge("e14","n14","n15"),RouteEdge("e15","n15","n16")
+      )
+    ))
+
+    // 4. Sampling
+    RoutingRepository.publish(RouteDefinition(
+      routeId = "SAMPLING", productId = "LOGIC-28NM-A", version = 1,
+      name = "Sampling Demo", description = "Sample wafers→measure→classify→merge back",
+      nodes = List(
+        AtomicStep("n1","Load FOUP",LoadFoupOp),
+        SagaStep("n2","Split Sample",SagaSplitOp,"sample",FixedCount(1)),
+        AtomicStep("n3","Transport→CDSEM",TransportOp,Map("from"->"STOCKER","to"->"CDSEM")),
+        AtomicStep("n4","At CDSEM",AtEquipmentOp,Map("area"->"METROLOGY","equipId"->"CDSEM-01")),
+        AtomicStep("n5","TrackIn",TrackInOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n6","Measure",MeasureOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n7","TrackOut",TrackOutOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n8","Classify",ClassifyOp),
+        SagaStep("n9","Merge Sample",SagaMergeOp,"sample",FixedCount(1)),
+        AtomicStep("n10","Transport→Stocker",TransportOp,Map("from"->"CDSEM","to"->"STOCKER")),
+        AtomicStep("n11","Seal",SealCompleteOp)
+      ),
+      edges = List(
+        RouteEdge("e1","n1","n2"),RouteEdge("e2","n2","n3"),RouteEdge("e3","n3","n4"),
+        RouteEdge("e4","n4","n5"),RouteEdge("e5","n5","n6"),RouteEdge("e6","n6","n7"),
+        RouteEdge("e7","n7","n8"),RouteEdge("e8","n8","n9"),RouteEdge("e9","n9","n10"),
+        RouteEdge("e10","n10","n11")
+      )
+    ))
+
+    // 5. Hold-Release
+    RoutingRepository.publish(RouteDefinition(
+      routeId = "HOLD-RELEASE", productId = "LOGIC-28NM-A", version = 1,
+      name = "Hold & Release", description = "Classify→hold borderline wafers→engineer review→release",
+      nodes = List(
+        AtomicStep("n1","Load FOUP",LoadFoupOp),
+        AtomicStep("n2","Transport→LITHO",TransportOp,Map("from"->"STOCKER","to"->"LITHO")),
+        AtomicStep("n3","At LITHO-01",AtEquipmentOp,Map("area"->"LITHO","equipId"->"LITHO-01")),
+        AtomicStep("n4","TrackIn",TrackInOp,Map("equipId"->"LITHO-01")),
+        AtomicStep("n5","Run Litho",RunRecipeOp,Map("equipId"->"LITHO-01","recipeId"->"LITHO-28-001")),
+        AtomicStep("n6","TrackOut",TrackOutOp,Map("equipId"->"LITHO-01")),
+        AtomicStep("n7","Transport→CDSEM",TransportOp,Map("from"->"LITHO","to"->"CDSEM")),
+        AtomicStep("n8","At CDSEM",AtEquipmentOp,Map("area"->"METROLOGY","equipId"->"CDSEM-01")),
+        AtomicStep("n9","TrackIn CD",TrackInOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n10","Measure",MeasureOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n11","TrackOut CD",TrackOutOp,Map("equipId"->"CDSEM-01")),
+        AtomicStep("n12","Classify",ClassifyOp),
+        SagaStep("n13","Split Hold",SagaSplitOp,"hold",FixedCount(1)),
+        AtomicStep("n14","Hold Wafers",HoldWafersOp),
+        WaitNode("n15","Engineer Review",15000L),
+        AtomicStep("n16","Release Wafers",ReleaseWafersOp),
+        DecisionNode("n17","Review Approved?",MeasurementCondition("cd_nm",WithinRange,28.0,34.0,AllWafers)),
+        SagaStep("n18","Merge Hold Back",SagaMergeOp,"hold",FixedCount(1)),
+        AtomicStep("n19","Transport→Stocker",TransportOp,Map("from"->"CDSEM","to"->"STOCKER")),
+        AtomicStep("n20","Scrap",ScrapWafersOp,Map.empty),
+        AtomicStep("n21","Seal",SealCompleteOp)
+      ),
+      edges = List(
+        RouteEdge("e1","n1","n2"),RouteEdge("e2","n2","n3"),RouteEdge("e3","n3","n4"),
+        RouteEdge("e4","n4","n5"),RouteEdge("e5","n5","n6"),RouteEdge("e6","n6","n7"),
+        RouteEdge("e7","n7","n8"),RouteEdge("e8","n8","n9"),RouteEdge("e9","n9","n10"),
+        RouteEdge("e10","n10","n11"),RouteEdge("e11","n11","n12"),RouteEdge("e12","n12","n13"),
+        RouteEdge("e13","n13","n14"),RouteEdge("e14","n14","n15"),RouteEdge("e15","n15","n16"),
+        RouteEdge("e16","n16","n17"),RouteEdge("e17","n17","n18",label="approved"),
+        RouteEdge("e18","n18","n19"),RouteEdge("e19","n19","n21"),
+        RouteEdge("e20","n17","n20",edgeType=ExceptionFlow,label="rejected"),
+        RouteEdge("e21","n20","n19")
+      )
+    ))
+  }
+
   case class EntityStateSnapshot(
     workOrderId: String,
     lot: LotConfirmation,

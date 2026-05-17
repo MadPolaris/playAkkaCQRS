@@ -61,3 +61,12 @@ GET     /api/fab-demo/scenario/:id/ledger        controllers.FabDemoController.g
 GET     /api/fab-demo/entity-state/:workOrderId  controllers.FabDemoController.getEntityState(workOrderId: String)
 GET     /api/fab-demo/scenario/:id/route-graph   controllers.FabDemoController.getRouteGraph(id: String)
 
+# Route CRUD (M3.5+)
+GET     /api/fab-demo/routes                     controllers.FabDemoController.listRoutes
+POST    /api/fab-demo/routes                     controllers.FabDemoController.publishRoute
+GET     /api/fab-demo/routes/:id                  controllers.FabDemoController.getRoute(id: String)
+GET     /api/fab-demo/routes/:id/versions         controllers.FabDemoController.listRouteVersions(id: String)
+GET     /api/fab-demo/routes/:id/versions/:v      controllers.FabDemoController.getRouteVersion(id: String, v: Int)
+GET     /api/fab-demo/routes/:id/compile          controllers.FabDemoController.compileRoute(id: String)
+POST    /api/fab-demo/routes/seed                 controllers.FabDemoController.seedDefaultRoutes
+

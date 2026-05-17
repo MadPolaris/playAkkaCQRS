@@ -119,6 +119,7 @@ case object ClassifyOp       extends AtomicOperationType
 case object SealCompleteOp   extends AtomicOperationType
 case object HoldWafersOp     extends AtomicOperationType
 case object ReleaseWafersOp  extends AtomicOperationType
+case object ScrapWafersOp    extends AtomicOperationType
 
 sealed trait SubProcessType
 case object SendAheadPilot extends SubProcessType
