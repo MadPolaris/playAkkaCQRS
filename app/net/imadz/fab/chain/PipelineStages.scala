@@ -53,6 +53,19 @@ object PipelineStages {
   }
 
   // ====================================================================
+  // Stage: TrackIn (进站) — FOUP loaded to equipment load port
+  // ====================================================================
+  def trackIn(state: FabDemoState, ctx: FabDemoContext, equipId: String, portId: String = "LP1"): Future[FabDemoState] = {
+    val s = emitLedger(state, s"PhaseTrackIn: $equipId port $portId", ctx)
+    ctx.publisher(GlobalStatusChanged("TRACK_IN", s"$equipId:$portId loading", "PhaseTrackIn"))
+    ctx.publisher(FoupArrivedAtPort(ctx.foupId, equipId, portId))
+    val areaType = if (equipId.contains("LITHO")) "LITHO" else if (equipId.contains("CDSEM")) "METROLOGY" else equipId
+    ctx.publisher(EquipmentStateChanged(equipId, areaType, "Load", Some(s"lot-${s.ledgerSeq}")))
+    ctx.publisher(FoupStateChanged(ctx.foupId, "ON_PORT", activeCount(state), 0, equipId, lotId = ctx.scenario.scenarioId))
+    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = equipId))
+  }
+
+  // ====================================================================
   // Stage: At Equipment (arrival)
   // ====================================================================
   def atEquipment(state: FabDemoState, ctx: FabDemoContext, area: String, equipId: String): Future[FabDemoState] = {
@@ -85,6 +98,18 @@ object PipelineStages {
         s.copy(ledgerSeq = s.ledgerSeq + 1)
       case _ => s.copy(ledgerSeq = s.ledgerSeq + 1)
     }(ctx.ec)
+  }
+
+  // ====================================================================
+  // Stage: TrackOut (出站) — FOUP unloaded from equipment after processing
+  // ====================================================================
+  def trackOut(state: FabDemoState, ctx: FabDemoContext, equipId: String, portId: String = "LP1"): Future[FabDemoState] = {
+    val s = emitLedger(state, s"PhaseTrackOut: $equipId port $portId", ctx)
+    ctx.publisher(GlobalStatusChanged("TRACK_OUT", s"$equipId:$portId unloading", "PhaseTrackOut"))
+    val areaType = if (equipId.contains("LITHO")) "LITHO" else if (equipId.contains("CDSEM")) "METROLOGY" else equipId
+    ctx.publisher(EquipmentStateChanged(equipId, areaType, "Idle", None))
+    ctx.publisher(FoupStateChanged(ctx.foupId, "UNLOADED", activeCount(state), 0, equipId, lotId = ctx.scenario.scenarioId))
+    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
   }
 
   // ====================================================================

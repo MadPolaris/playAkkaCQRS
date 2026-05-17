@@ -34,10 +34,14 @@ object SubProcessResolver {
           "LoadFoup",
           s"Transport:STOCKER->LITHO",
           s"AtEquipment:LITHO:$lithoEquip",
+          s"TrackIn:$lithoEquip:LP1",
           s"RunRecipe:$lithoEquip:$pilotRecipe",
+          s"TrackOut:$lithoEquip:LP1",
           s"Transport:LITHO->MET",
           s"AtEquipment:MET:$measureEquip",
+          s"TrackIn:$measureEquip:LP1",
           s"Measure:$measureEquip",
+          s"TrackOut:$measureEquip:LP1",
           "Classify"
         )
 
@@ -46,10 +50,14 @@ object SubProcessResolver {
           "LoadFoup",
           s"Transport:MET->LITHO",
           s"AtEquipment:LITHO:$lithoEquip",
+          s"TrackIn:$lithoEquip:LP1",
           s"RunRecipe:$lithoEquip:$reworkRecipe",
+          s"TrackOut:$lithoEquip:LP1",
           s"Transport:LITHO->MET",
           s"AtEquipment:MET:$measureEquip",
+          s"TrackIn:$measureEquip:LP1",
           s"Measure:$measureEquip",
+          s"TrackOut:$measureEquip:LP1",
           "Classify"
         )
 

@@ -111,6 +111,8 @@ sealed trait AtomicOperationType
 case object LoadFoupOp       extends AtomicOperationType
 case object TransportOp      extends AtomicOperationType
 case object AtEquipmentOp    extends AtomicOperationType
+case object TrackInOp        extends AtomicOperationType
+case object TrackOutOp       extends AtomicOperationType
 case object RunRecipeOp      extends AtomicOperationType
 case object MeasureOp        extends AtomicOperationType
 case object ClassifyOp       extends AtomicOperationType

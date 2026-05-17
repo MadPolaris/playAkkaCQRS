@@ -42,6 +42,8 @@ object RouteCardCompiler {
       case LoadFoup                         => "LoadFoup"
       case Transport(from, to)              => s"Transport:$from->$to"
       case AtEquipment(area, equipId)       => s"AtEquipment:$area:$equipId"
+      case TrackIn(equipId, portId)          => s"TrackIn:$equipId:$portId"
+      case TrackOut(equipId, portId)         => s"TrackOut:$equipId:$portId"
       case RunRecipe(equipId, recipeId)     => s"RunRecipe:$equipId:$recipeId"
       case Measure(equipId)                 => s"Measure:$equipId"
       case Classify                         => "Classify"

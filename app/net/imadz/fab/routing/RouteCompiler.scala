@@ -115,6 +115,8 @@ object RouteCompiler {
       case LoadFoupOp       => LoadFoup
       case TransportOp      => Transport(config.getOrElse("from", "STOCKER"), config.getOrElse("to", "LITHO"))
       case AtEquipmentOp    => AtEquipment(config.getOrElse("area", "LITHO"), config.getOrElse("equipId", "LITHO-01"))
+      case TrackInOp        => TrackIn(config.getOrElse("equipId", "LITHO-01"), config.getOrElse("portId", "LP1"))
+      case TrackOutOp       => TrackOut(config.getOrElse("equipId", "LITHO-01"), config.getOrElse("portId", "LP1"))
       case RunRecipeOp      => RunRecipe(config.getOrElse("equipId", "LITHO-01"), config.getOrElse("recipeId", "LITHO-28-001"))
       case MeasureOp        => Measure(config.getOrElse("equipId", "CDSEM-01"))
       case ClassifyOp       => Classify

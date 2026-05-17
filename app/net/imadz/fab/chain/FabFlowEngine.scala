@@ -97,9 +97,11 @@ object FabFlowEngine {
         for {
           s1 <- PipelineStages.transport(s, ctx, prevAreaId, targetAreaId)
           s2 <- PipelineStages.atEquipment(s1, ctx, targetAreaId, equipId)
-          s3 <- PipelineStages.process(s2, ctx, equipId, step.recipeId, targetAreaId)
+          s2b <- PipelineStages.trackIn(s2, ctx, equipId)
+          s3 <- PipelineStages.process(s2b, ctx, equipId, step.recipeId, targetAreaId)
+          s3b <- PipelineStages.trackOut(s3, ctx, equipId)
           s4 <- if (MeasureAreas.contains(targetAreaId)) {
-            measureAndClassify(s3, ctx, step, routing, spec)
+            measureAndClassify(s3b, ctx, step, routing, spec)
           } else {
             val next = s3.copy(
               currentRoutingStep = s3.currentRoutingStep + 1,
@@ -144,7 +146,8 @@ object FabFlowEngine {
     for {
       s1 <- PipelineStages.transport(state, ctx, targetAreaId, "MET")
       s2 <- PipelineStages.atEquipment(s1, ctx, "MET", CdsemEquipId)
-      s3 = PipelineStages.emitLedger(s2, s"Measure: CD-SEM — ${step.recipeId}", ctx)
+      s2b <- PipelineStages.trackIn(s2, ctx, CdsemEquipId)
+      s3 = PipelineStages.emitLedger(s2b, s"Measure: CD-SEM — ${step.recipeId}", ctx)
       _ = {
         ctx.publisher(GlobalStatusChanged("MEASURING", "CD measurement", "PhaseMeasure"))
         ctx.lotRef ! RecordEquipmentJobStarted(CdsemEquipId, "CD-MEASURE-001", ctx.ignoreLotReply)
@@ -294,9 +297,11 @@ object FabFlowEngine {
         for {
           s1 <- PipelineStages.transport(s, ctx, s.areaVisitHistory.lastOption.getOrElse("STOCKER"), area.areaId)
           s2 <- PipelineStages.atEquipment(s1, ctx, area.areaId, fbEquipId)
-          s3 <- PipelineStages.process(s2, ctx, fbEquipId, step.recipeId, area.areaId)
+          s2b <- PipelineStages.trackIn(s2, ctx, fbEquipId)
+          s3 <- PipelineStages.process(s2b, ctx, fbEquipId, step.recipeId, area.areaId)
+          s3b <- PipelineStages.trackOut(s3, ctx, fbEquipId)
           s4 <- if (MeasureAreas.contains(area.areaId))
-            measureAndClassify(s3, ctx, step.copy(equipmentArea = area), routing, spec)
+            measureAndClassify(s3b, ctx, step.copy(equipmentArea = area), routing, spec)
           else {
             val next = s3.copy(currentRoutingStep = s3.currentRoutingStep + 1,
               areaVisitHistory = s3.areaVisitHistory :+ area.areaId,

@@ -51,7 +51,9 @@ object FabScenarioPipeline {
   case object LoadFoup extends PipelineStage
   case class Transport(from: String, to: String) extends PipelineStage
   case class AtEquipment(area: String, equipId: String) extends PipelineStage
+  case class TrackIn(equipId: String, portId: String = "LP1") extends PipelineStage
   case class RunRecipe(equipId: String, recipeId: String) extends PipelineStage
+  case class TrackOut(equipId: String, portId: String = "LP1") extends PipelineStage
   case class Measure(equipId: String) extends PipelineStage
   case object Classify extends PipelineStage
   case class SagaSplit(lotKey: String) extends PipelineStage
@@ -72,8 +74,10 @@ object FabScenarioPipeline {
     stage match {
       case LoadFoup             => PipelineStages.loadFoup(state, ctx)
       case Transport(from, to)  => PipelineStages.transport(state, ctx, from, to)
+      case TrackIn(eid, port)    => PipelineStages.trackIn(state, ctx, eid, port)
       case AtEquipment(area, eid) => PipelineStages.atEquipment(state, ctx, area, eid)
       case RunRecipe(eid, rid)  => PipelineStages.process(state, ctx, eid, rid, areaTypeFor(eid))
+      case TrackOut(eid, port)   => PipelineStages.trackOut(state, ctx, eid, port)
       case Measure(eid)         => PipelineStages.measure(state, ctx, eid)
       case Classify             => classifyStage(state, ctx)
       case SagaSplit(lotKey)    => sagaSplit(state, ctx, lotKey)
@@ -98,10 +102,11 @@ object FabScenarioPipeline {
   // ====================================================================
 
   private def basicStages: Seq[PipelineStage] = Seq(
-    LoadFoup, Transport("STOCKER", "LITHO"), AtEquipment("LITHO", "LITHO-01"),
-    RunRecipe("LITHO-01", "LITHO-28-001"),
+    LoadFoup,
+    Transport("STOCKER", "LITHO"), AtEquipment("LITHO", "LITHO-01"),
+    TrackIn("LITHO-01"), RunRecipe("LITHO-01", "LITHO-28-001"), TrackOut("LITHO-01"),
     Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", "CDSEM-01"),
-    Measure("CDSEM-01"), Classify,
+    TrackIn("CDSEM-01"), Measure("CDSEM-01"), TrackOut("CDSEM-01"), Classify,
     Transport("CDSEM", "STOCKER"), SealComplete
   )
 
@@ -112,9 +117,9 @@ object FabScenarioPipeline {
       Branch(_.pilotPassed,
         Seq(SagaMerge("pilot"),
           Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
-          RunRecipe(equipId, "LITHO-28-001"),
+          TrackIn(equipId), RunRecipe(equipId, "LITHO-28-001"), TrackOut(equipId),
           Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
-          Measure(cdSemId), Classify,
+          TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
           Transport("CDSEM", "STOCKER"), SealComplete),
         Seq(ScrapWafers, SealComplete))
     )
@@ -122,10 +127,12 @@ object FabScenarioPipeline {
 
   private def scrapStages: Seq[PipelineStage] = {
     val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
-    Seq(LoadFoup, Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
-      RunRecipe(equipId, "LITHO-28-001"),
+    Seq(LoadFoup,
+      Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
+      TrackIn(equipId), RunRecipe(equipId, "LITHO-28-001"), TrackOut(equipId),
       Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
-      Measure(cdSemId), Classify, SagaSplit("scrap"), ScrapWafers,
+      TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
+      SagaSplit("scrap"), ScrapWafers,
       Transport("CDSEM", "STOCKER"), SealComplete)
   }
 
@@ -133,16 +140,18 @@ object FabScenarioPipeline {
     val cdSemId = "CDSEM-01"
     Seq(LoadFoup, SagaSplit("sample"),
       Transport("STOCKER", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
-      Measure(cdSemId), Classify, SagaMerge("sample"),
+      TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
+      SagaMerge("sample"),
       Transport("CDSEM", "STOCKER"), SealComplete)
   }
 
   private def holdReleaseStages: Seq[PipelineStage] = {
     val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
-    Seq(LoadFoup, Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
-      RunRecipe(equipId, "LITHO-28-001"),
+    Seq(LoadFoup,
+      Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
+      TrackIn(equipId), RunRecipe(equipId, "LITHO-28-001"), TrackOut(equipId),
       Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
-      Measure(cdSemId), Classify,
+      TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
       SagaSplit("hold"), HoldWafers, WaitForReview(15000), ReleaseWafers,
       Branch(_.reviewApproved,
         Seq(SagaMerge("hold"), Transport("CDSEM", "STOCKER"), SealComplete),
