@@ -23,7 +23,7 @@ object WorkOrderBehaviors {
         if (state != Idle)
           Effect.reply(cmd.replyTo)(WorkOrderConfirmation(workOrderId, "AlreadyActive"))
         else
-          Effect.persist(WorkOrderCreated(workOrderId, cmd.productId, cmd.waferIds, cmd.waferIds.size))
+          Effect.persist(WorkOrderCreated(workOrderId, cmd.productId, cmd.waferIds, cmd.waferIds.size, routeRef = cmd.routeRef))
             .thenRun { _ =>
               cmd.replyTo ! WorkOrderConfirmation(workOrderId, "Executing")
               actorContext.pipeToSelf(

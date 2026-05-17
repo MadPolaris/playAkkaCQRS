@@ -254,7 +254,7 @@ class FabDemoService @Inject()(
 
     publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
     val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
-    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(scenarioId, scenario.waferIds, replyTo))
+    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(scenarioId, scenario.waferIds, routeRef = None, replyTo))
   }
 
   private def spawnSimulators(
@@ -307,7 +307,7 @@ class FabDemoService @Inject()(
 
     publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
     val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
-    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(productId, waferIds, replyTo))
+    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(productId, waferIds, routeRef = None, replyTo))
   }
 
   /** Spawn generic equipment simulators for all areas used in a routing. */

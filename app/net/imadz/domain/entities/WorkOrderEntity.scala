@@ -12,6 +12,7 @@ object WorkOrderEntity {
     workOrderId: String,
     productId: String,
     waferIds: Seq[String],
+    routeRef: Option[String] = None,     // "routeId:v3" — versioned route reference
     sourceLotId: Option[String] = None,
     reworkLotId: Option[String] = None
   ) extends WorkOrderState
@@ -30,7 +31,8 @@ object WorkOrderEntity {
     workOrderId: String,
     productId: String,
     waferIds: Seq[String],
-    waferCount: Int
+    waferCount: Int,
+    routeRef: Option[String] = None   // M3.5+: versioned route reference
   ) extends WorkOrderEvent
   case class WorkOrderCompleted(
     passCount: Int,
@@ -43,8 +45,8 @@ object WorkOrderEntity {
   type WorkOrderEventHandler = (WorkOrderState, WorkOrderEvent) => WorkOrderState
 
   def handleEvent: WorkOrderEventHandler = (state, event) => event match {
-    case WorkOrderCreated(workOrderId, productId, waferIds, _) =>
-      Executing(workOrderId, productId, waferIds)
+    case WorkOrderCreated(workOrderId, productId, waferIds, _, routeRef) =>
+      Executing(workOrderId, productId, waferIds, routeRef = routeRef)
 
     case WorkOrderCompleted(passCount, scrapCount, reworkCount) =>
       Completed(passCount, scrapCount, reworkCount)

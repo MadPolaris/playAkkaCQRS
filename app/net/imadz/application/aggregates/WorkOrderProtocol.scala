@@ -19,6 +19,7 @@ object WorkOrderProtocol {
   case class CreateWorkOrder(
     productId: String,
     waferIds: Seq[String],
+    routeRef: Option[String] = None,  // M3.5+: "routeId:v3"
     replyTo: ActorRef[WorkOrderConfirmation]
   ) extends WorkOrderCommand
 
