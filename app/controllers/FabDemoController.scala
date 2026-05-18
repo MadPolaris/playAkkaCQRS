@@ -4,12 +4,12 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
 import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
-import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent}
+import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent, RecoveryEvent, FaultInjected, DynamicStageInjected, PipelineTimelineSnapshot}
+import net.imadz.fab.service.FabDemoService
 import akka.projection.ProjectionBehavior
 import net.imadz.fab.projection.{FabDemoEventBridge, FabDemoViewProjection}
 import net.imadz.fab.engine.RouteCardCompiler
 import net.imadz.fab.routing._
-import net.imadz.fab.service.FabDemoService
 import play.api.i18n.{I18nSupport, Lang}
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.{BaseController, ControllerComponents, WebSocket}
@@ -22,7 +22,8 @@ class FabDemoController @Inject()(
   implicit val classicSystem: akka.actor.ActorSystem,
   implicit val mat: Materializer,
   implicit val ec: ExecutionContext,
-  fabDemoService: FabDemoService
+  fabDemoService: FabDemoService,
+  ocapRuleStore: OcapRuleStore
 ) extends BaseController with I18nSupport {
 
   private implicit val typedSystem: ActorSystem[Nothing] = classicSystem.toTyped
@@ -107,6 +108,11 @@ class FabDemoController @Inject()(
       case ScrapEvent(wid, reason) => Json.obj("waferId" -> wid, "reason" -> reason)
       case OcapActionTriggered(rid, rname, atype, detail, wafers) => Json.obj("ruleId" -> rid, "ruleName" -> rname, "actionType" -> atype, "detail" -> detail, "affectedWafers" -> wafers)
       case PipelineStageFailed(stageName, equipId, errorCode, detail, ts) => Json.obj("stageName" -> stageName, "equipId" -> equipId, "errorCode" -> errorCode, "detail" -> detail, "timestamp" -> ts)
+      // M3.5 Self-Healing events
+      case RecoveryEvent(woId, rt, er, ps, rms, det) => Json.obj("workOrderId" -> woId, "recoveryType" -> rt, "eventsReplayed" -> er, "phasesSkipped" -> ps, "recoveryTimeMs" -> rms, "detail" -> det)
+      case FaultInjected(woId, eqId, ft, pn, res, resolv) => Json.obj("workOrderId" -> woId, "equipmentId" -> eqId, "faultType" -> ft, "phaseName" -> pn, "resolved" -> res, "resolution" -> resolv)
+      case DynamicStageInjected(woId, pnid, ist, tbr, si) => Json.obj("workOrderId" -> woId, "parentNodeId" -> pnid, "injectedStageType" -> ist, "triggeredByRule" -> tbr, "stageIndex" -> si)
+      case PipelineTimelineSnapshot(woId, tp, cp, cur, cpi, fp, rp, ot) => Json.obj("workOrderId" -> woId, "totalPhases" -> tp, "completedPhases" -> cp, "currentPhase" -> cur, "currentPhaseIndex" -> cpi, "failedPhases" -> fp, "recoveredPhases" -> rp, "ocapTriggers" -> ot)
       case AggregateStateUpdated(srcLot, childLots, wafers) => Json.obj(
         "sourceLot" -> Json.obj("lotId" -> srcLot.lotId, "status" -> srcLot.status, "waferCount" -> srcLot.waferCount, "passCount" -> srcLot.passCount, "scrapCount" -> srcLot.scrapCount, "currentArea" -> srcLot.currentArea),
         "childLots" -> childLots.map(cl => Json.obj("lotId" -> cl.lotId, "status" -> cl.status, "waferCount" -> cl.waferCount, "passCount" -> cl.passCount, "scrapCount" -> cl.scrapCount, "currentArea" -> cl.currentArea)),
@@ -268,6 +274,110 @@ class FabDemoController @Inject()(
     }.recover { case ex =>
       Ok(Json.obj("error" -> ex.getMessage, "workOrderId" -> workOrderId))
     }
+  }
+
+  // ====================================================================
+  // M3.5 Self-Healing Demo
+  // ====================================================================
+
+  /** Render the M3.5 Self-Healing Demo page. */
+  def m35Demo() = Action { implicit request =>
+    val langParam = request.getQueryString("lang").getOrElse("")
+    val langs: Seq[Lang] = if (langParam.nonEmpty) Seq(Lang(langParam)) else request.acceptLanguages
+    val messages = messagesApi.preferred(langs)
+    Ok(views.html.fabM35Demo()(messages))
+  }
+
+  /** WebSocket endpoint for M3.5 real-time events (reuses existing hubSource). */
+  def m35Socket: WebSocket = WebSocket.accept[String, String] { _ =>
+    Flow.fromSinkAndSource(Sink.ignore, hubSource.map { event =>
+      val typeName = event.getClass.getSimpleName.replace("$", "")
+      val data = writeEventData(event)
+      Json.obj("type" -> typeName, "data" -> data).toString()
+    })
+  }
+
+  /** Start the M3.5 self-healing demo. */
+  def m35Start() = Action.async { implicit request =>
+    val scenarioType = request.body.asJson.flatMap(j => (j \ "scenarioType").asOpt[String]).getOrElse("ocap-rework-crash")
+    val faultProbability = request.body.asJson.flatMap(j => (j \ "faultProbability").asOpt[Double]).getOrElse(0.2)
+
+    // Look up scenario details for the response
+    val scenarioDetails = scenarioType match {
+      case "send-ahead-ocap"        => ("Send-Ahead with OCAP", 5)
+      case "multi-workorder-chaos"  => ("Multi-WorkOrder Chaos (3 WO)", 15)
+      case _                        => ("OCAP Rework + Crash (Self-Healing)", 5)
+    }
+
+    fabDemoService.startM35Demo(scenarioType, faultProbability, publishEvent).map { result =>
+      Ok(Json.obj(
+        "success" -> true,
+        "message" -> s"M3.5 demo started: WorkOrder ${result.workOrderId}",
+        "workOrderId" -> result.workOrderId,
+        "scenarioType" -> scenarioType,
+        "scenarioName" -> scenarioDetails._1,
+        "waferCount" -> scenarioDetails._2
+      ))
+    }
+  }
+
+  /** Inject a crash for the given workOrderId. */
+  def m35InjectCrash(workOrderId: String) = Action.async {
+    fabDemoService.injectCrash(workOrderId, publishEvent).map { success =>
+      Ok(Json.obj("success" -> success, "workOrderId" -> workOrderId))
+    }
+  }
+
+  /** Update fault probability mid-demo (P5). */
+  def m35UpdateFaultProbability() = Action(parse.json) { request =>
+    val probability = request.body.\("probability").asOpt[Double].getOrElse(0.0)
+    val clamped = math.max(0.0, math.min(1.0, probability))
+    fabDemoService.updateFaultProbability(clamped)
+    Ok(Json.obj("success" -> true, "faultProbability" -> clamped))
+  }
+
+  /** Get current OCAP rules for the M3.5 demo page. */
+  def m35GetOcapRules() = Action {
+    val rules = fabDemoService.getOcapRulesForM35
+    Ok(Json.toJson(rules.map { r =>
+      Json.obj(
+        "ruleId" -> r.getOrElse("ruleId", "").toString,
+        "name" -> r.getOrElse("name", "").toString,
+        "priority" -> (r.getOrElse("priority", 0) match { case i: Int => i; case s => s.toString.toInt }),
+        "actionType" -> r.getOrElse("actionType", "").toString,
+        "condition" -> r.getOrElse("condition", "").toString,
+        "maxTriggersPerLot" -> (r.getOrElse("maxTriggersPerLot", 3) match { case i: Int => i; case s => s.toString.toInt })
+      )
+    }))
+  }
+
+  /** Get recovery status for a work order. */
+  def m35RecoveryStatus(id: String) = Action {
+    val status = fabDemoService.getRecoveryStatus(id)
+    Ok(Json.obj(
+      "workOrderId" -> status.getOrElse("workOrderId", "").toString,
+      "status" -> status.getOrElse("status", "").toString,
+      "recoveryCount" -> (status.getOrElse("recoveryCount", 0) match { case i: Int => i; case s => s.toString.toInt }),
+      "lastRecoveryTimeMs" -> (status.getOrElse("lastRecoveryTimeMs", 0L) match { case l: Long => l; case i: Int => i.toLong; case s => s.toString.toLong }),
+      "phasesSkipped" -> (status.getOrElse("phasesSkipped", 0) match { case i: Int => i; case s => s.toString.toInt }),
+      "eventsReplayed" -> (status.getOrElse("eventsReplayed", 0) match { case i: Int => i; case s => s.toString.toInt })
+    ))
+  }
+
+  /** Get fault history for a work order. */
+  def m35FaultHistory(id: String) = Action {
+    val history = fabDemoService.getFaultHistory(id)
+    val jsonArr = history.map { h =>
+      Json.obj(
+        "workOrderId" -> h.getOrElse("workOrderId", "").toString,
+        "equipmentId" -> h.getOrElse("equipmentId", "").toString,
+        "faultType" -> h.getOrElse("faultType", "").toString,
+        "phaseName" -> h.getOrElse("phaseName", "").toString,
+        "resolved" -> h.getOrElse("resolved", false).toString,
+        "timestamp" -> h.getOrElse("timestamp", 0L).toString
+      )
+    }
+    Ok(Json.toJson(jsonArr))
   }
 
   // ====================================================================

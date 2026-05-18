@@ -96,3 +96,49 @@ case class DomainEventRecorded(
   timestamp: Long,
   layer: Int             // 0=Chain, 1=Saga, 2=Aggregate, 3=Process
 ) extends FabSimulationEvent
+
+// --- M3.5 Self-Healing Events ---
+
+/** Recovery event for crash + self-healing visualization.
+  * recoveryType: "CRASH_DETECTED" | "RECOVERING" | "RECOVERED" | "COMPLETED" */
+case class RecoveryEvent(
+  workOrderId: String,
+  recoveryType: String,
+  eventsReplayed: Int,
+  phasesSkipped: Int,
+  recoveryTimeMs: Long,
+  detail: String
+) extends FabSimulationEvent
+
+/** Fault injection notification for equipment fault visualization.
+  * faultType: "hardware_fault" | "processing_error" | "timeout" | "actor_crash" */
+case class FaultInjected(
+  workOrderId: String,
+  equipmentId: String,
+  faultType: String,
+  phaseName: String,
+  resolved: Boolean,
+  resolution: Option[String]
+) extends FabSimulationEvent
+
+/** Dynamic DAG weave notification for OCAP branch injection.
+  * injectedStageType: "ReworkLoop" | "SendAheadPilot" | "HoldRelease" */
+case class DynamicStageInjected(
+  workOrderId: String,
+  parentNodeId: String,
+  injectedStageType: String,
+  triggeredByRule: Option[String],
+  stageIndex: Int
+) extends FabSimulationEvent
+
+/** Pipeline timeline snapshot for the horizontal progress bar. */
+case class PipelineTimelineSnapshot(
+  workOrderId: String,
+  totalPhases: Int,
+  completedPhases: Int,
+  currentPhase: Option[String],
+  currentPhaseIndex: Int,
+  failedPhases: Seq[String],
+  recoveredPhases: Seq[String],
+  ocapTriggers: Int
+) extends FabSimulationEvent

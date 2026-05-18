@@ -64,6 +64,16 @@ GET     /api/fab-demo/scenario/:id/ledger        controllers.FabDemoController.g
 GET     /api/fab-demo/entity-state/:workOrderId  controllers.FabDemoController.getEntityState(workOrderId: String)
 GET     /api/fab-demo/scenario/:id/route-graph   controllers.FabDemoController.getRouteGraph(id: String)
 
+# M3.5 Self-Healing Demo
+GET     /fab-demo/m35                               controllers.FabDemoController.m35Demo()
+GET     /ws/fab-demo/m35/events                     controllers.FabDemoController.m35Socket
+POST    /api/fab-demo/m35/start                     controllers.FabDemoController.m35Start()
+POST    /api/fab-demo/m35/inject-crash/:workOrderId  controllers.FabDemoController.m35InjectCrash(workOrderId: String)
+GET     /api/fab-demo/m35/ocap-rules                controllers.FabDemoController.m35GetOcapRules()
+GET     /api/fab-demo/m35/recovery-status/:id        controllers.FabDemoController.m35RecoveryStatus(id: String)
+GET     /api/fab-demo/m35/fault-history/:id          controllers.FabDemoController.m35FaultHistory(id: String)
+POST    /api/fab-demo/m35/fault-probability          controllers.FabDemoController.m35UpdateFaultProbability()
+
 # Route CRUD (M3.5+)
 GET     /api/fab-demo/routes                     controllers.FabDemoController.listRoutes
 POST    /api/fab-demo/routes                     controllers.FabDemoController.publishRoute

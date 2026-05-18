@@ -78,7 +78,8 @@ object FabExecutionModel {
     scrapLotId: Option[Id] = None,
     childLotRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand]] = Map.empty,
     childLotIds: Map[String, Id] = Map.empty,
-    ocapRules: List[OcapRuleDefinition] = Nil
+    ocapRules: List[OcapRuleDefinition] = Nil,
+    faultProbability: Double = 0.0
   )(implicit val ec: ExecutionContext)
 
   // ---- Pipeline error types (M3.5) ----

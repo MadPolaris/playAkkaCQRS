@@ -31,6 +31,145 @@
     return COLORS[nodeType] || COLORS.equipment;
   }
 
+  /**
+   * Highlight OCAP-affected nodes with purple glow effect.
+   * @param nodeIds array of node IDs to highlight with OCAP styling
+   */
+  global.highlightOcapNodes = function (nodeIds) {
+    // First clear previous OCAP highlights
+    document.querySelectorAll('#route-graph-svg .rg-node.rg-ocap').forEach(function (el) {
+      el.classList.remove('rg-ocap');
+    });
+    nodeIds.forEach(function (nid) {
+      var el = document.getElementById('rg-' + nid);
+      if (el) el.classList.add('rg-ocap');
+    });
+  };
+
+  /**
+   * Show an OCAP-triggered path with animated purple glow on an edge.
+   * Creates a temporary overlay path on the SVG that pulses.
+   * @param fromId source node ID
+   * @param toId   target node ID
+   * @param label  optional label text for the path
+   */
+  global.highlightOcapPath = function (fromId, toId, label) {
+    var svg = document.getElementById('route-graph-svg');
+    if (!svg) return;
+    var nodeMap = svg._nodeMap;
+    if (!nodeMap) return;
+    var from = nodeMap[fromId], to = nodeMap[toId];
+    if (!from || !to) return;
+
+    var x1 = from.x + from.w / 2, y1 = from.y + from.h;
+    var x2 = to.x + to.w / 2, y2 = to.y;
+
+    // Same routing logic as renderGraph
+    if (Math.abs(from.y - to.y) < 30 && from.x < to.x) {
+      x1 = from.x + from.w; y1 = from.y + from.h / 2;
+      x2 = to.x; y2 = to.y + to.h / 2;
+    }
+    if (from.y < to.y && Math.abs(from.x - to.x) < 30) {
+      x1 = from.x + from.w / 2; y1 = from.y + from.h;
+      x2 = to.x + to.w / 2; y2 = to.y;
+    }
+
+    var cpY = (y1 + y2) / 2;
+    var d = 'M' + x1 + ',' + y1 + ' C' + x1 + ',' + cpY + ' ' + x2 + ',' + cpY + ' ' + x2 + ',' + y2;
+
+    // Remove previous OCAP paths
+    svg.querySelectorAll('.ocap-dynamic-path').forEach(function (el) { el.remove(); });
+
+    var path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('class', 'ocap-dynamic-path ocap-path-glow');
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', '#a855f7');
+    path.setAttribute('stroke-width', '2.5');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-dasharray', '6 4');
+    path.setAttribute('opacity', '0.9');
+    path.setAttribute('marker-end', 'url(#rg-arrow-ocap)');
+    svg.insertBefore(path, svg.querySelector('style'));
+
+    if (label) {
+      var labelEl = document.createElementNS(SVG_NS, 'text');
+      labelEl.setAttribute('class', 'ocap-dynamic-path');
+      labelEl.setAttribute('x', (x1 + x2) / 2 - 20);
+      labelEl.setAttribute('y', cpY - 6);
+      labelEl.setAttribute('fill', '#a855f7');
+      labelEl.setAttribute('font-size', '10');
+      labelEl.setAttribute('font-family', 'SF Mono, Fira Code, monospace');
+      labelEl.setAttribute('font-weight', '700');
+      labelEl.textContent = label || 'OCAP';
+      svg.insertBefore(labelEl, svg.querySelector('style'));
+    }
+  };
+
+  /**
+   * Show a dynamic stage (dashed purple node) injected into the route graph.
+   * @param stageType the type of stage injected (e.g. "ReworkLoop", "HoldRelease")
+   * @param parentNodeId the node this stage branches from
+   * @param stageIndex index for positioning
+   */
+  global.showDynamicStage = function (stageType, parentNodeId, stageIndex) {
+    var svg = document.getElementById('route-graph-svg');
+    if (!svg) return;
+    // Remove previous dynamic stage nodes
+    svg.querySelectorAll('.rg-dynamic-stage').forEach(function (el) { el.remove(); });
+
+    var parentEl = document.getElementById('rg-' + parentNodeId);
+    if (!parentEl) return;
+    var parentNode = svg._nodeMap[parentNodeId];
+    if (!parentNode) return;
+
+    var ox = parentNode.x + parentNode.w + 20;
+    var oy = parentNode.y + (stageIndex || 0) * 50;
+
+    var g = document.createElementNS(SVG_NS, 'g');
+    g.setAttribute('class', 'rg-node rg-dynamic-stage');
+    g.setAttribute('transform', 'translate(' + ox + ',' + oy + ')');
+
+    var rect = document.createElementNS(SVG_NS, 'rect');
+    rect.setAttribute('width', 80);
+    rect.setAttribute('height', 30);
+    rect.setAttribute('rx', 6);
+    rect.setAttribute('ry', 6);
+    rect.setAttribute('fill', '#2a1a3a');
+    rect.setAttribute('stroke', '#a855f7');
+    rect.setAttribute('stroke-width', '2');
+    rect.setAttribute('stroke-dasharray', '5 3');
+    g.appendChild(rect);
+
+    var label = document.createElementNS(SVG_NS, 'text');
+    label.setAttribute('x', 40);
+    label.setAttribute('y', 15);
+    label.setAttribute('fill', '#a855f7');
+    label.setAttribute('font-size', '9');
+    label.setAttribute('font-family', 'SF Mono, Fira Code, monospace');
+    label.setAttribute('text-anchor', 'middle');
+    label.setAttribute('dominant-baseline', 'middle');
+    label.setAttribute('font-weight', '700');
+    label.textContent = stageType || 'OCAP';
+    g.appendChild(label);
+
+    svg.insertBefore(g, svg.querySelector('style'));
+  };
+
+  /**
+   * Clear all OCAP highlights and dynamic stages.
+   */
+  global.clearOcapHighlights = function () {
+    document.querySelectorAll('#route-graph-svg .rg-node.rg-ocap').forEach(function (el) {
+      el.classList.remove('rg-ocap');
+    });
+    document.querySelectorAll('#route-graph-svg .ocap-dynamic-path').forEach(function (el) {
+      el.remove();
+    });
+    document.querySelectorAll('#route-graph-svg .rg-dynamic-stage').forEach(function (el) {
+      el.remove();
+    });
+  };
+
   // ---- Public API ----
 
   /**
@@ -214,7 +353,13 @@
     style.textContent =
       '.rg-node { transition: all 0.3s ease; }' +
       '.rg-active rect { stroke: #fff !important; stroke-width: 2.5 !important; filter: url(#rg-glow); }' +
-      '.rg-active text { fill: #fff !important; font-weight: bold; }';
+      '.rg-active text { fill: #fff !important; font-weight: bold; }' +
+      '.rg-ocap rect { stroke: #a855f7 !important; stroke-width: 2.5 !important; filter: url(#rg-glow); }' +
+      '.rg-ocap text { fill: #a855f7 !important; }' +
+      '.ocap-dynamic-path { animation: ocap-path-pulse 1.5s ease-in-out infinite; }' +
+      '@keyframes ocap-path-pulse { 0%,100% { stroke-opacity:0.4; } 50% { stroke-opacity:1; } }' +
+      '.rg-dynamic-stage { animation: dynamic-stage-fadein 0.5s ease-out; }' +
+      '@keyframes dynamic-stage-fadein { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }';
     svg.appendChild(style);
 
     container.innerHTML = '';

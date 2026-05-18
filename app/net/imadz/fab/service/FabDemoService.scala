@@ -10,12 +10,13 @@ import net.imadz.application.aggregates.WorkOrderProtocol.{CreateWorkOrder, Work
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
-import net.imadz.fab.chain.{FabDemoPipeline, FabFlowEngine, FabScenarioPipeline}
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
-import net.imadz.fab.events.{DemoStarted, FabSimulationEvent}
+import net.imadz.fab.chain.{FabDemoPipeline, FabFlowEngine, FabPipelineExecutionActor, FabScenarioPipeline}
+import net.imadz.fab.chain.FabScenarioPipeline.PipelineStage
+import net.imadz.fab.events.{DemoStarted, FabSimulationEvent, RecoveryEvent, PipelineTimelineSnapshot, FaultInjected}
 import net.imadz.fab.model.{Por, PorRepository}
+import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.protocol.ActorEquipmentAdapter
-import net.imadz.fab.routing.{OcapRuleStore, RouteCompiler, RoutingRepository}
+import net.imadz.fab.routing.{OcapRuleDefinition, OcapRuleStore, RouteCompiler, RoutingRepository}
 import net.imadz.fab.scenario.{FabSimulationScenario, StandardScenarios}
 import net.imadz.fab.simulation._
 
@@ -44,6 +45,15 @@ class FabDemoService @Inject()(
   // Used by pipelineStarter for both initial runs AND crash-recovery replays,
   // where no per-request WebSocket publisher is available.
   @volatile private var systemWidePublisher: Option[FabSimulationEvent => Unit] = None
+
+  /** Current fault probability for M3.5 equipment simulators (0.0–1.0). */
+  @volatile var currentFaultProbability: Double = 0.0
+
+  /** Shared M3.5 equipment adapter — persists across pipeline actor crashes so recovery can reuse simulator refs. */
+  @volatile private var m35Adapter: Option[ActorEquipmentAdapter] = None
+
+  /** Whether FabPipelineExecutionActor has been registered in sharding. */
+  private var pipelineActorInitialized: Boolean = false
 
   def setSystemWidePublisher(publisher: FabSimulationEvent => Unit): Unit = {
     systemWidePublisher = Some(publisher)
@@ -366,12 +376,15 @@ class FabDemoService @Inject()(
   ): Unit = {
     // Spawn equipment simulators and register with adapter
     import net.imadz.fab.simulation._
+    val fp = currentFaultProbability
+    val lithoConfig = scenario.litho.copy(faultProbability = fp)
+    val cdSemConfig = scenario.cdSem.copy(faultProbability = fp)
     val lithoActor = system.systemActorOf(
-      new LithographySimulator(scenario.lithoDetail)(scenario.litho),
+      new LithographySimulator(scenario.lithoDetail)(lithoConfig),
       s"litho-${scenario.scenarioId}-${System.currentTimeMillis()}"
     )
     val cdSemActor = system.systemActorOf(
-      new CdSemSimulator(scenario.cdSemDetail)(scenario.cdSem),
+      new CdSemSimulator(scenario.cdSemDetail)(cdSemConfig),
       s"cdsem-${scenario.scenarioId}-${System.currentTimeMillis()}"
     )
     val amhsActor = system.systemActorOf(
@@ -454,6 +467,7 @@ class FabDemoService @Inject()(
                                       publisher: FabSimulationEvent => Unit,
                                       waferIds: Seq[String]
   ): Unit = {
+    val fp = currentFaultProbability
     val areaIds = routing.steps.map(_.equipmentArea.areaId).distinct
     val equipIds = areaIds.flatMap(aid => FabFlowEngine.AreaToEquipmentId.get(aid))
 
@@ -461,7 +475,7 @@ class FabDemoService @Inject()(
     equipIds.foreach { eid =>
       val areaType = routing.steps.find(s => FabFlowEngine.AreaToEquipmentId.get(s.equipmentArea.areaId).contains(eid))
         .map(_.equipmentArea.areaId).getOrElse(eid)
-      val equipCfg = EquipmentConfig(eid, areaType, processingTime = 8.seconds)
+      val equipCfg = EquipmentConfig(eid, areaType, processingTime = 8.seconds, faultProbability = fp)
       val actor = system.systemActorOf(
         new GenericEquipmentSimulator().apply(equipCfg),
         s"dyn-equip-$eid-${System.currentTimeMillis()}"
@@ -478,7 +492,7 @@ class FabDemoService @Inject()(
       waferOutcomes = Map.empty // will use random generation
     )
     val cdSemActor = system.systemActorOf(
-      new CdSemSimulator(cdSemCfg)(EquipmentConfig(cdSemId, "METROLOGY", processingTime = 5.seconds)),
+      new CdSemSimulator(cdSemCfg)(EquipmentConfig(cdSemId, "METROLOGY", processingTime = 5.seconds, faultProbability = fp)),
       s"dyn-cdsem-${System.currentTimeMillis()}"
     )
     adapter.registerSimulator(cdSemId, cdSemActor)
@@ -1068,4 +1082,475 @@ class FabDemoService @Inject()(
     childLots: Map[String, LotConfirmation]
   )
 
+  // ===========================================================================
+  // M3.5 Self-Healing Demo
+  // ===========================================================================
+
+  /** Map M3.5 scenario type to internal scenario ID and OCAP rules. */
+  private def resolveM35Scenario(scenarioType: String): (String, List[OcapRuleDefinition]) = {
+    val allRules = ocapRuleStore.getRules
+    scenarioType match {
+      case "send-ahead-ocap"      => ("send-ahead-pilot", allRules.filter(r => r.routeId == "SEND-AHEAD-PILOT" || r.routeId.isEmpty))
+      case "multi-workorder-chaos" => ("photo-cell-5wafer", allRules.filter(r => r.routeId == "PHOTOCELL-5WAFER" || r.routeId.isEmpty))
+      case _                       => ("photo-cell-5wafer", allRules.filter(r => r.routeId == "PHOTOCELL-5WAFER" || r.routeId.isEmpty))
+    }
+  }
+
+  /** Resolve M3.5 scenario to OCAP-enhanced PipelineStages. */
+  private def m35StageResolver(scenarioId: String, ocapRules: List[OcapRuleDefinition]): Seq[PipelineStage] = scenarioId match {
+    case "send-ahead-pilot" => FabScenarioPipeline.m35SendAheadStages(ocapRules)
+    case _                  => FabScenarioPipeline.m35BasicStages(ocapRules)
+  }
+
+  /** Build scenario profile for "OCAP Rework + Crash" with guaranteed OCAP firing. */
+  private def buildOcapReworkCrashScenario(faultProbability: Double): (FabSimulationScenario, Seq[PipelineStage]) = {
+    val baseScenario = StandardScenarios.photoCell5Wafer
+    // Guarantee at least 1 borderline CD (triggers OCAP rule OCAP-001: cd_nm BETWEEN 34.0 AND 36.0)
+    // WAFER-3 gets BORDERLINE outcome with CD ~34.5nm
+    // WAFER-5 gets SCRAP to show scrap bin
+    val waferIds = baseScenario.waferIds
+    val guaranteedOutcomes = Map(
+      "WAFER-1" -> "PASS",
+      "WAFER-2" -> "PASS",
+      "WAFER-3" -> "BORDERLINE",  // ~34.5nm → triggers OCAP Rework rule
+      "WAFER-4" -> "PASS",
+      "WAFER-5" -> "FAIL"         // triggers rework
+    )
+    val adjustedCdSem = baseScenario.cdSemDetail.copy(
+      waferOutcomes = guaranteedOutcomes
+    )
+    val adjustedLitho = baseScenario.lithoDetail.copy(
+      hardwareFaultRate = faultProbability
+    )
+    val scenario = baseScenario.copy(
+      cdSemDetail = adjustedCdSem,
+      lithoDetail = adjustedLitho,
+      litho = baseScenario.litho.copy(faultProbability = faultProbability),
+      cdSem = baseScenario.cdSem.copy(faultProbability = faultProbability)
+    )
+    val rules = ocapRuleStore.getRules.filter(r => r.routeId == "PHOTOCELL-5WAFER" || r.routeId.isEmpty)
+    val stages = FabScenarioPipeline.m35BasicStages(rules)
+    (scenario, stages)
+  }
+
+  /** Build "Send-Ahead with OCAP" scenario. */
+  private def buildSendAheadOcapScenario(faultProbability: Double): (FabSimulationScenario, Seq[PipelineStage]) = {
+    val baseScenario = StandardScenarios.sendAheadPilot
+    // Pilot wafer gets borderline CD to trigger OCAP notify rule
+    val waferIds = baseScenario.waferIds
+    val guaranteedOutcomes = Map(
+      "PILOT-WAFER-1" -> "BORDERLINE", // ~35nm → triggers OCAP Notify
+      "PILOT-WAFER-2" -> "PASS",
+      "PILOT-WAFER-3" -> "PASS",
+      "PILOT-WAFER-4" -> "PASS",
+      "PILOT-WAFER-5" -> "PASS"
+    )
+    val adjustedCdSem = baseScenario.cdSemDetail.copy(
+      waferOutcomes = guaranteedOutcomes
+    )
+    val scenario = baseScenario.copy(
+      cdSemDetail = adjustedCdSem,
+      litho = baseScenario.litho.copy(faultProbability = faultProbability),
+      cdSem = baseScenario.cdSem.copy(faultProbability = faultProbability)
+    )
+    val rules = ocapRuleStore.getRules.filter(r => r.routeId == "SEND-AHEAD-PILOT" || r.routeId.isEmpty)
+    val stages = FabScenarioPipeline.m35SendAheadStages(rules)
+    (scenario, stages)
+  }
+
+  /** Build "Multi-WorkOrder Chaos" scenario — returns base config + stage list for one of 3 concurrent WOs. */
+  private def buildMultiWorkOrderChaosScenario(faultProbability: Double): (FabSimulationScenario, Seq[PipelineStage]) = {
+    val baseScenario = StandardScenarios.photoCell5Wafer
+    // High fault rate + mixed outcomes to guarantee interesting behavior
+    val waferIds = baseScenario.waferIds
+    val guaranteedOutcomes = Map(
+      "WAFER-1" -> "PASS",
+      "WAFER-2" -> "PASS",
+      "WAFER-3" -> "BORDERLINE",
+      "WAFER-4" -> "FAIL",
+      "WAFER-5" -> "SCRAP"
+    )
+    val adjustedCdSem = baseScenario.cdSemDetail.copy(
+      waferOutcomes = guaranteedOutcomes
+    )
+    val scenario = baseScenario.copy(
+      cdSemDetail = adjustedCdSem,
+      litho = baseScenario.litho.copy(faultProbability = faultProbability),
+      cdSem = baseScenario.cdSem.copy(faultProbability = faultProbability)
+    )
+    val rules = ocapRuleStore.getRules.filter(r => r.routeId == "PHOTOCELL-5WAFER" || r.routeId.isEmpty)
+    val stages = FabScenarioPipeline.m35ChaosStages(rules)
+    (scenario, stages)
+  }
+
+  /** Build a FabDemoContext for M3.5 demo recovery from deterministic IDs. */
+  private def m35ContextFactory(scenarioId: String, workOrderId: String): FabDemoContext = {
+    val ocapRules = forM35ContextOcapRules(scenarioId)
+    val scenario = scenarioId match {
+      case "send-ahead-pilot"  => StandardScenarios.sendAheadPilot
+      case "scrap-downgrade"   => StandardScenarios.scrapDowngrade
+      case "sampling-demo"     => StandardScenarios.samplingDemo
+      case "hold-release"      => StandardScenarios.holdRelease
+      case _                   => StandardScenarios.photoCell5Wafer
+    }
+    val waferIds = scenario.waferIds
+    val waferUUIDs: Map[String, Id] = waferIds.map { wid =>
+      wid -> UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes)
+    }.toMap
+    val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
+    val reworkLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-rework-lot".getBytes)
+    val scrapLotId: Id  = UUID.nameUUIDFromBytes(s"$workOrderId-scrap-lot".getBytes)
+    val pilotLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-pilot-lot".getBytes)
+    val sampleLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-sample-lot".getBytes)
+    val holdLotId: Id   = UUID.nameUUIDFromBytes(s"$workOrderId-hold-lot".getBytes)
+
+    val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
+    val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
+    val scrapLotRef = sharding.entityRefFor(LotEntityTypeKey, scrapLotId.toString)
+    val pilotLotRef = sharding.entityRefFor(LotEntityTypeKey, pilotLotId.toString)
+    val sampleLotRef = sharding.entityRefFor(LotEntityTypeKey, sampleLotId.toString)
+    val holdLotRef = sharding.entityRefFor(LotEntityTypeKey, holdLotId.toString)
+
+    val sagaTxFn: (Id, Id, Set[Id], Set[String], Option[Id]) => Future[FabSagaConfirmation] =
+      (srcId, tgtId, wids, names, existingTxId) => fabSagaService.transferWafers(srcId, tgtId, wids, names, existingTxId)
+
+    // Reuse shared adapter so simulator refs survive pipeline crashes
+    val adapter = m35Adapter.getOrElse(new ActorEquipmentAdapter())
+    val ignoreLotReply = system.ignoreRef[LotConfirmation]
+    val pub = systemWidePublisher.getOrElse(publisherRegistry.getOrDefault(workOrderId, _ => ()).asInstanceOf[FabSimulationEvent => Unit])
+
+    FabDemoContext(
+      scenario = scenario,
+      foupId = s"FOUP-${scenario.scenarioId}",
+      lotRef = lotRef,
+      reworkLotRef = reworkLotRef,
+      waferUUIDs = waferUUIDs,
+      sourceLotId = sourceLotId,
+      reworkLotId = reworkLotId,
+      adapter = adapter,
+      publisher = pub,
+      ignoreLotReply = ignoreLotReply,
+      sagaTx = sagaTxFn,
+      speedMultiplier = 1.0,
+      scrapLotRef = Some(scrapLotRef),
+      scrapLotId = Some(scrapLotId),
+      childLotRefs = Map(
+        "pilot" -> pilotLotRef, "sample" -> sampleLotRef,
+        "hold" -> holdLotRef, "scrap" -> scrapLotRef
+      ),
+      childLotIds = Map(
+        "pilot" -> pilotLotId, "sample" -> sampleLotId,
+        "hold" -> holdLotId, "scrap" -> scrapLotId
+      ),
+      ocapRules = ocapRules,
+      faultProbability = currentFaultProbability
+    )
+  }
+
+  /** Resolve OCAP rules for M3.5 context by scenario. */
+  private def forM35ContextOcapRules(scenarioId: String): List[OcapRuleDefinition] = {
+    val routeId = scenarioId match {
+      case "send-ahead-pilot" => "SEND-AHEAD-PILOT"
+      case _                  => "PHOTOCELL-5WAFER"
+    }
+    ocapRuleStore.getRules.filter(r => r.routeId == routeId || r.routeId.isEmpty)
+  }
+
+  /** Build a FabDemoState for M3.5 demo recovery. */
+  private def m35StateFactory(workOrderId: String): FabDemoState = {
+    // Reconstruct initial state with wafer info — wafers are re-created from entities
+    FabDemoState(wafers = Map.empty)
+  }
+
+  /** Start the M3.5 self-healing demo.
+    * Uses FabPipelineExecutionActor for crash-resilient EventSourced execution.
+    *
+    * @param scenarioType   "ocap-rework-crash" | "send-ahead-ocap" | "multi-workorder-chaos"
+    * @param faultProbability  0.0–1.0 fault probability (default 0.2 for 20%)
+    * @param publisher     WebSocket event publisher
+    * @return WorkOrderConfirmation with the started work order */
+  def startM35Demo(
+    scenarioType: String,
+    faultProbability: Double,
+    publisher: FabSimulationEvent => Unit
+  ): Future[WorkOrderConfirmation] = {
+    net.imadz.fab.projection.FabDemoViewHandler.resetAll()
+    net.imadz.fab.projection.FabDemoViewProjection.resetChildLotRegistry()
+    currentFaultProbability = faultProbability
+
+    scenarioType match {
+      case "multi-workorder-chaos" => startM35MultiWorkOrderChaos(faultProbability, publisher)
+      case _                       => startM35SingleWorkOrder(scenarioType, faultProbability, publisher)
+    }
+  }
+
+  /** Start a single work order M3.5 demo (ocap-rework-crash or send-ahead-ocap). */
+  private def startM35SingleWorkOrder(
+    scenarioType: String,
+    faultProbability: Double,
+    publisher: FabSimulationEvent => Unit
+  ): Future[WorkOrderConfirmation] = {
+    val (scenarioId, ocapRules) = resolveM35Scenario(scenarioType)
+    val (scenario, stages) = scenarioType match {
+      case "send-ahead-ocap" => buildSendAheadOcapScenario(faultProbability)
+      case _                 => buildOcapReworkCrashScenario(faultProbability)
+    }
+    val workOrderId = UUID.randomUUID().toString
+
+    // Init FabPipelineExecutionActor in sharding (idempotent)
+    initPipelineActor(publisher)
+
+    publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
+
+    // Publish a timeline snapshot to initialize the UI
+    publisher(PipelineTimelineSnapshot(
+      workOrderId = workOrderId,
+      totalPhases = stages.size,
+      completedPhases = 0,
+      currentPhase = Some("Load FOUP"),
+      currentPhaseIndex = 0,
+      failedPhases = Seq.empty,
+      recoveredPhases = Seq.empty,
+      ocapTriggers = 0
+    ))
+
+    // Create WorkOrder aggregate
+    val workOrderRef = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
+    workOrderRef.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(scenarioId, scenario.waferIds, routeRef = None, replyTo = replyTo))
+      .map { confirmation =>
+        // Create shared equipment adapter and spawn simulators with fault probability
+        val adapter = new ActorEquipmentAdapter()
+        m35Adapter = Some(adapter)
+        spawnSimulators(scenario, adapter, publisher)
+
+        // Build initial context and state (reuses shared adapter via m35Adapter)
+        val ctx = m35ContextFactory(scenarioId, workOrderId)
+        val initialState = FabDemoState(
+          wafers = scenario.waferIds.map(wid => wid -> WaferInfo(wid)).toMap
+        )
+
+        // Publish DemoStarted event
+        publisher(DemoStarted(scenarioId, scenario.name, scenario.lotSize, scenario.waferIds))
+
+        // Create source lot aggregate (idempotent)
+        val waferUUIDs: Map[String, Id] = scenario.waferIds.map { wid =>
+          wid -> UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes)
+        }.toMap
+        val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
+        val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
+
+        lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
+
+        // Fire-and-forget: send StartExecution to FabPipelineExecutionActor
+        val pipelineRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
+        pipelineRef ! FabPipelineExecutionActor.StartExecution(
+          scenarioId = scenarioId,
+          workOrderId = workOrderId,
+          initialState = initialState,
+          stages = stages,
+          ctx = ctx,
+          replyTo = system.ignoreRef[FabPipelineExecutionActor.ExecutionReply]
+        )
+
+        // Schedule automatic crash injection mid-pipeline (after CDSEM measurement completes)
+        // Uses a 15-second delay to ensure the pipeline is past CDSEM measure stage
+        scheduleAutoCrash(workOrderId, publisher, delaySeconds = 15)
+
+        confirmation
+      }(ec)
+  }
+
+  /** Start 3 concurrent work orders for the Multi-WorkOrder Chaos scenario. */
+  private def startM35MultiWorkOrderChaos(
+    faultProbability: Double,
+    publisher: FabSimulationEvent => Unit
+  ): Future[WorkOrderConfirmation] = {
+    // Use the chaos scenario config for all 3 WOs
+    val (baseScenario, stages) = buildMultiWorkOrderChaosScenario(faultProbability)
+    val rulePrefixes = Seq("WO-ALPHA", "WO-BRAVO", "WO-CHARLIE")
+    val productPrefixes = Seq("ALPHA-01", "BRAVO-01", "CHARLIE-01")
+
+    initPipelineActor(publisher)
+
+    // Run 3 work orders concurrently
+    rulePrefixes.foreach { prefix =>
+      val workOrderId = prefix + "-" + UUID.randomUUID().toString.take(8)
+      val scenarioId = "photo-cell-5wafer"
+
+      publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
+
+      val workOrderRef = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
+      workOrderRef.ask[WorkOrderConfirmation](replyTo =>
+        CreateWorkOrder(scenarioId, baseScenario.waferIds, routeRef = None, replyTo = replyTo)
+      ).foreach { _ =>
+
+        // Publish DemoStarted event
+        publisher(DemoStarted(s"chaos-$prefix", s"Chaos $prefix", baseScenario.lotSize, baseScenario.waferIds))
+
+        // Publish a timeline snapshot to initialize the UI
+        publisher(PipelineTimelineSnapshot(
+          workOrderId = workOrderId,
+          totalPhases = stages.size,
+          completedPhases = 0,
+          currentPhase = Some("Load FOUP"),
+          currentPhaseIndex = 0,
+          failedPhases = Seq.empty,
+          recoveredPhases = Seq.empty,
+          ocapTriggers = 0
+        ))
+
+        // Create lot and start pipeline
+        val waferUUIDs: Map[String, Id] = baseScenario.waferIds.map { wid =>
+          wid -> UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes)
+        }.toMap
+        val sourceLotId: Id = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
+        val lotRef = sharding.entityRefFor(LotEntityTypeKey, sourceLotId.toString)
+
+        lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
+
+        val ctx = m35ContextFactory(scenarioId, workOrderId)
+        val initialState = FabDemoState(
+          wafers = baseScenario.waferIds.map(wid => wid -> WaferInfo(wid)).toMap
+        )
+
+        val pipelineRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
+        pipelineRef ! FabPipelineExecutionActor.StartExecution(
+          scenarioId = scenarioId,
+          workOrderId = workOrderId,
+          initialState = initialState,
+          stages = stages,
+          ctx = ctx,
+          replyTo = system.ignoreRef[FabPipelineExecutionActor.ExecutionReply]
+        )
+
+        // Schedule crash for one of the 3 WOs (staggered)
+        if (prefix == rulePrefixes.last) {
+          scheduleAutoCrash(workOrderId, publisher, delaySeconds = 25)
+        }
+      }(ec)
+    }
+
+    // Return the first work order as primary
+    val primaryWoId = rulePrefixes.head + "-" + UUID.randomUUID().toString.take(8)
+    Future.successful(WorkOrderConfirmation(primaryWoId, "STARTED"))
+  }
+
+  /** Schedule automatic crash injection mid-pipeline. */
+  private def scheduleAutoCrash(workOrderId: String, publisher: FabSimulationEvent => Unit, delaySeconds: Int): Unit = {
+    if (delaySeconds > 0) {
+      classicSystem.scheduler.scheduleOnce(
+        delaySeconds.seconds,
+        new Runnable {
+          def run(): Unit = {
+            try {
+              val entityRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
+              entityRef ! FabPipelineExecutionActor.StopPipeline(workOrderId)
+              publisher(RecoveryEvent(workOrderId, "CRASH_DETECTED", 0, 0,
+                System.currentTimeMillis(),
+                s"Auto-scheduled crash injected at ${delaySeconds}s"))
+            } catch {
+              case e: Exception =>
+                publisher(RecoveryEvent(workOrderId, "CRASH_DETECTED", 0, 0,
+                  System.currentTimeMillis(),
+                  s"Auto-crash failed: ${e.getMessage}"))
+            }
+          }
+        }
+      )(classicSystem.dispatcher)
+    }
+  }
+
+  /** Idempotent pipeline actor initialization. */
+  private def initPipelineActor(publisher: FabSimulationEvent => Unit): Unit = {
+    // Create a resolver that captures OCAP rules from the service
+    val ocapRulesRef = new java.util.concurrent.atomic.AtomicReference[List[OcapRuleDefinition]](ocapRuleStore.getRules)
+    val dynamicStageResolver: String => Seq[PipelineStage] = { scenarioId =>
+      val rules = ocapRulesRef.get.filter(r => {
+        val routeId = scenarioId match {
+          case "send-ahead-pilot" => "SEND-AHEAD-PILOT"
+          case _                  => "PHOTOCELL-5WAFER"
+        }
+        r.routeId == routeId || r.routeId.isEmpty
+      })
+      FabScenarioPipeline.m35BasicStages(rules)
+    }
+
+    if (!pipelineActorInitialized) {
+      this.synchronized {
+        if (!pipelineActorInitialized) {
+          FabPipelineExecutionActor.init(sharding, m35ContextFactory, m35StateFactory, dynamicStageResolver, publisher)
+          pipelineActorInitialized = true
+        }
+      }
+    }
+  }
+
+  // Keep the original m35StageResolver for backward compatibility with controller
+  // Only used for timeline snapshot count, actual pipeline uses dynamicStageResolver
+  private def m35StageCount(scenarioId: String): Int = scenarioId match {
+    case "send-ahead-pilot" => FabScenarioPipeline.m35SendAheadStages(Nil).size
+    case _                  => FabScenarioPipeline.m35BasicStages(Nil).size
+  }
+
+  /** Inject a crash into the pipeline for the given workOrderId.
+    * Sends StopPipeline to the FabPipelineExecutionActor entity,
+    * which throws a RuntimeException → actor stops → sharding restarts → RecoveryCompleted fires. */
+  def injectCrash(workOrderId: String, publisher: FabSimulationEvent => Unit): Future[Boolean] = {
+    implicit val disp = classicSystem.dispatcher
+    try {
+      val entityRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
+      // Send StopPipeline — the actor will throw, causing sharding to restart it
+      entityRef ! FabPipelineExecutionActor.StopPipeline(workOrderId)
+      publisher(FaultInjected(workOrderId, "FabPipelineExecutionActor", "actor_crash", "pipeline", resolved = false, Some("Crash injected via StopPipeline")))
+      Future.successful(true)
+    } catch {
+      case e: Exception =>
+        publisher(RecoveryEvent(workOrderId, "CRASH_DETECTED", 0, 0, System.currentTimeMillis(),
+          s"Crash injection failed: ${e.getMessage}"))
+        Future.successful(false)
+    }
+  }
+
+  /** Update fault probability for equipment simulators mid-demo. */
+  def updateFaultProbability(probability: Double): Unit = {
+    currentFaultProbability = probability
+  }
+
+  /** Return OCAP rules formatted for REST JSON response. */
+  def getOcapRulesForM35: Seq[Map[String, Any]] = {
+    ocapRuleStore.getRules.map { rule =>
+      Map(
+        "ruleId" -> rule.ruleId,
+        "name" -> rule.name,
+        "priority" -> rule.priority,
+        "actionType" -> (rule.actionPlan match {
+          case _: net.imadz.fab.routing.OcapHold         => "HOLD"
+          case _: net.imadz.fab.routing.OcapRework       => "REWORK"
+          case _: net.imadz.fab.routing.OcapScrap        => "SCRAP"
+          case _: net.imadz.fab.routing.OcapNotify       => "NOTIFY"
+          case _: net.imadz.fab.routing.OcapAdjustRecipe => "ADJUST_RECIPE"
+          case _: net.imadz.fab.routing.OcapComposite    => "COMPOSITE"
+        }),
+        "condition" -> rule.triggerCondition.toString,
+        "maxTriggersPerLot" -> rule.maxTriggersPerLot
+      )
+    }
+  }
+
+  /** Return recovery status for a work order. For P1, returns a stub response. */
+  def getRecoveryStatus(workOrderId: String): Map[String, Any] = {
+    Map(
+      "workOrderId" -> workOrderId,
+      "status" -> "IDLE",
+      "recoveryCount" -> 0,
+      "lastRecoveryTimeMs" -> 0,
+      "phasesSkipped" -> 0,
+      "eventsReplayed" -> 0
+    )
+  }
+
+  /** Return fault history for a work order. For P1, returns a stub response. */
+  def getFaultHistory(workOrderId: String): Seq[Map[String, Any]] = {
+    Seq.empty
+  }
 }

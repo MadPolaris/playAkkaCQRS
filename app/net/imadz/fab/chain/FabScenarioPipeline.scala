@@ -85,6 +85,10 @@ object FabScenarioPipeline {
   // Unified IR extensions (M3.5+)
   case class OcapEvaluate(rules: List[OcapRuleDefinition]) extends PipelineStage
   case class ExecuteSubProcess(ref: SubProcessRef) extends PipelineStage
+  /** M3.5 Self-Healing Demo classify stage with OCAP event publishing.
+    * Runs standard classification, then evaluates OCAP rules against
+    * measurement results and publishes OcapActionTriggered events. */
+  case class M35ClassifyWithOcap(rules: List[OcapRuleDefinition]) extends PipelineStage
 
   private[chain] def runStage(stage: PipelineStage, state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
@@ -109,6 +113,7 @@ object FabScenarioPipeline {
       case PilotSubFlow           => runPilotSubFlow(state, ctx)
       case OcapEvaluate(rules)    => ocapEvaluate(state, ctx, rules)
       case ExecuteSubProcess(ref) => executeSubProcess(state, ctx, ref, nodeId = Some(ref.nodeId))
+      case M35ClassifyWithOcap(rules) => m35ClassifyWithOcap(state, ctx, rules)
     }
   }
 
@@ -119,7 +124,7 @@ object FabScenarioPipeline {
   // Scenario recipes
   // ====================================================================
 
-  private[chain] def basicStages: Seq[PipelineStage] = Seq(
+  private[fab] def basicStages: Seq[PipelineStage] = Seq(
     LoadFoup,
     Transport("STOCKER", "LITHO"), AtEquipment("LITHO", "LITHO-01"),
     TrackIn("LITHO-01"), RunRecipe("LITHO-01", "LITHO-28-001"), TrackOut("LITHO-01"),
@@ -128,7 +133,7 @@ object FabScenarioPipeline {
     Transport("CDSEM", "STOCKER"), SealComplete
   )
 
-  private[chain] def sendAheadStages: Seq[PipelineStage] = {
+  private[fab] def sendAheadStages: Seq[PipelineStage] = {
     val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
     Seq(
       LoadFoup, SagaSplit("pilot"), PilotSubFlow,
@@ -175,6 +180,46 @@ object FabScenarioPipeline {
         Seq(SagaMerge("hold"), PostReleaseClassify, Transport("CDSEM", "STOCKER"), SealComplete),
         Seq(ScrapWafers, Transport("CDSEM", "STOCKER"), SealComplete)))
   }
+
+  // ====================================================================
+  // M3.5 Self-Healing Demo Stage Lists (with OCAP evaluation)
+  // ====================================================================
+
+  /** M3.5 basic rework scenario stages with OCAP evaluation after classify. */
+  def m35BasicStages(rules: List[OcapRuleDefinition]): Seq[PipelineStage] = {
+    val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
+    Seq(
+      LoadFoup,
+      Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
+      TrackIn(equipId), RunRecipe(equipId, "LITHO-28-001"), TrackOut(equipId),
+      Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
+      TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
+      M35ClassifyWithOcap(rules),
+      Transport("CDSEM", "STOCKER"), SealComplete
+    )
+  }
+
+  /** M3.5 send-ahead scenario stages with OCAP evaluation of pilot wafer. */
+  def m35SendAheadStages(rules: List[OcapRuleDefinition]): Seq[PipelineStage] = {
+    val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
+    Seq(
+      LoadFoup, SagaSplit("pilot"), PilotSubFlow,
+      M35ClassifyWithOcap(rules),
+      Branch(_.pilotPassed,
+        Seq(SagaMerge("pilot"),
+          Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
+          TrackIn(equipId), RunRecipe(equipId, "LITHO-28-001"), TrackOut(equipId),
+          Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
+          TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
+          M35ClassifyWithOcap(rules),
+          Transport("CDSEM", "STOCKER"), SealComplete),
+        Seq(ScrapWafers, SealComplete))
+    )
+  }
+
+  /** M3.5 multi-WO chaos scenario stages — basic with OCAP, used for each work order. */
+  def m35ChaosStages(rules: List[OcapRuleDefinition]): Seq[PipelineStage] =
+    m35BasicStages(rules)
 
   // ====================================================================
   // Scenario-specific stages (not shared with FabDemoPipeline/FabFlowEngine)
@@ -437,7 +482,32 @@ object FabScenarioPipeline {
   }
 
   // ====================================================================
-  // M3.5 OCAP Interceptor (Hard 3)
+  // M3.5 Self-Healing: Classify + OCAP Event Publishing
+  // ====================================================================
+
+  /**
+   * M3.5 classify stage that runs standard classification and then evaluates
+   * OCAP rules against measurement results. Publishes OcapActionTriggered
+   * events for triggered rules but does NOT execute action plans (the
+   * hardcoded pipeline handles rework/split/merge). This gives the UI
+   * visible OCAP rule firings without duplicating pipeline logic.
+   */
+  private def m35ClassifyWithOcap(state: FabDemoState, ctx: FabDemoContext, rules: List[OcapRuleDefinition]): Future[FabDemoState] = {
+    implicit val ec: ExecutionContext = ctx.ec
+
+    // First, run OCAP evaluation to check conditions and publish events
+    if (rules.nonEmpty) {
+      ocapEvaluate(state, ctx, rules).flatMap { ocapState =>
+        // Then run standard classify
+        classifyStage(ocapState, ctx)
+      }
+    } else {
+      classifyStage(state, ctx)
+    }
+  }
+
+  // ====================================================================
+  // M3.5 OCAP Interceptor
   // ====================================================================
 
   /** Invoked from runSequence.recoverWith when a stage fails.
