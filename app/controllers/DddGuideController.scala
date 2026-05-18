@@ -42,6 +42,10 @@ class DddGuideController @Inject()(val controllerComponents: ControllerComponent
     Ok(views.html.m3Roadmap())
   }
 
+  def m3RoadmapEn() = Action { implicit request: Request[AnyContent] =>
+    Ok(views.html.m3Roadmap_en())
+  }
+
   def sagaExplore() = Action { implicit request: Request[AnyContent] =>
     Ok(views.html.saga())
   }

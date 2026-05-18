@@ -1,0 +1,517 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3 Milestone Roadmap · Fact-Driven Fab Decision Kernel</title>
+    <meta name="description" content="M3 gap assessment and execution roadmap — a progress audit of the M3 decision kernel for product managers and architects, with milestone breakdown and delivery plan.">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6; --pink: #ec4899;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.7; }
+
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center; padding: 60px 0 40px;
+            border-bottom: 1px solid var(--border); margin-bottom: 40px;
+        }
+        header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 10px; }
+        header h1 { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.35; }
+        header h1 .m3 { color: var(--amber); }
+        header .tagline { font-size: 0.92rem; color: var(--fg-muted); margin-top: 12px; max-width: 680px; margin-left: auto; margin-right: auto; }
+        header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+        .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .badge-pm { background: rgba(88,166,255,0.15); color: var(--accent); }
+        .badge-arch { background: rgba(245,158,11,0.15); color: var(--amber); }
+
+        .nav { display: flex; gap: 14px; justify-content: center; margin-top: 22px; font-size: 0.82rem; flex-wrap: wrap; }
+        .nav a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav a:hover { text-decoration: underline; }
+        .nav a.active { background: var(--amber); color: #000; padding: 5px 14px; border-radius: 6px; font-weight: 700; }
+        .nav a.active:hover { background: #d97706; text-decoration: none; }
+
+        section { margin-bottom: 50px; }
+        h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+        h2 .num { color: var(--fg-muted); font-weight: 400; margin-right: 6px; }
+        .section-desc { font-size: 0.84rem; color: var(--fg-muted); margin-bottom: 20px; }
+
+        .bn-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+        .bn-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px 18px; text-align: center; }
+        .bn-card .bn-num { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; }
+        .bn-card .bn-label { font-size: 0.78rem; color: var(--fg-muted); margin-top: 4px; }
+        .bn-40 { color: var(--red); }
+        .bn-85 { color: var(--amber); }
+        .bn-3w { color: var(--teal); }
+
+        .progress-wrap { margin: 16px 0 24px; }
+        .progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--fg-muted); margin-bottom: 6px; }
+        .progress-track { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+        .progress-fill.red { background: var(--red); }
+        .progress-fill.amber { background: var(--amber); }
+        .progress-fill.green { background: var(--green); }
+
+        .criteria-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @@media (max-width: 768px) { .criteria-grid { grid-template-columns: 1fr; } .bn-row { grid-template-columns: 1fr; } }
+        .c-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+        .c-card .c-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .c-card .c-title { font-size: 0.92rem; font-weight: 700; }
+        .c-card .c-pct { font-size: 0.82rem; font-weight: 800; padding: 2px 10px; border-radius: 12px; }
+        .c-pct.red { background: rgba(248,81,73,0.15); color: var(--red); }
+        .c-pct.amber { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .c-pct.green { background: rgba(63,185,80,0.15); color: var(--green); }
+        .c-card .c-status { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
+        .c-card .gap-list { font-size: 0.8rem; color: var(--fg-muted); list-style: none; }
+        .c-card .gap-list li { padding: 3px 0; padding-left: 16px; position: relative; }
+        .c-card .gap-list li::before { content: '•'; position: absolute; left: 0; }
+        .c-card .gap-list li.done { color: var(--green); }
+        .c-card .gap-list li.done::before { content: '✓'; color: var(--green); }
+        .c-card .gap-list li.gap::before { color: var(--red); }
+        .c-card .gap-list li.warn::before { color: var(--amber); }
+
+        .phase { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 24px; margin-bottom: 18px; }
+        .phase-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+        .phase-header .phase-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 2px; padding: 4px 12px; border-radius: 5px; }
+        .phase-label.p0 { background: rgba(248,81,73,0.15); color: var(--red); }
+        .phase-label.p1 { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .phase-label.p2 { background: rgba(63,185,80,0.15); color: var(--green); }
+        .phase-header .phase-date { font-size: 0.78rem; color: var(--fg-muted); font-weight: 500; }
+        .phase h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.01em; }
+        .phase .phase-motto { font-size: 0.82rem; color: var(--fg-subtle); font-style: italic; margin-bottom: 14px; }
+
+        .task-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        .task-table th { text-align: left; font-weight: 600; color: var(--fg-muted); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+        .task-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+        .task-table .task-id { font-family: var(--mono); font-size: 0.72rem; font-weight: 700; width: 50px; }
+        .task-table .task-id.p0-id { color: var(--red); }
+        .task-table .task-id.p1-id { color: var(--amber); }
+        .task-table .task-id.p2-id { color: var(--green); }
+        .task-table .task-est { width: 60px; font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted); text-align: right; }
+
+        .gantt { margin: 20px 0; }
+        .gantt-header { display: flex; font-size: 0.68rem; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+        .gantt-label-col { width: 140px; flex-shrink: 0; }
+        .gantt-weeks { display: flex; flex: 1; }
+        .gantt-weeks span { flex: 1; text-align: center; }
+        .gantt-row { display: flex; align-items: center; margin-bottom: 6px; }
+        .gantt-row .gantt-label { width: 140px; flex-shrink: 0; font-size: 0.78rem; font-weight: 600; }
+        .gantt-row .gantt-bar-wrap { flex: 1; position: relative; height: 26px; }
+        .gantt-bar { position: absolute; height: 26px; border-radius: 5px; top: 0; display: flex; align-items: center; padding: 0 8px; font-size: 0.68rem; font-weight: 600; }
+        .gantt-bar.p0-bar { background: rgba(248,81,73,0.2); border: 1px solid rgba(248,81,73,0.4); color: var(--red); }
+        .gantt-bar.p1-bar { background: rgba(245,158,11,0.2); border: 1px solid rgba(245,158,11,0.4); color: var(--amber); }
+        .gantt-bar.p2-bar { background: rgba(63,185,80,0.2); border: 1px solid rgba(63,185,80,0.4); color: var(--green); }
+
+        .callout { background: var(--bg-alt); border: 1px solid rgba(245,158,11,0.3); border-radius: 10px; padding: 20px 24px; margin: 20px 0; }
+        .callout .callout-icon { font-size: 1.2rem; margin-bottom: 8px; }
+        .callout p { font-size: 0.86rem; line-height: 1.7; color: var(--fg-muted); }
+        .callout strong { color: var(--fg); }
+
+        footer { text-align: center; padding: 40px 0 60px; font-size: 0.78rem; color: var(--fg-subtle); border-top: 1px solid var(--border); margin-top: 40px; }
+        footer a { color: var(--accent); text-decoration: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+
+    <!-- ═══════ Header ═══════ -->
+    <header>
+        <div class="kicker">M3.5 · M3.9 Milestone Roadmap</div>
+        <h1>Fact-Driven <span class="m3">Fab Decision Kernel</span><br>Gap Assessment &amp; Delivery Plan</h1>
+        <p class="tagline">
+            A progress audit for product managers and architects. Where we are, what remains, and what each step delivers.
+        </p>
+        <div class="badge-row">
+            <span class="badge badge-pm">Product Manager</span>
+            <span class="badge badge-arch">Architect</span>
+        </div>
+        <div class="nav">
+            <a href="/fab-demo">Fab Demo</a>
+            <a href="/fab-demo/designer">Route Designer</a>
+            <a href="/en/m3">M3 Architecture</a>
+            <a href="/en/m3-roadmap" class="active">M3 Roadmap</a>
+            <a href="/m3-roadmap" style="font-size:0.78rem;">中文</a>
+        </div>
+    </header>
+
+    <!-- ═══════ 0. Executive Summary ═══════ -->
+    <section>
+        <h2><span class="num">0</span>Core Insight</h2>
+        <p class="section-desc">Align the team on one fact: the M3 definition has evolved. Our progress assessment must follow.</p>
+
+        <div class="bn-row">
+            <div class="bn-card">
+                <div class="bn-num bn-85">85%</div>
+                <div class="bn-label">If M3 = static integration platform<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(M2.5+ DAG · Saga TCC · EventSourcing · WebSocket)</span></div>
+            </div>
+            <div class="bn-card">
+                <div class="bn-num bn-40">~40%</div>
+                <div class="bn-label">If M3 = fact-driven decision kernel<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(self-healing loop · dynamic DAG weaving · MU lifecycle)</span></div>
+            </div>
+            <div class="bn-card">
+                <div class="bn-num bn-3w">~3 wks</div>
+                <div class="bn-label">Distance to demo-ready M3 finish line<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(P0 core activation + P1 demo conviction)</span></div>
+            </div>
+        </div>
+
+        <div class="callout">
+            <div class="callout-icon">💡</div>
+            <p>
+                <strong>The chassis and engine are built and running well (85% of the foundational work)</strong> — M2.5+ DAG engine, Saga TCC distributed transactions,
+                event-sourced aggregates, 4-layer domain event projection, and WebSocket real-time push are all ready.<br><br>
+                <strong>The focus now is writing the autonomous driving soul (dynamic exception interception and re-weaving)</strong> — making the system never stall on any failure,
+                automatically weave Rework flows, and visualize everything in real time. This is the qualitative leap from "static integration platform" to "fact-driven decision kernel."
+            </p>
+        </div>
+    </section>
+
+    <!-- ═══════ 1. Acceptance Criteria Audit ═══════ -->
+    <section>
+        <h2><span class="num">1</span>M3 Acceptance Criteria Audit</h2>
+        <p class="section-desc">Four criteria, each assessed against current state, existing deliverables, and remaining gaps.</p>
+
+        <div class="progress-wrap">
+            <div class="progress-label"><span>M3 Decision Kernel — Overall Completion</span><span>~40%</span></div>
+            <div class="progress-track"><div class="progress-fill red" style="width:40%"></div></div>
+        </div>
+
+        <div class="criteria-grid">
+
+            <!-- C1 -->
+            <div class="c-card">
+                <div class="c-header">
+                    <div>
+                        <div class="c-status" style="color:var(--amber)">🟡 Infra ready, missing dynamic surface</div>
+                        <div class="c-title" style="margin-top:4px;">1. Online Orchestration &amp; Equipment Simulation</div>
+                    </div>
+                    <span class="c-pct amber">40%</span>
+                </div>
+                <ul class="gap-list">
+                    <li class="done">RouteDefinition DSL + RouteCompiler — complete</li>
+                    <li class="done">OcapEngine rule engine — 6 action types ready</li>
+                    <li class="done">6 equipment simulators — probabilistic yield</li>
+                    <li class="done">SubProcessRef mechanism — 5 sub-process types</li>
+                    <li class="gap">Route Designer is read-only — no drag-drop editing</li>
+                    <li class="gap">OCAP rules are hardcoded — no CRUD API/UI</li>
+                    <li class="warn">Equipment never fails spontaneously — JobFailed only on Abort</li>
+                    <li class="gap">ReworkLoop is a TODO stub</li>
+                </ul>
+            </div>
+
+            <!-- C2 -->
+            <div class="c-card">
+                <div class="c-header">
+                    <div>
+                        <div class="c-status" style="color:var(--red)">🔴 Core challenge, not yet connected</div>
+                        <div class="c-title" style="margin-top:4px;">2. Self-Healing Closed Loop</div>
+                    </div>
+                    <span class="c-pct red">25%</span>
+                </div>
+                <ul class="gap-list">
+                    <li class="done">Saga Prepare/Commit failure → auto Compensate</li>
+                    <li class="done">SUSPENDED + ManualFixStep mechanism exists</li>
+                    <li class="done">Chain replays Pipeline idempotently on restart</li>
+                    <li class="done">Result Classifier (DynamicFlowAssembler) complete</li>
+                    <li class="gap">Pipeline zero exception handling — one Stage crash = full collapse</li>
+                    <li class="gap">WorkOrder no failure path — RecordLotFailed missing</li>
+                    <li class="gap">OCAP is a sequential Stage, not an exception interceptor</li>
+                    <li class="gap">Exceptions do not trigger DAG re-weaving / ChainDSL injection</li>
+                </ul>
+            </div>
+
+            <!-- C3 -->
+            <div class="c-card">
+                <div class="c-header">
+                    <div>
+                        <div class="c-status" style="color:var(--amber)">🟡 Single-module strong, cross-module missing</div>
+                        <div class="c-title" style="margin-top:4px;">3. Multi-Module State Consistency</div>
+                    </div>
+                    <span class="c-pct amber">55%</span>
+                </div>
+                <ul class="gap-list">
+                    <li class="done">LotInvariantSpec + LotAggregateSpec — thorough</li>
+                    <li class="done">FabSagaTransactorSpec — TCC behavior complete</li>
+                    <li class="done">5 scenario integration tests — all passing</li>
+                    <li class="done">4-layer domain event WebSocket — observation ready</li>
+                    <li class="warn">Missing WorkOrder↔Lot consistency tests</li>
+                    <li class="warn">Missing post-saga-compensation Lot wafer count verification</li>
+                    <li class="warn">Missing crash-recovery cross-module alignment tests</li>
+                </ul>
+            </div>
+
+            <!-- C4 -->
+            <div class="c-card">
+                <div class="c-header">
+                    <div>
+                        <div class="c-status" style="color:var(--green)">🟢 Happy path runs smoothly</div>
+                        <div class="c-title" style="margin-top:4px;">4. Scenario Execution &amp; Route Visualization</div>
+                    </div>
+                    <span class="c-pct green">65%</span>
+                </div>
+                <ul class="gap-list">
+                    <li class="done">5 core scenarios all run to completion</li>
+                    <li class="done">WebSocket real-time event stream — ~200ms latency</li>
+                    <li class="done">Route Graph SVG + JSON display</li>
+                    <li class="done">4-layer domain event sidebar + aggregate panel</li>
+                    <li class="warn">Route Graph shows static template only — dynamic branches not reflected</li>
+                    <li class="warn">Dynamic POR scenarios lack integration tests</li>
+                </ul>
+            </div>
+
+        </div>
+    </section>
+
+    <!-- ═══════ 2. Three-Phase Roadmap ═══════ -->
+    <section>
+        <h2><span class="num">2</span>Delivery Roadmap: 3 Phases</h2>
+        <p class="section-desc">Three progressive phases: core decision capability → demo conviction → production readiness.</p>
+
+        <!-- Gantt -->
+        <div class="gantt">
+            <div class="gantt-header">
+                <div class="gantt-label-col">Phase</div>
+                <div class="gantt-weeks"><span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span></div>
+            </div>
+            <div class="gantt-row">
+                <div class="gantt-label" style="color:var(--red)">🔴 Phase 1</div>
+                <div class="gantt-bar-wrap">
+                    <div class="gantt-bar p0-bar" style="left:0%; width:40%">Activate Decision Kernel</div>
+                </div>
+            </div>
+            <div class="gantt-row">
+                <div class="gantt-label" style="color:var(--amber)">🟡 Phase 2</div>
+                <div class="gantt-bar-wrap">
+                    <div class="gantt-bar p1-bar" style="left:40%; width:20%">Demo Conviction</div>
+                </div>
+            </div>
+            <div class="gantt-row">
+                <div class="gantt-label" style="color:var(--green)">🟢 Phase 3</div>
+                <div class="gantt-bar-wrap">
+                    <div class="gantt-bar p2-bar" style="left:60%; width:40%">Production Readiness · can defer to post-M3.5</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Phase 1 -->
+        <div class="phase">
+            <div class="phase-header">
+                <span class="phase-label p0">🔴 Phase 1</span>
+                <span class="phase-date">~2 weeks · Fixes blocking the core M3 value proposition</span>
+            </div>
+            <h3>Activate the Decision Kernel</h3>
+            <p class="phase-motto">After this phase, the system is truly "alive" — exceptions no longer cause stalls; the system autonomously decides and recovers.</p>
+
+            <table class="task-table">
+                <thead>
+                    <tr><th>#</th><th>Task</th><th>Description</th><th>Effort</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="task-id p0-id">P0-1</td>
+                        <td><strong>Pipeline-wide exception handling</strong></td>
+                        <td>Introduce global exception capture (recover/fallbackTo) across all three Pipeline engines. Add <code>RecordLotFailed</code> command chain. Any process failure, Saga suspension, or full-batch scrap correctly propagates to WorkOrder — ending the zombie WorkOrder problem.</td>
+                        <td class="task-est">2d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p0-id">P0-2</td>
+                        <td><strong>OCAP as interceptor + DAG weaver</strong></td>
+                        <td>Transform OCAP from a sequential Pipeline Stage into an exception interceptor. Implement the real ReworkLoop sub-process. On exception, dynamically weave Rework DSL into the active Pipeline sequence.</td>
+                        <td class="task-est">3d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p0-id">P0-3</td>
+                        <td><strong>WorkOrder failure propagation</strong></td>
+                        <td>Add <code>RecordLotFailed</code> command + Projection listener + end-to-end verification. Full-batch scrap / Pipeline crash / Saga SUSPENDED → WorkOrder correctly transitions to Failed.</td>
+                        <td class="task-est">1.5d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p0-id">P0-4</td>
+                        <td><strong>Saga self-healing enhancement</strong></td>
+                        <td>Enrich SUSPENDED state retry and degradation mechanisms (RetryCurrentPhase). Close the automated compensation loop. ManualFixStep no longer returns empty results.</td>
+                        <td class="task-est">2d</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size:0.78rem; color:var(--fg-subtle); margin-top:12px;">
+                Phase 1 complete = M3 skeleton established · Self-Healing closed loop demonstrable · ~<strong>8.5 person-days</strong>
+            </p>
+        </div>
+
+        <!-- Phase 2 -->
+        <div class="phase">
+            <div class="phase-header">
+                <span class="phase-label p1">🟡 Phase 2</span>
+                <span class="phase-date">~1 week · Convince PMs and customers</span>
+            </div>
+            <h3>Demo Conviction</h3>
+            <p class="phase-motto">Make the system's intelligence visible and convincing to business stakeholders and external customers.</p>
+
+            <table class="task-table">
+                <thead>
+                    <tr><th>#</th><th>Task</th><th>Description</th><th>Effort</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="task-id p1-id">P1-1</td>
+                        <td><strong>Spontaneous equipment fault injection</strong></td>
+                        <td>Activate <code>InjectFault</code> protocol. Litho/CDSEM simulators produce random faults (JobFailed) at runtime, visually triggering Phase 1 OCAP interception and dynamic Rework.</td>
+                        <td class="task-est">1d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p1-id">P1-2</td>
+                        <td><strong>Live route graph</strong></td>
+                        <td>Upgrade Route Graph SVG to consume Ledger events. Real-time highlighting of current node and dynamically woven bypass branches (Rework/Scrap forks).</td>
+                        <td class="task-est">1d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p1-id">P1-3</td>
+                        <td><strong>WorkOrder full-lifecycle display</strong></td>
+                        <td>Seamless panel refresh from click-start → Idle → Executing → exception fork → Completed/Failed. Every state transition traceable.</td>
+                        <td class="task-est">0.5d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p1-id">P1-4</td>
+                        <td><strong>Saga SUSPENDED scenario demo</strong></td>
+                        <td>Show Saga entering SUSPENDED after compensation failure, recovery via RetryCurrentPhase, and visual suspend/recover state in UI.</td>
+                        <td class="task-est">1d</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size:0.78rem; color:var(--fg-subtle); margin-top:12px;">
+                Phase 1+2 complete = M3.5 demo-ready · PMs and customers will recognize M3 as complete · ~<strong>13 person-days</strong>
+            </p>
+        </div>
+
+        <!-- Phase 3 -->
+        <div class="phase">
+            <div class="phase-header">
+                <span class="phase-label p2">🟢 Phase 3</span>
+                <span class="phase-date">~2 weeks · Can defer to post-M3.5 / M3.9 timeframe</span>
+            </div>
+            <h3>Production Readiness</h3>
+            <p class="phase-motto">The bar for architects. Lays the foundation for M3.9 (cluster resilience) and beyond.</p>
+
+            <table class="task-table">
+                <thead>
+                    <tr><th>#</th><th>Task</th><th>Description</th><th>Effort</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="task-id p2-id">P2-1</td>
+                        <td><strong>OCAP rule CRUD API</strong></td>
+                        <td>REST endpoints + simple UI panel for creating/editing/deleting OCAP rules at runtime. Rule changes take effect immediately, no restart.</td>
+                        <td class="task-est">2d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p2-id">P2-2</td>
+                        <td><strong>Interactive Route Designer</strong></td>
+                        <td>Drag-and-drop node+edge visual orchestration. Node type palette, property editing, edge connections, SubProcess selection. Replaces the current read-only Route Browser.</td>
+                        <td class="task-est">3d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p2-id">P2-3</td>
+                        <td><strong>Cross-module consistency integration tests</strong></td>
+                        <td>Full-chain automated verification: WorkOrder↔Lot↔Saga↔Chain. Covers happy path + exception path + crash-recovery state alignment.</td>
+                        <td class="task-est">2d</td>
+                    </tr>
+                    <tr>
+                        <td class="task-id p2-id">P2-4</td>
+                        <td><strong>Multi-WorkOrder concurrency + equipment contention</strong></td>
+                        <td>Simultaneous WorkOrders. Verify equipment scheduling, FOUP queuing, Lot isolation correctness.</td>
+                        <td class="task-est">3d</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p style="font-size:0.78rem; color:var(--fg-subtle); margin-top:12px;">
+                Phase 1+2+3 complete = production-grade · Architects will recognize engineering quality · ~<strong>23 person-days</strong>
+            </p>
+        </div>
+    </section>
+
+    <!-- ═══════ 3. What's Already Solid ═══════ -->
+    <section>
+        <h2><span class="num">3</span>Completed Foundation (the 85%)</h2>
+        <p class="section-desc">These are the solid base of the M3 decision kernel — no major changes needed, just layer the decision intelligence on top.</p>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:8px; padding:16px;">
+                <h4 style="color:var(--green); font-size:0.9rem;">Aggregates &amp; Saga</h4>
+                <p style="font-size:0.78rem; color:var(--fg-muted);">3 EventSourced aggregates (WorkOrder/Lot/FabProcess) · Saga TCC 2 Participants · Crash recovery (event replay)</p>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:8px; padding:16px;">
+                <h4 style="color:var(--purple); font-size:0.9rem;">DAG Execution Engine</h4>
+                <p style="font-size:0.78rem; color:var(--fg-muted);">M2.5+ 6 standard components · ChainExecutionActor event-sourced · SubBatchProcessor · Zero-modification reuse</p>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:8px; padding:16px;">
+                <h4 style="color:var(--accent); font-size:0.9rem;">Projections &amp; Event Streams</h4>
+                <p style="font-size:0.78rem; color:var(--fg-muted);">7 Projections · 4-layer domain events · MongoDB journal + JDBC offset · WebSocket ~200ms latency</p>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:8px; padding:16px;">
+                <h4 style="color:var(--teal); font-size:0.9rem;">Routing &amp; Decision</h4>
+                <p style="font-size:0.78rem; color:var(--fg-muted);">RouteDefinition DSL (10 node types) · RouteCompiler · OcapEngine · DynamicFlowAssembler · ConditionEvaluator</p>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:8px; padding:16px;">
+                <h4 style="color:var(--amber); font-size:0.9rem;">Scenarios &amp; Simulation</h4>
+                <p style="font-size:0.78rem; color:var(--fg-muted);">5 complete scenarios · 6 equipment simulators · Static RouteDefinition ×5 · Dynamic POR · 3 Pipeline engines</p>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:8px; padding:16px;">
+                <h4 style="color:var(--pink); font-size:0.9rem;">Testing &amp; Documentation</h4>
+                <p style="font-size:0.78rem; color:var(--fg-muted);">16 test files · 27 test cases · Full scenario integration coverage · Architecture docs in knowledge_base/ · i18n</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════ 4. Summary ═══════ -->
+    <section>
+        <h2><span class="num">4</span>Summary</h2>
+
+        <div class="callout" style="border-color: rgba(20,184,166,0.3);">
+            <div class="callout-icon">🎯</div>
+            <p>
+                <strong>One sentence for the PM:</strong> The chassis and engine are built and running well (85% of the foundational work).
+                The focus now is writing the autonomous driving soul (dynamic exception interception and re-weaving).
+                With Phase 1 + Phase 2, in approximately <strong>3 weeks</strong> we can demonstrate a genuine fact-driven Fab decision kernel
+                that never stalls on failure, automatically weaves Rework flows, and visualizes everything in real time.
+            </p>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-top:20px;">
+            <div style="background:var(--bg-alt); border:1px solid rgba(248,81,73,0.3); border-radius:8px; padding:14px; text-align:center;">
+                <div style="font-size:1.5rem; font-weight:800; color:var(--red);">Phase 1</div>
+                <div style="font-size:0.75rem; color:var(--fg-muted);">~2 wks · Activate kernel</div>
+                <div style="font-size:0.72rem; color:var(--fg-subtle); margin-top:4px;">Self-Healing loop demonstrable</div>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:14px; text-align:center;">
+                <div style="font-size:1.5rem; font-weight:800; color:var(--amber);">+ Phase 2</div>
+                <div style="font-size:0.75rem; color:var(--fg-muted);">~3 wks · Demo finish line 🏁</div>
+                <div style="font-size:0.72rem; color:var(--fg-subtle); margin-top:4px;">PMs &amp; customers recognize M3.5 done</div>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid rgba(63,185,80,0.3); border-radius:8px; padding:14px; text-align:center;">
+                <div style="font-size:1.5rem; font-weight:800; color:var(--green);">+ Phase 3</div>
+                <div style="font-size:0.75rem; color:var(--fg-muted);">~5 wks · Production-grade</div>
+                <div style="font-size:0.72rem; color:var(--fg-subtle); margin-top:4px;">Architects recognize quality</div>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <p>M3.5 · M3.9 — Fact-Driven Fab Decision Kernel &nbsp;|&nbsp; playAkkaCQRS &nbsp;|&nbsp; 2026-05-18</p>
+        <p style="margin-top:8px;">
+            <a href="/fab-demo">Fab Demo</a> · <a href="/en/m3">M3 Architecture</a> · <a href="/">Home</a> · <a href="/m3-roadmap">中文</a>
+        </p>
+    </footer>
+
+</div>
+
+</body>
+</html>
