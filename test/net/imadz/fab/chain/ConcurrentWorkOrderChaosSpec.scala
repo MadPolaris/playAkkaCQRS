@@ -63,10 +63,10 @@ class ConcurrentWorkOrderChaosSpec extends ScalaTestWithActorTestKit(FabSagaTest
         r.state shouldBe a[Completed]
       }
 
-      // Verify final states
-      wo1.getState().asInstanceOf[Completed].passCount shouldBe 5  // 3 + 2
-      wo2.getState().asInstanceOf[Completed].passCount shouldBe 6  // 4 + 2
-      wo3.getState().asInstanceOf[Completed].passCount shouldBe 7  // 5 + 2
+      // Verify final states (zipWithIndex: i=0,1,2)
+      wo1.getState().asInstanceOf[Completed].passCount shouldBe 5  // LOT-1:3 + LOT-2:2
+      wo2.getState().asInstanceOf[Completed].passCount shouldBe 7  // LOT-1:4 + LOT-2:3
+      wo3.getState().asInstanceOf[Completed].passCount shouldBe 9  // LOT-1:5 + LOT-2:4
     }
 
     // P2.2: 5 concurrent WorkOrders, some with failures
@@ -181,13 +181,13 @@ class ConcurrentWorkOrderChaosSpec extends ScalaTestWithActorTestKit(FabSagaTest
         }
       }
 
-      // Verify final states
+      // Verify final states (only final lot carries scrapCount=1)
       kits.foreach { case (kit, prod, lots) =>
         val state = kit.getState()
         state shouldBe a[Completed]
         val completed = state.asInstanceOf[Completed]
         completed.passCount shouldBe lots * 2
-        completed.scrapCount shouldBe lots * 1
+        completed.scrapCount shouldBe 1
       }
     }
   }
