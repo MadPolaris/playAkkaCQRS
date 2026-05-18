@@ -12,7 +12,7 @@ object LotProtocol {
   sealed trait LotCommand extends CborSerializable
 
   // Lifecycle
-  case class CreateLot(productId: String, waferNames: Map[Id, String], replyTo: ActorRef[LotConfirmation], parentLotId: Option[Id] = None, splitReason: Option[SplitReason] = None) extends LotCommand
+  case class CreateLot(productId: String, waferNames: Map[Id, String], replyTo: ActorRef[LotConfirmation], parentLotId: Option[Id] = None, splitReason: Option[SplitReason] = None, workOrderId: Option[String] = None) extends LotCommand
   case class GetLotState(replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class SealLot(replyTo: ActorRef[LotConfirmation]) extends LotCommand
 

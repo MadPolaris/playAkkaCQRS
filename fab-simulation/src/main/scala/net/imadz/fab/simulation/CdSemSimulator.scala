@@ -1,6 +1,7 @@
 package net.imadz.fab.simulation
 
 import net.imadz.fab.protocol._
+import org.slf4j.LoggerFactory
 
 import scala.util.Random
 
@@ -16,6 +17,7 @@ class CdSemSimulator(
   val config: CdSemConfig
 ) extends EquipmentSimulator {
 
+  private val logger = LoggerFactory.getLogger(getClass)
   private val rng = new Random()
 
   override protected def generateResult(
@@ -24,6 +26,7 @@ class CdSemSimulator(
     val wafers = config.waferIds.map { waferId =>
       val category = config.waferOutcomes.getOrElse(waferId, drawCategory())
       val measuredCd = generateCdValue(category)
+      logger.info(s"[CdSemSimulator] Wafer $waferId → category=$category cdNm=$measuredCd (outcomeMap: ${config.waferOutcomes})")
       waferId -> CriticalDimension(waferId, measuredCd, config.targetCdNm)
     }.toMap
     MetrologyResult(job.jobId, wafers)

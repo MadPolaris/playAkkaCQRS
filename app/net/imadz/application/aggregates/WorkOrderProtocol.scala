@@ -5,13 +5,7 @@ import akka.persistence.typed.scaladsl.Effect
 import net.imadz.common.CborSerializable
 import net.imadz.domain.entities.WorkOrderEntity.{WorkOrderEvent, WorkOrderState}
 
-import scala.concurrent.Future
-
 object WorkOrderProtocol {
-
-  // --- Pipeline Runner (closure provided by FabDemoService) ---
-  // publisher: callback for WebSocket events (no-op during recovery)
-  type PipelineStarter = (String, String, Seq[String], Any => Unit) => Future[(Int, Int, Int)]
 
   // --- Commands ---
   sealed trait WorkOrderCommand extends CborSerializable
@@ -20,18 +14,17 @@ object WorkOrderProtocol {
     productId: String,
     waferIds: Seq[String],
     routeRef: Option[String] = None,  // M3.5+: "routeId:v3"
+    totalLots: Int = 1,               // number of source lots to track
     replyTo: ActorRef[WorkOrderConfirmation]
   ) extends WorkOrderCommand
 
-  // Internal commands (from pipeToSelf)
-  private[aggregates] case class PipelineCompleted(
+  // Event-driven completion report (from WorkOrderCompletionProcessManager)
+  case class RecordLotCompleted(
+    workOrderId: String,
+    lotId: String,
     passCount: Int,
     scrapCount: Int,
     reworkCount: Int
-  ) extends WorkOrderCommand
-
-  private[aggregates] case class PipelineFailed(
-    error: String
   ) extends WorkOrderCommand
 
   // --- Reply ---

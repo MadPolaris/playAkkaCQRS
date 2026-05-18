@@ -40,7 +40,8 @@ object LotEntity {
     loadedFoupId: Option[String] = None,
     parentLotId: Option[Id] = None,
     splitReason: Option[SplitReason] = None,
-    routeCard: Option[RouteCard] = None   // M3.5+: 随身工艺路线卡
+    routeCard: Option[RouteCard] = None,   // M3.5+: 随身工艺路线卡
+    workOrderId: Option[String] = None     // owning WorkOrder (set for source lots)
   ) {
     // --- Derived views (computed on-demand, no cache) ---
     def waferIds: Set[Id] = wafers.keySet
@@ -77,7 +78,7 @@ object LotEntity {
 
   // Event
   sealed trait LotEvent extends CborSerializable
-  case class LotCreated(productId: String, waferNames: Map[Id, String], parentLotId: Option[Id] = None, splitReason: Option[SplitReason] = None) extends LotEvent
+  case class LotCreated(productId: String, waferNames: Map[Id, String], parentLotId: Option[Id] = None, splitReason: Option[SplitReason] = None, workOrderId: Option[String] = None) extends LotEvent
   case class WaferRemovalReserved(transferId: Id, waferIds: Set[Id], waferNames: Set[String]) extends LotEvent
   case class WaferRemovalCommitted(transferId: Id, waferNames: Set[String]) extends LotEvent
   case class WaferRemovalReleased(transferId: Id) extends LotEvent

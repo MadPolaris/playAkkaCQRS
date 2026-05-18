@@ -9,6 +9,7 @@ import net.imadz.fab.events._
 import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.protocol._
 import net.imadz.fab.scenario.{DecisionConfig, FabSimulationScenario}
+import org.slf4j.LoggerFactory
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
@@ -22,6 +23,8 @@ import scala.concurrent.duration._
  * Equipment and Saga interactions are async; WebSocket events are published inline.
  */
 object PipelineStages {
+
+  private val logger = LoggerFactory.getLogger("PipelineStages")
 
   // ====================================================================
   // Stage 1: Load FOUP
@@ -128,11 +131,16 @@ object PipelineStages {
         ctx.publisher(ProcessingCompleted(equipId, jobId, success = true, ""))
         ctx.publisher(EquipmentStateChanged(equipId, "METROLOGY", "Idle", None))
         val cdValues: Map[String, Double] = waferMeasurements.map { case (wid, cd) => wid -> cd.measuredNm }
+        logger.info(s"[Measure] CDSEM returned ${cdValues.size} wafer CD values: ${cdValues.map { case (k, v) => s"$k=$v" }.mkString(", ")}")
         val newWafers = s.wafers.map { case (wid, info) =>
-          wid -> info.copy(cdValueHistory = info.cdValueHistory ++ cdValues.get(wid).toList)
+          val cdVal = cdValues.get(wid)
+          if (cdVal.isEmpty) logger.warn(s"[Measure] No CD value for wafer $wid in CDSEM response! Available: ${cdValues.keys.mkString(", ")}")
+          wid -> info.copy(cdValueHistory = info.cdValueHistory ++ cdVal.toList)
         }
         s.copy(ledgerSeq = s.ledgerSeq + 1, wafers = newWafers)
-      case _ => s.copy(ledgerSeq = s.ledgerSeq + 1)
+      case other =>
+        logger.warn(s"[Measure] Unexpected CDSEM response (expected MetrologyResult): ${other.getClass.getSimpleName}")
+        s.copy(ledgerSeq = s.ledgerSeq + 1)
     }(ctx.ec)
   }
 

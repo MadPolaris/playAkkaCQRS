@@ -20,36 +20,36 @@ class LotInvariantSpec extends AnyWordSpec with Matchers {
   "CreateLotRule" should {
     "accept valid create request" in {
       val waferMap = Map(wafer1 -> "WAFER-1")
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", waferMap, None, None))
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", waferMap, None, None, None))
       result.map(_.head) shouldBe Right(LotCreated("PROD-A", waferMap))
     }
 
     "reject empty productId" in {
       val waferMap = Map(wafer1 -> "WAFER-1")
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("", waferMap, None, None))
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("", waferMap, None, None, None))
       result shouldBe Left(iMadzError("LOT_002", "Product ID must not be empty"))
     }
 
     "reject if lot already created" in {
       val waferMap = Map(wafer1 -> "WAFER-1")
-      val result = LotInvariants.CreateLotRule(activeState, ("PROD-B", waferMap, None, None))
+      val result = LotInvariants.CreateLotRule(activeState, ("PROD-B", waferMap, None, None, None))
       result shouldBe Left(iMadzError("LOT_001", s"Lot $lotId already created, cannot create again"))
     }
 
     "allow empty wafer list for child lot creation" in {
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Map.empty, None, None))
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Map.empty, None, None, None))
       result shouldBe Right(List(LotCreated("PROD-A", Map.empty)))
     }
 
     "allow child lot creation with parentLotId and splitReason" in {
       val parentId = UUID.randomUUID()
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Map.empty, Some(parentId), Some(ReworkSplit)))
-      result shouldBe Right(List(LotCreated("PROD-A", Map.empty, Some(parentId), Some(ReworkSplit))))
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", Map.empty, Some(parentId), Some(ReworkSplit), None))
+      result shouldBe Right(List(LotCreated("PROD-A", Map.empty, Some(parentId), Some(ReworkSplit), None)))
     }
 
     "reject > 25 wafers" in {
       val tooMany = (1 to 26).map(i => UUID.randomUUID() -> s"WAFER-$i").toMap
-      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", tooMany, None, None))
+      val result = LotInvariants.CreateLotRule(LotEntity.empty(lotId), ("PROD-A", tooMany, None, None, None))
       result.isLeft shouldBe true
       result.left.get.code shouldBe "LOT_004"
     }

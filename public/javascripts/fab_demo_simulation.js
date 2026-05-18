@@ -51,8 +51,9 @@
       updateGlobalStatus({status: 'STARTED', detail: data.name, phase: 'Init'});
     });
 
-    // --- Ledger ---
+    // --- Ledger (dynamic: rows added as events arrive) ---
     sub(S.ledger$, function(data) {
+      upsertLedgerRow(data.stepSeq, data.stepName);
       highlightLedgerRow(data.stepSeq);
       updateStepProgress(data.stepName || '');
     });
@@ -938,6 +939,9 @@
 
     var ledgerRows = document.querySelectorAll('#ledgerBody tr');
     ledgerRows.forEach(function(row) { row.classList.remove('active', 'done'); });
+    // Clear dynamic ledger rows (keep placeholder if any)
+    var tbody = document.getElementById('ledgerBody');
+    if (tbody) { tbody.innerHTML = ''; }
 
     var spEl = document.getElementById('stepProgress');
     if (spEl) { spEl.style.display = 'none'; spEl.textContent = ''; }
@@ -963,8 +967,6 @@
     window._demoPaused = false;
 
     _resetAllUI();
-
-    loadScenarioLedger(scenarioId);
 
     var startUrl = scenarioType === 'dynamic-routing'
       ? '/api/fab-demo/product/' + scenarioId + '/start'
@@ -1004,8 +1006,70 @@
   };
 
   // ===================================================================
-  // Event Sourcing Ledger
+  // Event Sourcing Ledger (dynamic — rows added as events arrive)
   // ===================================================================
+
+  /**
+   * Parse a stepName of the form "Phase<Phase>: <Description>"
+   * Returns { phase, event } or { phase: '—', event: stepName } on failure.
+   */
+  function _parseStepName(stepName) {
+    var m = stepName.match(/^Phase(\S+):\s*(.*)$/);
+    if (m) {
+      return { phase: m[1], event: m[2] };
+    }
+    return { phase: '—', event: stepName };
+  }
+
+  /** Insert or update a row in the dynamic ledger table. */
+  function upsertLedgerRow(stepSeq, stepName) {
+    var tbody = document.getElementById('ledgerBody');
+    if (!tbody) return;
+
+    // Look for existing row with this data-seq
+    var existing = document.querySelector('#ledgerBody tr[data-seq="' + stepSeq + '"]');
+    var parsed = _parseStepName(stepName);
+
+    if (existing) {
+      // Update event cell only (it's the first <td> after the seq cell)
+      var cells = existing.querySelectorAll('td');
+      if (cells.length >= 2) {
+        cells[1].textContent = parsed.event;
+      }
+      if (cells.length >= 7) {
+        cells[6].textContent = parsed.phase;
+      }
+    } else {
+      var tr = document.createElement('tr');
+      tr.setAttribute('data-seq', stepSeq);
+      tr.innerHTML =
+        '<td class="seq">' + stepSeq + '</td>' +
+        '<td>' + parsed.event + '</td>' +
+        '<td>—</td>' +   // Lot(src)
+        '<td>—</td>' +   // Lot(rework)
+        '<td>—</td>' +   // Wafer
+        '<td>—</td>' +   // Saga
+        '<td>' + parsed.phase + '</td>';
+
+      // Insert in sorted order by data-seq
+      var rows = tbody.querySelectorAll('tr');
+      var inserted = false;
+      for (var i = 0; i < rows.length; i++) {
+        var rowSeq = parseInt(rows[i].getAttribute('data-seq'));
+        if (stepSeq < rowSeq) {
+          tbody.insertBefore(tr, rows[i]);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) {
+        tbody.appendChild(tr);
+      }
+    }
+  }
+
+  /** Static ledger loader — kept for backward compatibility with Route Browser page.
+   *  The main simulation page builds the ledger dynamically via upsertLedgerRow. */
   function loadScenarioLedger(scenarioId) {
     fetch('/api/fab-demo/scenario/' + scenarioId + '/ledger')
       .then(function(r) { return r.json(); })
@@ -1206,7 +1270,6 @@
     state.paused = false;
     window._demoPaused = false;
     _resetAllUI();
-    loadScenarioLedger(routeId);
     addTimelineEntry({type: 'Info', data: 'Starting route: ' + routeId});
 
     fetch('/api/fab-demo/routes/' + encodeURIComponent(routeId) + '/start', { method: 'POST' })
@@ -1247,9 +1310,7 @@
           opt.textContent = s.name + typeLabel;
           sel.appendChild(opt);
         });
-        if (scenarios.length > 0) {
-          loadScenarioLedger(scenarios[0].id);
-        }
+        // LEDGER is now built dynamically from WebSocket events — no static preload needed
       })
       .catch(function() { /* demo page may be served before backend is ready */ });
 

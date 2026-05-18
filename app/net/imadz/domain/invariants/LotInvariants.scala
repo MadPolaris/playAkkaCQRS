@@ -5,9 +5,9 @@ import net.imadz.domain.entities.LotEntity._
 
 object LotInvariants {
 
-  implicit object CreateLotRule extends InvariantRule[LotEvent, LotState, (String, Map[Id, String], Option[Id], Option[SplitReason])] {
-    def apply(state: LotState, param: (String, Map[Id, String], Option[Id], Option[SplitReason])): Either[iMadzError, List[LotEvent]] = {
-      val (productId, waferNames, parentLotId, splitReason) = param
+  implicit object CreateLotRule extends InvariantRule[LotEvent, LotState, (String, Map[Id, String], Option[Id], Option[SplitReason], Option[String])] {
+    def apply(state: LotState, param: (String, Map[Id, String], Option[Id], Option[SplitReason], Option[String])): Either[iMadzError, List[LotEvent]] = {
+      val (productId, waferNames, parentLotId, splitReason, workOrderId) = param
       if (state.phase != Empty)
         Left(iMadzError("LOT_001", s"Lot ${state.lotId} already created, cannot create again"))
       else if (productId.isEmpty)
@@ -15,7 +15,7 @@ object LotInvariants {
       else if (waferNames.size > 25)
         Left(iMadzError("LOT_004", s"Lot cannot exceed FOUP capacity of 25 wafers, got ${waferNames.size}"))
       else
-        Right(List(LotCreated(productId, waferNames, parentLotId, splitReason)))
+        Right(List(LotCreated(productId, waferNames, parentLotId, splitReason, workOrderId)))
     }
   }
 

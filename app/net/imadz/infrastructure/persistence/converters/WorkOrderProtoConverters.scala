@@ -12,14 +12,35 @@ trait WorkOrderProtoConverters extends PrimitiveConverter {
         workOrderId = e.workOrderId,
         productId = e.productId,
         waferIds = e.waferIds,
-        waferCount = e.waferCount
+        waferCount = e.waferCount,
+        totalLots = e.totalLots
       )
     override def fromProto(p: WorkOrderCreatedPO): WorkOrderCreated =
       WorkOrderCreated(
         workOrderId = p.workOrderId,
         productId = p.productId,
         waferIds = p.waferIds,
-        waferCount = p.waferCount
+        waferCount = p.waferCount,
+        totalLots = p.totalLots
+      )
+  }
+
+  object LotCompletionRecordedConv extends ProtoConverter[LotCompletionRecorded, LotCompletionRecordedPO] {
+    override def toProto(e: LotCompletionRecorded): LotCompletionRecordedPO =
+      LotCompletionRecordedPO(
+        workOrderId = e.workOrderId,
+        lotId = e.lotId,
+        passCount = e.passCount,
+        scrapCount = e.scrapCount,
+        reworkCount = e.reworkCount
+      )
+    override def fromProto(p: LotCompletionRecordedPO): LotCompletionRecorded =
+      LotCompletionRecorded(
+        workOrderId = p.workOrderId,
+        lotId = p.lotId,
+        passCount = p.passCount,
+        scrapCount = p.scrapCount,
+        reworkCount = p.reworkCount
       )
   }
 
@@ -43,8 +64,13 @@ trait WorkOrderProtoConverters extends PrimitiveConverter {
     override def toProto(s: WorkOrderState): WorkOrderStatePO = s match {
       case Idle =>
         WorkOrderStatePO(phase = "Idle")
-      case Executing(workOrderId, productId, waferIds, _, _, _) =>
-        WorkOrderStatePO(phase = "Executing", workOrderId = workOrderId, productId = productId, waferIds = waferIds)
+      case Executing(workOrderId, productId, waferIds, _, _, _, totalLots, completedLotCount, completedLotIds, accumPassCount, accumScrapCount, accumReworkCount) =>
+        WorkOrderStatePO(
+          phase = "Executing", workOrderId = workOrderId, productId = productId,
+          waferIds = waferIds, totalLots = totalLots, completedLotCount = completedLotCount,
+          completedLotIds = completedLotIds.toSeq,
+          accumPassCount = accumPassCount, accumScrapCount = accumScrapCount, accumReworkCount = accumReworkCount
+        )
       case Completed(passCount, scrapCount, reworkCount) =>
         WorkOrderStatePO(phase = "Completed", passCount = passCount, scrapCount = scrapCount, reworkCount = reworkCount)
       case Failed(error) =>
@@ -52,7 +78,12 @@ trait WorkOrderProtoConverters extends PrimitiveConverter {
     }
     override def fromProto(p: WorkOrderStatePO): WorkOrderState = p.phase match {
       case "Idle"       => Idle
-      case "Executing"  => Executing(p.workOrderId, p.productId, p.waferIds.toSeq)
+      case "Executing"  => Executing(
+        workOrderId = p.workOrderId, productId = p.productId, waferIds = p.waferIds.toSeq,
+        totalLots = p.totalLots, completedLotCount = p.completedLotCount,
+        completedLotIds = p.completedLotIds.toSet,
+        accumPassCount = p.accumPassCount, accumScrapCount = p.accumScrapCount, accumReworkCount = p.accumReworkCount
+      )
       case "Completed"  => Completed(p.passCount, p.scrapCount, p.reworkCount)
       case "Failed"     => Failed(p.error)
       case other        => throw new IllegalArgumentException(s"Unknown WorkOrder phase: $other")

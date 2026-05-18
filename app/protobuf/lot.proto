@@ -37,6 +37,7 @@ message LotCreatedPO {
   repeated WaferNameEntryPO wafer_names = 3;
   string parent_lot_id = 4;               // empty if this is a source lot
   string split_reason = 5;                // "rework"|"scrap"|"pilot"|"sample"|"hold" — empty if source lot
+  string work_order_id = 6;               // owning WorkOrder ID (set for source lots)
 }
 
 message WaferRemovalReservedPO {
@@ -205,4 +206,5 @@ message LotStatePO {
   repeated WaferClassResultPO wafer_classifications = 14;
   string parent_lot_id = 15;
   string split_reason = 16;
+  string work_order_id = 17;
 }

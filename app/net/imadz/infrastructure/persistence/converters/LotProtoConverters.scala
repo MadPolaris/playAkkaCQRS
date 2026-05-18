@@ -44,7 +44,8 @@ trait LotProtoConverters extends PrimitiveConverter {
       waferIds = e.waferNames.keys.map(IdConv.toProto).toSeq,
       waferNames = e.waferNames.map { case (id, name) => WaferNameEntryPO(waferId = IdConv.toProto(id), name = name) }.toSeq,
       parentLotId = e.parentLotId.map(IdConv.toProto).getOrElse(""),
-      splitReason = splitReasonToString(e.splitReason)
+      splitReason = splitReasonToString(e.splitReason),
+      workOrderId = e.workOrderId.getOrElse("")
     )
     override def fromProto(p: LotCreatedPO): LotCreated = {
       val waferNames: Map[Id, String] = if (p.waferNames.nonEmpty) {
@@ -57,7 +58,8 @@ trait LotProtoConverters extends PrimitiveConverter {
         productId = p.productId,
         waferNames = waferNames,
         parentLotId = if (p.parentLotId.isEmpty) None else Some(IdConv.fromProto(p.parentLotId)),
-        splitReason = stringToSplitReason(p.splitReason)
+        splitReason = stringToSplitReason(p.splitReason),
+        workOrderId = if (p.workOrderId.isEmpty) None else Some(p.workOrderId)
       )
     }
   }
@@ -217,7 +219,8 @@ trait LotProtoConverters extends PrimitiveConverter {
         WaferClassResultPO(waferId = IdConv.toProto(id), classification = r.classification, cdValueNm = r.cdValueNm, reworkCount = r.reworkCount)
       }.toSeq,
       parentLotId = s.parentLotId.map(IdConv.toProto).getOrElse(""),
-      splitReason = splitReasonToString(s.splitReason)
+      splitReason = splitReasonToString(s.splitReason),
+      workOrderId = s.workOrderId.getOrElse("")
     )
 
     override def fromProto(p: LotStatePO): LotState = {
@@ -247,7 +250,8 @@ trait LotProtoConverters extends PrimitiveConverter {
         completedTransferIds = p.completedTransferIds.map(IdConv.fromProto).toSet,
         loadedFoupId = if (p.loadedFoupId.isEmpty) None else Some(p.loadedFoupId),
         parentLotId = if (p.parentLotId.isEmpty) None else Some(IdConv.fromProto(p.parentLotId)),
-        splitReason = stringToSplitReason(p.splitReason)
+        splitReason = stringToSplitReason(p.splitReason),
+        workOrderId = if (p.workOrderId.isEmpty) None else Some(p.workOrderId)
       )
     }
 

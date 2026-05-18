@@ -53,7 +53,7 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
 
   private def handleLotEvent(lotId: String, event: LotEvent): Unit = {
     event match {
-      case LotCreated(productId, waferNames, parentLotId, splitReason) =>
+      case LotCreated(productId, waferNames, parentLotId, splitReason, _) =>
         // Always create view state — child lots with empty wafers are first-class entities
         // with parent-child relationships, not anonymous containers.
         val nameToUuid: Map[String, String] = waferNames.map { case (id, name) => name -> id.toString }

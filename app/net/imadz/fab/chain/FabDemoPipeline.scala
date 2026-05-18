@@ -12,6 +12,7 @@ import net.imadz.fab.protocol._
 import net.imadz.fab.scenario.{DecisionConfig, FabSimulationScenario}
 
 import akka.util.Timeout
+import org.slf4j.LoggerFactory
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
@@ -23,6 +24,8 @@ import scala.concurrent.duration._
  * (classify with rework loop, saga split/merge) remains here.
  */
 object FabDemoPipeline {
+
+  private val logger = LoggerFactory.getLogger("FabDemoPipeline")
 
   // ====================================================================
   // Pipeline runner
@@ -74,7 +77,11 @@ object FabDemoPipeline {
     var scrapWafers = Seq.empty[String]
 
     state.wafers.filter { case (_, w) => w.classification.isEmpty || w.classification.contains("FAIL") }.foreach { case (wid, info) =>
-      val cdValue = info.cdValueHistory.lastOption.getOrElse(ctx.scenario.cdSemDetail.generateRandomCdValue())
+      val cdValue = info.cdValueHistory.lastOption.getOrElse {
+        val fallback = ctx.scenario.cdSemDetail.generateRandomCdValue()
+        logger.warn(s"[Classify] Wafer $wid: cdValueHistory is EMPTY — falling back to random CD value = $fallback")
+        fallback
+      }
       if (info.reworkCount > 0) {
         updatedWafers += wid -> info.copy(classification = Some("PASS"))
         passWafers :+= wid
@@ -150,6 +157,9 @@ object FabDemoPipeline {
       ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "SplitLot",
         s"Split ${reworkWafers.size} wafers for rework: ${reworkWafers.mkString(",")}", reworkWafers))
     }
+
+    logger.info(s"[Classify] iter=${state.iteration} PASS=$passWafers REWORK=$reworkWafers SCRAP=$scrapWafers " +
+      s"passCount=$totalPass scrapCount=$totalScrap hasRework=${reworkWafers.nonEmpty}")
 
     Future.successful(s.copy(wafers = updatedWafers, passCount = totalPass, scrapCount = totalScrap,
       ledgerSeq = s.ledgerSeq + 1))

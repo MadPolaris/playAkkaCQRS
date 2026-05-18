@@ -7,10 +7,10 @@ import net.imadz.domain.entities.LotEntity._
 
 trait LotCommandHelpers {
 
-  implicit object CreateLotHelper extends CommandHelper[CreateLot, LotState, (String, Map[Id, String], Option[Id], Option[SplitReason]), LotConfirmation] {
-    override def toParam(state: LotState, command: CreateLot): (String, Map[Id, String], Option[Id], Option[SplitReason]) = (command.productId, command.waferNames, command.parentLotId, command.splitReason)
-    override def createFailureReply(param: (String, Map[Id, String], Option[Id], Option[SplitReason]))(error: iMadzError): LotConfirmation = LotConfirmation(Some(error))
-    override def createSuccessReply(param: (String, Map[Id, String], Option[Id], Option[SplitReason]))(state: LotState): LotConfirmation = LotConfirmation(None, state.waferIds, Some(state.phase))
+  implicit object CreateLotHelper extends CommandHelper[CreateLot, LotState, (String, Map[Id, String], Option[Id], Option[SplitReason], Option[String]), LotConfirmation] {
+    override def toParam(state: LotState, command: CreateLot): (String, Map[Id, String], Option[Id], Option[SplitReason], Option[String]) = (command.productId, command.waferNames, command.parentLotId, command.splitReason, command.workOrderId)
+    override def createFailureReply(param: (String, Map[Id, String], Option[Id], Option[SplitReason], Option[String]))(error: iMadzError): LotConfirmation = LotConfirmation(Some(error))
+    override def createSuccessReply(param: (String, Map[Id, String], Option[Id], Option[SplitReason], Option[String]))(state: LotState): LotConfirmation = LotConfirmation(None, state.waferIds, Some(state.phase))
   }
 
   implicit object SealLotHelper extends CommandHelper[SealLot, LotState, Unit, LotConfirmation] {

@@ -6,7 +6,7 @@ import akka.util.Timeout
 import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.aggregates.WorkOrderAggregate
-import net.imadz.application.aggregates.WorkOrderProtocol.{CreateWorkOrder, WorkOrderConfirmation, PipelineStarter => WorkOrderPipelineStarter}
+import net.imadz.application.aggregates.WorkOrderProtocol.{CreateWorkOrder, WorkOrderConfirmation}
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
@@ -48,33 +48,7 @@ class FabDemoService @Inject()(
     systemWidePublisher = Some(publisher)
   }
 
-  // --- Register WorkOrder Aggregate with ClusterSharding (idempotent) ---
-  WorkOrderAggregate.init(sharding, createPipelineStarter())
-
-  /**
-   * Shared PipelineStarter — creates entities, builds context, spawns simulators,
-   * and runs the pipeline. Called both on initial StartChain and on RecoveryCompleted
-   * replay (idempotent via deterministic UUIDs from workOrderId).
-   */
-  private def createPipelineStarter(): WorkOrderPipelineStarter = {
-    (workOrderId: String, productId: String, waferIds: Seq[String], _: Any => Unit) =>
-      // Access systemWidePublisher LAZILY at runtime (not captured at factory-creation time)
-      // so it's available even for crash-recovery replays long after controller init.
-      val publisher: FabSimulationEvent => Unit = systemWidePublisher.getOrElse {
-        val fromRegistry = publisherRegistry.remove(workOrderId)
-        if (fromRegistry != null) fromRegistry.asInstanceOf[FabSimulationEvent => Unit]
-        else (_: FabSimulationEvent) => ()
-      }
-      val stateFut = (RoutingRepository.getLatest(productId), PorRepository.findByProductId(productId)) match {
-        case (Some(routeDef), _) =>
-          runFromRoute(workOrderId, productId, routeDef, waferIds, publisher)
-        case (None, Some(routing)) =>
-          runDynamicPor(workOrderId, productId, routing, waferIds, publisher)
-        case (None, None) =>
-          runStaticScenario(workOrderId, productId, waferIds, publisher)
-      }
-      stateFut.map(s => (s.passCount, s.scrapCount, s.wafers.values.count(_.reworkCount > 0)))(ec)
-  }
+  // WorkOrder aggregate init moved to FabBootstrap (no-arg init)
 
   /** Execute a dynamic POR work order (creates entities + runs pipeline). */
   private def runDynamicPor(
@@ -145,7 +119,7 @@ class FabDemoService @Inject()(
     // Create entities (idempotent) then run pipeline
     // Child lots (rework, scrap) are created lazily inside the pipeline's saga split/scrap stages.
     for {
-      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref))
+      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
       _ = spawnDynamicSimulators(routing, adapter, publisher, waferIds)
       result <- pipelineFn(initialState, ctx)
     } yield result
@@ -232,7 +206,7 @@ class FabDemoService @Inject()(
     publisher(DemoStarted(productId, routeDef.name, waferIds.size, waferIds))
 
     for {
-      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref))
+      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
       _ = spawnMinimalSimulators(adapter, publisher)
       result <- FabScenarioPipeline.runStages(stages, initialState, ctx)
     } yield result
@@ -350,7 +324,7 @@ class FabDemoService @Inject()(
     val pipelineFn = if (isRework) FabDemoPipeline.runPipeline _ else FabScenarioPipeline.runPipeline _
 
     for {
-      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref))
+      _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
       result <- pipelineFn(initialState, ctx)
     } yield result
   }
@@ -375,7 +349,12 @@ class FabDemoService @Inject()(
 
     publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
     val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
-    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(scenarioId, scenario.waferIds, routeRef = None, replyTo))
+    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(scenarioId, scenario.waferIds, routeRef = None, replyTo = replyTo))
+      .map { confirmation =>
+        // Fire-and-forget: pipeline runs independently; WorkOrder tracks completion via Projection
+        runStaticScenario(workOrderId, scenarioId, scenario.waferIds, publisher)
+        confirmation
+      }(ec)
   }
 
   private def spawnSimulators(
@@ -421,14 +400,18 @@ class FabDemoService @Inject()(
   def startDemoWithProduct(productId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
     net.imadz.fab.projection.FabDemoViewHandler.resetAll()
     net.imadz.fab.projection.FabDemoViewProjection.resetChildLotRegistry()
-    PorRepository.findByProductId(productId)
+    val routing = PorRepository.findByProductId(productId)
       .getOrElse(throw new IllegalArgumentException(s"Unknown product: $productId"))
     val waferIds = (1 to 5).map(i => s"WAFER-$i")
     val workOrderId = UUID.randomUUID().toString
 
     publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
     val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
-    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(productId, waferIds, routeRef = None, replyTo))
+    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(productId, waferIds, routeRef = None, replyTo = replyTo))
+      .map { confirmation =>
+        runDynamicPor(workOrderId, productId, routing, waferIds, publisher)
+        confirmation
+      }(ec)
   }
 
   /** Start a demo from a RouteDefinition in RoutingRepository (Route Browser "Start" button). */
@@ -455,7 +438,11 @@ class FabDemoService @Inject()(
 
     publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
     val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
-    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(routeId, waferIds, routeRef = None, replyTo))
+    ref.ask[WorkOrderConfirmation](replyTo => CreateWorkOrder(routeId, waferIds, routeRef = None, replyTo = replyTo))
+      .map { confirmation =>
+        runFromRoute(workOrderId, routeId, routeDef, waferIds, publisher)
+        confirmation
+      }(ec)
   }
 
   /** Spawn generic equipment simulators for all areas used in a routing. */

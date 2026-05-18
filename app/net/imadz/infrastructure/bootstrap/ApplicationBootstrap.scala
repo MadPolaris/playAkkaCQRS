@@ -64,8 +64,9 @@ class ApplicationBootstrap @Inject()(
     sharding = sharding,
     repository = creditBalanceRepository)
 
-  // --- 4. 初始化 Fab Lot 聚合根 (WorkOrder 由 FabDemoService 触发初始化) ---
+  // --- 4. 初始化 Fab Lot + WorkOrder 聚合根 ---
   initLotAggregate(sharding)
+  initWorkOrderAggregate(sharding)
 
   // --- 5. 初始化 Fab Saga Coordinator + Transactor ---
   initFabSagaCoordinator(
@@ -84,6 +85,7 @@ class ApplicationBootstrap @Inject()(
   initMonthlySummaryProjection(system, sharding, monthlyRepository)
   initWorkOrderProjection(system)
   initFabLotProjection(system)
+  initWorkOrderCompletionProjection(system)
   initFabSagaTransactionProjection(system)
 
   println("🚀 [ApplicationBootstrap] All CQRS components initialized successfully.")

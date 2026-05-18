@@ -10,9 +10,8 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.{EventSourcedBehavior, RetentionCriteria}
 import net.imadz.application.aggregates.LotAggregate.LotEntityTypeKey
 import net.imadz.application.aggregates.LotProtocol.LotCommand
-import net.imadz.application.aggregates.{LotAggregate, WorkOrderAggregate, WorkOrderProtocol}
-import WorkOrderProtocol.WorkOrderCommand
-import net.imadz.application.projection.{FabLotProjection, FabSagaTransactionProjection, WorkOrderProjection}
+import net.imadz.application.aggregates.{LotAggregate, WorkOrderAggregate}
+import net.imadz.application.projection.{FabLotProjection, FabSagaTransactionProjection, WorkOrderCompletionProjection, WorkOrderProjection}
 import net.imadz.application.aggregates.repository.LotRepository
 import net.imadz.application.services.FabSagaService
 import net.imadz.application.services.transactor.{FabSagaProtocol, FabSagaTransactor, FabTransactionContext}
@@ -59,8 +58,7 @@ trait FabBootstrap {
 
   // --- Work Order Aggregate ---
   def initWorkOrderAggregate(sharding: ClusterSharding): Unit = {
-    // WorkOrder.init is called from FabDemoService, which provides the pipelineStarter
-    // This method is reserved for future use when WorkOrder becomes self-contained
+    WorkOrderAggregate.init(sharding)
   }
 
   // --- Fab Saga Transactor ---
@@ -109,6 +107,17 @@ trait FabBootstrap {
       name = FabLotProjection.projectionName,
       numberOfInstances = LotAggregate.tags.size,
       behaviorFactory = index => ProjectionBehavior(FabLotProjection.createProjection(system, index)),
+      settings = ShardedDaemonProcessSettings(system),
+      stopMessage = Some(ProjectionBehavior.Stop)
+    )
+  }
+
+  // --- WorkOrder Completion Projection (bridges Lot ProcessCompleted → WorkOrder RecordLotCompleted) ---
+  def initWorkOrderCompletionProjection(system: ActorSystem[_]): Unit = {
+    ShardedDaemonProcess(system).init(
+      name = WorkOrderCompletionProjection.projectionName,
+      numberOfInstances = LotAggregate.tags.size,
+      behaviorFactory = index => ProjectionBehavior(WorkOrderCompletionProjection.createProjection(system, index)),
       settings = ShardedDaemonProcessSettings(system),
       stopMessage = Some(ProjectionBehavior.Stop)
     )

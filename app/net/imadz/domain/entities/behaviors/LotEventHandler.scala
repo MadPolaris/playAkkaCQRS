@@ -4,13 +4,14 @@ import net.imadz.domain.entities.LotEntity._
 
 object LotEventHandler {
   def apply: LotEventHandler = (state, event) => event match {
-    case LotCreated(productId, waferNames, parentLotId, splitReason) =>
+    case LotCreated(productId, waferNames, parentLotId, splitReason, workOrderId) =>
       state.copy(
         productId = productId,
         wafers = waferNames.map { case (id, name) => id -> WaferState(name = name) },
         phase = Active,
         parentLotId = parentLotId,
-        splitReason = splitReason
+        splitReason = splitReason,
+        workOrderId = workOrderId
       )
 
     case WaferRemovalReserved(transferId, waferIds, waferNames) =>
