@@ -47,6 +47,7 @@ GET     /en/m2                      controllers.DddGuideController.m2En()
 # M3 & M2.5+
 GET     /m3                         controllers.DddGuideController.m3Explore()
 GET     /en/m3                      controllers.DddGuideController.m3En()
+GET     /m3-roadmap                 controllers.DddGuideController.m3Roadmap()
 GET     /m3-demo                    controllers.DddGuideController.m3Demo()
 GET     /api/projection/status      controllers.DddGuideController.getProjectionStatus()
 GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(ids: String)

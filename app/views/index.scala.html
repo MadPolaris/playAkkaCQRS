@@ -297,6 +297,7 @@
                     <a href="/en/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>Component Library</a>
                     <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Dynamic Orchestration</a>
                     <a href="/fab-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Fab Closed-Loop Demo</a>
+                    <a href="/m3-roadmap" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5+</span>Roadmap →</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -341,8 +342,9 @@
         Event sourcing instead of giant transactions. Sagas instead of stored procedures.
         A streaming DAG execution engine that orchestrates across systems.
         <br><br>
-        Milestones 1 &amp; 2 are live. M3 architecture and prototype are live. M4 — we want to define it
-        <em>with</em> the Fab industry.
+        Milestones 1, 2, 2.5+ are live. M3 architecture and prototype are live.
+        M3.5 (self-healing) and M3.9 (cluster resilience) are the next two milestones —
+        we're defining them <em>with</em> the Fab industry.
     </p>
     <div class="hero-actions">
         <a href="#problem" class="btn btn-primary">Read the Story</a>
@@ -482,17 +484,25 @@
         <div class="roadmap-item">
             <div class="roadmap-marker next">M3</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">Exploring — Collaborate With Us</span>
+                <span class="badge badge-explore">Architecture — Prototype Running</span>
                 <h4>M3 · Fact-Driven Fab Decision Kernel — Dynamic Process Weaving + MU Lifecycle</h4>
-                <p>Not a static integration platform. A decision layer on top of M2.5+ that adds intelligence to the factory floor. POR Repository holds the baseline process routes. Dynamic Flow Assembler weaves ChainDSL in real-time based on facts — PASS advances, FAIL triggers rework DSL, BORDERLINE re-verifies. Saga + LotContext (MU Account Matrix) guarantee atomicity of every dynamically woven segment. The closed loop (Perception→Logging→Inference→Action) means the system responds to what is happening <em>right now</em>, not what was planned hours ago. All 6 M2.5+ standard components reused without modification. Prototype code runs in FabDemo. <a href="/en/m3" style="color:var(--accent);font-weight:600;">Explore M3 →</a></p>
+                <p>A decision layer on top of M2.5+. POR Repository holds baseline process routes. Dynamic Flow Assembler weaves ChainDSL in real-time based on facts — PASS advances, FAIL triggers rework DSL, BORDERLINE re-verifies. Saga + LotContext (MU Account Matrix) guarantee atomicity of every dynamically woven segment. All 6 M2.5+ standard components reused without modification. Prototype code runs in FabDemo. <a href="/en/m3" style="color:var(--accent);font-weight:600;">Explore M3 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker next">M4</div>
+            <div class="roadmap-marker next">M3.5</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">Exploring — Collaborate With Us</span>
-                <h4>Fab Intelligent Digital MES — Simulation-Driven Manufacturing Platform</h4>
-                <p>A MES-centric intelligent digital manufacturing platform that powers continuous improvement across the Fab. Digital twin simulation for process and recipe optimization. Predictive analytics on production parameters — feed-forward and feed-backward control that anticipates defects before they occur. The goal: higher yield, shorter cycle time, lower cost. Built on the M1–M3 kernel (Saga + DAG engine + fact-driven decision layer) as the real-time execution foundation.</p>
+                <span class="badge badge-explore">In Progress — ~3 weeks to demo</span>
+                <h4>M3.5 · Self-Healing Decision Kernel — 0 Stuck WorkOrders</h4>
+                <p>The critical step from "static script" to "reactive kernel." Pipeline Stage failure → OCAP intercepts → dynamically weaves Rework DSL → Saga guarantees atomicity → WorkOrder converges correctly. Equipment injects spontaneous faults. Route graph reflects dynamic branches in real time. The system responds to <em>what is happening right now</em> — not what was planned hours ago. <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">M3.5 Roadmap →</a></p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M3.9</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">Planned — After M3.5</span>
+                <h4>M3.9 · Cluster Resilience — 0 Lost Events</h4>
+                <p>Akka Cluster multi-node deployment. Kill one node — WorkOrders don't stall, events don't drop, UI recovers automatically. 50 concurrent WorkOrders across 3 nodes. The reactive MES kernel v1.0 is complete when M3.5 + M3.9 are both proven.</p>
             </div>
         </div>
     </div>
@@ -580,17 +590,16 @@
 <!-- ==================== CTA: INVITATION ==================== -->
 <section class="section" id="collaborate">
     <div class="cta-section">
-        <h2>M4 — Define the Intelligent Digital Factory With Us</h2>
+        <h2>M3.5 &amp; M3.9 — Define the Reactive MES Kernel With Us</h2>
         <p>
-            M1, M2, M2.5+, and M3 are running in production-quality code.
-            M4 — the intelligent digital manufacturing platform with simulation and predictive optimization —
-            is where Fab domain expertise matters most.
+            M1, M2, M2.5+, and M3 architecture are running in production-quality code.
+            M3.5 (self-healing decision kernel) and M3.9 (cluster resilience) are the next two milestones
+            that will complete the reactive MES kernel v1.0.
             <br><br>
             If you're a Fab engineer, an automation architect, or a manufacturing systems expert —
-            we want to hear about the simulation scenarios, yield optimization challenges,
-            and predictive control loops that matter most on your factory floor.
-            What process parameters would you optimize first? What digital twin models would
-            give you the biggest return?
+            we want to hear about the failure scenarios, recovery expectations, and cluster
+            requirements that matter most on your factory floor.
+            What does "never stuck" mean for your operations? What recovery time is acceptable?
         </p>
         <div class="cta-links">
             <a href="https://github.com/MadPolaris/playAkkaCQRS/discussions" class="btn btn-primary">GitHub Discussions</a>

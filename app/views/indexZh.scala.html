@@ -280,6 +280,7 @@
                     <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
                     <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
                     <a href="/fab-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Fab 闭环演示</a>
+                    <a href="/m3-roadmap" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5+</span>路线图 →</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -323,7 +324,9 @@
         用事件溯源取代巨型事务，用 Saga 取代存储过程，
         用流批一体的 DAG 执行引擎编排跨系统流程。
         <br><br>
-        里程碑 1 和 2 已完成上线。M3 架构与原型代码已就绪。M4——我们希望<em>与 Fab 行业的人一起定义</em>。
+        里程碑 1、2、2.5+ 已完成上线。M3 架构与原型代码已就绪。
+        M3.5（自愈决策内核）和 M3.9（集群韧性）是接下来的两个里程碑——
+        我们希望<em>与 Fab 行业的人一起定义</em>。
     </p>
     <div class="hero-actions">
         <a href="#problem" class="btn btn-primary">了解问题</a>
@@ -460,17 +463,25 @@
         <div class="roadmap-item">
             <div class="roadmap-marker next">M3</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">探索中 — 共同定义</span>
+                <span class="badge badge-explore">架构就绪 — 原型可运行</span>
                 <h4>M3 · 事实驱动的 Fab 决策内核 — 动态工艺织造 + MU 生命周期</h4>
-                <p>不是一个静态集成平台，而是叠加在 M2.5+ 之上的决策层。POR 工艺路线库存放静态基准。Dynamic Flow Assembler 根据产线实时事实动态织造 ChainDSL——PASS 则继续推进、FAIL 则织造 Rework DSL、BORDERLINE 则复验。Saga + LotContext（MU 账户矩阵）保障每一段动态 DSL 的原子性。感知→入账→决策→位移 闭环让系统响应<em>此刻正在发生</em>的事实，而非数小时前的计划。M2.5+ 全部 6 个标准组件零修改复用。原型代码在 FabDemo 中可运行。 <a href="/m3" style="color:var(--accent);font-weight:600;">了解 M3 →</a></p>
+                <p>叠加在 M2.5+ 之上的决策层。POR 工艺路线库存放静态基准。Dynamic Flow Assembler 根据产线实时事实动态织造 ChainDSL——PASS 则继续推进、FAIL 则织造 Rework DSL、BORDERLINE 则复验。Saga + LotContext（MU 账户矩阵）保障每一段动态 DSL 的原子性。M2.5+ 全部 6 个标准组件零修改复用。原型代码在 FabDemo 中可运行。 <a href="/m3" style="color:var(--accent);font-weight:600;">了解 M3 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker next">M4</div>
+            <div class="roadmap-marker next">M3.5</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">探索中 — 共同定义</span>
-                <h4>Fab 智能数字工厂 MES — 仿真驱动的智能制造平台</h4>
-                <p>以 MES 为核心的智能数字制造平台，支撑 Fab 工厂的持续改进。数字孪生仿真实现在制品参数与工艺配方的优化。基于生产数据的预测分析——前馈与反馈控制闭环在缺陷产生之前就做出预判。目标：提升良率、缩短工期、降低成本。以 M1–M3 内核（Saga + DAG 引擎 + 事实驱动决策层）作为实时执行基础。</p>
+                <span class="badge badge-explore">进行中 — 约 3 周可演示</span>
+                <h4>M3.5 · 自愈决策内核 — 0 卡死工单</h4>
+                <p>从"静态脚本"到"反应式内核"的关键一步。Pipeline Stage 失败 → OCAP 拦截 → 动态织造 Rework DSL → Saga 保证原子性 → WorkOrder 正确收敛。设备自发故障注入。工艺路线图实时反映动态分支。系统响应<em>此刻正在发生</em>的事实，而非数小时前的计划。 <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">M3.5 路线图 →</a></p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M3.9</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">规划中 — M3.5 之后</span>
+                <h4>M3.9 · 集群韧性 — 0 丢失事件</h4>
+                <p>Akka Cluster 多节点部署。杀一个节点——WorkOrder 不卡，事件不丢，UI 自动恢复。3 节点 50 WorkOrder 并发。M3.5 + M3.9 全部验证通过之时，反应式 MES 内核 v1.0 正式成立。</p>
             </div>
         </div>
     </div>
@@ -558,15 +569,14 @@
 <!-- ==================== CTA：邀请协作 ==================== -->
 <section class="section" id="collaborate">
     <div class="cta-section">
-        <h2>M4 — 与我们一起定义智能数字工厂</h2>
+        <h2>M3.5 &amp; M3.9 — 与我们一起定义反应式 MES 内核</h2>
         <p>
-            M1、M2、M2.5+ 和 M3 已经以线上质量运行。
-            M4——融合仿真模拟与预测优化的智能数字制造平台——
-            是最需要 Fab 领域专家深度参与的里程碑。
+            M1、M2、M2.5+ 和 M3 架构已经以线上质量运行。
+            M3.5（自愈决策内核）和 M3.9（集群韧性）是完成反应式 MES 内核 v1.0 的最后两个里程碑。
             <br><br>
             如果你是 Fab 工程师、自动化架构师或制造系统专家——
-            我们希望听到那些在你的工厂现场最重要的仿真场景、良率优化挑战和预测控制需求。
-            你会优先优化哪些工艺参数？哪些数字孪生模型能给你最大的回报？
+            我们希望听到那些在你的工厂现场最重要的故障场景、恢复预期和集群需求。
+            对你们的运维来说，"永不卡死"意味着什么？什么样的恢复时间是可接受的？
         </p>
         <div class="cta-links">
             <a href="https://github.com/MadPolaris/playAkkaCQRS/discussions" class="btn btn-primary">GitHub 讨论区</a>
