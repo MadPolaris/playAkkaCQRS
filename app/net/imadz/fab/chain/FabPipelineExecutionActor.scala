@@ -1,14 +1,13 @@
 package net.imadz.fab.chain
 
-import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
+import akka.actor.typed.scaladsl.{Behaviors, ActorContext}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityTypeKey}
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, Recovery}
 import akka.persistence.typed.{PersistenceId, RecoveryCompleted}
 import net.imadz.fab.chain.FabScenarioPipeline.PipelineStage
 import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState}
-
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
 
 /**
@@ -151,19 +150,15 @@ object FabPipelineExecutionActor {
       stateFactory: String => FabDemoState,
       stageResolver: String => Seq[PipelineStage]
   )(implicit ec: ExecutionContext): Behavior[Command] = {
-
-    Behaviors.setup { actorContext =>
-
+    Behaviors.setup { ctx =>
       val persistenceId = PersistenceId(EntityKey.name, entityId)
-
-      val internalCmdHandler: (State, Command) => Effect[Event, State] = { (state, cmd) =>
-        internalCommandHandler(actorContext, entityId, state, cmd, contextFactory, stateFactory, stageResolver)
-      }
 
       EventSourcedBehavior[Command, Event, State](
         persistenceId = persistenceId,
         emptyState = Idle,
-        commandHandler = internalCmdHandler,
+        commandHandler = { (state, cmd) =>
+          internalCommandHandler(ctx, entityId, state, cmd, contextFactory, stateFactory, stageResolver)
+        },
         eventHandler = eventHandler
       ).withRecovery(Recovery.default)
         .receiveSignal {
@@ -175,17 +170,17 @@ object FabPipelineExecutionActor {
               val recoveryStages = stageResolver(execState.scenarioId)
 
               val processor = FabPipelineProcessor(recoveryStages, recoveryCtx,
-                (phase, metadata) => actorContext.self ! PhaseCompleted(phase, metadata))
+                (phase, metadata) => ctx.self ! PhaseCompleted(phase, metadata))
 
               processor.resumeFromIndex(initState, execState.completedCount).onComplete {
                 case Success(_) =>
-                  actorContext.self ! PipelineSucceeded
+                  ctx.self ! PipelineSucceeded
                 case Failure(e) =>
-                  actorContext.self ! PipelineFailed("recovery", e.getMessage)
-              }(actorContext.executionContext)
+                  ctx.self ! PipelineFailed("recovery", e.getMessage)
+              }(ec)
             } catch {
               case e: Exception =>
-                actorContext.self ! PipelineFailed("recovery", s"Recovery failed: ${e.getMessage}")
+                ctx.self ! PipelineFailed("recovery", s"Recovery failed: ${e.getMessage}")
             }
 
           case _ => ()
@@ -247,7 +242,7 @@ object FabPipelineExecutionActor {
 
       // ---- Already idle/completed/failed, reject new Start ----
       case (s, StartExecution(_, _, _, _, _, replyTo)) =>
-        ctx.system.log.warn(
+        ctx.log.warn(
           s"[FabPipelineExecutionActor:$entityId] Rejecting StartExecution in state ${s.getClass.getSimpleName}"
         )
         replyTo ! Rejected(s"Already in state ${s.getClass.getSimpleName}")
