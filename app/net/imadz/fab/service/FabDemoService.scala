@@ -82,8 +82,8 @@ class FabDemoService @Inject()(
     val reworkLotRef = sharding.entityRefFor(LotEntityTypeKey, reworkLotId.toString)
     val scrapLotRef = sharding.entityRefFor(LotEntityTypeKey, scrapLotId.toString)
 
-    val sagaTxFn: (Id, Id, Set[Id], Set[String]) => Future[FabSagaConfirmation] =
-      (srcId, tgtId, wids, names) => fabSagaService.transferWafers(srcId, tgtId, wids, names)
+    val sagaTxFn: (Id, Id, Set[Id], Set[String], Option[Id]) => Future[FabSagaConfirmation] =
+      (srcId, tgtId, wids, names, existingTxId) => fabSagaService.transferWafers(srcId, tgtId, wids, names, existingTxId)
 
     val adapter = new ActorEquipmentAdapter()
 
@@ -163,8 +163,8 @@ class FabDemoService @Inject()(
     val sampleLotRef = sharding.entityRefFor(LotEntityTypeKey, sampleLotId.toString)
     val holdLotRef = sharding.entityRefFor(LotEntityTypeKey, holdLotId.toString)
 
-    val sagaTxFn: (Id, Id, Set[Id], Set[String]) => Future[FabSagaConfirmation] =
-      (srcId, tgtId, wids, names) => fabSagaService.transferWafers(srcId, tgtId, wids, names)
+    val sagaTxFn: (Id, Id, Set[Id], Set[String], Option[Id]) => Future[FabSagaConfirmation] =
+      (srcId, tgtId, wids, names, existingTxId) => fabSagaService.transferWafers(srcId, tgtId, wids, names, existingTxId)
 
     val adapter = new ActorEquipmentAdapter()
     val ignoreLotReply = system.ignoreRef[LotConfirmation]
@@ -276,8 +276,8 @@ class FabDemoService @Inject()(
     val sampleLotRef = sharding.entityRefFor(LotEntityTypeKey, sampleLotId.toString)
     val holdLotRef = sharding.entityRefFor(LotEntityTypeKey, holdLotId.toString)
 
-    val sagaTxFn: (Id, Id, Set[Id], Set[String]) => Future[FabSagaConfirmation] =
-      (srcId, tgtId, wids, names) => fabSagaService.transferWafers(srcId, tgtId, wids, names)
+    val sagaTxFn: (Id, Id, Set[Id], Set[String], Option[Id]) => Future[FabSagaConfirmation] =
+      (srcId, tgtId, wids, names, existingTxId) => fabSagaService.transferWafers(srcId, tgtId, wids, names, existingTxId)
 
     val adapter = new ActorEquipmentAdapter()
 

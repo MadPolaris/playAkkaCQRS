@@ -255,7 +255,7 @@ object FabDemoPipeline {
       lotId = ctx.scenario.scenarioId, reworkLotId = s"${ctx.scenario.scenarioId}-RWK"))
 
     createRework.flatMap(_ =>
-      ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet)
+      ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet, None)
     )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
@@ -298,7 +298,7 @@ object FabDemoPipeline {
         ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE",
           s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
 
-        ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, passWaferUUIDs.toSet, passWaferNames.toSet).flatMap { confirmation =>
+        ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, passWaferUUIDs.toSet, passWaferNames.toSet, None).flatMap { confirmation =>
           if (confirmation.error.isEmpty) {
             ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED",
               s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
@@ -355,7 +355,7 @@ object FabDemoPipeline {
       ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
 
     createScrap.flatMap(_ =>
-      ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet)
+      ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet, None)
     )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "COMMITTED",

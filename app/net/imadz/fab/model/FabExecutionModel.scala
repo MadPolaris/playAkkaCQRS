@@ -3,6 +3,7 @@ package net.imadz.fab.model
 import akka.actor.typed.ActorRef
 import net.imadz.application.aggregates.LotProtocol.{LotCommand, LotConfirmation}
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
+import net.imadz.common.CborSerializable
 import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.events.FabSimulationEvent
 import net.imadz.fab.protocol.ActorEquipmentAdapter
@@ -28,7 +29,7 @@ object FabExecutionModel {
     cdValueHistory: List[Double] = Nil,
     classification: Option[String] = None,
     subLot: Option[String] = None
-  )
+  ) extends CborSerializable
 
   case class FabDemoState(
     wafers: Map[String, WaferInfo],
@@ -49,7 +50,7 @@ object FabExecutionModel {
     currentArea: String = "STOCKER",
     /** Child lot view descriptor: suffix -> (status, waferCount). Set at split, transitioned at merge. */
     childLotView: Map[String, (String, Int)] = Map.empty
-  )
+  ) extends CborSerializable
 
   case class FabDemoContext(
     scenario: FabSimulationScenario,
@@ -62,7 +63,7 @@ object FabExecutionModel {
     adapter: ActorEquipmentAdapter,
     publisher: FabSimulationEvent => Unit,
     ignoreLotReply: ActorRef[LotConfirmation],
-    sagaTx: (Id, Id, Set[Id], Set[String]) => Future[FabSagaConfirmation],
+    sagaTx: (Id, Id, Set[Id], Set[String], Option[Id]) => Future[FabSagaConfirmation],
     speedMultiplier: Double,
     scrapLotRef: Option[akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand]] = None,
     scrapLotId: Option[Id] = None,

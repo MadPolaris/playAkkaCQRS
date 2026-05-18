@@ -86,7 +86,7 @@ object FabScenarioPipeline {
   case class OcapEvaluate(rules: List[OcapRuleDefinition]) extends PipelineStage
   case class ExecuteSubProcess(ref: SubProcessRef) extends PipelineStage
 
-  private def runStage(stage: PipelineStage, state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
+  private[chain] def runStage(stage: PipelineStage, state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
     stage match {
       case LoadFoup             => PipelineStages.loadFoup(state, ctx)
@@ -119,7 +119,7 @@ object FabScenarioPipeline {
   // Scenario recipes
   // ====================================================================
 
-  private def basicStages: Seq[PipelineStage] = Seq(
+  private[chain] def basicStages: Seq[PipelineStage] = Seq(
     LoadFoup,
     Transport("STOCKER", "LITHO"), AtEquipment("LITHO", "LITHO-01"),
     TrackIn("LITHO-01"), RunRecipe("LITHO-01", "LITHO-28-001"), TrackOut("LITHO-01"),
@@ -128,7 +128,7 @@ object FabScenarioPipeline {
     Transport("CDSEM", "STOCKER"), SealComplete
   )
 
-  private def sendAheadStages: Seq[PipelineStage] = {
+  private[chain] def sendAheadStages: Seq[PipelineStage] = {
     val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
     Seq(
       LoadFoup, SagaSplit("pilot"), PilotSubFlow,
@@ -143,7 +143,7 @@ object FabScenarioPipeline {
     )
   }
 
-  private def scrapStages: Seq[PipelineStage] = {
+  private[chain] def scrapStages: Seq[PipelineStage] = {
     val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
     Seq(LoadFoup,
       Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
@@ -154,7 +154,7 @@ object FabScenarioPipeline {
       Transport("CDSEM", "STOCKER"), SealComplete)
   }
 
-  private def samplingStages: Seq[PipelineStage] = {
+  private[chain] def samplingStages: Seq[PipelineStage] = {
     val cdSemId = "CDSEM-01"
     Seq(LoadFoup, SagaSplit("sample"),
       Transport("STOCKER", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
@@ -163,7 +163,7 @@ object FabScenarioPipeline {
       Transport("CDSEM", "STOCKER"), SealComplete)
   }
 
-  private def holdReleaseStages: Seq[PipelineStage] = {
+  private[chain] def holdReleaseStages: Seq[PipelineStage] = {
     val equipId = "LITHO-01"; val cdSemId = "CDSEM-01"
     Seq(LoadFoup,
       Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
@@ -332,7 +332,7 @@ object FabScenarioPipeline {
 
     // Create child lot first, then execute TCC transfer (ignoring create result — fails safely if already exists)
     createChild.flatMap(_ =>
-      ctx.sagaTx(ctx.sourceLotId, childLotId, finalMoveIds, finalMoveNames)
+      ctx.sagaTx(ctx.sourceLotId, childLotId, finalMoveIds, finalMoveNames, None)
     )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED", ctx.scenario.scenarioId, rwkLotName, finalMoveIds.toSeq.map(_.toString)))
@@ -371,7 +371,7 @@ object FabScenarioPipeline {
     val sagaId = s"SAGA-MERGE-$lotKey-${state.iteration}"
     val rwkLotName = s"${ctx.scenario.scenarioId}-${lotKey.toUpperCase}"
     ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE", rwkLotName, ctx.scenario.scenarioId, finalMoveIds.toSeq.map(_.toString)))
-    ctx.sagaTx(childLotId, ctx.sourceLotId, finalMoveIds, finalMoveNames).flatMap { confirmation =>
+    ctx.sagaTx(childLotId, ctx.sourceLotId, finalMoveIds, finalMoveNames, None).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED", rwkLotName, ctx.scenario.scenarioId, finalMoveIds.toSeq.map(_.toString)))
         val mergedWafers = state.wafers.map { case (wid, info) =>
@@ -442,11 +442,12 @@ object FabScenarioPipeline {
 
   /** Invoked from runSequence.recoverWith when a stage fails.
    *  Evaluates OCAP rules and executes the highest-priority action plan. */
-  private def invokeOcapInterceptor(
+  private[chain] def invokeOcapInterceptor(
     state: FabDemoState, ctx: FabDemoContext, err: StageError
   ): Future[FabDemoState] = {
     val rules = ctx.ocapRules
     if (rules.isEmpty) {
+      ctx.lotRef ! FailLot(err.detail, err.stageName, ctx.ignoreLotReply)
       Future.successful(state) // no rules — Phase 1 behavior
     } else {
       OcapEngine.matchRules(state, rules).headOption match {
@@ -460,13 +461,14 @@ object FabScenarioPipeline {
             affectedWafers = Seq.empty))
           executeOcapAction(s, ctx, rule.actionPlan)
         case None =>
+          ctx.lotRef ! FailLot(err.detail, err.stageName, ctx.ignoreLotReply)
           Future.successful(state) // no rules triggered
       }
     }
   }
 
   /** Execute a single OCAP action plan, potentially injecting pipeline stages. */
-  private def executeOcapAction(
+  private[chain] def executeOcapAction(
     state: FabDemoState, ctx: FabDemoContext, actionPlan: OcapActionPlan
   ): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
@@ -476,8 +478,9 @@ object FabScenarioPipeline {
           nodeId = "ocap-rework", label = "OCAP Rework", subProcessType = ReworkLoop,
           params = Map("reworkRecipeId" -> r.recipeId, "maxReworkCount" -> r.maxCount.toString)))
 
-      case _: OcapScrap =>
+      case s: OcapScrap =>
         ctx.publisher(GlobalStatusChanged("SCRAPPING", "OCAP Scrap action", "PhaseOCAP"))
+        ctx.lotRef ! FailLot(s.reason, "OCAP_SCRAP", ctx.ignoreLotReply)
         runSequence(Seq(ScrapWafers, SealComplete), state, ctx)
 
       case h: OcapHold =>

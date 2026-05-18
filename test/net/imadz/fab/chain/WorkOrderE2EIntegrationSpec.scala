@@ -110,7 +110,7 @@ class WorkOrderE2EIntegrationSpec extends ScalaTestWithActorTestKit(
       adapter = adapter,
       publisher = collectEvents.asInstanceOf[FabSimulationEvent => Unit],
       ignoreLotReply = system.ignoreRef,
-      sagaTx = (_, _, _, _) => Future.successful(FabSagaConfirmation(
+      sagaTx = (_, _, _, _, _) => Future.successful(FabSagaConfirmation(
         transactionId = UUID.randomUUID(), error = None)),
       speedMultiplier = speedMultiplier,
       ocapRules = ocapRules

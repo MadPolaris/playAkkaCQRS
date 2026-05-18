@@ -20,6 +20,8 @@ import net.imadz.common.Id
 import net.imadz.common.serialization.SerializationExtension
 import net.imadz.domain.entities.LotEntity
 import net.imadz.domain.entities.behaviors.LotEventHandler
+import net.imadz.fab.chain.{FabPipelineExecutionActor, FabScenarioPipeline}
+import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState}
 import net.imadz.infra.saga.SagaTransactionCoordinator
 import net.imadz.infrastructure.persistence._
 import net.imadz.infrastructure.persistence.strategies.FabSerializationStrategies
@@ -132,6 +134,16 @@ trait FabBootstrap {
       settings = ShardedDaemonProcessSettings(system),
       stopMessage = Some(ProjectionBehavior.Stop)
     )
+  }
+
+  // --- Fab Pipeline Execution Actor (M3.5 Crash Recovery) ---
+  def initFabPipelineExecutionActor(
+    sharding: ClusterSharding,
+    contextFactory: (String, String) => FabDemoContext,
+    stateFactory: String => FabDemoState,
+    stageResolver: String => Seq[FabScenarioPipeline.PipelineStage]
+  )(implicit ec: ExecutionContext): Unit = {
+    FabPipelineExecutionActor.init(sharding, contextFactory, stateFactory, stageResolver)
   }
 
   // --- Serialization ---

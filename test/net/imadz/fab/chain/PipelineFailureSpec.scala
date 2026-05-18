@@ -54,7 +54,7 @@ class PipelineFailureSpec extends ScalaTestWithActorTestKit(
       waferUUIDs = Map.empty, sourceLotId = java.util.UUID.randomUUID(), reworkLotId = java.util.UUID.randomUUID(),
       adapter = adapter, publisher = collectEvents.asInstanceOf[net.imadz.fab.events.FabSimulationEvent => Unit],
       ignoreLotReply = system.ignoreRef,
-      sagaTx = (_, _, _, _) => Future.successful(
+      sagaTx = (_, _, _, _, _) => Future.successful(
         net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation(
           transactionId = java.util.UUID.randomUUID(), error = None)),
       speedMultiplier = 1.0

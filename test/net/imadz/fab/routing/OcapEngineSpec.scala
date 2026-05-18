@@ -247,7 +247,7 @@ class OcapEngineSpec extends AnyFlatSpec with Matchers {
     adapter = null.asInstanceOf[ActorEquipmentAdapter],
     publisher = publisher,
     ignoreLotReply = null.asInstanceOf[ActorRef[LotConfirmation]],
-    sagaTx = (_, _, _, _) => Future.successful(null),
+    sagaTx = (_, _, _, _, _) => Future.successful(null),
     speedMultiplier = 1.0
   )(ec)
 }
