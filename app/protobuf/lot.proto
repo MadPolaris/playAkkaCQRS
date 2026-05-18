@@ -156,6 +156,11 @@ message ProcessCompletedPO {
   int32 rework_count = 4;
 }
 
+message LotFailedPO {
+  string reason = 1;
+  string failed_at = 2;
+}
+
 // --- Event Union ---
 
 message LotEventPO {
@@ -184,6 +189,7 @@ message LotEventPO {
     WafersHeldPO wafersHeld = 22;
     WafersReleasedPO wafersReleased = 23;
     ProcessCompletedPO processCompleted = 24;
+    LotFailedPO lotFailed = 25;
   }
 }
 

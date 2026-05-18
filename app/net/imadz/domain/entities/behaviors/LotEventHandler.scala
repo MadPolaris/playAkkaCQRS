@@ -92,6 +92,7 @@ object LotEventHandler {
     case WafersReleased(_) => state
 
     case ProcessCompleted(_, _, _, _) => state
+    case LotFailed(_, _) => state
 
     // RouteCard events (M3.5+)
     case RouteCardAssigned(steps, sourcedFrom, reason, assignedAt) =>

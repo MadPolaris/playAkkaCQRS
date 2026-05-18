@@ -4,6 +4,7 @@ import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.{Behaviors, TimerScheduler}
 import net.imadz.fab.protocol._
 import scala.concurrent.duration._
+import scala.util.Random
 import java.util.UUID
 
 /**
@@ -14,6 +15,8 @@ import java.util.UUID
  * Subclasses implement `generateResult` to produce equipment-specific output.
  */
 abstract class EquipmentSimulator {
+
+  protected val rng: Random = new Random()
 
   protected case class Job(
     jobId: String,
@@ -28,7 +31,8 @@ abstract class EquipmentSimulator {
     portOccupancy: Map[String, Option[String]] = Map.empty,
     totalProcessed: Int = 0,
     totalFailed: Int = 0,
-    speedMultiplier: Double = 1.0
+    speedMultiplier: Double = 1.0,
+    pendingFault: Option[String] = None  // M3.5: force next TimerTick to fail with this fault type
   )
 
   // ---- Public API ----
@@ -66,6 +70,9 @@ abstract class EquipmentSimulator {
       replyTo ! StatusReport(state.equipmentId, state.status, None, state.portOccupancy)
       Behaviors.same
 
+    case InjectFault(faultType, _) =>
+      idle(state.copy(pendingFault = Some(faultType)), config, timers)
+
     case SimulateCommand(_, replyTo) =>
       replyTo ! StatusReport(state.equipmentId, Idle, None, state.portOccupancy)
       Behaviors.same
@@ -77,7 +84,22 @@ abstract class EquipmentSimulator {
     state: SimState, config: EquipmentConfig, timers: TimerScheduler[SimulatorCommand]
   ): Behavior[SimulatorCommand] = Behaviors.receiveMessage {
     case TimerTick =>
-      completeJob(state, config, timers)
+      val faultToInject = state.pendingFault.orElse(drawSpontaneousFault(config))
+      faultToInject match {
+        case Some(ft) =>
+          state.currentJob.foreach { job =>
+            job.replyTo ! JobFailed(job.jobId, state.equipmentId, ft, s"Simulated fault: $ft")
+          }
+          idle(
+            state.copy(status = Idle, currentJob = None, totalFailed = state.totalFailed + 1, pendingFault = None),
+            config, timers
+          )
+        case None =>
+          completeJob(state, config, timers)
+      }
+
+    case InjectFault(faultType, _) =>
+      busy(state.copy(pendingFault = Some(faultType)), config, timers)
 
     case SimulateCommand(AbortJob(jobId, reason), replyTo) =>
       timers.cancel(TimerTick)
@@ -107,6 +129,13 @@ abstract class EquipmentSimulator {
       case None =>
         idle(state, config, timers)
     }
+  }
+
+  /** M3.5: Randomly decide whether to inject a spontaneous fault based on config.faultProbability. */
+  private def drawSpontaneousFault(config: EquipmentConfig): Option[String] = {
+    if (config.faultProbability > 0.0 && rng.nextDouble() < config.faultProbability)
+      Some(FaultType.all(rng.nextInt(FaultType.all.size)))
+    else None
   }
 
   protected def newJobId(): String = UUID.randomUUID().toString

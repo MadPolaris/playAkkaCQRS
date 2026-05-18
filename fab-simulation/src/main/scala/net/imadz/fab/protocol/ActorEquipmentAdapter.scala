@@ -74,6 +74,13 @@ class ActorEquipmentAdapter(implicit
     subscribers = subscribers - equipmentId
   }
 
+  /** Inject a fault into a simulator (M3.5). Fire-and-forget — no return value. */
+  def injectFault(equipmentId: String, faultType: String, duration: Option[FiniteDuration] = None): Unit = {
+    simulators.get(equipmentId).foreach { ref =>
+      ref ! InjectFault(faultType, duration)
+    }
+  }
+
   /** Notify all subscribers about an event from a given equipment */
   private[protocol] def notifySubscribers(equipmentId: String, event: EquipmentEvent): Unit = {
     subscribers.getOrElse(equipmentId, Nil).foreach(cb => cb(event))
@@ -91,3 +98,6 @@ case class SimulateCommand(cmd: EquipmentCommand, replyTo: ActorRef[EquipmentEve
 
 /** Internal timer tick — used by simulators with Akka Behaviors.withTimers */
 case object TimerTick extends SimulatorCommand
+
+/** Inject a fault into a simulator (M3.5). Sent via ActorEquipmentAdapter.injectFault(). */
+case class InjectFault(faultType: String, duration: Option[FiniteDuration] = None) extends SimulatorCommand

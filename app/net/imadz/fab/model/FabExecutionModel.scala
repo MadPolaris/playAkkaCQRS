@@ -6,9 +6,11 @@ import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirma
 import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.events.FabSimulationEvent
 import net.imadz.fab.protocol.ActorEquipmentAdapter
+import net.imadz.fab.routing.OcapRuleDefinition
 import net.imadz.fab.scenario.FabSimulationScenario
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NoStackTrace
 
 /**
  * Shared execution model types used by FabDemoPipeline, FabScenarioPipeline,
@@ -65,6 +67,22 @@ object FabExecutionModel {
     scrapLotRef: Option[akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand]] = None,
     scrapLotId: Option[Id] = None,
     childLotRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand]] = Map.empty,
-    childLotIds: Map[String, Id] = Map.empty
+    childLotIds: Map[String, Id] = Map.empty,
+    ocapRules: List[OcapRuleDefinition] = Nil
   )(implicit val ec: ExecutionContext)
+
+  // ---- Pipeline error types (M3.5) ----
+
+  case class StageError(
+    stageName: String,
+    equipId: Option[String],
+    errorCode: String,
+    detail: String
+  )
+
+  /** Thrown inside PipelineStages when equipment returns JobFailed.
+   *  Caught by recoverWith at the engine level (FabFlowEngine / FabScenarioPipeline). */
+  case class StageFailedException(error: StageError)
+    extends RuntimeException(s"[${error.stageName}] ${error.errorCode}: ${error.detail}")
+    with NoStackTrace
 }

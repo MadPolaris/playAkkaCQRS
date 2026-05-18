@@ -27,6 +27,13 @@ object WorkOrderProtocol {
     reworkCount: Int
   ) extends WorkOrderCommand
 
+  case class RecordLotFailed(
+    workOrderId: String,
+    lotId: String,
+    reason: String,
+    failedAt: String
+  ) extends WorkOrderCommand
+
   // --- Reply ---
   case class WorkOrderConfirmation(workOrderId: String, phase: String) extends CborSerializable
 

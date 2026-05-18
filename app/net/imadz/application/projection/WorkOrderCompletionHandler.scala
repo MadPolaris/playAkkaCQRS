@@ -5,9 +5,9 @@ import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.jdbc.scaladsl.JdbcHandler
 import net.imadz.application.aggregates.WorkOrderAggregate.WorkOrderEntityTypeKey
-import net.imadz.application.aggregates.WorkOrderProtocol.RecordLotCompleted
+import net.imadz.application.aggregates.WorkOrderProtocol.{RecordLotCompleted, RecordLotFailed}
 import net.imadz.common.application.projection.ScalikeJdbcSession
-import net.imadz.domain.entities.LotEntity.{LotCreated, ProcessCompleted}
+import net.imadz.domain.entities.LotEntity.{LotCreated, LotFailed, ProcessCompleted}
 import net.imadz.infrastructure.persistence.LotEventAdapter
 import net.imadz.infrastructure.proto.lot.LotEventPO
 import org.slf4j.LoggerFactory
@@ -58,6 +58,16 @@ class WorkOrderCompletionHandler(system: ActorSystem[_])
             s"this may be a child lot (expected, ignoring)")
         }
 
+
+      case LotFailed(reason, failedAt) =>
+        val workOrderId = lotToWorkOrder.get(lotId)
+        if (workOrderId != null) {
+          val ref = sharding.entityRefFor(WorkOrderEntityTypeKey, workOrderId)
+          ref ! RecordLotFailed(workOrderId, lotId, reason, failedAt)
+          logger.warn(s"[WorkOrderCompletion] Lot failed → WorkOrder: lot=$lotId wo=$workOrderId " +
+            s"reason=$reason failedAt=$failedAt")
+          lotToWorkOrder.remove(lotId)
+        }
       case _ => // ignore other Lot events
     }
   }

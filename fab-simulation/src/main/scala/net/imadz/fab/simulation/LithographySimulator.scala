@@ -17,8 +17,6 @@ class LithographySimulator(
   val config: LithoConfig
 ) extends EquipmentSimulator {
 
-  private val rng = new Random()
-
   override protected def generateResult(
     state: SimState, job: Job, equipConfig: EquipmentConfig
   ): EquipmentResult = {

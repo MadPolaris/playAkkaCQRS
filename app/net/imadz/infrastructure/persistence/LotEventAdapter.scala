@@ -34,6 +34,7 @@ class LotEventAdapter extends EventAdapter[LotEvent, LotEventPO.Event] with LotP
     case evt: WafersHeld => LotEventPO.Event.WafersHeld(WafersHeldConv.toProto(evt))
     case evt: WafersReleased => LotEventPO.Event.WafersReleased(WafersReleasedConv.toProto(evt))
     case evt: ProcessCompleted => LotEventPO.Event.ProcessCompleted(ProcessCompletedConv.toProto(evt))
+    case evt: LotFailed => LotEventPO.Event.LotFailed(LotFailedConv.toProto(evt))
   }
 
   override def fromJournal(p: LotEventPO.Event, manifest: String): EventSeq[LotEvent] = p match {
@@ -61,6 +62,7 @@ class LotEventAdapter extends EventAdapter[LotEvent, LotEventPO.Event] with LotP
     case LotEventPO.Event.WafersHeld(po) => EventSeq.single(WafersHeldConv.fromProto(po))
     case LotEventPO.Event.WafersReleased(po) => EventSeq.single(WafersReleasedConv.fromProto(po))
     case LotEventPO.Event.ProcessCompleted(po) => EventSeq.single(ProcessCompletedConv.fromProto(po))
+    case LotEventPO.Event.LotFailed(po) => EventSeq.single(LotFailedConv.fromProto(po))
     case LotEventPO.Event.Empty => EventSeq.empty
   }
 }

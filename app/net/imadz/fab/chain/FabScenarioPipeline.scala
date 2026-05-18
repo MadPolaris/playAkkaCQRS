@@ -5,10 +5,11 @@ import net.imadz.application.aggregates.LotProtocol.{LotConfirmation, SealLot}
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.common.CommonTypes.Id
 import net.imadz.domain.entities.LotEntity.{HoldSplit, PilotSplit, ReworkSplit, SampleSplit, ScrapSplit, SplitReason}
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState}
+import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, StageError, StageFailedException}
 import net.imadz.fab.events._
 
-import net.imadz.fab.routing.{OcapEngine, OcapRuleDefinition, ReworkLoop, SendAheadPilot, SubProcessRef}
+import net.imadz.fab.routing.{OcapEngine, OcapRuleDefinition, ReworkLoop, SendAheadPilot, SubProcessRef,
+  OcapActionPlan, OcapRework, OcapScrap, OcapHold, OcapNotify, OcapAdjustRecipe, OcapComposite}
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
@@ -44,7 +45,17 @@ object FabScenarioPipeline {
 
   private def runSequence(stages: Seq[PipelineStage], init: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     stages.foldLeft(Future.successful(init)) { (f, stage) =>
-      f.flatMap(state => runStage(stage, state, ctx))(ctx.ec)
+      f.flatMap(state =>
+        runStage(stage, state, ctx).recoverWith {
+          case StageFailedException(err) =>
+            ctx.publisher(PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
+            ctx.publisher(GlobalStatusChanged("FAILED", s"${err.stageName}: ${err.detail}", "PhaseFailed"))
+            invokeOcapInterceptor(state, ctx, err)
+          case ex: Exception =>
+            ctx.publisher(GlobalStatusChanged("ERROR", s"Unexpected: ${ex.getMessage}", "PhaseFailed"))
+            Future.successful(state)
+        }(ctx.ec)
+      )(ctx.ec)
     }
   }
 
@@ -97,7 +108,7 @@ object FabScenarioPipeline {
       case Branch(cond, t, f)   => if (cond(state)) runSequence(t, state, ctx) else runSequence(f, state, ctx)
       case PilotSubFlow           => runPilotSubFlow(state, ctx)
       case OcapEvaluate(rules)    => ocapEvaluate(state, ctx, rules)
-      case ExecuteSubProcess(ref) => executeSubProcess(state, ctx, ref)
+      case ExecuteSubProcess(ref) => executeSubProcess(state, ctx, ref, nodeId = Some(ref.nodeId))
     }
   }
 
@@ -426,22 +437,122 @@ object FabScenarioPipeline {
   }
 
   // ====================================================================
-  // Unified IR extensions (M3.5+ Phase 1 stubs)
+  // M3.5 OCAP Interceptor (Hard 3)
   // ====================================================================
 
+  /** Invoked from runSequence.recoverWith when a stage fails.
+   *  Evaluates OCAP rules and executes the highest-priority action plan. */
+  private def invokeOcapInterceptor(
+    state: FabDemoState, ctx: FabDemoContext, err: StageError
+  ): Future[FabDemoState] = {
+    val rules = ctx.ocapRules
+    if (rules.isEmpty) {
+      Future.successful(state) // no rules — Phase 1 behavior
+    } else {
+      OcapEngine.matchRules(state, rules).headOption match {
+        case Some(rule) =>
+          val s = PipelineStages.emitLedger(state, s"OCAP: Intercepted ${err.stageName} failure — ${rule.name}", ctx)
+          ctx.publisher(GlobalStatusChanged("OCAP_INTERCEPT", s"${err.stageName} failed: ${err.detail} → ${rule.name}", "PhaseOCAP"))
+          ctx.publisher(OcapActionTriggered(
+            ruleId = rule.ruleId, ruleName = rule.name,
+            actionType = actionTypeName(rule.actionPlan),
+            detail = s"${err.stageName}: ${err.detail}",
+            affectedWafers = Seq.empty))
+          executeOcapAction(s, ctx, rule.actionPlan)
+        case None =>
+          Future.successful(state) // no rules triggered
+      }
+    }
+  }
+
+  /** Execute a single OCAP action plan, potentially injecting pipeline stages. */
+  private def executeOcapAction(
+    state: FabDemoState, ctx: FabDemoContext, actionPlan: OcapActionPlan
+  ): Future[FabDemoState] = {
+    implicit val ec: ExecutionContext = ctx.ec
+    actionPlan match {
+      case r: OcapRework =>
+        executeSubProcess(state, ctx, SubProcessRef(
+          nodeId = "ocap-rework", label = "OCAP Rework", subProcessType = ReworkLoop,
+          params = Map("reworkRecipeId" -> r.recipeId, "maxReworkCount" -> r.maxCount.toString)))
+
+      case _: OcapScrap =>
+        ctx.publisher(GlobalStatusChanged("SCRAPPING", "OCAP Scrap action", "PhaseOCAP"))
+        runSequence(Seq(ScrapWafers, SealComplete), state, ctx)
+
+      case h: OcapHold =>
+        ctx.publisher(GlobalStatusChanged("HOLDING", s"OCAP Hold: ${h.reason}", "PhaseOCAP"))
+        runSequence(Seq(HoldWafers, WaitForReview(h.durationMs), ReleaseWafers), state, ctx)
+
+      case n: OcapNotify =>
+        ctx.publisher(GlobalStatusChanged("NOTIFIED", n.reason, "PhaseOCAP"))
+        Future.successful(state)
+
+      case a: OcapAdjustRecipe =>
+        ctx.publisher(GlobalStatusChanged("ADJUSTED", s"Recipe ${a.recipeId} offset ${a.offsetNm}nm", "PhaseOCAP"))
+        Future.successful(state)
+
+      case OcapComposite(actions) =>
+        actions.foldLeft(Future.successful(state)) { (f, a) =>
+          f.flatMap(s => executeOcapAction(s, ctx, a))
+        }
+    }
+  }
+
+  private def actionTypeName(plan: OcapActionPlan): String = plan match {
+    case _: OcapRework       => "REWORK"
+    case _: OcapScrap        => "SCRAP"
+    case _: OcapHold         => "HOLD"
+    case _: OcapNotify       => "NOTIFY"
+    case _: OcapAdjustRecipe => "ADJUST_RECIPE"
+    case _: OcapComposite    => "COMPOSITE"
+  }
+
+  // ====================================================================
+  // Unified IR extensions (M3.5+)
+  // ====================================================================
+
+  /** Sequential OCAP evaluation (compiled from RouteDefinition OcapFlow/OcapNode). */
   private def ocapEvaluate(state: FabDemoState, ctx: FabDemoContext, rules: List[OcapRuleDefinition]): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseOCAP: Evaluating OCAP rules", ctx)
     ctx.publisher(GlobalStatusChanged("OCAP", s"Evaluating ${rules.size} OCAP rule(s)", "PhaseOCAP"))
     OcapEngine.evaluate(s, ctx, rules)(ctx.ec)
   }
 
-  private def executeSubProcess(state: FabDemoState, ctx: FabDemoContext, ref: SubProcessRef): Future[FabDemoState] = {
-    val s = PipelineStages.emitLedger(state, s"PhaseSubProcess: ${ref.subProcessType} (late-binding)", ctx)
+  private def executeSubProcess(state: FabDemoState, ctx: FabDemoContext, ref: SubProcessRef, nodeId: Option[String] = None): Future[FabDemoState] = {
+    val s = PipelineStages.emitLedger(state, s"PhaseSubProcess: ${ref.subProcessType} (late-binding)", ctx,
+      nodeId = nodeId, subProcess = Some(ref.subProcessType.toString))
     ctx.publisher(GlobalStatusChanged("SUB_PROCESS", s"Executing sub-process: ${ref.subProcessType}", "PhaseSubProcess"))
+    implicit val ec: ExecutionContext = ctx.ec
     ref.subProcessType match {
       case SendAheadPilot => runPilotSubFlow(s, ctx)
-      case ReworkLoop     => Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1)) // TODO: Phase 3
-      case _              => Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+      case ReworkLoop =>
+        val recipeId = ref.params.getOrElse("reworkRecipeId", "REWORK-LITHO-001")
+        val maxCount = ref.params.get("maxReworkCount").flatMap(v => scala.util.Try(v.toInt).toOption).getOrElse(3)
+        val needsRework = s.wafers.values.exists(w =>
+          w.classification.contains("FAIL") || w.classification.contains("BORDERLINE"))
+        if (!needsRework) {
+          ctx.publisher(GlobalStatusChanged("SUB_PROCESS", "ReworkLoop: no wafers need rework, skipping", "PhaseSubProcess"))
+          Future.successful(s)
+        } else {
+          val reworkStages: Seq[PipelineStage] = Seq(
+            SagaSplit("rwk"),
+            Transport("CDSEM", "LITHO"), AtEquipment("LITHO", ctx.scenario.litho.equipmentId),
+            TrackIn(ctx.scenario.litho.equipmentId), RunRecipe(ctx.scenario.litho.equipmentId, recipeId),
+            TrackOut(ctx.scenario.litho.equipmentId),
+            Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", ctx.scenario.cdSem.equipmentId),
+            TrackIn(ctx.scenario.cdSem.equipmentId), Measure(ctx.scenario.cdSem.equipmentId),
+            TrackOut(ctx.scenario.cdSem.equipmentId), Classify,
+            Branch(
+              cond = (st: FabDemoState) => st.wafers.values.exists(w =>
+                w.classification.contains("FAIL") || w.classification.contains("BORDERLINE")),
+              ifTrue = Seq.empty, // terminal: no more rework (guarded by maxCount in classify)
+              ifFalse = Seq(SagaMerge("rwk"))),
+            Transport("CDSEM", "STOCKER")
+          )
+          runSequence(reworkStages, s, ctx)
+        }
+      case _ => Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
     }
   }
 }

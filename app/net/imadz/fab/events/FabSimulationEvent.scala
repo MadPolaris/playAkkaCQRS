@@ -70,7 +70,22 @@ case class LotUpdated(lotId: String, activeWafers: Int, scrappedWafers: Int, com
 
 
 // --- Event Sourcing Ledger ---
-case class LedgerStepAdvanced(stepSeq: Int, stepName: String) extends FabSimulationEvent
+case class LedgerStepAdvanced(
+  stepSeq: Int,
+  stepName: String,
+  currentNodeId: Option[String] = None,     // M3.5: RouteNode.nodeId currently executing
+  activeSubProcess: Option[String] = None,  // M3.5: "ReworkLoop", "SendAheadPilot", etc.
+  branchDecision: Option[String] = None     // M3.5: "PASS→Continue", "FAIL→Rework", etc.
+) extends FabSimulationEvent
+
+// --- Pipeline Stage Failure (M3.5) ---
+case class PipelineStageFailed(
+  stageName: String,
+  equipId: Option[String],
+  errorCode: String,
+  detail: String,
+  timestamp: Long = System.currentTimeMillis()
+) extends FabSimulationEvent
 
 // --- Domain Event Record (sidebar audit trail) ---
 case class DomainEventRecorded(

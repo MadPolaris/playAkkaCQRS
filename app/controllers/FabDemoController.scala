@@ -99,13 +99,14 @@ class FabDemoController @Inject()(
       case LotUpdated(lid, act, scr, steps, pass, rw) => Json.obj("lotId" -> lid, "activeWafers" -> act, "scrappedWafers" -> scr, "completedSteps" -> steps, "passedWafers" -> pass, "reworkedWafers" -> rw)
       case OrchestratorCommand(cid, eid, ct, desc, wids) => Json.obj("commandId" -> cid, "targetEquipmentId" -> eid, "commandType" -> ct, "description" -> desc, "relatedWaferIds" -> wids)
       case FoupStateChanged(fid, st, awc, rwc, loc, lotId, rwkLotId) => Json.obj("foupId" -> fid, "status" -> st, "activeWaferCount" -> awc, "reworkWaferCount" -> rwc, "location" -> loc, "lotId" -> lotId, "reworkLotId" -> rwkLotId)
-      case LedgerStepAdvanced(seq, name) => Json.obj("stepSeq" -> seq, "stepName" -> name)
+      case LedgerStepAdvanced(seq, name, nodeId, subProcess, branchDecision) => Json.obj("stepSeq" -> seq, "stepName" -> name, "currentNodeId" -> nodeId, "activeSubProcess" -> subProcess, "branchDecision" -> branchDecision)
       case DomainEventRecorded(evtType, aggType, aggId, data, ts, layer) => Json.obj(
         "eventType" -> evtType, "aggregateType" -> aggType, "aggregateId" -> aggId,
         "data" -> data, "timestamp" -> ts, "layer" -> layer)
       case GlobalStatusChanged(st, detail, phase) => Json.obj("status" -> st, "detail" -> detail, "phase" -> phase)
       case ScrapEvent(wid, reason) => Json.obj("waferId" -> wid, "reason" -> reason)
       case OcapActionTriggered(rid, rname, atype, detail, wafers) => Json.obj("ruleId" -> rid, "ruleName" -> rname, "actionType" -> atype, "detail" -> detail, "affectedWafers" -> wafers)
+      case PipelineStageFailed(stageName, equipId, errorCode, detail, ts) => Json.obj("stageName" -> stageName, "equipId" -> equipId, "errorCode" -> errorCode, "detail" -> detail, "timestamp" -> ts)
       case AggregateStateUpdated(srcLot, childLots, wafers) => Json.obj(
         "sourceLot" -> Json.obj("lotId" -> srcLot.lotId, "status" -> srcLot.status, "waferCount" -> srcLot.waferCount, "passCount" -> srcLot.passCount, "scrapCount" -> srcLot.scrapCount, "currentArea" -> srcLot.currentArea),
         "childLots" -> childLots.map(cl => Json.obj("lotId" -> cl.lotId, "status" -> cl.status, "waferCount" -> cl.waferCount, "passCount" -> cl.passCount, "scrapCount" -> cl.scrapCount, "currentArea" -> cl.currentArea)),

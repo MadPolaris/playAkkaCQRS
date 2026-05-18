@@ -19,7 +19,8 @@ case class FabSimulationConfig(
 case class EquipmentConfig(
   equipmentId: String,
   areaId: String,
-  processingTime: FiniteDuration = 30.seconds
+  processingTime: FiniteDuration = 30.seconds,
+  faultProbability: Double = 0.0  // 0.0=never fails, 0.05=5% per job, 1.0=always fails (M3.5)
 )
 
 case class AmhsConfig(

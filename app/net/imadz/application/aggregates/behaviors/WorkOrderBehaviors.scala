@@ -47,6 +47,16 @@ object WorkOrderBehaviors {
             // Not in Executing — ignore
             Effect.none
         }
+
+      case cmd: RecordLotFailed =>
+        state match {
+          case s: Executing =>
+            Effect.persist(WorkOrderFailed(
+              s"Lot ${cmd.lotId} failed at ${cmd.failedAt}: ${cmd.reason}"
+            ))
+          case _ =>
+            Effect.none
+        }
     }
   }
 }

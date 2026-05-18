@@ -5,7 +5,7 @@ import net.imadz.application.aggregates.LotProtocol.{LotConfirmation, SealLot}
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.common.CommonTypes.Id
 import net.imadz.domain.entities.LotEntity.{ReworkSplit, ScrapSplit}
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
+import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, StageError, StageFailedException, WaferInfo}
 import net.imadz.fab.events._
 import net.imadz.fab.model.{EquipmentArea, Por, PorStep}
 import net.imadz.fab.protocol.{ProcessRecipe, TransferFoup}
@@ -94,7 +94,7 @@ object FabFlowEngine {
 
         PipelineStages.emitLedger(s, s"Step ${s.currentRoutingStep + 1}/${routing.steps.length}: $targetAreaId (reentry=$reentryIdx) — ${step.recipeId}", ctx)
 
-        for {
+        (for {
           s1 <- PipelineStages.transport(s, ctx, prevAreaId, targetAreaId)
           s2 <- PipelineStages.atEquipment(s1, ctx, targetAreaId, equipId)
           s2b <- PipelineStages.trackIn(s2, ctx, equipId)
@@ -113,7 +113,15 @@ object FabFlowEngine {
             Future.successful(next)
           }
           s5 <- loop(s4)
-        } yield s5
+        } yield s5).recoverWith {
+          case StageFailedException(err) =>
+            ctx.publisher(net.imadz.fab.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
+            ctx.publisher(net.imadz.fab.events.GlobalStatusChanged("FAILED", s"${err.stageName} failed: ${err.detail}", "PhaseFailed"))
+            Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+          case ex: Exception =>
+            ctx.publisher(net.imadz.fab.events.GlobalStatusChanged("ERROR", s"Unexpected: ${ex.getMessage}", "PhaseFailed"))
+            Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+        }
       }
     }
 
@@ -157,15 +165,19 @@ object FabFlowEngine {
       result <- ctx.adapter.sendCommand(CdsemEquipId, ProcessRecipe("CD-MEASURE-001"))
       s4 <- result match {
         case net.imadz.fab.protocol.JobCompleted(jobId, _, net.imadz.fab.protocol.MetrologyResult(_, waferMeasurements)) =>
-          Future.successful {
-            ctx.lotRef ! RecordEquipmentJobCompleted(CdsemEquipId, jobId, success = true, ctx.ignoreLotReply)
-            ctx.publisher(ProcessingCompleted(CdsemEquipId, jobId, success = true, ""))
-            ctx.publisher(EquipmentStateChanged(CdsemEquipId, "MET", "Idle", None))
-            val cdValues: Map[String, Double] = waferMeasurements.map { case (wid, cd) => wid -> cd.measuredNm }
-            s3.copy(ledgerSeq = s3.ledgerSeq + 1, wafers = s3.wafers.map { case (wid, info) =>
-              wid -> info.copy(cdValueHistory = info.cdValueHistory ++ cdValues.get(wid).toList)
-            })
-          }
+          ctx.lotRef ! RecordEquipmentJobCompleted(CdsemEquipId, jobId, success = true, ctx.ignoreLotReply)
+          ctx.publisher(ProcessingCompleted(CdsemEquipId, jobId, success = true, ""))
+          ctx.publisher(EquipmentStateChanged(CdsemEquipId, "MET", "Idle", None))
+          val cdValues: Map[String, Double] = waferMeasurements.map { case (wid, cd) => wid -> cd.measuredNm }
+          Future.successful(s3.copy(ledgerSeq = s3.ledgerSeq + 1, wafers = s3.wafers.map { case (wid, info) =>
+            wid -> info.copy(cdValueHistory = info.cdValueHistory ++ cdValues.get(wid).toList)
+          }))
+        case net.imadz.fab.protocol.JobFailed(jobId, _, errorCode, detail) =>
+          val err = StageError("Measure", Some(CdsemEquipId), errorCode, detail)
+          ctx.publisher(net.imadz.fab.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
+          ctx.publisher(ProcessingCompleted(CdsemEquipId, jobId, success = false, detail))
+          ctx.publisher(EquipmentStateChanged(CdsemEquipId, "MET", "Idle", None))
+          Future.failed(StageFailedException(err))
         case _ => Future.successful(s3.copy(ledgerSeq = s3.ledgerSeq + 1))
       }
       s5 <- classifyAndDecide(s4, ctx, step, routing, spec, reentryIdx, targetAreaId)

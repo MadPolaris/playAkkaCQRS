@@ -203,6 +203,11 @@ trait LotProtoConverters extends PrimitiveConverter {
     override def fromProto(p: ProcessCompletedPO): ProcessCompleted = ProcessCompleted(lotId = p.lotId, passCount = p.passCount, scrapCount = p.scrapCount, reworkCount = p.reworkCount)
   }
 
+  object LotFailedConv extends ProtoConverter[LotFailed, LotFailedPO] {
+    override def toProto(e: LotFailed): LotFailedPO = LotFailedPO(reason = e.reason, failedAt = e.failedAt)
+    override def fromProto(p: LotFailedPO): LotFailed = LotFailed(reason = p.reason, failedAt = p.failedAt)
+  }
+
   // --- State Snapshot ---
   object LotStateConv extends ProtoConverter[LotState, LotStatePO] {
     override def toProto(s: LotState): LotStatePO = LotStatePO(

@@ -103,6 +103,7 @@ object LotEntity {
   case class WafersHeld(waferIds: Set[String], reason: String) extends LotEvent
   case class WafersReleased(waferIds: Set[String]) extends LotEvent
   case class ProcessCompleted(lotId: String, passCount: Int, scrapCount: Int, reworkCount: Int) extends LotEvent
+  case class LotFailed(reason: String, failedAt: String) extends LotEvent
 
   // --- RouteCard: Lot随身工艺路线卡 (M3.5+) ---
   case class RouteCard(

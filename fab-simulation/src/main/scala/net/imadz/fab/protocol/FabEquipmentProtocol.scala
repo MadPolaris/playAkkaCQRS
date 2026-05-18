@@ -116,8 +116,17 @@ case class CriticalDimension(
 /** Controls simulation behavior (sent to simulators, not real equipment) */
 sealed trait SimulatorControl
 
-/** Inject a fault into a simulator */
-case class InjectFault(faultType: String, duration: Option[FiniteDuration]) extends SimulatorControl
-
 /** Adjust simulation speed multiplier */
 case class AdjustSpeed(multiplier: Double) extends SimulatorControl
+
+// ============================================================================
+// Fault Injection (M3.5)
+// ============================================================================
+
+object FaultType {
+  val HardwareFault = "HARDWARE_FAULT"
+  val CommTimeout = "COMM_TIMEOUT"
+  val SensorAnomaly = "SENSOR_ANOMALY"
+  val PowerFluctuation = "POWER_FLUCTUATION"
+  val all: Seq[String] = Seq(HardwareFault, CommTimeout, SensorAnomaly, PowerFluctuation)
+}

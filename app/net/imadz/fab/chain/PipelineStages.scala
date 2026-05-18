@@ -6,7 +6,7 @@ import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
 import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.events._
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
+import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, StageError, StageFailedException, WaferInfo}
 import net.imadz.fab.protocol._
 import net.imadz.fab.scenario.{DecisionConfig, FabSimulationScenario}
 import org.slf4j.LoggerFactory
@@ -93,13 +93,19 @@ object PipelineStages {
     ctx.lotRef ! RecordEquipmentJobStarted(equipId, recipeId, ctx.ignoreLotReply)
     ctx.publisher(EquipmentStateChanged(equipId, areaType, "Busy", Some(s"job-$recipeId")))
     ctx.publisher(ProcessingStarted(equipId, recipeId, scaledMs))
-    ctx.adapter.sendCommand(equipId, ProcessRecipe(recipeId)).map {
+    ctx.adapter.sendCommand(equipId, ProcessRecipe(recipeId)).flatMap {
       case JobCompleted(jobId, _, _) =>
         ctx.lotRef ! RecordEquipmentJobCompleted(equipId, jobId, success = true, ctx.ignoreLotReply)
         ctx.publisher(ProcessingCompleted(equipId, jobId, success = true, ""))
         ctx.publisher(EquipmentStateChanged(equipId, areaType, "Idle", None))
-        s.copy(ledgerSeq = s.ledgerSeq + 1)
-      case _ => s.copy(ledgerSeq = s.ledgerSeq + 1)
+        Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+      case JobFailed(jobId, _, errorCode, detail) =>
+        val err = StageError("Process", Some(equipId), errorCode, detail)
+        ctx.publisher(net.imadz.fab.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
+        ctx.publisher(ProcessingCompleted(equipId, jobId, success = false, detail))
+        ctx.publisher(EquipmentStateChanged(equipId, areaType, "Idle", None))
+        Future.failed(StageFailedException(err))
+      case _ => Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
     }(ctx.ec)
   }
 
@@ -125,7 +131,7 @@ object PipelineStages {
     ctx.lotRef ! RecordEquipmentJobStarted(equipId, "CD-MEASURE-001", ctx.ignoreLotReply)
     ctx.publisher(EquipmentStateChanged(equipId, "METROLOGY", "Busy", Some("metrology-job")))
     ctx.publisher(ProcessingStarted(equipId, "CD-MEASURE-001", scaledMs))
-    ctx.adapter.sendCommand(equipId, ProcessRecipe("CD-MEASURE-001")).map {
+    ctx.adapter.sendCommand(equipId, ProcessRecipe("CD-MEASURE-001")).flatMap {
       case JobCompleted(jobId, _, MetrologyResult(_, waferMeasurements)) =>
         ctx.lotRef ! RecordEquipmentJobCompleted(equipId, jobId, success = true, ctx.ignoreLotReply)
         ctx.publisher(ProcessingCompleted(equipId, jobId, success = true, ""))
@@ -137,10 +143,16 @@ object PipelineStages {
           if (cdVal.isEmpty) logger.warn(s"[Measure] No CD value for wafer $wid in CDSEM response! Available: ${cdValues.keys.mkString(", ")}")
           wid -> info.copy(cdValueHistory = info.cdValueHistory ++ cdVal.toList)
         }
-        s.copy(ledgerSeq = s.ledgerSeq + 1, wafers = newWafers)
+        Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, wafers = newWafers))
+      case JobFailed(jobId, _, errorCode, detail) =>
+        val err = StageError("Measure", Some(equipId), errorCode, detail)
+        ctx.publisher(net.imadz.fab.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
+        ctx.publisher(ProcessingCompleted(equipId, jobId, success = false, detail))
+        ctx.publisher(EquipmentStateChanged(equipId, "METROLOGY", "Idle", None))
+        Future.failed(StageFailedException(err))
       case other =>
         logger.warn(s"[Measure] Unexpected CDSEM response (expected MetrologyResult): ${other.getClass.getSimpleName}")
-        s.copy(ledgerSeq = s.ledgerSeq + 1)
+        Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
     }(ctx.ec)
   }
 
@@ -189,8 +201,10 @@ object PipelineStages {
   def scale(d: FiniteDuration, multiplier: Double): FiniteDuration =
     if (multiplier > 0) (d.toMillis / multiplier).toLong.millis else d
 
-  def emitLedger(state: FabDemoState, name: String, ctx: FabDemoContext): FabDemoState = {
-    ctx.publisher(LedgerStepAdvanced(state.ledgerSeq, name))
+  def emitLedger(state: FabDemoState, name: String, ctx: FabDemoContext,
+                 nodeId: Option[String] = None, subProcess: Option[String] = None,
+                 branchDecision: Option[String] = None): FabDemoState = {
+    ctx.publisher(LedgerStepAdvanced(state.ledgerSeq, name, nodeId, subProcess, branchDecision))
     state
   }
 

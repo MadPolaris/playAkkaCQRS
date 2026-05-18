@@ -195,7 +195,8 @@ class FabDemoService @Inject()(
         "sample" -> sampleLotId,
         "hold" -> holdLotId,
         "scrap" -> scrapLotId
-      )
+      ),
+      ocapRules = routeDef.ocapRules
     )
 
     val initialState = FabDemoState(
