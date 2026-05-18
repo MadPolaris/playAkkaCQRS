@@ -83,12 +83,37 @@ object FabDemoPipeline {
         fallback
       }
       if (info.reworkCount > 0) {
-        updatedWafers += wid -> info.copy(classification = Some("PASS"))
-        passWafers :+= wid
+        // Re-evaluate: reworked wafer must pass CD inspection again
+        val cls = PipelineStages.classifyCd(cdValue, decisionConfig)
         ctx.lotRef ! RecordWaferMeasured(ctx.waferUUIDs(wid), cdValue, ctx.ignoreLotReply)
-        ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
-        ctx.publisher(MeasurementResultEvent(wid, cdValue, "PASS", decisionConfig.upperSpecNm))
-        ctx.publisher(DecisionMade(wid, "Rework → PASS", None))
+        ctx.publisher(MeasurementResultEvent(wid, cdValue, cls, decisionConfig.upperSpecNm))
+        cls match {
+          case "PASS" | "BORDERLINE" =>
+            updatedWafers += wid -> info.copy(classification = Some("PASS"))
+            passWafers :+= wid
+            ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid), "PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
+            ctx.publisher(DecisionMade(wid, "Rework → PASS", None))
+          case "FAIL" =>
+            val nc = info.reworkCount + 1
+            if (nc >= maxRework) {
+              updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("SCRAP"))
+              scrapWafers :+= wid
+              ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid), "SCRAP", nc, cdValue, ctx.ignoreLotReply)
+              ctx.publisher(DecisionMade(wid, s"Rework → FAIL (attempt $nc/$maxRework) → SCRAP", None))
+              ctx.publisher(ScrapEvent(wid, s"Max rework($maxRework) exceeded"))
+            } else {
+              updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("FAIL"))
+              reworkWafers :+= wid
+              ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid), "FAIL", nc, cdValue, ctx.ignoreLotReply)
+              ctx.publisher(DecisionMade(wid, s"Rework → FAIL (attempt $nc/$maxRework)", None))
+            }
+          case "SCRAP" =>
+            updatedWafers += wid -> info.copy(reworkCount = info.reworkCount + 1, classification = Some("SCRAP"))
+            scrapWafers :+= wid
+            ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid), "SCRAP", info.reworkCount + 1, cdValue, ctx.ignoreLotReply)
+            ctx.publisher(DecisionMade(wid, "Rework → SCRAP", None))
+            ctx.publisher(ScrapEvent(wid, s"CD=$cdValue nm → SCRAP after rework"))
+        }
       } else {
         val cls = PipelineStages.classifyCd(cdValue, decisionConfig)
         ctx.lotRef ! RecordWaferMeasured(ctx.waferUUIDs(wid), cdValue, ctx.ignoreLotReply)
