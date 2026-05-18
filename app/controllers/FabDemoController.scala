@@ -57,12 +57,20 @@ class FabDemoController @Inject()(
     "fab-demo-view-projection"
   )
 
-  /** Render the Fab demo page */
+  /** Render the Fab simulation page */
   def index() = Action { implicit request =>
     val langParam = request.getQueryString("lang").getOrElse("")
     val langs: Seq[Lang] = if (langParam.nonEmpty) Seq(Lang(langParam)) else request.acceptLanguages
     val messages = messagesApi.preferred(langs)
-    Ok(views.html.fabDemo()(messages))
+    Ok(views.html.fabSimulation()(messages))
+  }
+
+  /** Render the Route Designer page */
+  def designer() = Action { implicit request =>
+    val langParam = request.getQueryString("lang").getOrElse("")
+    val langs: Seq[Lang] = if (langParam.nonEmpty) Seq(Lang(langParam)) else request.acceptLanguages
+    val messages = messagesApi.preferred(langs)
+    Ok(views.html.fabDesigner()(messages))
   }
 
   /** WebSocket endpoint for real-time simulation events.

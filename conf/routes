@@ -53,6 +53,7 @@ GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(
 
 # Fab Demo
 GET     /fab-demo                               controllers.FabDemoController.index()
+GET     /fab-designer                           controllers.FabDemoController.designer()
 GET     /ws/fab-demo/events                     controllers.FabDemoController.socket
 POST    /api/fab-demo/start/:scenarioId          controllers.FabDemoController.startDemo(scenarioId: String)
 POST    /api/fab-demo/product/:productId/start   controllers.FabDemoController.startProductDemo(productId: String)
