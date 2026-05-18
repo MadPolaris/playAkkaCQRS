@@ -28,7 +28,14 @@ object FabExecutionModel {
     reworkCount: Int = 0,
     cdValueHistory: List[Double] = Nil,
     classification: Option[String] = None,
-    subLot: Option[String] = None
+    subLot: Option[String] = None,
+    measurements: Map[String, List[Double]] = Map.empty
+  ) extends CborSerializable
+
+  case class EquipmentState(
+    equipmentId: String,
+    status: String = "Idle",
+    errorCount: Int = 0
   ) extends CborSerializable
 
   case class FabDemoState(
@@ -49,7 +56,9 @@ object FabExecutionModel {
     /** Current equipment area or transport path (for aggregate state panel display) */
     currentArea: String = "STOCKER",
     /** Child lot view descriptor: suffix -> (status, waferCount). Set at split, transitioned at merge. */
-    childLotView: Map[String, (String, Int)] = Map.empty
+    childLotView: Map[String, (String, Int)] = Map.empty,
+    /** Equipment-level state for OCAP equipment conditions */
+    equipmentState: Map[String, EquipmentState] = Map.empty
   ) extends CborSerializable
 
   case class FabDemoContext(

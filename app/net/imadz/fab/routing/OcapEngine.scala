@@ -68,7 +68,7 @@ object OcapEngine {
    */
   def matchRules(state: FabDemoState, rules: List[OcapRuleDefinition]): List[OcapRuleDefinition] =
     rules
-      .filter(r => ConditionEvaluator.evaluate(r.triggerCondition, state))
+      .filter(r => ConditionEvaluator.evaluate(r.triggerCondition, state, r.onMissingMetric))
       .sortBy(_.priority)
 
   /**

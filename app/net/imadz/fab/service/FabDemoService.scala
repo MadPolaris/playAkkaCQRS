@@ -15,7 +15,7 @@ import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, Wafe
 import net.imadz.fab.events.{DemoStarted, FabSimulationEvent}
 import net.imadz.fab.model.{Por, PorRepository}
 import net.imadz.fab.protocol.ActorEquipmentAdapter
-import net.imadz.fab.routing.{RouteCompiler, RoutingRepository}
+import net.imadz.fab.routing.{OcapRuleStore, RouteCompiler, RoutingRepository}
 import net.imadz.fab.scenario.{FabSimulationScenario, StandardScenarios}
 import net.imadz.fab.simulation._
 
@@ -29,7 +29,8 @@ import scala.concurrent.duration._
 class FabDemoService @Inject()(
   classicSystem: akka.actor.ActorSystem,
   sharding: ClusterSharding,
-  fabSagaService: FabSagaService
+  fabSagaService: FabSagaService,
+  ocapRuleStore: OcapRuleStore
 ) {
   private implicit val system: ActorSystem[Nothing] =
     akka.actor.typed.scaladsl.adapter.ClassicActorSystemOps(classicSystem).toTyped
@@ -924,14 +925,7 @@ class FabDemoService @Inject()(
         RouteEdge("e15","n14","n10", label = "rework→re-measure"),
         RouteEdge("e16","n15","n16")
       ),
-      ocapRules = List(
-        OcapRuleDefinition("OCAP-001","Borderline→Rework",
-          MeasurementCondition("cd_nm",WithinRange,34.0,36.0,AnyWafer),
-          OcapComposite(List(OcapRework("REWORK-LITHO-001",2),OcapNotify("CD borderline","area-engineer"))),priority=1),
-        OcapRuleDefinition("OCAP-002","FarOut→Scrap",
-          MeasurementCondition("cd_nm",GreaterThan,42.0,0.0,AnyWafer),
-          OcapScrap("CD far out of spec"),priority=0)
-      )
+      ocapRules = ocapRuleStore.getRulesByRoute("PHOTOCELL-5WAFER")
     ))
 
     // 2. Send-Ahead Pilot

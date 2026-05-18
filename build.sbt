@@ -197,6 +197,7 @@ lazy val root = (project in file("."))
     libraryDependencies += "nl.gn0s1s" %% "base64" % "0.2.2",
     libraryDependencies += "com.github.jwt-scala" %% "jwt-play" % "9.1.2",
     libraryDependencies += "org.mongodb.scala" %% "mongo-scala-driver" % "4.11.0",
+	libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.3.0",
     
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-remote" % akkaVersion,

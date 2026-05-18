@@ -175,11 +175,21 @@ case class AggregateCondition(
   logic: LogicOp
 ) extends ConditionExpression
 
+case class EquipmentCondition(
+  equipmentId: String,
+  metric: String,
+  operator: ComparisonOp,
+  lowerBound: Double = 0.0,
+  upperBound: Double = Double.MaxValue
+) extends ConditionExpression
+
 sealed trait ComparisonOp
-case object GreaterThan   extends ComparisonOp
-case object LessThan      extends ComparisonOp
-case object WithinRange   extends ComparisonOp
-case object OutsideRange  extends ComparisonOp
+case object GreaterThan        extends ComparisonOp
+case object GreaterThanOrEqual extends ComparisonOp
+case object LessThan           extends ComparisonOp
+case object LessThanOrEqual    extends ComparisonOp
+case object WithinRange        extends ComparisonOp
+case object OutsideRange       extends ComparisonOp
 
 sealed trait LogicOp
 case object And extends LogicOp
@@ -195,13 +205,19 @@ case class SlotRange(from: Int, to: Int) extends WaferScope
 // OCAP Rule Definition (stored independently from route for versioned lifecycle)
 // ============================================================================
 
+sealed trait MissingMetricPolicy
+case object ConservativeReject extends MissingMetricPolicy  // missing → trigger rule (reject)
+case object ConservativePass   extends MissingMetricPolicy  // missing → skip rule (pass)
+
 case class OcapRuleDefinition(
   ruleId: String,
   name: String,
   triggerCondition: ConditionExpression,
   actionPlan: OcapActionPlan,
-  priority: Int = 0,             // lower = higher priority
-  maxTriggersPerLot: Int = 3
+  priority: Int = 0,                          // lower = higher priority
+  maxTriggersPerLot: Int = 3,
+  onMissingMetric: MissingMetricPolicy = ConservativePass,
+  routeId: String = ""
 )
 
 sealed trait OcapActionPlan

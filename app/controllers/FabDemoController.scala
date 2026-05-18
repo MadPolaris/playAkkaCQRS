@@ -427,7 +427,8 @@ class FabDemoController @Inject()(
   }
 
   private def parseComparisonOp(s: String): ComparisonOp = s match {
-    case "GreaterThan" => GreaterThan; case "LessThan" => LessThan
-    case "WithinRange" => WithinRange; case "OutsideRange" => OutsideRange
+    case "GreaterThan"        => GreaterThan;        case "LessThan"        => LessThan
+    case "GreaterThanOrEqual" => GreaterThanOrEqual; case "LessThanOrEqual" => LessThanOrEqual
+    case "WithinRange"        => WithinRange;         case "OutsideRange"   => OutsideRange
   }
 }
