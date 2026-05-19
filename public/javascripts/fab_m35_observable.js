@@ -121,7 +121,7 @@
     );
 
     _m35Streams.demoCompleted$ = rawEvent$.pipe(
-      op.filter(function(e) { return e.type === 'DemoCompleted'; }),
+      op.filter(function(e) { return e.type === 'RecoveryCompleted'; }),
       op.map(function(e) { return e.data; })
     );
 
@@ -165,7 +165,7 @@
             stats.totalWafers = event.data.lotSize || event.data.waferIds ? (event.data.waferIds || []).length : 0;
             stats.startTime = Date.now();
             break;
-          case 'DemoCompleted':
+          case 'RecoveryCompleted':
             stats.passed = event.data.passedWafers || 0;
             stats.reworked = event.data.reworkedWafers || 0;
             stats.scrapped = event.data.scrappedWafers || 0;
@@ -175,6 +175,9 @@
             stats.ocapTriggers++;
             break;
           case 'RecoveryEvent':
+            if (event.data.recoveryType === 'CRASH_DETECTED') {
+              stats.faults++;
+            }
             if (event.data.recoveryType === 'RECOVERED' || event.data.recoveryType === 'COMPLETED') {
               stats.recoveries++;
             }

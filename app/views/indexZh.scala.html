@@ -280,6 +280,7 @@
                     <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
                     <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
                     <a href="/fab-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Fab 闭环演示</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5</span>自愈决策内核 Demo</a>
                     <a href="/m3-roadmap" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5+</span>路线图 →</a>
                 </div>
             </div>
@@ -471,9 +472,9 @@
         <div class="roadmap-item">
             <div class="roadmap-marker next">M3.5</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">进行中 — 约 3 周可演示</span>
+                <span class="badge badge-explore">进行中 — 单 WO 自愈就绪</span>
                 <h4>M3.5 · 自愈决策内核 — 0 卡死工单</h4>
-                <p>从"静态脚本"到"反应式内核"的关键一步。Pipeline Stage 失败 → OCAP 拦截 → 动态织造 Rework DSL → Saga 保证原子性 → WorkOrder 正确收敛。设备自发故障注入。工艺路线图实时反映动态分支。系统响应<em>此刻正在发生</em>的事实，而非数小时前的计划。 <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">M3.5 路线图 →</a></p>
+                <p>从"静态脚本"到"反应式内核"的关键一步。单 WorkOrder EventSourced 断点恢复已就绪：FabPipelineExecutionActor 崩溃后通过 Journal 重放恢复状态，resumeFromIndex 跳过已完成阶段从中断处继续。Pipeline Stage 失败 → OCAP 拦截 → 动态织造 Rework DSL → Saga 保证原子性。设备故障注入。工艺路线图实时反映动态分支。 <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">M3.5 自愈演示 →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">路线图 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -538,6 +539,15 @@
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：POR→Assembler→Saga/LotContext→ChainDSL；事实驱动闭环</p>
             <br>
             <a href="/m3" class="card-link">了解 M3 →</a>
+        </div>
+        <div class="card">
+            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🛡️</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M3.5</span><span class="tag">自愈</span><span class="tag">OCAP</span><span class="tag">断点恢复</span></div>
+            <h3>M3.5 自愈决策内核（进行中）</h3>
+            <p>单 WorkOrder EventSourced 崩溃自愈已就绪。FabPipelineExecutionActor 通过 Journal 重放恢复状态，resumeFromIndex 断点续传跳过已完成阶段。OCAP 规则引擎拦截故障并执行 Rework/Scrap/Hold/Notify。演示包含崩溃注入、恢复过程、OCAP 触发实时可视化。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：Actor 崩溃 → 事件重放恢复 → 断点续传 → OCAP 故障拦截</p>
+            <br>
+            <a href="/fab-demo/m35" class="card-link">打开 M3.5 自愈演示 →</a>
         </div>
     </div>
 

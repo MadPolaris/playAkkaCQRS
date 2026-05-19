@@ -7,7 +7,7 @@ import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
 import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent, RecoveryEvent, FaultInjected, DynamicStageInjected, PipelineTimelineSnapshot}
 import net.imadz.fab.service.FabDemoService
 import akka.projection.ProjectionBehavior
-import net.imadz.fab.projection.{FabDemoEventBridge, FabDemoViewProjection}
+import net.imadz.fab.projection.{FabDemoEventBridge, FabDemoViewProjection, FabPipelineProjection}
 import net.imadz.fab.engine.RouteCardCompiler
 import net.imadz.fab.routing._
 import play.api.i18n.{I18nSupport, Lang}
@@ -58,6 +58,13 @@ class FabDemoController @Inject()(
     "fab-demo-view-projection"
   )
 
+  // Pipeline timeline projection: subscribes "fab-pipeline" tagged journal events,
+  // converts PhaseDone → PipelineTimelineSnapshot for UI progress bar
+  typedSystem.systemActorOf(
+    ProjectionBehavior(FabPipelineProjection.createProjection(typedSystem, publishEvent)),
+    "fab-pipeline-projection"
+  )
+
   /** Render the Fab simulation page */
   def index() = Action { implicit request =>
     val langParam = request.getQueryString("lang").getOrElse("")
@@ -88,7 +95,7 @@ class FabDemoController @Inject()(
     import net.imadz.fab.events._
     event match {
       case DemoStarted(sid, name, size, wids) => Json.obj("scenarioId" -> sid, "name" -> name, "lotSize" -> size, "waferIds" -> wids)
-      case DemoCompleted(lid, tw, pw, rw, sw) => Json.obj("lotId" -> lid, "totalWafers" -> tw, "passedWafers" -> pw, "reworkedWafers" -> rw, "scrappedWafers" -> sw)
+      case RecoveryCompleted(lid, tw, pw, rw, sw) => Json.obj("lotId" -> lid, "totalWafers" -> tw, "passedWafers" -> pw, "reworkedWafers" -> rw, "scrappedWafers" -> sw)
       case EquipmentStateChanged(eid, aid, st, job) => Json.obj("equipmentId" -> eid, "areaId" -> aid, "status" -> st, "currentJob" -> job)
       case FoupInTransit(fid, from, to, eta) => Json.obj("foupId" -> fid, "fromArea" -> from, "toArea" -> to, "etaMs" -> eta)
       case FoupArrivedAtPort(fid, eid, pid) => Json.obj("foupId" -> fid, "equipmentId" -> eid, "portId" -> pid)

@@ -13,7 +13,7 @@ sealed trait FabSimulationEvent extends CborSerializable
 
 // --- Lifecycle ---
 case class DemoStarted(scenarioId: String, name: String, lotSize: Int, waferIds: Seq[String]) extends FabSimulationEvent
-case class DemoCompleted(lotId: String, totalWafers: Int, passedWafers: Int, reworkedWafers: Int, scrappedWafers: Int) extends FabSimulationEvent
+case class RecoveryCompleted(lotId: String, totalWafers: Int, passedWafers: Int, reworkedWafers: Int, scrappedWafers: Int) extends FabSimulationEvent
 
 // --- Equipment State ---
 case class EquipmentStateChanged(equipmentId: String, areaId: String, status: String, currentJob: Option[String]) extends FabSimulationEvent

@@ -7,7 +7,7 @@ import net.imadz.common.CborSerializable
 import net.imadz.common.CommonTypes.Id
 import net.imadz.fab.events.FabSimulationEvent
 import net.imadz.fab.protocol.ActorEquipmentAdapter
-import net.imadz.fab.routing.OcapRuleDefinition
+import net.imadz.fab.routing.{OcapActionPlan, OcapRuleDefinition}
 import net.imadz.fab.scenario.FabSimulationScenario
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -58,7 +58,10 @@ object FabExecutionModel {
     /** Child lot view descriptor: suffix -> (status, waferCount). Set at split, transitioned at merge. */
     childLotView: Map[String, (String, Int)] = Map.empty,
     /** Equipment-level state for OCAP equipment conditions */
-    equipmentState: Map[String, EquipmentState] = Map.empty
+    equipmentState: Map[String, EquipmentState] = Map.empty,
+    /** OCAP actions pending execution, populated by OcapEngine.evaluate,
+      * consumed by OcapActionRouter. (ruleId, actionPlan) in priority order. */
+    ocapActions: List[(String, OcapActionPlan)] = Nil
   ) extends CborSerializable
 
   case class FabDemoContext(

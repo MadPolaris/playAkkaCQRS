@@ -84,6 +84,9 @@
     sub(S.recoveryEvent$, function(data) {
       updateRecoveryStatus(data);
       addRecoveryEntry(data);
+      if (data.recoveryType === 'CRASH_DETECTED') {
+        updateM35Summary({faults: ++state.faultCount});
+      }
       if (data.recoveryType === 'RECOVERED' || data.recoveryType === 'COMPLETED') {
         updateM35Summary({recoveries: ++state.recoveryCount});
       }
@@ -92,6 +95,7 @@
     // --- Fault Injected ---
     sub(S.faultInjected$, function(data) {
       addFaultEntry(data);
+      updateM35Summary({faults: ++state.faultCount});
     });
 
     // --- Dynamic Stage Injected (OCAP branch) + Route Graph (P8) ---
@@ -146,12 +150,33 @@
       if (state._completionShown) return;
       state._completionShown = true;
 
-      updateRecoveryStatus({recoveryType: 'COMPLETED', detail: 'All wafers processed'});
+      var badge = document.getElementById('recoveryStatusBadge');
+      var isRecovering = badge && badge.className.indexOf('recovering') >= 0;
+
+      // If we just came out of a crash recovery, show RECOVERED first,
+      // then transition to COMPLETED + overlay after a brief pause
+      if (isRecovering) {
+        updateRecoveryStatus({recoveryType: 'RECOVERED', detail: 'Recovery complete, pipeline finished'});
+        setTimeout(function() {
+          updateRecoveryStatus({recoveryType: 'COMPLETED', detail: 'All wafers processed'});
+          showCompletionWithStats(data);
+        }, 1200);
+      } else {
+        updateRecoveryStatus({recoveryType: 'COMPLETED', detail: 'All wafers processed'});
+        showCompletionWithStats(data);
+      }
+    });
+
+    // Extracted helper so it can be called with or without delay
+    function showCompletionWithStats(data) {
+      // Reset the start button
+      var btn = document.querySelector('.controls button.primary');
+      if (btn) { btn.textContent = '▶ 启动自愈演示'; btn.disabled = false; }
+
       var passedMsg = (data.passedWafers || 0) + ' passed';
       var scrapMsg = (data.scrappedWafers || 0) + ' scrapped';
-      showToast('Demo Complete: ' + passedMsg + ', ' + scrapMsg + ' — zero stuck WorkOrders', 'success');
+      showToast('自愈成功: ' + passedMsg + ', ' + scrapMsg, 'success');
 
-      // Build stats from DemoCompleted event + accumulated state counters
       var stats = {
         totalWafers: data.totalWafers || 0,
         passed: data.passedWafers || 0,
@@ -176,7 +201,7 @@
       } else {
         showCompletionOverlay(stats);
       }
-    });
+    }
 
     sub(S.scrapEvent$, function(data) {
       handleScrapEvent(data);
@@ -724,7 +749,7 @@
         msg = icon + ' OCAP Dynamic Weave: ' + event.data.injectedStageType +
           ' injected by ' + (event.data.triggeredByRule || 'OCAP');
         break;
-      case 'DemoCompleted':
+      case 'RecoveryCompleted':
         icon = '✅';
         msg = icon + ' All Complete — ' + event.data.passedWafers + ' passed, ' +
           event.data.scrappedWafers + ' scrapped · 0 stuck WorkOrders';

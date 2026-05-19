@@ -165,12 +165,12 @@
                 <div class="bn-label">如果 M3 = 静态集成平台<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(M2.5+ DAG · Saga TCC · EventSourcing · WebSocket)</span></div>
             </div>
             <div class="bn-card">
-                <div class="bn-num bn-40">~40%</div>
+                <div class="bn-num bn-40">~55%</div>
                 <div class="bn-label">如果 M3 = 事实驱动的决策内核<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(自愈闭环 · 动态工艺织造 · MU 生命周期)</span></div>
             </div>
             <div class="bn-card">
-                <div class="bn-num bn-3w">~3 周</div>
-                <div class="bn-label">到达可演示 M3 终点的距离<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(P0 核心打通 + P1 演示说服力)</span></div>
+                <div class="bn-num bn-3w">~2 周</div>
+                <div class="bn-label">到达可演示 M3 终点的距离<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(P0 核心打通 + P1 演示说服力 · 多 WO 编排聚合)</span></div>
             </div>
         </div>
 
@@ -191,8 +191,8 @@
         <p class="section-desc">对照 4 项验收标准，逐项审查当前状态、已有成果和剩余差距。</p>
 
         <div class="progress-wrap">
-            <div class="progress-label"><span>M3 决策内核整体完成度</span><span>~40%</span></div>
-            <div class="progress-track"><div class="progress-fill red" style="width:40%"></div></div>
+            <div class="progress-label"><span>M3 决策内核整体完成度</span><span>~55%</span></div>
+            <div class="progress-track"><div class="progress-fill amber" style="width:55%"></div></div>
         </div>
 
         <div class="criteria-grid">
@@ -222,19 +222,19 @@
             <div class="c-card">
                 <div class="c-header">
                     <div>
-                        <div class="c-status" style="color:var(--red)">🔴 核心难点，未打通</div>
+                        <div class="c-status" style="color:var(--amber)">🟡 单 WO 自愈就绪，多 WO 编排缺</div>
                         <div class="c-title" style="margin-top:4px;">2. Self-Healing 自愈闭环</div>
                     </div>
-                    <span class="c-pct red">25%</span>
+                    <span class="c-pct amber">50%</span>
                 </div>
                 <ul class="gap-list">
                     <li class="done">Saga Prepare/Commit 失败 → 自动 Compensate</li>
                     <li class="done">SUSPENDED + ManualFixStep 机制存在</li>
-                    <li class="done">Chain 重启时幂等重放 Pipeline</li>
+                    <li class="done">EventSourced Pipeline Actor — 断点续传 resumeFromIndex</li>
                     <li class="done">Result Classifier (DynamicFlowAssembler) 完备</li>
-                    <li class="gap">Pipeline 零异常处理 — 一个 Stage 崩全链崩</li>
-                    <li class="gap">WorkOrder 无失败路径 — RecordLotFailed 缺失</li>
-                    <li class="gap">OCAP 是顺序 Stage，不是异常拦截器</li>
+                    <li class="done">OCAP 已升级为异常拦截器 — invokeOcapInterceptor 在 Stage 失败时触发</li>
+                    <li class="gap">Idle 状态崩溃 — StartExecution 丢失无上层编排重试</li>
+                    <li class="gap">多 WO 并发缺少 WorkOrderBatch 聚合 / Watchdog</li>
                     <li class="gap">异常不触发 DAG 重组 / ChainDSL 织造</li>
                 </ul>
             </div>

@@ -155,12 +155,12 @@
                 <div class="bn-label">If M3 = static integration platform<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(M2.5+ DAG · Saga TCC · EventSourcing · WebSocket)</span></div>
             </div>
             <div class="bn-card">
-                <div class="bn-num bn-40">~40%</div>
+                <div class="bn-num bn-40">~55%</div>
                 <div class="bn-label">If M3 = fact-driven decision kernel<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(self-healing loop · dynamic DAG weaving · MU lifecycle)</span></div>
             </div>
             <div class="bn-card">
-                <div class="bn-num bn-3w">~3 wks</div>
-                <div class="bn-label">Distance to demo-ready M3 finish line<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(P0 core activation + P1 demo conviction)</span></div>
+                <div class="bn-num bn-3w">~2 wks</div>
+                <div class="bn-label">Distance to demo-ready M3 finish line<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(P0 core activation + P1 demo conviction · multi-WO orchestration)</span></div>
             </div>
         </div>
 
@@ -181,8 +181,8 @@
         <p class="section-desc">Four criteria, each assessed against current state, existing deliverables, and remaining gaps.</p>
 
         <div class="progress-wrap">
-            <div class="progress-label"><span>M3 Decision Kernel — Overall Completion</span><span>~40%</span></div>
-            <div class="progress-track"><div class="progress-fill red" style="width:40%"></div></div>
+            <div class="progress-label"><span>M3 Decision Kernel — Overall Completion</span><span>~55%</span></div>
+            <div class="progress-track"><div class="progress-fill amber" style="width:55%"></div></div>
         </div>
 
         <div class="criteria-grid">
@@ -212,19 +212,19 @@
             <div class="c-card">
                 <div class="c-header">
                     <div>
-                        <div class="c-status" style="color:var(--red)">🔴 Core challenge, not yet connected</div>
+                        <div class="c-status" style="color:var(--amber)">🟡 Single-WO self-healing ready, multi-WO orchestration missing</div>
                         <div class="c-title" style="margin-top:4px;">2. Self-Healing Closed Loop</div>
                     </div>
-                    <span class="c-pct red">25%</span>
+                    <span class="c-pct amber">50%</span>
                 </div>
                 <ul class="gap-list">
                     <li class="done">Saga Prepare/Commit failure → auto Compensate</li>
                     <li class="done">SUSPENDED + ManualFixStep mechanism exists</li>
-                    <li class="done">Chain replays Pipeline idempotently on restart</li>
+                    <li class="done">EventSourced Pipeline Actor — breakpoint resume via resumeFromIndex</li>
                     <li class="done">Result Classifier (DynamicFlowAssembler) complete</li>
-                    <li class="gap">Pipeline zero exception handling — one Stage crash = full collapse</li>
-                    <li class="gap">WorkOrder no failure path — RecordLotFailed missing</li>
-                    <li class="gap">OCAP is a sequential Stage, not an exception interceptor</li>
+                    <li class="done">OCAP upgraded to exception interceptor — invokeOcapInterceptor triggers on Stage failure</li>
+                    <li class="gap">Idle-state crash — StartExecution lost without upper-level orchestration retry</li>
+                    <li class="gap">Multi-WO concurrency needs WorkOrderBatch aggregate / Watchdog</li>
                     <li class="gap">Exceptions do not trigger DAG re-weaving / ChainDSL injection</li>
                 </ul>
             </div>

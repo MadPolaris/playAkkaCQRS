@@ -58,6 +58,7 @@ object RouteCardCompiler {
       case PilotSubFlow                     => "PilotSubFlow"
       case Branch(_, _, _)                  => "Branch"
       case OcapEvaluate(_)                  => "OcapEvaluate"
+      case OcapActionRouter                 => "OcapActionRouter"
       case ExecuteSubProcess(ref)           => s"SubProcess:${ref.subProcessType}"
     }
   }

@@ -347,7 +347,7 @@ object FabFlowEngine {
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, StockerEquipId, "STOCKER-PORT-1"))
     ctx.publisher(LotUpdated(routing.productId, ctx.scenario.lotSize, state.scrapCount,
       (1 to routing.steps.size).map(i => s"Step-$i").toList, state.passCount, 0))
-    ctx.publisher(DemoCompleted(routing.productId, ctx.scenario.lotSize, state.passCount, 0, state.scrapCount))
+    ctx.publisher(RecoveryCompleted(routing.productId, ctx.scenario.lotSize, state.passCount, 0, state.scrapCount))
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = "STOCKER"))
   }
 

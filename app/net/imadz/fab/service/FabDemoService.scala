@@ -1341,20 +1341,24 @@ class FabDemoService @Inject()(
 
         lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
 
-        // Fire-and-forget: send StartExecution to FabPipelineExecutionActor
+        // Send StartExecution via ask — wait for Accepted before scheduling crash
+        // to guarantee the actor is in Executing state (not Idle) when StopPipeline arrives.
         val pipelineRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
-        pipelineRef ! FabPipelineExecutionActor.StartExecution(
-          scenarioId = scenarioId,
-          workOrderId = workOrderId,
-          initialState = initialState,
-          stages = stages,
-          ctx = ctx,
-          replyTo = system.ignoreRef[FabPipelineExecutionActor.ExecutionReply]
-        )
-
-        // Schedule automatic crash injection mid-pipeline (after CDSEM measurement completes)
-        // Uses a 15-second delay to ensure the pipeline is past CDSEM measure stage
-        scheduleAutoCrash(workOrderId, publisher, delaySeconds = 15)
+        pipelineRef.ask[FabPipelineExecutionActor.ExecutionReply](ref =>
+          FabPipelineExecutionActor.StartExecution(
+            scenarioId = scenarioId,
+            workOrderId = workOrderId,
+            initialState = initialState,
+            stages = stages,
+            ctx = ctx,
+            replyTo = ref
+          )
+        ).foreach {
+          case FabPipelineExecutionActor.Accepted =>
+            scheduleAutoCrash(workOrderId, publisher, delaySeconds = 15)
+          case FabPipelineExecutionActor.Rejected(reason) =>
+            system.log.warn(s"StartExecution rejected for $workOrderId: $reason")
+        }(ec)
 
         confirmation
       }(ec)
@@ -1414,19 +1418,24 @@ class FabDemoService @Inject()(
         )
 
         val pipelineRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
-        pipelineRef ! FabPipelineExecutionActor.StartExecution(
-          scenarioId = scenarioId,
-          workOrderId = workOrderId,
-          initialState = initialState,
-          stages = stages,
-          ctx = ctx,
-          replyTo = system.ignoreRef[FabPipelineExecutionActor.ExecutionReply]
-        )
-
-        // Schedule crash for one of the 3 WOs (staggered)
-        if (prefix == rulePrefixes.last) {
-          scheduleAutoCrash(workOrderId, publisher, delaySeconds = 25)
-        }
+        pipelineRef.ask[FabPipelineExecutionActor.ExecutionReply](ref =>
+          FabPipelineExecutionActor.StartExecution(
+            scenarioId = scenarioId,
+            workOrderId = workOrderId,
+            initialState = initialState,
+            stages = stages,
+            ctx = ctx,
+            replyTo = ref
+          )
+        ).foreach {
+          case FabPipelineExecutionActor.Accepted =>
+            // Schedule crash for one of the 3 WOs (staggered) — only after actor confirms Executing state
+            if (prefix == rulePrefixes.last) {
+              scheduleAutoCrash(workOrderId, publisher, delaySeconds = 25)
+            }
+          case FabPipelineExecutionActor.Rejected(reason) =>
+            system.log.warn(s"StartExecution rejected for $workOrderId: $reason")
+        }(ec)
       }(ec)
     }
 
@@ -1444,6 +1453,8 @@ class FabDemoService @Inject()(
           def run(): Unit = {
             try {
               val entityRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
+              publisher(FaultInjected(workOrderId, "FabPipelineExecutionActor", "actor_crash", "pipeline",
+                resolved = false, resolution = Some(s"Auto-scheduled crash at ${delaySeconds}s")))
               entityRef ! FabPipelineExecutionActor.StopPipeline(workOrderId)
               publisher(RecoveryEvent(workOrderId, "CRASH_DETECTED", 0, 0,
                 System.currentTimeMillis(),

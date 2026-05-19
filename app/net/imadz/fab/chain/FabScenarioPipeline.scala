@@ -90,6 +90,10 @@ object FabScenarioPipeline {
     * measurement results and publishes OcapActionTriggered events. */
   case class M35ClassifyWithOcap(rules: List[OcapRuleDefinition]) extends PipelineStage
 
+  /** Executes pending OCAP actions stored in [[FabDemoState.ocapActions]].
+    * Placed after [[M35ClassifyWithOcap]] in M3.5 stage lists. */
+  case object OcapActionRouter extends PipelineStage
+
   private[chain] def runStage(stage: PipelineStage, state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
     stage match {
@@ -114,6 +118,7 @@ object FabScenarioPipeline {
       case OcapEvaluate(rules)    => ocapEvaluate(state, ctx, rules)
       case ExecuteSubProcess(ref) => executeSubProcess(state, ctx, ref, nodeId = Some(ref.nodeId))
       case M35ClassifyWithOcap(rules) => m35ClassifyWithOcap(state, ctx, rules)
+      case OcapActionRouter => ocapActionRouter(state, ctx)
     }
   }
 
@@ -195,6 +200,7 @@ object FabScenarioPipeline {
       Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
       TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
       M35ClassifyWithOcap(rules),
+      OcapActionRouter,
       Transport("CDSEM", "STOCKER"), SealComplete
     )
   }
@@ -205,6 +211,7 @@ object FabScenarioPipeline {
     Seq(
       LoadFoup, SagaSplit("pilot"), PilotSubFlow,
       M35ClassifyWithOcap(rules),
+      OcapActionRouter,
       Branch(_.pilotPassed,
         Seq(SagaMerge("pilot"),
           Transport("STOCKER", "LITHO"), AtEquipment("LITHO", equipId),
@@ -212,6 +219,7 @@ object FabScenarioPipeline {
           Transport("LITHO", "CDSEM"), AtEquipment("METROLOGY", cdSemId),
           TrackIn(cdSemId), Measure(cdSemId), TrackOut(cdSemId), Classify,
           M35ClassifyWithOcap(rules),
+          OcapActionRouter,
           Transport("CDSEM", "STOCKER"), SealComplete),
         Seq(ScrapWafers, SealComplete))
     )
@@ -509,6 +517,23 @@ object FabScenarioPipeline {
   // ====================================================================
   // M3.5 OCAP Interceptor
   // ====================================================================
+
+  /** Reads [[FabDemoState.ocapActions]] and executes the highest-priority action.
+    * Proactive counterpart to [[invokeOcapInterceptor]] — runs after classification,
+    * not just on stage failure. If no pending actions, returns state unchanged. */
+  private def ocapActionRouter(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
+    implicit val ec: ExecutionContext = ctx.ec
+    state.ocapActions.headOption match {
+      case Some((ruleId, actionPlan)) =>
+        val s = PipelineStages.emitLedger(state,
+          s"PhaseOcapAction: Executing OCAP rule $ruleId: ${actionTypeName(actionPlan)}", ctx)
+        ctx.publisher(GlobalStatusChanged("OCAP_ACTION",
+          s"Rule $ruleId: ${actionTypeName(actionPlan)}", "PhaseOcapAction"))
+        executeOcapAction(s.copy(ocapActions = Nil), ctx, actionPlan)
+      case None =>
+        Future.successful(state)
+    }
+  }
 
   /** Invoked from runSequence.recoverWith when a stage fails.
    *  Evaluates OCAP rules and executes the highest-priority action plan. */

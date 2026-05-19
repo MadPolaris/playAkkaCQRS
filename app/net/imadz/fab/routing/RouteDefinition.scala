@@ -1,5 +1,7 @@
 package net.imadz.fab.routing
 
+import net.imadz.common.CborSerializable
+
 /**
  * Configurable Fab route system — data model.
  *
@@ -220,7 +222,7 @@ case class OcapRuleDefinition(
   routeId: String = ""
 )
 
-sealed trait OcapActionPlan
+sealed trait OcapActionPlan extends CborSerializable
 case class OcapHold(durationMs: Long, reason: String)        extends OcapActionPlan
 case class OcapRework(recipeId: String, maxCount: Int)        extends OcapActionPlan
 case class OcapScrap(reason: String)                          extends OcapActionPlan

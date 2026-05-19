@@ -180,7 +180,7 @@ object PipelineStages {
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, ctx.scenario.stocker.equipmentId, "STOCKER-PORT-1"))
     ctx.publisher(LotUpdated(ctx.scenario.scenarioId, ctx.scenario.lotSize, state.scrapCount,
       (1 to state.iteration + 1).map(i => s"Completed-$i").toList, state.passCount, totalRework))
-    ctx.publisher(DemoCompleted(ctx.scenario.scenarioId, ctx.scenario.lotSize, state.passCount, totalRework, state.scrapCount))
+    ctx.publisher(RecoveryCompleted(ctx.scenario.scenarioId, ctx.scenario.lotSize, state.passCount, totalRework, state.scrapCount))
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = "STOCKER"))
   }
 

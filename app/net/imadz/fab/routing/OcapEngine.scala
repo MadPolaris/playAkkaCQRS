@@ -53,8 +53,13 @@ object OcapEngine {
         ))
       }
 
+      // Store triggered action plans in state for downstream OcapActionRouter
+      val actions: List[(String, OcapActionPlan)] =
+        triggered.map(r => (r.ruleId, r.actionPlan))
+      val stateWithActions = state.copy(ocapActions = actions)
+
       // Apply immediate state changes for non-pipeline actions
-      val updated = triggered.foldLeft(state) { (s, rule) =>
+      val updated = triggered.foldLeft(stateWithActions) { (s, rule) =>
         applyImmediateAction(s, rule)
       }
 
