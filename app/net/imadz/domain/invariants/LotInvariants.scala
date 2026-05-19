@@ -122,10 +122,23 @@ object LotInvariants {
 
   implicit object SealLotRule extends InvariantRule[LotEvent, LotState, Unit] {
     def apply(state: LotState, param: Unit): Either[iMadzError, List[LotEvent]] = {
-      if (state.phase != Active)
-        Left(iMadzError("LOT_030", s"Cannot seal lot in phase ${state.phase}"))
+      state.phase match {
+        case Active => Right(List(LotSealed()))
+        case AwaitingSubLot =>
+          Left(iMadzError("LOT_031", s"Cannot seal lot ${state.lotId}: awaiting sub-lot result. Complete or scrap the sub-lot first."))
+        case _ =>
+          Left(iMadzError("LOT_030", s"Cannot seal lot in phase ${state.phase}"))
+      }
+    }
+  }
+
+  implicit object CompleteProcessRule extends InvariantRule[LotEvent, LotState, (String, Int, Int, Int)] {
+    def apply(state: LotState, param: (String, Int, Int, Int)): Either[iMadzError, List[LotEvent]] = {
+      val (lotId, passCount, scrapCount, reworkCount) = param
+      if (state.phase == AwaitingSubLot)
+        Left(iMadzError("LOT_041", s"Cannot complete process: lot ${state.lotId} is awaiting sub-lot result"))
       else
-        Right(List(LotSealed()))
+        Right(List(ProcessCompleted(lotId, passCount, scrapCount, reworkCount)))
     }
   }
 

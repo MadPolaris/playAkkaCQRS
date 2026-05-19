@@ -1,0 +1,264 @@
+@(workOrderId: Option[String])(implicit messages: Messages)
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Fab Timeline — Multi-Branch Lot Event Graph</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #0d1117; --bg-card: #161b22; --border: #30363d;
+      --fg: #e6edf3; --fg-muted: #8b949e;
+      --accent: #58a6ff; --amber: #f59e0b; --green: #3fb950;
+      --red: #f85149; --purple: #a855f7; --cyan: #39d2c0;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--fg); min-height: 100vh; }
+    .app { max-width: 100%; margin: 0 auto; padding: 16px; }
+    h1 { font-size: 0.9rem; margin-bottom: 12px; }
+    .query-bar { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
+    .query-bar input { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-card); color: var(--fg); font-size: 0.75rem; font-family: monospace; }
+    .query-bar button { padding: 6px 16px; border: none; border-radius: 6px; background: var(--accent); color: #fff; font-size: 0.75rem; cursor: pointer; }
+    .query-bar select { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--bg-card); color: var(--fg); font-size: 0.7rem; }
+
+    .legend { display: flex; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+    .legend span { display: inline-flex; align-items: center; gap: 3px; font-size: 0.65rem; color: var(--fg-muted); }
+    .legend .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-source { background: var(--accent); } .dot-rework { background: var(--amber); }
+    .dot-scrap { background: var(--red); } .dot-pilot { background: var(--purple); }
+    .dot-sample { background: var(--cyan); } .dot-hold { background: var(--fg-muted); }
+    .dot-pipeline { background: var(--green); }
+
+    .summary { font-size: 0.65rem; color: var(--fg-muted); margin-bottom: 10px; }
+    .summary strong { color: var(--fg); }
+    .empty-state { text-align: center; padding: 40px 16px; color: var(--fg-muted); font-size: 0.75rem; }
+    .error-state { color: var(--red); padding: 10px; background: rgba(248,81,73,0.1); border-radius: 6px; font-size: 0.7rem; }
+
+    /* ── Multi-track grid ── */
+    .tracks-wrap { overflow-x: auto; }
+    .tracks { display: flex; gap: 0; min-width: max-content; position: relative; }
+
+    .track {
+      flex: 0 0 auto; width: 280px; position: relative;
+      border-right: 1px solid var(--border);
+    }
+    .track:last-child { border-right: none; }
+    .track-header {
+      position: sticky; top: 0; z-index: 2; background: var(--bg);
+      padding: 6px 8px; font-size: 0.65rem; font-weight: 600;
+      border-bottom: 2px solid var(--border); text-align: center;
+    }
+    .track-source .track-header { border-bottom-color: var(--accent); color: var(--accent); }
+    .track-rework .track-header { border-bottom-color: var(--amber); color: var(--amber); }
+    .track-scrap  .track-header { border-bottom-color: var(--red); color: var(--red); }
+    .track-pilot  .track-header { border-bottom-color: var(--purple); color: var(--purple); }
+    .track-sample .track-header { border-bottom-color: var(--cyan); color: var(--cyan); }
+    .track-hold   .track-header { border-bottom-color: var(--fg-muted); color: var(--fg-muted); }
+    .track-pipeline .track-header { border-bottom-color: var(--green); color: var(--green); }
+
+    .track-body { position: relative; }
+    .track-line {
+      position: absolute; top: 8px; bottom: 8px;
+      width: 2px; background: var(--border);
+    }
+    .track-source .track-line { left: 12px; background: rgba(88,166,255,0.3); }
+    .track-rework .track-line { left: 12px; background: rgba(245,158,11,0.3); }
+    .track-scrap  .track-line { left: 12px; background: rgba(248,81,73,0.3); }
+    .track-pilot  .track-line { left: 12px; background: rgba(168,85,247,0.3); }
+    .track-sample .track-line { left: 12px; background: rgba(57,210,192,0.3); }
+    .track-hold   .track-line { left: 12px; background: rgba(139,148,158,0.3); }
+    .track-pipeline .track-line { left: 12px; background: rgba(63,185,80,0.3); }
+
+    .evt {
+      position: relative; padding: 2px 4px 2px 22px; font-size: 0.62rem;
+      border-bottom: 1px solid rgba(48,54,61,0.4); cursor: default;
+    }
+    .evt:hover { background: rgba(88,166,255,0.05); }
+    .evt::before {
+      content: ''; position: absolute; left: 8px; top: 6px;
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .track-source .evt::before { background: var(--accent); }
+    .track-rework .evt::before { background: var(--amber); }
+    .track-scrap  .evt::before { background: var(--red); }
+    .track-pilot  .evt::before { background: var(--purple); }
+    .track-sample .evt::before { background: var(--cyan); }
+    .track-hold   .evt::before { background: var(--fg-muted); }
+    .track-pipeline .evt::before { background: var(--green); }
+
+    .evt-time { color: var(--fg-muted); font-size: 0.55rem; font-family: monospace; }
+    .evt-type { font-weight: 600; margin-left: 4px; }
+    .evt-detail { color: var(--fg-muted); margin-left: 4px; font-size: 0.58rem; }
+
+    /* Split / Merge connectors */
+    .evt.split-out::after, .evt.merge-in::after {
+      content: ''; position: absolute; top: 50%; height: 2px;
+      z-index: 1; pointer-events: none;
+    }
+    .evt.split-out::after {
+      right: -4px; width: 12px;
+      background: linear-gradient(to right, var(--amber), transparent);
+    }
+    .evt.merge-in::after {
+      left: -4px; width: calc(100% + 8px);
+      background: linear-gradient(to left, var(--amber), transparent);
+    }
+
+    /* Split → Merge ribbon between tracks */
+    .connector {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0;
+    }
+
+    .split-label, .merge-label {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      background: rgba(245,158,11,0.12); border: 1px dashed var(--amber);
+      border-radius: 4px; padding: 2px 8px; font-size: 0.55rem;
+      color: var(--amber); z-index: 1; white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>Fab Timeline — Multi-Branch Lot Event Graph</h1>
+  <div class="query-bar">
+    <input id="woIdInput" type="text" placeholder="WorkOrder ID" value="@workOrderId.getOrElse("")">
+    <button onclick="queryTimeline()">Query</button>
+    <select id="trackFilter" onchange="renderFromCache()" style="display:none">
+      <option value="all">All tracks</option>
+    </select>
+  </div>
+  <div class="legend">
+    <span><span class="dot dot-source"></span> source</span>
+    <span><span class="dot dot-rework"></span> rework</span>
+    <span><span class="dot dot-scrap"></span> scrap</span>
+    <span><span class="dot dot-pilot"></span> pilot</span>
+    <span><span class="dot dot-sample"></span> sample</span>
+    <span><span class="dot dot-hold"></span> hold</span>
+    <span><span class="dot dot-pipeline"></span> pipeline</span>
+  </div>
+  <div id="summary" class="summary"></div>
+  <div id="result"></div>
+</div>
+
+<script>
+var lastData = null;
+
+function queryTimeline() {
+  var woId = document.getElementById('woIdInput').value.trim();
+  if (!woId) { alert('Please enter a WorkOrder ID'); return; }
+  document.getElementById('result').innerHTML = '<div class="empty-state">Loading...</div>';
+
+  fetch('/fab/timeline/' + encodeURIComponent(woId))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        document.getElementById('result').innerHTML = '<div class="error-state">' + data.error + '</div>';
+        return;
+      }
+      lastData = data;
+      renderFromCache();
+    })
+    .catch(function(err) {
+      document.getElementById('result').innerHTML = '<div class="error-state">Fetch failed: ' + err.message + '</div>';
+    });
+}
+
+// Branch display order and colors
+var BRANCH_ORDER = ['pipeline', 'source', 'rework', 'scrap', 'pilot', 'sample', 'hold'];
+var BRANCH_LABEL = {
+  pipeline: 'Pipeline', source: 'Source Lot', rework: 'Rework Lot',
+  scrap: 'Scrap Lot', pilot: 'Pilot Lot', sample: 'Sample Lot', hold: 'Hold Lot'
+};
+
+function renderFromCache() {
+  if (!lastData || !lastData.events) return;
+  renderMultiTrack(lastData);
+}
+
+function renderMultiTrack(data) {
+  var summary = document.getElementById('summary');
+  summary.innerHTML = '<strong>WO:</strong> <code>' + data.workOrderId + '</code> &nbsp;|&nbsp; <strong>Source:</strong> <code>' + (data.sourceLotId||'') + '</code> &nbsp;|&nbsp; <strong>Rework:</strong> <code>' + (data.reworkLotId||'') + '</code> &nbsp;|&nbsp; <strong>Events:</strong> ' + data.events.length;
+
+  // Group events by branch
+  var groups = {};
+  for (var i = 0; i < data.events.length; i++) {
+    var e = data.events[i];
+    if (!groups[e.branch]) groups[e.branch] = [];
+    groups[e.branch].push(e);
+  }
+
+  // Determine active branches (those with events), in display order
+  var activeBranches = BRANCH_ORDER.filter(function(b) { return groups[b] && groups[b].length > 0; });
+  if (activeBranches.length === 0) {
+    document.getElementById('result').innerHTML = '<div class="empty-state">No events found.</div>';
+    return;
+  }
+
+  // Count total unique time positions across all branches to size the track
+  var allTimes = new Set();
+  for (var b = 0; b < activeBranches.length; b++) {
+    var evts = groups[activeBranches[b]];
+    for (var i = 0; i < evts.length; i++) allTimes.add(evts[i].timestamp);
+  }
+  var timeList = Array.from(allTimes).sort(function(a,b){ return a-b; });
+
+  // Global time range for fixed-slot track offset
+  // Timestamps are pseudo-sequential (backend SCALE=100 per event), so
+  // (firstTs - globalStart) / 100 gives the event-index offset.
+  // Events render at fixed 32px each → use same ratio for track start.
+  var globalStart = timeList[0];
+  var globalEnd = timeList[timeList.length - 1];
+  var SLOT_PX = 32;       // Fixed pixel height per event slot
+  var TIME_SCALE = 100;   // Must match backend SCALE (pseudo-timestamp units per event)
+
+  // Build grid: one row per time slot, columns per active branch
+  var cellWidth = Math.max(220, Math.floor(960 / activeBranches.length));
+  var html = '<div class="tracks-wrap"><div class="tracks" style="--cols:' + activeBranches.length + '">';
+
+  for (var b = 0; b < activeBranches.length; b++) {
+    var branch = activeBranches[b];
+    var evts = groups[branch];
+
+    // Offset track start to its first event's time (fixed slot spacing = event-aligned)
+    var firstTs = evts[0].timestamp;
+    var offsetPx = Math.round((firstTs - globalStart) / TIME_SCALE * SLOT_PX);
+
+    var cls = 'track track-' + branch;
+    html += '<div class="' + cls + '" style="width:' + cellWidth + 'px">';
+    html += '<div class="track-header">' + (BRANCH_LABEL[branch] || branch) + ' <span style="opacity:0.5">(' + evts.length + ')</span></div>';
+    html += '<div class="track-body" style="position:relative;min-height:' + Math.max(offsetPx + evts.length * 32, offsetPx + 60) + 'px">';
+    html += '<div class="track-line" style="top:' + (offsetPx + 4) + 'px;bottom:4px"></div>';
+    if (offsetPx > 0) {
+      html += '<div style="height:' + offsetPx + 'px"></div>';
+    }
+
+    for (var i = 0; i < evts.length; i++) {
+      var e = evts[i];
+      var extraCls = '';
+      if (e.eventType === 'WaferRemovalCommitted' || e.eventType === 'WafersSplitForRework') extraCls = ' split-out';
+      else if (e.eventType === 'WaferAdditionCommitted' && e.branch !== 'source') extraCls = ' merge-in';
+
+      html += '<div class="evt' + extraCls + '" title="' + escAttr(e.eventType + ': ' + (e.detail||'')) + '">';
+      html += '<span class="evt-time">' + e.timeStr + '</span>';
+      html += '<span class="evt-type">' + e.eventType + '</span>';
+      if (e.detail) html += '<div class="evt-detail">' + escHtml(e.detail) + '</div>';
+      html += '</div>';
+    }
+    html += '</div></div>';
+  }
+
+  html += '</div></div>';
+
+  document.getElementById('result').innerHTML = html;
+}
+
+function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function escAttr(s) { return s.replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+@if(workOrderId.nonEmpty) {
+  document.addEventListener('DOMContentLoaded', function() { queryTimeline(); });
+}
+</script>
+</body>
+</html>

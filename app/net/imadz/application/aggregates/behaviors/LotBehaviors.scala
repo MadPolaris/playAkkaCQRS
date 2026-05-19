@@ -100,6 +100,18 @@ object LotBehaviors extends LotCommandHelpers {
         Effect.persist(WaferClassified(cmd.waferId, cmd.classification, cmd.reworkCount, cmd.cdValue))
           .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
 
+    case cmd: RecordSubLotCreated =>
+      Effect.persist(SubLotCreated(cmd.childLotId, cmd.splitReason, cmd.waferIds))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordSubLotMerged =>
+      Effect.persist(SubLotMerged(cmd.childLotId, cmd.waferIds))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
+    case cmd: RecordSubLotScrapped =>
+      Effect.persist(SubLotScrapped(cmd.childLotId, cmd.reason, cmd.waferIds))
+        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+
     case cmd: RecordWafersSplitForRework =>
       Effect.persist(WafersSplitForRework(cmd.reworkWaferIds, cmd.scrapWaferIds, cmd.iteration))
         .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
@@ -125,8 +137,13 @@ object LotBehaviors extends LotCommandHelpers {
         .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
 
     case cmd: CompleteProcess =>
-      Effect.persist(ProcessCompleted(cmd.lotId, cmd.passCount, cmd.scrapCount, cmd.reworkCount))
-        .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
+      if (state.phase == AwaitingSubLot)
+        Effect.reply(cmd.replyTo)(LotConfirmation(
+          Some(new net.imadz.common.CommonTypes.iMadzError("LOT_041", s"Cannot complete process: lot ${state.lotId} is awaiting sub-lot result")),
+          phase = Some(state.phase)))
+      else
+        Effect.persist(ProcessCompleted(cmd.lotId, cmd.passCount, cmd.scrapCount, cmd.reworkCount))
+          .thenReply(cmd.replyTo)(s => LotConfirmation(None, phase = Some(s.phase)))
 
     case cmd: FailLot =>
       Effect.persist(LotFailed(cmd.reason, cmd.failedAt))

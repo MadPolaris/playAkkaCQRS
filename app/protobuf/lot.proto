@@ -149,6 +149,23 @@ message WafersReleasedPO {
   repeated string wafer_ids = 1;
 }
 
+message SubLotCreatedPO {
+  string child_lot_id = 1;
+  string split_reason = 2;   // "rework"|"scrap"|"pilot"|"sample"|"hold"
+  repeated string wafer_ids = 3;
+}
+
+message SubLotMergedPO {
+  string child_lot_id = 1;
+  repeated string wafer_ids = 2;
+}
+
+message SubLotScrappedPO {
+  string child_lot_id = 1;
+  string reason = 2;
+  repeated string wafer_ids = 3;
+}
+
 message ProcessCompletedPO {
   string lot_id = 1;
   int32 pass_count = 2;
@@ -190,6 +207,9 @@ message LotEventPO {
     WafersReleasedPO wafersReleased = 23;
     ProcessCompletedPO processCompleted = 24;
     LotFailedPO lotFailed = 25;
+    SubLotCreatedPO subLotCreated = 26;
+    SubLotMergedPO subLotMerged = 27;
+    SubLotScrappedPO subLotScrapped = 28;
   }
 }
 

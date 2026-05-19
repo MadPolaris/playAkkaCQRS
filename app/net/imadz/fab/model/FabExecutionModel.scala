@@ -68,9 +68,11 @@ object FabExecutionModel {
     scenario: FabSimulationScenario,
     foupId: String,
     lotRef: akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand],
+    /** @deprecated Prefer `childLotRefs("rwk")` — SubLot context switching uses the child maps. */
     reworkLotRef: akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand],
     waferUUIDs: Map[String, Id],
     sourceLotId: Id,
+    /** @deprecated Prefer `childLotIds("rwk")` — SubLot context switching uses the child maps. */
     reworkLotId: Id,
     adapter: ActorEquipmentAdapter,
     publisher: FabSimulationEvent => Unit,
@@ -83,7 +85,13 @@ object FabExecutionModel {
     childLotIds: Map[String, Id] = Map.empty,
     ocapRules: List[OcapRuleDefinition] = Nil,
     faultProbability: Double = 0.0
-  )(implicit val ec: ExecutionContext)
+  )(implicit val ec: ExecutionContext) {
+
+    /** Runtime-only Promise storage for AwaitSubLotResult suspension.
+     *  Keyed by lotKey ("rwk","pilot", etc.). NOT serialized — re-populated at runtime and on recovery. */
+    val awaitPromises: scala.collection.concurrent.TrieMap[String, scala.concurrent.Promise[SubLotResult]] =
+      scala.collection.concurrent.TrieMap.empty
+  }
 
   // ---- Pipeline error types (M3.5) ----
 
@@ -99,4 +107,9 @@ object FabExecutionModel {
   case class StageFailedException(error: StageError)
     extends RuntimeException(s"[${error.stageName}] ${error.errorCode}: ${error.detail}")
     with NoStackTrace
+
+  /** Result of a sub-lot's async processing, used to resolve the AwaitSubLotResult stage.
+   *  @param state  the FabDemoState after merge or scrap
+   *  @param outcome "merged" if sub-lot merged back, "scrapped" if sub-lot was scrapped */
+  case class SubLotResult(state: FabDemoState, outcome: String)
 }

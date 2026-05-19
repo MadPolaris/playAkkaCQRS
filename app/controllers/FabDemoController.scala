@@ -3,13 +3,23 @@ package controllers
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.scaladsl.adapter._
 import akka.stream.Materializer
+import akka.actor.typed.ActorSystem
+import akka.actor.typed.scaladsl.adapter._
+import akka.persistence.query.{PersistenceQuery, Sequence}
+import akka.persistence.query.scaladsl.{CurrentEventsByPersistenceIdQuery, ReadJournal}
+import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
+import akka.contrib.persistence.mongodb.MongoReadJournal
 import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent, RecoveryEvent, FaultInjected, DynamicStageInjected, PipelineTimelineSnapshot}
 import net.imadz.fab.service.FabDemoService
+import net.imadz.fab.chain.FabPipelineExecutionActor
 import akka.projection.ProjectionBehavior
 import net.imadz.fab.projection.{FabDemoEventBridge, FabDemoViewProjection, FabPipelineProjection}
 import net.imadz.fab.engine.RouteCardCompiler
 import net.imadz.fab.routing._
+import net.imadz.infrastructure.persistence.LotEventAdapter
+import net.imadz.domain.entities.LotEntity.LotEvent
+import java.util.UUID
 import play.api.i18n.{I18nSupport, Lang}
 import play.api.libs.json.{JsValue, Json}
 import play.api.mvc.{BaseController, ControllerComponents, WebSocket}
@@ -385,6 +395,265 @@ class FabDemoController @Inject()(
       )
     }
     Ok(Json.toJson(jsonArr))
+  }
+
+  // ====================================================================
+  // Timeline Query — git-branch-style event replay from journal
+  // ====================================================================
+
+  private val readJournal = PersistenceQuery(classicSystem).readJournalFor[ReadJournal with CurrentEventsByPersistenceIdQuery](MongoReadJournal.Identifier)
+  private val lotEventAdapter = new LotEventAdapter()
+
+  /** Render the timeline query page. */
+  def timelinePage(workOrderId: Option[String]) = Action { implicit request =>
+    Ok(views.html.fabTimeline(workOrderId))
+  }
+
+  /** JSON endpoint: query all events for a workOrderId across pipeline + all child lots. */
+  def timelineQuery(workOrderId: String) = Action.async {
+    import scala.concurrent.Future
+
+    if (workOrderId.trim.isEmpty) {
+      Future.successful(BadRequest(Json.obj("error" -> "workOrderId required")))
+    } else {
+      val sourceLotUuid = UUID.nameUUIDFromBytes(s"$workOrderId-source-lot".getBytes)
+      val reworkLotUuid = UUID.nameUUIDFromBytes(s"$workOrderId-rework-lot".getBytes)
+      val scrapLotUuid  = UUID.nameUUIDFromBytes(s"$workOrderId-scrap-lot".getBytes)
+      val pilotLotUuid  = UUID.nameUUIDFromBytes(s"$workOrderId-pilot-lot".getBytes)
+      val sampleLotUuid = UUID.nameUUIDFromBytes(s"$workOrderId-sample-lot".getBytes)
+      val holdLotUuid   = UUID.nameUUIDFromBytes(s"$workOrderId-hold-lot".getBytes)
+
+      val pipelinePid = s"FabPipelineExecution|$workOrderId"
+      val lotIds: List[(String, String)] = List(
+        "source" -> s"Lot|${sourceLotUuid.toString}",
+        "rework" -> s"Lot|${reworkLotUuid.toString}",
+        "scrap"  -> s"Lot|${scrapLotUuid.toString}",
+        "pilot"  -> s"Lot|${pilotLotUuid.toString}",
+        "sample" -> s"Lot|${sampleLotUuid.toString}",
+        "hold"   -> s"Lot|${holdLotUuid.toString}"
+      )
+
+      val pipelineEvents: Future[Seq[TimelineEntry]] =
+        readJournal.currentEventsByPersistenceId(pipelinePid, 0, Long.MaxValue)
+          .map { env =>
+            val offset = offsetToLong(env.offset)
+            env.event match {
+              case e: FabPipelineExecutionActor.Event => pipelineEventToEntry(offset, e)
+              case _ => None
+            }
+          }.collect { case Some(entry) => entry }
+          .runWith(Sink.seq)
+
+      val lotQueries: List[Future[Seq[TimelineEntry]]] = lotIds.map { case (branch, pid) =>
+        readJournal.currentEventsByPersistenceId(pid, 0, Long.MaxValue)
+          .map { env =>
+            val offset = offsetToLong(env.offset)
+            val evt = env.event match {
+              case po: net.imadz.infrastructure.proto.lot.LotEventPO.Event =>
+                lotEventAdapter.fromJournal(po, "").events.headOption
+              case _ => None
+            }
+            evt.map(e => TimelineEntry(offset, branch, lotEventName(e), lotEventDetail(e)))
+          }
+          .collect { case Some(entry) => entry }
+          .runWith(Sink.seq)
+      }
+      val lotBranches: Future[Seq[TimelineEntry]] = Future.sequence(lotQueries).map(_.flatten)
+
+      pipelineEvents.flatMap { pipeline =>
+        lotBranches.map { lots =>
+          // Group events by branch (preserving journal order within each branch)
+          val branchEvents: Map[String, Seq[TimelineEntry]] = (pipeline ++ lots).groupBy(_.branch)
+          val sourceEvents = branchEvents.getOrElse("source", Seq.empty)
+
+          // Find SubLotCreated events on source lot → childLotId → index within source lot
+          val subLotForkIndex: Map[String, Long] = sourceEvents.zipWithIndex.collect {
+            case (entry, idx) if entry.eventType == "SubLotCreated" =>
+              // Extract childLotId from detail: "childLot=<id>, reason=..."
+              val childIdPattern = "childLot=([a-f0-9]+)".r
+              childIdPattern.findFirstMatchIn(entry.detail).map(_.group(1)) -> idx.toLong
+          }.collect { case (Some(cid), idx) => cid -> idx }.toMap
+
+          // Child lot ID → branch mapping (from deterministic UUIDs computed above)
+          val childIdToBranch: Map[String, String] = Map(
+            reworkLotUuid.toString -> "rework",
+            scrapLotUuid.toString  -> "scrap",
+            pilotLotUuid.toString  -> "pilot",
+            sampleLotUuid.toString -> "sample",
+            holdLotUuid.toString   -> "hold"
+          ).map { case (uuid, branch) => uuid.take(8) -> branch }
+
+          // Resolve fork index for each child branch
+          val branchForkIndex: Map[String, Long] = subLotForkIndex.flatMap {
+            case (childIdShort, idx) => childIdToBranch.get(childIdShort).map(_ -> idx)
+          }
+
+          val SCALE = 100L
+
+          // ---- Fork-Join causal ordering ---------------------------------------
+          // Rule: SubLotMerged / SubLotScrapped on parent MUST appear AFTER the
+          // child lot's terminal event (LotFailed / LotSealed). Otherwise parent
+          // looks like it "knows" the outcome before the child finishes.
+          //
+          // This generalises to any number of children — each fork-join pair is
+          // resolved independently, and source-lot events between fork and outcome
+          // are spread proportionally into the child's time window.
+
+          // Child branch → last event index (terminal position)
+          val childBranchLastIdx: Map[String, Long] = branchEvents.flatMap {
+            case (branch, events) if childIdToBranch.values.toSet.contains(branch) && events.nonEmpty =>
+              Some(branch -> (events.size.toLong - 1))
+            case _ => None
+          }
+
+          // Source-lot fork→outcome pairs: childBranch → (forkIdx, outcomeIdx)
+          val sourceOutcomePairs: Map[String, (Long, Long)] = {
+            val outcomes: Seq[(String, Long)] = sourceEvents.zipWithIndex.collect {
+              case (e, idx) if e.eventType == "SubLotMerged" || e.eventType == "SubLotScrapped" =>
+                val childIdPattern = "childLot=([a-f0-9]+)".r
+                childIdPattern.findFirstMatchIn(e.detail).map(_.group(1)) -> idx.toLong
+            }.collect { case (Some(cid), idx) => cid -> idx }
+            outcomes.flatMap { case (cid, outcomeIdx) =>
+              childIdToBranch.get(cid).flatMap { branch =>
+                branchForkIndex.get(branch).map(forkIdx => branch -> (forkIdx, outcomeIdx))
+              }
+            }.toMap
+          }
+
+          // Source-lot index → (childBranch, forkIdx, outcomeIdx) for active fork-join range
+          val sourceForkRange: Map[Long, (String, Long, Long)] = sourceEvents.indices.flatMap { i =>
+            val idx = i.toLong
+            sourceOutcomePairs.collectFirst {
+              case (branch, (fork, outcome)) if idx >= fork && idx <= outcome =>
+                idx -> (branch, fork, outcome)
+            }
+          }.toMap
+
+          // Maximum outcome timestamp (used for post-join events)
+          val maxOutcomeTs: Long = sourceOutcomePairs.map { case (branch, (fork, outcome)) =>
+            val childLast = childBranchLastIdx.getOrElse(branch, 0L)
+            (fork + childLast + 1) * SCALE + (sourceEvents.size.toLong - 1 - outcome) * SCALE
+          }.fold(0L)(_ max _)
+
+          // Assign pseudo-timestamps respecting fork-join causal ordering
+          val withTs: Seq[TimelineEntry] = branchEvents.toSeq.flatMap {
+            case ("source", events) =>
+              events.zipWithIndex.map { case (e, i) =>
+                val idx = i.toLong
+                val ts = sourceForkRange.get(idx) match {
+                  case Some((branch, fork, outcome)) =>
+                    val childLast = childBranchLastIdx.getOrElse(branch, 0L)
+                    if (idx == fork) {
+                      // SubLotCreated — at fork point
+                      fork * SCALE
+                    } else if (idx == outcome) {
+                      // SubLotMerged / SubLotScrapped — after child terminal
+                      (fork + childLast + 1) * SCALE
+                    } else {
+                      // Between fork and outcome → spread proportionally into child's window
+                      val gapCount = outcome - fork - 1
+                      val pos      = idx - fork - 1
+                      if (gapCount > 0 && childLast > 0)
+                        (fork + 1 + (childLast - 1) * pos / gapCount) * SCALE
+                      else
+                        (fork + 1) * SCALE
+                    }
+                  case None =>
+                    // After last join → continue sequentially from max outcome
+                    val afterAll = sourceOutcomePairs.values.forall { case (_, o) => idx > o }
+                    if (afterAll && sourceOutcomePairs.nonEmpty) {
+                      val maxO = sourceOutcomePairs.values.map(_._2).max
+                      maxOutcomeTs - (sourceEvents.size.toLong - 1 - idx) * SCALE
+                    } else {
+                      idx * SCALE
+                    }
+                }
+                e.copy(timestamp = ts)
+              }
+
+            case (branch, events) if childIdToBranch.values.toSet.contains(branch) =>
+              val forkIdx = branchForkIndex.getOrElse(branch, 0L)
+              events.zipWithIndex.map { case (e, i) =>
+                e.copy(timestamp = (forkIdx + i) * SCALE)
+              }
+
+            case (branch, events) =>
+              events.zipWithIndex.map { case (e, i) =>
+                e.copy(timestamp = i * SCALE)
+              }
+          }.sortBy(_.timestamp)
+
+          val minTs = withTs.headOption.map(_.timestamp).getOrElse(0L)
+          Ok(Json.obj(
+            "workOrderId" -> workOrderId,
+            "sourceLotId" -> sourceLotUuid.toString,
+            "reworkLotId" -> reworkLotUuid.toString,
+            "events" -> withTs.map { e =>
+              Json.obj(
+                "timestamp" -> e.timestamp,
+                "branch"    -> e.branch,
+                "eventType" -> e.eventType,
+                "detail"    -> e.detail,
+                "timeStr"   -> formatOffsetTime(e.timestamp, minTs)
+              )
+            }
+          ))
+        }
+      }.recover { case ex =>
+        Ok(Json.obj("error" -> ex.getMessage, "workOrderId" -> workOrderId))
+      }
+    }
+  }
+
+  private case class TimelineEntry(timestamp: Long, branch: String, eventType: String, detail: String)
+
+  private def pipelineEventToEntry(timestamp: Long, evt: FabPipelineExecutionActor.Event): Option[TimelineEntry] = evt match {
+    case FabPipelineExecutionActor.Started(scenarioId, woId, stageCount) =>
+      Some(TimelineEntry(timestamp, "pipeline", "Started", s"scenario=$scenarioId, stages=$stageCount"))
+    case FabPipelineExecutionActor.PhaseDone(phase, ts, metadata, _) =>
+      Some(TimelineEntry(timestamp, "pipeline", s"PhaseDone", s"$phase"))
+    case FabPipelineExecutionActor.AllCompleted(scenarioId, woId) =>
+      Some(TimelineEntry(timestamp, "pipeline", "AllCompleted", s"scenario=$scenarioId"))
+    case FabPipelineExecutionActor.ExecutionFailed(phase, reason) =>
+      Some(TimelineEntry(timestamp, "pipeline", "ExecutionFailed", s"$phase: $reason"))
+  }
+
+  private def lotEventName(evt: LotEvent): String = evt.getClass.getSimpleName.replace("$", "")
+
+  private def lotEventDetail(evt: LotEvent): String = evt match {
+    case e: net.imadz.domain.entities.LotEntity.LotCreated => s"product=${e.productId}"
+    case e: net.imadz.domain.entities.LotEntity.WaferRemovalCommitted => s"transferId=${e.transferId}, wafers=${e.waferNames.mkString(",")}"
+    case e: net.imadz.domain.entities.LotEntity.WaferAdditionCommitted => s"transferId=${e.transferId}"
+    case e: net.imadz.domain.entities.LotEntity.TransportStarted => s"${e.fromArea}->${e.toArea}"
+    case e: net.imadz.domain.entities.LotEntity.TransportCompleted => s"${e.equipmentId}"
+    case e: net.imadz.domain.entities.LotEntity.EquipmentJobStarted => s"${e.equipmentId}, recipe=${e.recipeId}"
+    case e: net.imadz.domain.entities.LotEntity.EquipmentJobCompleted => s"${e.equipmentId}, success=${e.success}"
+    case e: net.imadz.domain.entities.LotEntity.WaferMeasured => s"wafer=${e.waferId}, cd=${e.cdNm}nm"
+    case e: net.imadz.domain.entities.LotEntity.WaferClassified => s"wafer=${e.waferId}, ${e.classification}, cd=${e.cdValue}nm"
+    case e: net.imadz.domain.entities.LotEntity.WafersSplitForRework => s"rework=${e.reworkWaferIds.mkString(",")}, iteration=${e.iteration}"
+    case e: net.imadz.domain.entities.LotEntity.SubLotCreated => s"childLot=${e.childLotId.toString.take(8)}, reason=${e.splitReason}, wafers=${e.waferIds.size}"
+    case e: net.imadz.domain.entities.LotEntity.SubLotMerged => s"childLot=${e.childLotId.toString.take(8)}, wafers=${e.waferIds.size}"
+    case e: net.imadz.domain.entities.LotEntity.SubLotScrapped => s"childLot=${e.childLotId.toString.take(8)}, reason=${e.reason}, wafers=${e.waferIds.size}"
+    case e: net.imadz.domain.entities.LotEntity.WafersReworked => s"wafers=${e.waferIds.mkString(",")}"
+    case e: net.imadz.domain.entities.LotEntity.ProcessCompleted => s"pass=${e.passCount}, scrap=${e.scrapCount}, rework=${e.reworkCount}"
+    case e: net.imadz.domain.entities.LotEntity.LotFailed => s"${e.reason} @ ${e.failedAt}"
+    case e: net.imadz.domain.entities.LotEntity.LotSealed => ""
+    case e: net.imadz.domain.entities.LotEntity.RouteCardAssigned => s"steps=${e.steps.size}"
+    case e: net.imadz.domain.entities.LotEntity.RouteCardStepAdvanced => s"step=${e.stepIndex}"
+    case _ => ""
+  }
+
+  private def offsetToLong(offset: akka.persistence.query.Offset): Long = offset match {
+    case Sequence(v) => v
+    case _           => 0L
+  }
+
+  private def formatOffsetTime(offset: Long, minOffset: Long): String = {
+    val rel = offset - minOffset
+    val totalMs = rel * 100L
+    val s = totalMs / 1000L
+    val ms = totalMs % 1000L
+    f"T+$s%02d.$ms%03d"
   }
 
   // ====================================================================

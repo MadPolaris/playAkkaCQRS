@@ -173,6 +173,43 @@ trait LotProtoConverters extends PrimitiveConverter {
     override def fromProto(p: WafersSplitForReworkPO): WafersSplitForRework = WafersSplitForRework(reworkWaferIds = p.reworkWaferIds.toSet, scrapWaferIds = p.scrapWaferIds.toSet, iteration = p.iteration)
   }
 
+  object SubLotCreatedConv extends ProtoConverter[SubLotCreated, SubLotCreatedPO] {
+    override def toProto(e: SubLotCreated): SubLotCreatedPO = SubLotCreatedPO(
+      childLotId = IdConv.toProto(e.childLotId),
+      splitReason = splitReasonToString(Some(e.splitReason)),
+      waferIds = e.waferIds.map(IdConv.toProto).toSeq
+    )
+    override def fromProto(p: SubLotCreatedPO): SubLotCreated = SubLotCreated(
+      childLotId = IdConv.fromProto(p.childLotId),
+      splitReason = stringToSplitReason(p.splitReason).getOrElse(ReworkSplit),
+      waferIds = p.waferIds.map(IdConv.fromProto).toSet
+    )
+  }
+
+  object SubLotMergedConv extends ProtoConverter[SubLotMerged, SubLotMergedPO] {
+    override def toProto(e: SubLotMerged): SubLotMergedPO = SubLotMergedPO(
+      childLotId = IdConv.toProto(e.childLotId),
+      waferIds = e.waferIds.map(IdConv.toProto).toSeq
+    )
+    override def fromProto(p: SubLotMergedPO): SubLotMerged = SubLotMerged(
+      childLotId = IdConv.fromProto(p.childLotId),
+      waferIds = p.waferIds.map(IdConv.fromProto).toSet
+    )
+  }
+
+  object SubLotScrappedConv extends ProtoConverter[SubLotScrapped, SubLotScrappedPO] {
+    override def toProto(e: SubLotScrapped): SubLotScrappedPO = SubLotScrappedPO(
+      childLotId = IdConv.toProto(e.childLotId),
+      reason = e.reason,
+      waferIds = e.waferIds.map(IdConv.toProto).toSeq
+    )
+    override def fromProto(p: SubLotScrappedPO): SubLotScrapped = SubLotScrapped(
+      childLotId = IdConv.fromProto(p.childLotId),
+      reason = p.reason,
+      waferIds = p.waferIds.map(IdConv.fromProto).toSet
+    )
+  }
+
   object WafersReworkedConv extends ProtoConverter[WafersReworked, WafersReworkedPO] {
     override def toProto(e: WafersReworked): WafersReworkedPO = WafersReworkedPO(waferIds = e.waferIds.toSeq)
     override def fromProto(p: WafersReworkedPO): WafersReworked = WafersReworked(waferIds = p.waferIds.toSet)
@@ -261,7 +298,7 @@ trait LotProtoConverters extends PrimitiveConverter {
     }
 
     private def parsePhase(s: String): LotPhase = s match {
-      case "Empty" => Empty; case "Active" => Active; case "Sealed" => Sealed; case "Completed" => Completed; case _ => Empty
+      case "Empty" => Empty; case "Active" => Active; case "Sealed" => Sealed; case "Completed" => Completed; case "AwaitingSubLot" => AwaitingSubLot; case _ => Empty
     }
   }
 }

@@ -70,6 +70,7 @@ class FabPipelineProcessor(
     case OcapEvaluate(_)                    => "OcapEvaluate"
     case OcapActionRouter                   => "OcapActionRouter"
     case ExecuteSubProcess(ref)             => s"ExecuteSubProcess_${ref.subProcessType}"
+    case AwaitSubLotResult(lotKey)          => s"AwaitSubLotResult_${lotKey}"
     case _                                  => stage.getClass.getSimpleName
   }
 

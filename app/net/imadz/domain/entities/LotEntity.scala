@@ -75,6 +75,7 @@ object LotEntity {
   case object Active extends LotPhase
   case object Sealed extends LotPhase
   case object Completed extends LotPhase
+  case object AwaitingSubLot extends LotPhase
 
   // Event
   sealed trait LotEvent extends CborSerializable
@@ -97,6 +98,9 @@ object LotEntity {
   case class WaferMeasured(waferId: Id, cdNm: Double) extends LotEvent
   case class WaferClassified(waferId: Id, classification: String, reworkCount: Int, cdValue: Double) extends LotEvent
   case class WafersSplitForRework(reworkWaferIds: Set[String], scrapWaferIds: Set[String], iteration: Int) extends LotEvent
+  case class SubLotCreated(childLotId: Id, splitReason: SplitReason, waferIds: Set[Id]) extends LotEvent
+  case class SubLotMerged(childLotId: Id, waferIds: Set[Id]) extends LotEvent
+  case class SubLotScrapped(childLotId: Id, reason: String, waferIds: Set[Id]) extends LotEvent
   case class WafersReworked(waferIds: Set[String]) extends LotEvent
   case class WafersSentAsPilot(waferIds: Set[String]) extends LotEvent
   case class WafersSampled(sampleIds: Set[String], skipIds: Set[String]) extends LotEvent

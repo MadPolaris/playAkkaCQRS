@@ -85,6 +85,9 @@ object LotEventHandler {
       }
 
     case WafersSplitForRework(_, _, _) => state
+    case SubLotCreated(_, _, _) => state.copy(phase = AwaitingSubLot)
+    case SubLotMerged(_, _) => state.copy(phase = Active)
+    case SubLotScrapped(_, _, _) => state.copy(phase = Active)
     case WafersReworked(_) => state
     case WafersSentAsPilot(_) => state
     case WafersSampled(_, _) => state

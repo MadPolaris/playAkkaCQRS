@@ -34,6 +34,9 @@ object LotProtocol {
   case class RecordEquipmentJobCompleted(equipmentId: String, jobId: String, success: Boolean, replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWaferMeasured(waferId: Id, cdNm: Double, replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWaferClassified(waferId: Id, classification: String, reworkCount: Int, cdValue: Double, replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  case class RecordSubLotCreated(childLotId: Id, splitReason: SplitReason, waferIds: Set[Id], replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  case class RecordSubLotMerged(childLotId: Id, waferIds: Set[Id], replyTo: ActorRef[LotConfirmation]) extends LotCommand
+  case class RecordSubLotScrapped(childLotId: Id, reason: String, waferIds: Set[Id], replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWafersSplitForRework(reworkWaferIds: Set[String], scrapWaferIds: Set[String], iteration: Int, replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWafersReworked(waferIds: Set[String], replyTo: ActorRef[LotConfirmation]) extends LotCommand
   case class RecordWafersSentAsPilot(waferIds: Set[String], replyTo: ActorRef[LotConfirmation]) extends LotCommand
