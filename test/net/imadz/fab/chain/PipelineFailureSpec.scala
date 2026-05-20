@@ -1,10 +1,12 @@
 package net.imadz.fab.chain
 
+import net.imadz.application.chain._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, StageError, StageFailedException, WaferInfo}
+import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState, StageError, StageFailedException, WaferInfo}
 import net.imadz.fab.protocol.{ActorEquipmentAdapter, EquipmentCommand, EquipmentEvent, JobCompleted, JobFailed, MetrologyResult, CriticalDimension}
-import net.imadz.fab.events.PipelineStageFailed
-import net.imadz.fab.scenario.{FabSimulationScenario, DecisionConfig}
+import net.imadz.domain.events.PipelineStageFailed
+import net.imadz.application.scenario.{FabSimulationScenario, DecisionConfig}
 import net.imadz.fab.simulation.{EquipmentConfig, LithoConfig, CdSemConfig, AmhsConfig, StockerConfig}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
@@ -52,7 +54,7 @@ class PipelineFailureSpec extends ScalaTestWithActorTestKit(
     FabDemoContext(
       scenario = scenario, foupId = "FOUP-TEST", lotRef = lotRef, reworkLotRef = lotRef,
       waferUUIDs = Map.empty, sourceLotId = java.util.UUID.randomUUID(), reworkLotId = java.util.UUID.randomUUID(),
-      adapter = adapter, publisher = collectEvents.asInstanceOf[net.imadz.fab.events.FabSimulationEvent => Unit],
+      adapter = adapter, publisher = collectEvents.asInstanceOf[net.imadz.domain.events.FabSimulationEvent => Unit],
       ignoreLotReply = system.ignoreRef,
       sagaTx = (_, _, _, _, _) => Future.successful(
         net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation(

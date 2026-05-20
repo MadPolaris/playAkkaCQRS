@@ -1,5 +1,8 @@
 package net.imadz.fab.routing
 
+import net.imadz.domain.routing._
+import net.imadz.application.routing._
+
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.common.Id
 import net.imadz.common.CommonTypes.iMadzError

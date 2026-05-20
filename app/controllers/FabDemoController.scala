@@ -10,13 +10,14 @@ import akka.persistence.query.scaladsl.{CurrentEventsByPersistenceIdQuery, ReadJ
 import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
 import akka.contrib.persistence.mongodb.MongoReadJournal
-import net.imadz.fab.events.{DomainEventRecorded, FabSimulationEvent, RecoveryEvent, FaultInjected, DynamicStageInjected, PipelineTimelineSnapshot}
-import net.imadz.fab.service.FabDemoService
-import net.imadz.fab.chain.FabPipelineExecutionActor
+import net.imadz.domain.events.{DomainEventRecorded, FabSimulationEvent, RecoveryEvent, FaultInjected, DynamicStageInjected, PipelineTimelineSnapshot}
+import net.imadz.application.services.FabDemoService
+import net.imadz.application.chain.FabPipelineExecutionActor
 import akka.projection.ProjectionBehavior
-import net.imadz.fab.projection.{FabDemoEventBridge, FabDemoViewProjection, FabPipelineProjection}
-import net.imadz.fab.engine.RouteCardCompiler
-import net.imadz.fab.routing._
+import net.imadz.application.projection.{FabDemoEventBridge, FabDemoViewProjection, FabPipelineProjection}
+import net.imadz.application.routing.{RouteCardCompiler, RouteCompiler}
+import net.imadz.domain.routing._
+import net.imadz.infrastructure.repositories.routing.{OcapRuleStore, RouteDefinitionStore}
 import net.imadz.infrastructure.persistence.LotEventAdapter
 import net.imadz.domain.entities.LotEntity.LotEvent
 import java.util.UUID
@@ -102,7 +103,7 @@ class FabDemoController @Inject()(
   }
 
   private def writeEventData(event: FabSimulationEvent): play.api.libs.json.JsValue = {
-    import net.imadz.fab.events._
+    import net.imadz.domain.events._
     event match {
       case DemoStarted(sid, name, size, wids) => Json.obj("scenarioId" -> sid, "name" -> name, "lotSize" -> size, "waferIds" -> wids)
       case RecoveryCompleted(lid, tw, pw, rw, sw) => Json.obj("lotId" -> lid, "totalWafers" -> tw, "passedWafers" -> pw, "reworkedWafers" -> rw, "scrappedWafers" -> sw)
@@ -662,9 +663,9 @@ class FabDemoController @Inject()(
 
   /** List all route IDs with latest version info */
   def listRoutes = Action {
-    val routeIds = RoutingRepository.listRouteIds()
+    val routeIds = RouteDefinitionStore.listRouteIds()
     val routes = routeIds.map { rid =>
-      RoutingRepository.getLatest(rid).map { r =>
+      RouteDefinitionStore.getLatest(rid).map { r =>
         Json.obj("routeId" -> r.routeId, "version" -> r.version, "name" -> r.name,
           "productId" -> r.productId, "nodeCount" -> r.nodes.size, "edgeCount" -> r.edges.size)
       }
@@ -674,7 +675,7 @@ class FabDemoController @Inject()(
 
   /** Get latest version of a route definition */
   def getRoute(id: String) = Action {
-    RoutingRepository.getLatest(id) match {
+    RouteDefinitionStore.getLatest(id) match {
       case Some(r) => Ok(routeDefToJson(r))
       case None    => NotFound(Json.obj("error" -> s"Route $id not found"))
     }
@@ -682,13 +683,13 @@ class FabDemoController @Inject()(
 
   /** List all versions of a route */
   def listRouteVersions(id: String) = Action {
-    val versions = RoutingRepository.listVersions(id)
+    val versions = RouteDefinitionStore.listVersions(id)
     Ok(Json.obj("routeId" -> id, "versions" -> versions))
   }
 
   /** Get a specific version of a route */
   def getRouteVersion(id: String, version: Int) = Action {
-    RoutingRepository.get(id, version) match {
+    RouteDefinitionStore.get(id, version) match {
       case Some(r) => Ok(routeDefToJson(r))
       case None    => NotFound(Json.obj("error" -> s"Route $id v$version not found"))
     }
@@ -699,7 +700,7 @@ class FabDemoController @Inject()(
     val json = request.body
     try {
       val route = parseRouteDef(json)
-      val published = RoutingRepository.publish(route)
+      val published = RouteDefinitionStore.publish(route)
       Created(Json.obj("success" -> true, "routeId" -> published.routeId, "version" -> published.version))
     } catch {
       case ex: Exception => BadRequest(Json.obj("error" -> ex.getMessage))
@@ -708,7 +709,7 @@ class FabDemoController @Inject()(
 
   /** Compile a route to preview the steps */
   def compileRoute(id: String) = Action {
-    RoutingRepository.getLatest(id) match {
+    RouteDefinitionStore.getLatest(id) match {
       case Some(route) =>
         val stages = RouteCompiler.compile(route)
         val steps = stages.map { s =>
@@ -730,7 +731,7 @@ class FabDemoController @Inject()(
   /** Seed default routes into Repository (idempotent) */
   def seedDefaultRoutes = Action {
     fabDemoService.seedDefaultRoutes()
-    Ok(Json.obj("success" -> true, "routes" -> RoutingRepository.listRouteIds()))
+    Ok(Json.obj("success" -> true, "routes" -> RouteDefinitionStore.listRouteIds()))
   }
 
   private def routeDefToJson(r: RouteDefinition): JsValue = Json.obj(

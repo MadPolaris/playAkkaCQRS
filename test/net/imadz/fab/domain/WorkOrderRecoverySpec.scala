@@ -1,5 +1,7 @@
 package net.imadz.fab.domain
 
+import net.imadz.application.aggregates._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.Behavior

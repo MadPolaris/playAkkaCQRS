@@ -1,6 +1,8 @@
 package net.imadz.fab.chain
 
-import net.imadz.fab.model.{EquipmentArea, Por, PorStep, PorRepository}
+import net.imadz.application.chain._
+
+import net.imadz.fab.model.EquipmentArea; import net.imadz.domain.values.{Por, PorStep, PorRepository}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -52,17 +54,17 @@ class PorSpec extends AnyWordSpec with Matchers {
 
   "PorRepository" should {
     "find registered routing by product ID" in {
-      val r = net.imadz.fab.model.PorRepository.findByProductId("LOGIC-28NM-A")
+      val r = net.imadz.domain.values.PorRepository.findByProductId("LOGIC-28NM-A")
       r shouldBe defined
       r.get.steps.size shouldBe 11
     }
 
     "return None for unknown product" in {
-      net.imadz.fab.model.PorRepository.findByProductId("UNKNOWN") shouldBe None
+      net.imadz.domain.values.PorRepository.findByProductId("UNKNOWN") shouldBe None
     }
 
     "list all registered products" in {
-      val products = net.imadz.fab.model.PorRepository.listProducts
+      val products = net.imadz.domain.values.PorRepository.listProducts
       products.map(_.productId) should contain("LOGIC-28NM-A")
     }
   }

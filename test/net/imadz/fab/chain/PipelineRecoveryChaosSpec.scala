@@ -1,17 +1,19 @@
 package net.imadz.fab.chain
 
+import net.imadz.application.chain._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorRef
 import akka.actor.typed.scaladsl.Behaviors
 import com.typesafe.config.ConfigFactory
 import net.imadz.application.aggregates.LotAggregate
 import net.imadz.application.aggregates.LotProtocol.LotCommand
-import net.imadz.fab.chain.FabPipelineExecutionActor._
-import net.imadz.fab.chain.FabScenarioPipeline.PipelineStage
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
+import net.imadz.application.chain.FabPipelineExecutionActor._
+import net.imadz.application.chain.FabScenarioPipeline.PipelineStage
+import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
 import net.imadz.fab.protocol.ActorEquipmentAdapter
 import net.imadz.fab.saga.FabSagaTestConfig
-import net.imadz.fab.scenario.{DecisionConfig, FabSimulationScenario}
+import net.imadz.application.scenario.{DecisionConfig, FabSimulationScenario}
 import net.imadz.fab.simulation.{AmhsConfig, CdSemConfig, EquipmentConfig, LithoConfig, StockerConfig}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike

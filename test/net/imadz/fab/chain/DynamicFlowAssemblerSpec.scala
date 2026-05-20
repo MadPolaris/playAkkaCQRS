@@ -1,7 +1,10 @@
 package net.imadz.fab.chain
 
-import net.imadz.fab.model.{EquipmentArea, PorStep}
-import net.imadz.fab.scenario.DecisionConfig
+import net.imadz.application.chain._
+
+import net.imadz.fab.model.EquipmentArea
+import net.imadz.domain.values.PorStep
+import net.imadz.application.scenario.DecisionConfig
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 

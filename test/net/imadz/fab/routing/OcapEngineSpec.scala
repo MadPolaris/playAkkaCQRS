@@ -1,8 +1,12 @@
 package net.imadz.fab.routing
 
-import net.imadz.fab.events.{FabSimulationEvent, OcapActionTriggered}
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
-import net.imadz.fab.scenario.{DecisionConfig, StandardScenarios}
+import net.imadz.domain.routing._
+import net.imadz.application.routing._
+import net.imadz.infrastructure.repositories.routing.SpecRepository
+
+import net.imadz.domain.events.{FabSimulationEvent, OcapActionTriggered}
+import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState, WaferInfo}
+import net.imadz.application.scenario.{DecisionConfig, StandardScenarios}
 import net.imadz.application.aggregates.LotProtocol.{LotCommand, LotConfirmation}
 import net.imadz.common.Id
 import net.imadz.fab.protocol.ActorEquipmentAdapter

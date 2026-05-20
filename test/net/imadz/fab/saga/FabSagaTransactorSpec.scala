@@ -1,5 +1,7 @@
 package net.imadz.fab.saga
 
+import net.imadz.application.services.transactor._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import net.imadz.application.services.transactor.behaviors.FabSagaTransactorBehaviors
 import net.imadz.domain.entities.FabSagaTransactionEntity

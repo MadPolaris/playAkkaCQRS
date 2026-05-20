@@ -1,6 +1,9 @@
 package net.imadz.fab.routing
 
-import net.imadz.fab.chain.FabScenarioPipeline._
+import net.imadz.domain.routing._
+import net.imadz.application.routing._
+
+import net.imadz.application.chain.FabScenarioPipeline._
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

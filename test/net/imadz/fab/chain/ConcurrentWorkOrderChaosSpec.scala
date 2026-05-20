@@ -1,5 +1,7 @@
 package net.imadz.fab.chain
 
+import net.imadz.application.chain._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.Behavior

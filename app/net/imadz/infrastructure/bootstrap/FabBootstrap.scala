@@ -20,8 +20,8 @@ import net.imadz.common.Id
 import net.imadz.common.serialization.SerializationExtension
 import net.imadz.domain.entities.LotEntity
 import net.imadz.domain.entities.behaviors.LotEventHandler
-import net.imadz.fab.chain.{FabPipelineExecutionActor, FabScenarioPipeline}
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState}
+import net.imadz.application.chain.{FabPipelineExecutionActor, FabScenarioPipeline}
+import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState}
 import net.imadz.infra.saga.SagaTransactionCoordinator
 import net.imadz.infrastructure.persistence._
 import net.imadz.infrastructure.persistence.strategies.FabSerializationStrategies

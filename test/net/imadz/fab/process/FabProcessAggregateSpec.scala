@@ -1,5 +1,7 @@
 package net.imadz.fab.process
 
+import net.imadz.application.aggregates._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import net.imadz.domain.entities.FabProcessEntity
 import net.imadz.fab.saga.FabSagaTestConfig

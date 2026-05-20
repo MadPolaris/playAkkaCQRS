@@ -1,15 +1,18 @@
 package net.imadz.fab.chain
 
+import net.imadz.application.chain._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.scaladsl.Behaviors
 import net.imadz.application.aggregates.LotAggregate
 import net.imadz.application.aggregates.LotProtocol.LotCommand
 import net.imadz.application.services.transactor.FabSagaProtocol.FabSagaConfirmation
-import net.imadz.fab.events._
-import net.imadz.fab.model.FabExecutionModel.{FabDemoContext, FabDemoState, StageFailedException, WaferInfo}
+import net.imadz.domain.events._
+import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState, StageFailedException, WaferInfo}
 import net.imadz.fab.protocol._
-import net.imadz.fab.routing._
-import net.imadz.fab.scenario.{DecisionConfig, FabSimulationScenario, StandardScenarios}
+import net.imadz.domain.routing._
+import net.imadz.application.routing._
+import net.imadz.application.scenario.{DecisionConfig, FabSimulationScenario, StandardScenarios}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfterEach}
 import org.scalatest.wordspec.AnyWordSpecLike

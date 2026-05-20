@@ -1,5 +1,7 @@
 package net.imadz.fab.domain
 
+import net.imadz.application.aggregates._
+
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.domain.entities.LotEntity

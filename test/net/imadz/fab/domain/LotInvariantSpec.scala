@@ -1,5 +1,7 @@
 package net.imadz.fab.domain
 
+import net.imadz.application.aggregates._
+
 import net.imadz.common.CommonTypes.iMadzError
 import net.imadz.domain.entities.LotEntity
 import net.imadz.domain.entities.LotEntity._
