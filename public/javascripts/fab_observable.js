@@ -91,7 +91,7 @@
     _streams.processingCompleted$ = byType('ProcessingCompleted');
     _streams.measurement$        = byType('MeasurementResultEvent');
     _streams.lotUpdated$         = byType('LotUpdated');
-    _streams.demoCompleted$      = byType('DemoCompleted');
+    _streams.demoCompleted$      = byType('RecoveryCompleted');
     _streams.orchestratorCmd$    = byType('OrchestratorCommand');
     _streams.foupStateChanged$   = byType('FoupStateChanged');
     _streams.ledger$             = byType('LedgerStepAdvanced');

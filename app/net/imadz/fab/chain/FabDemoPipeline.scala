@@ -262,6 +262,7 @@ object FabDemoPipeline {
           ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
         ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "SplitCompleted",
           s"TCC Split committed: ${reworkWaferIds.mkString(",")} → Rework Lot", reworkWaferIds))
+        ctx.lotRef ! RecordSubLotCreated(ctx.reworkLotId, ReworkSplit, reworkWaferUUIDs, ctx.ignoreLotReply)
         val rwkWaferIds = reworkWaferIds.toSet
         val updatedWafers = state.wafers.map { case (wid, info) =>
           if (rwkWaferIds.contains(wid)) wid -> info.copy(subLot = Some("rwk"))
@@ -304,6 +305,7 @@ object FabDemoPipeline {
               s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
             ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeCompleted",
               s"TCC Merge: ${passWaferNames.mkString(",")} → Source Lot", passWaferNames.toSeq))
+            ctx.lotRef ! RecordSubLotMerged(ctx.reworkLotId, passWaferUUIDs.toSet, ctx.ignoreLotReply)
             passWaferNames.foreach { name =>
               state.wafers.get(name).foreach { info =>
                 val cdValue = info.cdValueHistory.lastOption.getOrElse(0.0)

@@ -169,7 +169,7 @@ case class MeasurementCondition(
   operator: ComparisonOp,
   lowerBound: Double = 0.0,
   upperBound: Double = Double.MaxValue,
-  waferScope: WaferScope = AllWafers
+  waferScope: WaferScope = AnyWafer
 ) extends ConditionExpression
 
 case class AggregateCondition(

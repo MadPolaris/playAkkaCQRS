@@ -45,7 +45,7 @@
     // --- Demo Lifecycle ---
     sub(S.demoCompleted$, function(data) {
       updateFoupCompleted();
-      addTimelineEntry({type: 'DemoCompleted', data: data}, true);
+      addTimelineEntry({type: 'RecoveryCompleted', data: data}, true);
     });
     sub(S.demoStarted$, function(data) {
       updateGlobalStatus({status: 'STARTED', detail: data.name, phase: 'Init'});
@@ -841,7 +841,7 @@
         cls = 'fail'; msg = '✗ SCRAP: ' + event.data.waferId + ' — ' + event.data.reason; break;
       case 'AggregateStateUpdated':
         cls = ''; msg = '📊 Aggregate state updated'; break;
-      case 'DemoCompleted':
+      case 'RecoveryCompleted':
         msg = '✓ Demo completed — PASS=' + event.data.passedWafers + ' REWORK=' + event.data.reworkedWafers + ' SCRAP=' + event.data.scrappedWafers;
         break;
       default: msg = event.type + ' ' + JSON.stringify(event.data).substring(0, 80);

@@ -56,7 +56,9 @@ lazy val commonSettings = Seq(
     "com.typesafe.play" %% "play-json" % "2.9.3",
     "com.google.guava" % "guava" % "30.1.1-jre",
     "com.typesafe.akka" %% "akka-http-core" % "10.2.7",
-    "org.slf4j" % "slf4j-api" % "2.0.4"
+    "org.slf4j" % "slf4j-api" % "2.0.4",
+    "org.scalatest" %% "scalatest" % "3.2.15" % Test,
+    "ch.qos.logback" % "logback-classic" % "1.4.5" % Test
   )
 )
 

@@ -72,6 +72,10 @@ POST    /api/fab-demo/m35/inject-crash/:workOrderId  controllers.FabDemoControll
 GET     /api/fab-demo/m35/ocap-rules                controllers.FabDemoController.m35GetOcapRules()
 GET     /api/fab-demo/m35/recovery-status/:id        controllers.FabDemoController.m35RecoveryStatus(id: String)
 GET     /api/fab-demo/m35/fault-history/:id          controllers.FabDemoController.m35FaultHistory(id: String)
+
+# Timeline Query
+GET     /fab/timeline                               controllers.FabDemoController.timelinePage(workOrderId: Option[String])
+GET     /fab/timeline/:workOrderId                   controllers.FabDemoController.timelineQuery(workOrderId: String)
 POST    /api/fab-demo/m35/fault-probability          controllers.FabDemoController.m35UpdateFaultProbability()
 
 # Route CRUD (M3.5+)

@@ -115,8 +115,8 @@ class FabDemoService @Inject()(
       speedMultiplier = 1.0,
       scrapLotRef = Some(scrapLotRef),
       scrapLotId = Some(scrapLotId),
-      childLotRefs = Map("scrap" -> scrapLotRef),
-      childLotIds = Map("scrap" -> scrapLotId)
+      childLotRefs = Map("scrap" -> scrapLotRef, "rwk" -> reworkLotRef),
+      childLotIds = Map("scrap" -> scrapLotId, "rwk" -> reworkLotId)
     )
 
     val initialState = FabDemoState(
@@ -199,13 +199,15 @@ class FabDemoService @Inject()(
         "pilot" -> pilotLotRef,
         "sample" -> sampleLotRef,
         "hold" -> holdLotRef,
-        "scrap" -> scrapLotRef
+        "scrap" -> scrapLotRef,
+        "rwk" -> reworkLotRef
       ),
       childLotIds = Map(
         "pilot" -> pilotLotId,
         "sample" -> sampleLotId,
         "hold" -> holdLotId,
-        "scrap" -> scrapLotId
+        "scrap" -> scrapLotId,
+        "rwk" -> reworkLotId
       ),
       ocapRules = routeDef.ocapRules
     )
@@ -313,13 +315,15 @@ class FabDemoService @Inject()(
         "pilot" -> pilotLotRef,
         "sample" -> sampleLotRef,
         "hold" -> holdLotRef,
-        "scrap" -> scrapLotRef
+        "scrap" -> scrapLotRef,
+        "rwk" -> reworkLotRef
       ),
       childLotIds = Map(
         "pilot" -> pilotLotId,
         "sample" -> sampleLotId,
         "hold" -> holdLotId,
-        "scrap" -> scrapLotId
+        "scrap" -> scrapLotId,
+        "rwk" -> reworkLotId
       )
     )
 
@@ -1236,11 +1240,13 @@ class FabDemoService @Inject()(
       scrapLotId = Some(scrapLotId),
       childLotRefs = Map(
         "pilot" -> pilotLotRef, "sample" -> sampleLotRef,
-        "hold" -> holdLotRef, "scrap" -> scrapLotRef
+        "hold" -> holdLotRef, "scrap" -> scrapLotRef,
+        "rwk" -> reworkLotRef
       ),
       childLotIds = Map(
         "pilot" -> pilotLotId, "sample" -> sampleLotId,
-        "hold" -> holdLotId, "scrap" -> scrapLotId
+        "hold" -> holdLotId, "scrap" -> scrapLotId,
+        "rwk" -> reworkLotId
       ),
       ocapRules = ocapRules,
       faultProbability = currentFaultProbability

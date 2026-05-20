@@ -282,6 +282,8 @@ object FabFlowEngine {
               ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
             ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "SplitCompleted",
               s"TCC Split committed: ${reworkWaferIds.mkString(",")} → Rework Lot", reworkWaferIds))
+            // Domain event: source lot records sub-lot creation for dynamic rework
+            ctx.lotRef ! RecordSubLotCreated(ctx.reworkLotId, ReworkSplit, reworkWaferUUIDs, ctx.ignoreLotReply)
             val rwkSet = reworkWaferIds.toSet
             val wafersWithSubLot = updatedWafers.map { case (wid, info) =>
               if (rwkSet.contains(wid)) wid -> info.copy(subLot = Some("rwk"))

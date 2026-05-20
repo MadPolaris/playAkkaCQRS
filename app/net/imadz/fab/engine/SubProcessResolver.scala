@@ -46,8 +46,8 @@ object SubProcessResolver {
         )
 
       case ReworkLoop =>
+        // SubLot alternate route (no LoadFoup — SubLot doesn't re-load FOUP)
         Seq(
-          "LoadFoup",
           s"Transport:MET->LITHO",
           s"AtEquipment:LITHO:$lithoEquip",
           s"TrackIn:$lithoEquip:LP1",
