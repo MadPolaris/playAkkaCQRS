@@ -147,10 +147,10 @@
             <span class="badge badge-arch">架构师</span>
         </div>
         <div class="nav">
-            <a href="/fab-demo">Fab Demo 仿真</a>
-            <a href="/fab-demo/designer">路由设计器</a>
-            <a href="/en/m3">M3 架构说明</a>
-            <a href="/m3-roadmap" class="active">M3 路线图</a>
+            <a href="/fab-demo/m35">M3.5 自愈演示</a>
+            <a href="/m3">M3 架构说明</a>
+            <a href="/m3-roadmap" class="active">M3.5 路线图</a>
+            <a href="/en/m3-roadmap">EN</a>
         </div>
     </header>
 
@@ -161,26 +161,24 @@
 
         <div class="bn-row">
             <div class="bn-card">
-                <div class="bn-num bn-85">85%</div>
-                <div class="bn-label">如果 M3 = 静态集成平台<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(M2.5+ DAG · Saga TCC · EventSourcing · WebSocket)</span></div>
+                <div class="bn-num bn-85">90%</div>
+                <div class="bn-label">如果 M3.5 = 静态集成平台<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(M2.5+ DAG · Saga TCC · EventSourcing · WebSocket)</span></div>
             </div>
             <div class="bn-card">
-                <div class="bn-num bn-40">~55%</div>
-                <div class="bn-label">如果 M3 = 事实驱动的决策内核<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(自愈闭环 · 动态工艺织造 · MU 生命周期)</span></div>
+                <div class="bn-num bn-40">~75%</div>
+                <div class="bn-label">如果 M3.5 = 事实驱动的决策内核<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(自愈闭环 · 动态工艺织造 · OCAP 拦截)</span></div>
             </div>
             <div class="bn-card">
-                <div class="bn-num bn-3w">~2 周</div>
-                <div class="bn-label">到达可演示 M3 终点的距离<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(P0 核心打通 + P1 演示说服力 · 多 WO 编排聚合)</span></div>
+                <div class="bn-num bn-3w">~1 周</div>
+                <div class="bn-label">到达可演示 M3.5 终点的距离<br><span style="font-size:0.7rem;color:var(--fg-subtle)">(P1 演示说服力 · Route Graph 动态化)</span></div>
             </div>
         </div>
 
         <div class="callout">
             <div class="callout-icon">💡</div>
             <p>
-                <strong>造车的底盘和发动机已经全部完工并且运转良好（85% 的底层工作）</strong>——M2.5+ DAG 引擎、Saga TCC 分布式事务、
-                事件溯源聚合根、4 层领域事件投影、WebSocket 实时推送全部就绪。<br><br>
-                <strong>现在的重点是写入自动驾驶的灵魂（动态异常拦截与重组）</strong>——让系统在遇到任何故障时都不会卡死、
-                能自动织造 Rework 流程并实时可视化，这才是从"静态集成平台"到"事实驱动决策内核"的质变。
+                <strong>Phase 1（决策内核激活）已全部交付。</strong>当前聚焦 Phase 2（演示说服力）：
+                活的工艺路线图、Saga SUSPENDED 场景演示等视觉交互优化。Phase 3（工业级完备）可随 M3.9 并行推进。
             </p>
         </div>
     </section>
@@ -191,8 +189,8 @@
         <p class="section-desc">对照 4 项验收标准，逐项审查当前状态、已有成果和剩余差距。</p>
 
         <div class="progress-wrap">
-            <div class="progress-label"><span>M3 决策内核整体完成度</span><span>~55%</span></div>
-            <div class="progress-track"><div class="progress-fill amber" style="width:55%"></div></div>
+            <div class="progress-label"><span>M3.5 决策内核整体完成度</span><span>~75%</span></div>
+            <div class="progress-track"><div class="progress-fill amber" style="width:75%"></div></div>
         </div>
 
         <div class="criteria-grid">
@@ -201,20 +199,20 @@
             <div class="c-card">
                 <div class="c-header">
                     <div>
-                        <div class="c-status" style="color:var(--amber)">🟡 基础设施就绪，缺动态入口</div>
+                        <div class="c-status" style="color:var(--green)">🟢 核心能力全部就绪</div>
                         <div class="c-title" style="margin-top:4px;">1. 在线编排 &amp; 设备模拟</div>
                     </div>
-                    <span class="c-pct amber">40%</span>
+                    <span class="c-pct green">80%</span>
                 </div>
                 <ul class="gap-list">
                     <li class="done">RouteDefinition DSL + RouteCompiler — 完备</li>
                     <li class="done">OcapEngine 规则引擎 — 6 种动作类型就绪</li>
                     <li class="done">6 个设备模拟器 — 概率性良率仿真</li>
                     <li class="done">SubProcessRef 机制 — 5 种子流程类型</li>
-                    <li class="gap">Route Designer 只读 — 无拖拽编辑</li>
-                    <li class="gap">OCAP 规则硬编码 — 无 CRUD API/UI</li>
-                    <li class="warn">设备不产生自发故障 — JobFailed 仅限 Abort</li>
-                    <li class="gap">ReworkLoop 是 TODO 存根</li>
+                    <li class="done">设备自发故障注入 — Litho/CDSEM 随机 JobFailed</li>
+                    <li class="done">ReworkLoop — OCAP→Rework DSL 端到端闭环</li>
+                    <li class="warn">Route Designer 只读 — 无拖拽编辑</li>
+                    <li class="warn">OCAP 规则部分硬编码 — 需运行时 CRUD API</li>
                 </ul>
             </div>
 
@@ -222,20 +220,20 @@
             <div class="c-card">
                 <div class="c-header">
                     <div>
-                        <div class="c-status" style="color:var(--amber)">🟡 单 WO 自愈就绪，多 WO 编排缺</div>
+                        <div class="c-status" style="color:var(--green)">🟢 单 WO 自愈全链路闭环</div>
                         <div class="c-title" style="margin-top:4px;">2. Self-Healing 自愈闭环</div>
                     </div>
-                    <span class="c-pct amber">50%</span>
+                    <span class="c-pct green">85%</span>
                 </div>
                 <ul class="gap-list">
                     <li class="done">Saga Prepare/Commit 失败 → 自动 Compensate</li>
                     <li class="done">SUSPENDED + ManualFixStep 机制存在</li>
                     <li class="done">EventSourced Pipeline Actor — 断点续传 resumeFromIndex</li>
                     <li class="done">Result Classifier (DynamicFlowAssembler) 完备</li>
-                    <li class="done">OCAP 已升级为异常拦截器 — invokeOcapInterceptor 在 Stage 失败时触发</li>
-                    <li class="gap">Idle 状态崩溃 — StartExecution 丢失无上层编排重试</li>
-                    <li class="gap">多 WO 并发缺少 WorkOrderBatch 聚合 / Watchdog</li>
-                    <li class="gap">异常不触发 DAG 重组 / ChainDSL 织造</li>
+                    <li class="done">OCAP 升级为异常拦截器 — invokeOcapInterceptor 触发</li>
+                    <li class="done">异常触发 DAG 重组 / OCAP→Rework DSL 动态织造</li>
+                    <li class="done">Pipeline 全局异常捕获 — 3 个管线引擎 recover/fallbackTo</li>
+                    <li class="gap">多 WO 并发缺少 WorkOrderBatch 聚合 / Watchdog 机制</li>
                 </ul>
             </div>
 
@@ -243,19 +241,19 @@
             <div class="c-card">
                 <div class="c-header">
                     <div>
-                        <div class="c-status" style="color:var(--amber)">🟡 单模块充分，缺跨模块证明</div>
+                        <div class="c-status" style="color:var(--green)">🟢 跨模块一致性大幅增强</div>
                         <div class="c-title" style="margin-top:4px;">3. 多模块状态一致性</div>
                     </div>
-                    <span class="c-pct amber">55%</span>
+                    <span class="c-pct green">75%</span>
                 </div>
                 <ul class="gap-list">
                     <li class="done">LotInvariantSpec + LotAggregateSpec — 详尽</li>
                     <li class="done">FabSagaTransactorSpec — TCC 行为完整</li>
                     <li class="done">5 场景集成测试 — 全部通过</li>
                     <li class="done">4 层领域事件实时 WebSocket — 观测完善</li>
-                    <li class="warn">缺 WorkOrder↔Lot 一致性测试</li>
-                    <li class="warn">缺 Saga 补偿后 Lot Wafer 计数验证</li>
-                    <li class="warn">缺崩溃恢复后多模块对齐测试</li>
+                    <li class="done">WorkOrderE2EIntegrationSpec — WO↔Lot↔Saga 全链路</li>
+                    <li class="done">PipelineRecoveryChaosSpec — 崩溃恢复后多模块对齐</li>
+                    <li class="warn">Saga 补偿后 Lot Wafer 计数自动化验证待加强</li>
                 </ul>
             </div>
 
@@ -266,15 +264,15 @@
                         <div class="c-status" style="color:var(--green)">🟢 正向流程顺畅</div>
                         <div class="c-title" style="margin-top:4px;">4. 场景执行 &amp; 路线可视化</div>
                     </div>
-                    <span class="c-pct green">65%</span>
+                    <span class="c-pct green">75%</span>
                 </div>
                 <ul class="gap-list">
                     <li class="done">5 核心场景全部可执行到终点</li>
                     <li class="done">WebSocket 实时事件流 — ~200ms 延迟</li>
                     <li class="done">Route Graph SVG + JSON 展示</li>
                     <li class="done">4 层领域事件侧边栏 + 聚合面板</li>
+                    <li class="done">M3.5 Self-Healing Demo — 五幕叙事完整</li>
                     <li class="warn">Route Graph 只展示静态模板 — 动态分叉不反映</li>
-                    <li class="warn">动态 POR 场景缺乏集成测试</li>
                 </ul>
             </div>
 
@@ -293,21 +291,21 @@
                 <div class="gantt-weeks"><span>W1</span><span>W2</span><span>W3</span><span>W4</span><span>W5</span></div>
             </div>
             <div class="gantt-row">
-                <div class="gantt-label" style="color:var(--red)">🔴 Phase 1</div>
+                <div class="gantt-label" style="color:var(--green)">✅ Phase 1 Done</div>
                 <div class="gantt-bar-wrap">
-                    <div class="gantt-bar p0-bar" style="left:0%; width:40%">决策内核激活</div>
+                    <div class="gantt-bar p2-bar" style="left:0%; width:40%">决策内核激活 (已交付)</div>
                 </div>
             </div>
             <div class="gantt-row">
                 <div class="gantt-label" style="color:var(--amber)">🟡 Phase 2</div>
                 <div class="gantt-bar-wrap">
-                    <div class="gantt-bar p1-bar" style="left:40%; width:20%">演示说服力</div>
+                    <div class="gantt-bar p1-bar" style="left:45%; width:15%">演示说服力</div>
                 </div>
             </div>
             <div class="gantt-row">
                 <div class="gantt-label" style="color:var(--green)">🟢 Phase 3</div>
                 <div class="gantt-bar-wrap">
-                    <div class="gantt-bar p2-bar" style="left:60%; width:40%">架构完备性 · 可延后至 M3.5</div>
+                    <div class="gantt-bar p2-bar" style="left:60%; width:40%">架构完备性 · 可延后至 M3.9</div>
                 </div>
             </div>
         </div>
@@ -315,53 +313,50 @@
         <!-- Phase 1 -->
         <div class="phase">
             <div class="phase-header">
-                <span class="phase-label p0">🔴 Phase 1</span>
-                <span class="phase-date">约 2 周 · 阻塞 M3 核心价值的硬伤</span>
+                <span class="phase-label p2">🟢 Phase 1 · 已完成</span>
+                <span class="phase-date">已交付 · 约 8.5 人天</span>
             </div>
-            <h3>真正激活"决策内核"</h3>
-            <p class="phase-motto">做完这一步，系统才算"活"了——遇到异常不再卡死，能自行决策和恢复。</p>
+            <h3>真正激活"决策内核" ✅</h3>
+            <p class="phase-motto">系统已"活"——遇到异常不再卡死，能自行决策和恢复。</p>
 
             <table class="task-table">
                 <thead>
-                    <tr><th>#</th><th>攻坚任务</th><th>说明</th><th>工作量</th></tr>
+                    <tr><th>#</th><th>攻坚任务</th><th>说明</th><th>状态</th></tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="task-id p0-id">P0-1</td>
+                        <td class="task-id p2-id">P0-1</td>
                         <td><strong>打通异常的"任督二脉"</strong></td>
-                        <td>在 Pipeline 中引入全局异常捕获（recover/fallbackTo），新增 <code>RecordLotFailed</code> 指令链，确保任何工艺失败、Saga 悬置或全批报废都能正确上报至 WorkOrder，终结卡死现象。</td>
-                        <td class="task-est">2d</td>
+                        <td>Pipeline 全局异常捕获（recover/fallbackTo），<code>RecordLotFailed</code> 指令链，异常上报 WorkOrder。</td>
+                        <td class="task-est">✅</td>
                     </tr>
                     <tr>
-                        <td class="task-id p0-id">P0-2</td>
+                        <td class="task-id p2-id">P0-2</td>
                         <td><strong>OCAP 升级为拦截器 + DAG 织造</strong></td>
-                        <td>改造引擎使 OCAP 在前序步骤失败时被唤醒。实现真正的 ReworkLoop 子流程，并在触发异常时将 Rework DSL 动态插入到正在执行的 Pipeline 序列中。</td>
-                        <td class="task-est">3d</td>
+                        <td>OCAP 在 Stage 失败时唤醒。ReworkLoop 实现。Rework DSL 动态插入 Pipeline 序列。</td>
+                        <td class="task-est">✅</td>
                     </tr>
                     <tr>
-                        <td class="task-id p0-id">P0-3</td>
+                        <td class="task-id p2-id">P0-3</td>
                         <td><strong>WorkOrder 失败传播</strong></td>
-                        <td>新增 <code>RecordLotFailed</code> 命令 + Projection 监听 + 端到端验证。废片全批/Pipeline 崩/Saga SUSPENDED → WorkOrder 正确转 Failed。</td>
-                        <td class="task-est">1.5d</td>
+                        <td><code>RecordLotFailed</code> 命令 + Projection 监听 + 端到端验证。全批报废/Pipeline 崩→WO.Failed。</td>
+                        <td class="task-est">✅</td>
                     </tr>
                     <tr>
-                        <td class="task-id p0-id">P0-4</td>
+                        <td class="task-id p2-id">P0-4</td>
                         <td><strong>Saga 自愈策略增强</strong></td>
-                        <td>丰富 SUSPENDED 状态的重试与降级机制（RetryCurrentPhase），闭环自动化补偿。ManualFixStep 不再返回空结果。</td>
-                        <td class="task-est">2d</td>
+                        <td>SUSPENDED 状态 RetryCurrentPhase，闭环自动化补偿。</td>
+                        <td class="task-est">✅</td>
                     </tr>
                 </tbody>
             </table>
-            <p style="font-size:0.78rem; color:var(--fg-subtle); margin-top:12px;">
-                ✅ Phase 1 完成 = M3 骨架成立 · Self-Healing 闭环可演示 · 约 <strong>8.5 人天</strong>
-            </p>
         </div>
 
         <!-- Phase 2 -->
         <div class="phase">
             <div class="phase-header">
-                <span class="phase-label p1">🟡 Phase 2</span>
-                <span class="phase-date">约 1 周 · 让 PM 和客户信服</span>
+                <span class="phase-label p1">🟡 Phase 2 · 进行中</span>
+                <span class="phase-date">约 0.5 周剩余 · 让 PM 和客户信服</span>
             </div>
             <h3>提升 Demo 演示说服力</h3>
             <p class="phase-motto">让业务方和外部客户在视觉和交互上感受到系统的"智能"。</p>
@@ -372,10 +367,10 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td class="task-id p1-id">P1-1</td>
+                        <td class="task-id p2-id">P1-1</td>
                         <td><strong>设备自发故障注入</strong></td>
-                        <td>激活 <code>InjectFault</code> 协议，使 Litho/CDSEM 在运行中产生随机故障（JobFailed），直观触发 Phase 1 的 OCAP 拦截和动态 Rework。</td>
-                        <td class="task-est">1d</td>
+                        <td>激活 <code>InjectFault</code> 协议，Litho/CDSEM 随机产生 JobFailed，触发 OCAP 拦截和动态 Rework。</td>
+                        <td class="task-est">✅</td>
                     </tr>
                     <tr>
                         <td class="task-id p1-id">P1-2</td>
@@ -384,10 +379,10 @@
                         <td class="task-est">1d</td>
                     </tr>
                     <tr>
-                        <td class="task-id p1-id">P1-3</td>
+                        <td class="task-id p2-id">P1-3</td>
                         <td><strong>WorkOrder 全生命周期展示</strong></td>
-                        <td>确保从点击启动 → Idle → Executing → 异常分叉 → Completed/Failed 的状态在聚合面板上零延迟刷新，每个状态转换可追溯。</td>
-                        <td class="task-est">0.5d</td>
+                        <td>启动 → Idle → Executing → 异常分叉 → Completed/Failed 面板零延迟刷新，可追溯。</td>
+                        <td class="task-est">✅</td>
                     </tr>
                     <tr>
                         <td class="task-id p1-id">P1-4</td>
@@ -398,7 +393,7 @@
                 </tbody>
             </table>
             <p style="font-size:0.78rem; color:var(--fg-subtle); margin-top:12px;">
-                ✅ Phase 1+2 完成 = M3 可演示终点 · PM 和客户会认可 M3 完成 · 约 <strong>13 人天</strong>
+                ✅ Phase 1 已交付 + Phase 2 进行中 = M3.5 自愈闭环已可演示 · 预计 <strong>3 天</strong> 完成剩余
             </p>
         </div>
 
@@ -476,7 +471,7 @@
             </div>
             <div style="background:var(--bg-alt); border:1px solid var(--border); border-radius:8px; padding:16px;">
                 <h4 style="color:var(--pink); font-size:0.9rem;">测试 &amp; 文档</h4>
-                <p style="font-size:0.78rem; color:var(--fg-muted);">16 测试文件 · 27 测试用例 · 全场景集成覆盖 · 架构文档 knowledge_base/ · i18n</p>
+                <p style="font-size:0.78rem; color:var(--fg-muted);">22 测试文件 · 202 测试用例 · 全场景集成覆盖 · 架构文档 knowledge_base/ · i18n</p>
             </div>
         </div>
     </section>
@@ -488,35 +483,35 @@
         <div class="callout" style="border-color: rgba(20,184,166,0.3);">
             <div class="callout-icon">🎯</div>
             <p>
-                <strong>给产品经理的一句话：</strong>造车的底盘和发动机已经全部完工并且运转良好（85% 的底层工作），
-                现在的重点是写入自动驾驶的灵魂（动态异常拦截与重组）。按照 Phase 1+2 推进，大约需要 <strong>3 周</strong>，
-                即可向所有人展示一个遇到任何故障都不会卡死、能自动织造 Rework 流程并实时可视化的纯正"事实驱动 Fab 决策内核"。
+                <strong>给产品经理的一句话：</strong>Phase 1（决策内核激活）已全部交付。OCAP 拦截、Rework DSL 动态织造、断点续传、
+                设备故障注入、多 WO 并发均已通过测试。当前聚焦 Phase 2 剩余任务（活的工艺路线图、Saga SUSPENDED 演示），
+                预计 <strong>3 天</strong> 内即可向所有人展示完整的"事实驱动 Fab 决策内核"。
             </p>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px; margin-top:20px;">
-            <div style="background:var(--bg-alt); border:1px solid rgba(248,81,73,0.3); border-radius:8px; padding:14px; text-align:center;">
-                <div style="font-size:1.5rem; font-weight:800; color:var(--red);">Phase 1</div>
-                <div style="font-size:0.75rem; color:var(--fg-muted);">~2 周 · 决策内核激活</div>
+            <div style="background:var(--bg-alt); border:1px solid rgba(63,185,80,0.3); border-radius:8px; padding:14px; text-align:center;">
+                <div style="font-size:1.5rem; font-weight:800; color:var(--green);">Phase 1 ✅</div>
+                <div style="font-size:0.75rem; color:var(--fg-muted);">~2 周 · 已交付</div>
                 <div style="font-size:0.72rem; color:var(--fg-subtle); margin-top:4px;">Self-Healing 闭环可演示</div>
             </div>
             <div style="background:var(--bg-alt); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:14px; text-align:center;">
-                <div style="font-size:1.5rem; font-weight:800; color:var(--amber);">+ Phase 2</div>
-                <div style="font-size:0.75rem; color:var(--fg-muted);">~3 周 · 可演示终点 🏁</div>
-                <div style="font-size:0.72rem; color:var(--fg-subtle); margin-top:4px;">PM 和客户会认可 M3 完成</div>
+                <div style="font-size:1.5rem; font-weight:800; color:var(--amber);">Phase 2</div>
+                <div style="font-size:0.75rem; color:var(--fg-muted);">当前重点 · ~3 天剩余</div>
+                <div style="font-size:0.72rem; color:var(--fg-subtle); margin-top:4px;">演示说服力冲刺</div>
             </div>
             <div style="background:var(--bg-alt); border:1px solid rgba(63,185,80,0.3); border-radius:8px; padding:14px; text-align:center;">
-                <div style="font-size:1.5rem; font-weight:800; color:var(--green);">+ Phase 3</div>
-                <div style="font-size:0.75rem; color:var(--fg-muted);">~5 周 · 工业级完备</div>
-                <div style="font-size:0.72rem; color:var(--fg-subtle); margin-top:4px;">架构师认可工程质量</div>
+                <div style="font-size:1.5rem; font-weight:800; color:var(--green);">Phase 3</div>
+                <div style="font-size:0.75rem; color:var(--fg-muted);">可延后 · ~2 周</div>
+                <div style="font-size:0.72rem; color:var(--fg-subtle); margin-top:4px;">工业级完备</div>
             </div>
         </div>
     </section>
 
     <footer>
-        <p>M3 · Fact-Driven Fab Decision Kernel &nbsp;|&nbsp; playAkkaCQRS &nbsp;|&nbsp; 2026-05-18</p>
+        <p>M3.5 · Fact-Driven Fab Decision Kernel &nbsp;|&nbsp; playAkkaCQRS &nbsp;|&nbsp; 2026-05-20</p>
         <p style="margin-top:8px;">
-            <a href="/fab-demo">Fab Demo</a> · <a href="/en/m3">M3 架构</a> · <a href="/">首页</a>
+            <a href="/fab-demo/m35">M3.5 Demo</a> · <a href="/m3">M3 架构</a> · <a href="/">首页</a>
         </p>
     </footer>
 

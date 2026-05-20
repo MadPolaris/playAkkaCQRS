@@ -157,17 +157,22 @@
         <nav class="nav-links">
             <a href="/">Home</a>
             <a href="/fab-demo/m35" style="color:#a855f7; font-weight:700;">M3.5 Self-Healing Demo</a>
-            <a href="/fab-demo" style="color:#14b8a6; font-weight:700;">Fab Closed-Loop Demo</a>
+            <a href="/en/m3-roadmap" style="color:#f59e0b; font-weight:700;">M3.5 Roadmap</a>
             <a href="/m3" class="primary">中文</a>
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Distributed TX</a>
-                    <a href="/en/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
-                    <a href="/en/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>Component Library</a>
-                    <a href="/en/m3" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>Dynamic Orchestration</a>
-                    <a href="/fab-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Fab Closed-Loop Demo</a>
-                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5</span>Self-Healing Kernel Demo</a>
+                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Coordinator</a>
+                    <a href="/en/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>Stream-Batch DAG Engine</a>
+                    <a href="/en/m3" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>Self-Healing Orchestration</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">Live Demo <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Self-Healing</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -815,7 +820,7 @@
         <div class="arch-callout purple">
             <strong>Proof of incremental evolution:</strong> Not a single line of M2.5+ code is modified. M3's additions are entirely in the Decision Layer—Dynamic Flow Assembler,
             Lot Context (MU Matrix), BMM, four-way Result Classifier. The Runtime Layer is simply called in <strong>new sequences and conditions</strong>.
-            See <a href="/en/m25" style="color:var(--purple);">M2.5+ Component Library</a>.
+            See <a href="/en/m2" style="color:var(--purple);">M2 Stream-Batch DAG Engine</a>.
         </div>
     </section>
 
@@ -891,63 +896,42 @@
         <h2>9. M3.5 · Self-Healing Decision Kernel — From Static Script to Reactive Kernel</h2>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
-            M3.5 adds <strong>crash self-healing</strong> and <strong>OCAP interception</strong> on top of the M3 Decision Layer.
-            It answers one critical question: when the execution engine itself crashes, how do WorkOrders avoid getting stuck?
+            M3.5 adds <strong>crash self-healing</strong> and <strong>OCAP interception</strong> on top of the M3 Decision Layer —
+            and is now <strong>fully implemented</strong>. Single-WO breakpoint resume, OCAP→Rework DSL dynamic weaving,
+            spontaneous equipment fault injection, Pipeline-wide exception handling, and WorkOrder failure propagation
+            are all delivered. Multi-WorkOrder concurrent chaos testing passes (202 tests).
         </p>
 
-        <h3>Single WorkOrder Self-Healing: EventSourced Breakpoint Resume</h3>
-
-        <p style="font-size:0.85rem; color:var(--fg-muted); margin-bottom:16px;">
-            Each WorkOrder maps to a <code>FabPipelineExecutionActor</code> (EventSourcedBehavior).
-            Its state machine has four states: <strong>Idle → Executing → Completed / Failed</strong>.
-            During pipeline execution, each completed phase persists a <code>PhaseCompleted</code> event,
-            appending the phase name to the <code>completedPhases</code> cursor.
-        </p>
-
-        <div class="comp-grid">
-            <div class="comp-card" style="border-color: rgba(63,185,80,0.3);">
-                <div class="comp-icon">💾</div>
-                <h4>EventSourced Persistence</h4>
-                <p>All PhaseCompleted events are written to the Akka Persistence Journal (MongoDB).
-                On crash restart, event replay rebuilds the <code>completedPhases</code> cursor.
-                The system knows exactly where it left off — no progress is lost.</p>
-            </div>
-            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
-                <div class="comp-icon">⏭️</div>
-                <h4>Breakpoint Resume (resumeFromIndex)</h4>
-                <p>In the <code>RecoveryCompleted</code> signal, execution context is rebuilt and
-                <code>FabPipelineProcessor.resumeFromIndex(state, completedCount)</code> is called —
-                skipping completed phases and continuing from the breakpoint.</p>
-            </div>
-            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
-                <div class="comp-icon">🛡️</div>
-                <h4>OCAP Fault Interception</h4>
-                <p>When a Pipeline Stage fails, <code>FabScenarioPipeline.invokeOcapInterceptor</code>
-                matches OCAP rules (condition evaluation + priority sorting), executing
-                Rework / Scrap / Hold / Notify / AdjustRecipe actions.
-                Rules are hot-reloaded from HOCON config — no restart needed.</p>
-            </div>
+        <div class="stat-row" style="margin-bottom: 24px;">
+            <div class="stat-card"><div class="num num-green">202</div><div class="lbl">Unit + Integration Tests</div></div>
+            <div class="stat-card"><div class="num num-purple">6</div><div class="lbl">M3.5 Core Capabilities Delivered</div></div>
+            <div class="stat-card"><div class="num num-teal">5</div><div class="lbl">Self-Healing Demo Acts</div></div>
         </div>
 
-        <h3>Current Capability Boundary</h3>
+        <h3>6 Core Capabilities Delivered</h3>
+
+        <table class="ps-table" style="margin-bottom: 24px;">
+            <thead><tr><th style="width:5%">#</th><th style="width:28%">Capability</th><th style="width:37%">Implementation</th><th style="width:30%">Validation</th></tr></thead>
+            <tbody>
+                <tr><td>1</td><td><strong>EventSourced Breakpoint Resume</strong></td><td>Crash → Journal replay restores completedPhases → resumeFromIndex skips completed</td><td>PipelineRecoveryChaosSpec (3 scenarios)</td></tr>
+                <tr><td>2</td><td><strong>OCAP Exception Interceptor</strong></td><td>invokeOcapInterceptor triggers on Stage failure, 6 action types</td><td>5 OCAP scenario integration tests</td></tr>
+                <tr><td>3</td><td><strong>OCAP→Rework DSL Weaving</strong></td><td>OCAP intercept → DynamicFlowAssembler weaves Rework DSL → injects into engine</td><td>ReworkLoop end-to-end verification</td></tr>
+                <tr><td>4</td><td><strong>Pipeline Global Exception Handling</strong></td><td>3 pipeline engines with global recover/fallbackTo, failures propagated to WorkOrder</td><td>PipelineFailureSpec (6 scenarios)</td></tr>
+                <tr><td>5</td><td><strong>Spontaneous Equipment Faults</strong></td><td>Litho/CDSEM simulators produce random JobFailed faults at runtime</td><td>ConcurrentWorkOrderChaosSpec (50 WO concurrent)</td></tr>
+                <tr><td>6</td><td><strong>WorkOrder Failure Propagation</strong></td><td>RecordLotFailed command + Projection listener + UI panel live update</td><td>WorkOrderE2EIntegrationSpec (7 use cases)</td></tr>
+            </tbody>
+        </table>
 
         <div class="arch-callout">
-            <strong>Achieved:</strong> Single WorkOrder mid-flight crash → EventSourced state recovery → breakpoint resume → OCAP fault interception.
-            Crashes in <code>Executing</code> state recover automatically from after the last completed phase.
-        </div>
-
-        <div class="arch-callout red">
-            <strong>Known Gap:</strong> If a crash hits the <code>Idle</code> state (before <code>StartExecution</code> is processed),
-            the fire-and-forget message is lost with no upper-level orchestration aggregate to retry.
-            In multi-WorkOrder concurrent scenarios, there is no WorkOrderBatch aggregate or Watchdog
-            mechanism to guarantee all WorkOrders eventually start. This is the next focus area for M3.5.
+            <strong>Achieved:</strong> Single-WO EventSourced state recovery → breakpoint resume → OCAP fault interception → Rework DSL dynamic weaving.
+            Multi-WO concurrency verified via ConcurrentWorkOrderChaosSpec. Equipment spontaneous fault injection activated.
         </div>
 
         <blockquote>
             <strong>Live Demo:</strong>
             <a href="/fab-demo/m35" style="color:var(--purple); font-weight:700;">M3.5 Self-Healing Demo →</a>
-            — Three scenarios: OCAP Rework + Crash, Send-Ahead + OCAP, Multi-WorkOrder Concurrent Chaos.
-            Watch EventSourced recovery, OCAP rule triggers, and breakpoint resume in real time.
+            — Five acts: OCAP Rework, Crash Recovery, Send-Ahead + OCAP, Multi-WO Concurrent Chaos, Event Contract Verification.
+            <a href="/en/m3-roadmap" style="color:var(--amber); font-weight:700;">M3.5 Roadmap →</a>
         </blockquote>
     </section>
 
@@ -956,9 +940,8 @@
         <p>Tech Stack: Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
         <p style="margin-top:4px;">
             <a href="/fab-demo/m35">M3.5 Self-Healing Demo</a> ·
-            <a href="/en/m25">M2.5+ Component Library (Execution Engine)</a> ·
+            <a href="/en/m3-roadmap">M3.5 Roadmap</a> ·
             <a href="/architecture">Architecture Radar</a> ·
-            <a href="/fab-demo">Fab Closed-Loop Demo</a> ·
             Architecture: Onion + DDD + CQRS/ES + Saga · Reactive Manifesto
         </p>
     </div>

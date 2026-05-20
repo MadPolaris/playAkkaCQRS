@@ -49,7 +49,6 @@
         .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
         .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
         .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
-        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
         .badge-m3 { background: rgba(245,158,11,0.15); color: var(--amber); }
         .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
 
@@ -139,10 +138,17 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
-                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
-                    <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
-                    <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
+                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
+                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
+                    <a href="/m3" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">在线演示 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 引擎</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>自愈编排</a>
                 </div>
             </div>
         </nav>
@@ -208,8 +214,7 @@
         <p>技术栈：Scala 2.13 · Akka 2.6 · Play Framework 2.8 · SVG animateMotion</p>
         <p style="margin-top:4px;">
             <a href="/m3">M3 架构文档</a> ·
-            <a href="/m25">M2.5+ 标准组件库</a> ·
-            <a href="/m25-demo">M2.5+ 交互演示</a>
+            <a href="/dag">DAG 引擎演示</a>
         </p>
     </div>
 

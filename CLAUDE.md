@@ -10,7 +10,7 @@
 | M2 — 流批一体多层级 DAG 执行引擎 | ✅ 线上质量 |
 | M2.5+ — 标准组件库 (6 组件 · Fix Once Apply Everywhere) | ✅ 线上质量 |
 | M3 — 事实驱动的 Fab 决策内核 (动态工艺织造 + MU 生命周期) | ✅ 原型可运行 (5 场景 + 动态 POR + 4 层事件投影 + WorkOrder 事件驱动) |
-| M3.5 — 自愈决策内核 (OCAP 拦截 · 动态 DAG 织造 · 0 卡死工单) | 🔨 进行中 (~40% · 预计 3 周到可演示) |
+| M3.5 — 自愈决策内核 (OCAP 拦截 · 动态 DAG 织造 · 0 卡死工单) | 🔨 进行中 |
 | M3.9 — 集群韧性 (多节点 · 杀节点不丢事件 · 50 WorkOrder 并发) | 🔮 规划中 |
 
 路线图详情：`/m3-roadmap`。Demo 页：`/fab-demo`。
@@ -67,14 +67,9 @@ Red → Green → Refactor，严格循环
 ```
 
 - **Actor 行为测试**：`EventSourcedBehaviorTestKit` 负责无副作用的 Command/Event 验证
-- **`.thenStop()` 陷阱**：Actor 完成后调用 `thenStop()` 时，用 `ref ! Command` + `TestProbe` 验证，不要用 `runCommand`（会 hang）
-- **长 Saga 测试超时**：在 `ConfigFactory` 中显式调大：
-  ```
-akka.test.single-expect-default = 30s
-akka.actor.testkit.typed.single-expect-default = 30s
-  ```
-- **测试失败先查逻辑**：持续 timeout 或非预期状态 → 先质疑测试前提，再改产品代码
-- **EventSourcing 状态转换**：Error path 和 Saga Compensation 时，显式保留 `replyTo` 和 `reason` 到新 State
+- **`.thenStop()` 陷阱**：不要用 `runCommand`（会 hang），用 `ref ! Command` + `TestProbe` 验证
+- **长 Saga 测试**：调大 timeout — `akka.test.single-expect-default = 30s`
+- **EventSourcing 状态转换**：Error/Saga Compensation 时显式保留 `replyTo` 和 `reason` 到新 State
 
 ## Local Dev Setup
 
@@ -88,28 +83,15 @@ sbt run                       # http://localhost:9000
 
 ```
 app/net/imadz/
-├── domain/             Entity, ValueObject, Invariant
-├── application/        Aggregate, ApplicationService, Projection, Saga
-│   └── aggregates/     Lot/Wafer/FabProcess Aggregates + Process Entity
-├── infrastructure/     Persistence adapter, Bootstrap, Guice module
-└── fab/                M3 Fab Demo (5 静态场景 + 动态 POR)
-    ├── chain/           FabChainExecutor + FabDemoPipeline + FabScenarioPipeline
-    │                    + DynamicFlowAssembler (纯决策引擎) + FabFlowEngine (动态执行)
-    ├── scenario/        FabSimulationScenario (5 StandardScenarios)
-    ├── service/         FabDemoService (多场景路由 + startDemoWithProduct)
-    ├── projection/      FabDemoEventBridge (3 层 EventStream 订阅)
-    ├── events/          FabSimulationEvent (WebSocket 事件类型)
-    ├── simulation/      Litho/CD-SEM/AMHS/Stocker/GenericEquipment 模拟器
-    ├── protocol/        ActorEquipmentAdapter + EquipmentAdapter
-    └── model/           LotContext, ProductRouting, ProductRoutingRepository,
-                         EquipmentArea, MeasurementResult
-
-app/views/           Play Twirl 模板（首页、Demo 页、文档页）
-app/protobuf/        .proto 文件 (lot/wafer/process — 三件套)
-conf/                application.conf / persistence.conf / cluster.conf / logback-test.xml
-conf/sql/1.sql       MySQL read-side schema（docker-compose 自动初始化）
-knowledge_base/      架构文档 & 方法论文档
-test/                单元 + 集成测试 (161 用例, 5 种 Pattern + DynamicFlowAssembler)
+├── domain/          Entity, ValueObject, Invariant
+├── application/     Aggregate, Saga, Projection (aggregates/ Lot/Wafer/Process)
+├── infrastructure/  Persistence, Bootstrap, Guice DI
+└── fab/             M3 Demo: chain/ (DAG 引擎) · simulation/ (设备模拟器) · model/ (路由)
+app/views/           Play Twirl 模板（首页、Demo、文档）
+app/protobuf/        lot/wafer/process — 三件套
+conf/                app/persistence/cluster.conf + routes + SQL schema
+knowledge_base/      架构文档 · artifact 模板 · 方法论文档
+test/                 单元 + 集成测试 (202 用例, 6 种 Pattern)
 ```
 
 ### Test Patterns (测试分层)
@@ -123,3 +105,11 @@ test/                单元 + 集成测试 (161 用例, 5 种 Pattern + DynamicF
 | 5: Process Aggregate Spec | 状态机转换 | `FabProcessAggregateSpec` |
 
 注意：`EventSourcedBehaviorTestKit` 为每个实例创建独立 journal。多个 TestKit 使用相同 persistenceId 不会共享事件。跨测试共享 deterministic UUID 会导致状态泄露（状态来源不明确），应使用 random UUID + `BeforeAndAfterEach`。
+
+## Key References
+
+- **DDD 架构违规（6 条永不再犯）**：Actor 不直接发 UI 事件、fire-and-forget 竞态、Future 回调超 Actor 生命周期、全局 mutable 状态传递、前后端事件契约错位、发布路径不一致 — 详情见 memory `ddd-architecture-violations`
+- **Chain vs Saga 不混用**：Chain 管工序编排，Saga 管跨聚合 TCC 事务。OCAP 是路由决策点，不是新事务模式
+- **一个事实只落一个地方**：效果已由 Event 持久化，不需要单独记录决策
+- **知识库导航**：`knowledge_base/architecture/` (分层定义) · `knowledge_base/artifacts/` (30 种代码模板) · `knowledge_base/methodology/` (架构哲学)
+- **维护**：`/harness` 整理 Harness Engineering 环境

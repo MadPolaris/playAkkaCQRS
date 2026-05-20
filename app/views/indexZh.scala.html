@@ -275,13 +275,17 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
-                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
-                    <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
-                    <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
-                    <a href="/fab-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Fab 闭环演示</a>
-                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5</span>自愈决策内核 Demo</a>
-                    <a href="/m3-roadmap" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5+</span>路线图 →</a>
+                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务协调器</a>
+                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>流批一体 DAG 引擎</a>
+                    <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈动态工序编排</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">在线演示 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 引擎</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈内核</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -458,7 +462,7 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
                 <h4>标准组件库 — 修复一次，全局生效</h4>
-                <p>6 大标准组件替代 4 种手写 FSM 模板：SubBatchProcessor、ResultClassifier、ReconfirmHandler、ReBatchRouter、AreaScheduler、ExceptionScheduler。充值/申购同一套组件，仅错误码映射不同。一个修复点，所有实例同步更新。M3 Fab 动态工序编排直接复用全部 6 个组件。 <a href="/m25" style="color:var(--accent);font-weight:600;">阅读详解 →</a> <a href="/m25-demo" style="color:var(--accent);font-weight:600;">在线演示 →</a></p>
+                <p>6 大标准组件替代 4 种手写 FSM 模板：SubBatchProcessor、ResultClassifier、ReconfirmHandler、ReBatchRouter、AreaScheduler、ExceptionScheduler。充值/申购同一套组件，仅错误码映射不同。一个修复点，所有实例同步更新。M3 Fab 动态工序编排直接复用全部 6 个组件。 <a href="/m2" style="color:var(--accent);font-weight:600;">阅读详解 →</a> <a href="/dag" style="color:var(--accent);font-weight:600;">在线演示 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -524,8 +528,8 @@
             <p>6 大标准组件替代 4 种手写 FSM 模板。充值/申购同一套组件，仅错误码映射不同。SMS 通知复用同一条 Pipeline 的阶段。一个修复点，所有实例同步更新。M3 Fab 动态工序编排直接复用全部 6 个组件。</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：SubBatchProcessor → 任意设备区；ResultClassifier → 任意质量门禁</p>
             <br>
-            <a href="/m25" class="card-link">阅读详解 →</a>
-            <a href="/m25-demo" class="card-link" style="margin-left:16px;">打开演示 →</a>
+            <a href="/m2" class="card-link">阅读详解 →</a>
+            <a href="/dag" class="card-link" style="margin-left:16px;">打开演示 →</a>
         </div>
     </div>
 

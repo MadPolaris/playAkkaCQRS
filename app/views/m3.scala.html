@@ -163,17 +163,22 @@
         <nav class="nav-links">
             <a href="/">首页</a>
             <a href="/fab-demo/m35" style="color:#a855f7; font-weight:700;">M3.5 自愈演示</a>
-            <a href="/fab-demo" style="color:#14b8a6; font-weight:700;">Fab 闭环演示</a>
+            <a href="/m3-roadmap" style="color:#f59e0b; font-weight:700;">M3.5 路线图</a>
             <a href="/en/m3" style="color:#f59e0b; font-weight:700;">EN</a>
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
-                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
-                    <a href="/m25" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M2.5+</span>标准组件库</a>
-                    <a href="/m3" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
-                    <a href="/fab-demo" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Fab 闭环演示</a>
-                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5</span>自愈决策内核 Demo</a>
+                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务协调器</a>
+                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>流批一体 DAG 引擎</a>
+                    <a href="/m3" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>自愈动态工序编排</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">在线演示 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 引擎</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈内核</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -838,7 +843,7 @@
         <div class="arch-callout purple">
             <strong>渐进演进的核心证明：</strong>M2.5+ 没有一行代码被修改。M3 的增量全部在决策层——Dynamic Flow Assembler、
             Lot Context (MU 矩阵)、BMM、四路 Result Classifier。运行时层只是以<strong>新的顺序和条件</strong>被调用。
-            详见 <a href="/m25" style="color:var(--purple);">M2.5+ 标准组件库</a>。
+            详见 <a href="/m2" style="color:var(--purple);">M2 流批一体 DAG 引擎</a>。
         </div>
     </section>
 
@@ -914,62 +919,41 @@
         <h2>九、M3.5 · 自愈决策内核 — 从静态脚本到反应式内核</h2>
 
         <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
-            M3.5 在 M3 决策层之上增加了<strong>崩溃自愈</strong>和<strong>OCAP 拦截</strong>能力。
-            它回答了一个关键问题：当执行引擎本身崩溃时，工单如何不卡死？
+            M3.5 在 M3 决策层之上增加了<strong>崩溃自愈</strong>和<strong>OCAP 拦截</strong>能力——并已<strong>全面落地</strong>。
+            单 WorkOrder 断点续传、OCAP→Rework DSL 动态织造、设备自发故障注入、Pipeline 全局异常捕获、
+            WorkOrder 失败传播均已实现。多 WorkOrder 并发混沌测试通过（202 测试）。
         </p>
 
-        <h3>单 WorkOrder 自愈：EventSourced 断点恢复</h3>
-
-        <p style="font-size:0.85rem; color:var(--fg-muted); margin-bottom:16px;">
-            每个 WorkOrder 对应一个 <code>FabPipelineExecutionActor</code>（EventSourcedBehavior）。
-            其状态机包含四个状态：<strong>Idle → Executing → Completed / Failed</strong>。
-            Pipeline 执行过程中，每完成一个阶段（Phase），就持久化一条 <code>PhaseCompleted</code> 事件，
-            将阶段名称追加到 <code>completedPhases</code> 游标中。
-        </p>
-
-        <div class="comp-grid">
-            <div class="comp-card" style="border-color: rgba(63,185,80,0.3);">
-                <div class="comp-icon">💾</div>
-                <h4>EventSourced 持久化</h4>
-                <p>所有 PhaseCompleted 事件写入 Akka Persistence Journal（MongoDB）。
-                崩溃后 Actor 重启，事件重放恢复 <code>completedPhases</code> 游标。
-                系统知道自己"跑到哪了"，不会丢失进度。</p>
-            </div>
-            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
-                <div class="comp-icon">⏭️</div>
-                <h4>断点续传 resumeFromIndex</h4>
-                <p><code>RecoveryCompleted</code> 信号中重建执行上下文，
-                调用 <code>FabPipelineProcessor.resumeFromIndex(state, completedCount)</code>——
-                跳过已完成阶段，从中断处继续执行后续阶段。</p>
-            </div>
-            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
-                <div class="comp-icon">🛡️</div>
-                <h4>OCAP 故障拦截</h4>
-                <p>Pipeline Stage 执行失败时，<code>FabScenarioPipeline.invokeOcapInterceptor</code>
-                匹配 OCAP 规则（条件评估 + 优先级排序），执行 Rework / Scrap / Hold / Notify / AdjustRecipe 动作。
-                规则从 HOCON 配置文件热加载，无需重启。</p>
-            </div>
+        <div class="stat-row" style="margin-bottom: 24px;">
+            <div class="stat-card"><div class="num num-green">202</div><div class="lbl">单元 + 集成测试</div></div>
+            <div class="stat-card"><div class="num num-purple">6</div><div class="lbl">M3.5 核心能力全部交付</div></div>
+            <div class="stat-card"><div class="num num-teal">3</div><div class="lbl">自愈演示场景</div></div>
         </div>
 
-        <h3>当前能力边界</h3>
+        <h3>已交付的 6 项核心能力</h3>
+
+        <table class="ps-table" style="margin-bottom: 24px;">
+            <thead><tr><th style="width:5%">#</th><th style="width:28%">能力</th><th style="width:37%">实现</th><th style="width:30%">验证</th></tr></thead>
+            <tbody>
+                <tr><td>1</td><td><strong>EventSourced 断点续传</strong></td><td>崩溃后 Journal 重放恢复 completedPhases，resumeFromIndex 跳已完成阶段</td><td>PipelineRecoveryChaosSpec（3 场景）</td></tr>
+                <tr><td>2</td><td><strong>OCAP 异常拦截器</strong></td><td>invokeOcapInterceptor 在 Stage 失败时触发，6 种动作</td><td>5 个 OCAP 场景集成测试</td></tr>
+                <tr><td>3</td><td><strong>OCAP→Rework DSL 织造</strong></td><td>OCAP 拦截 → DynamicFlowAssembler 实时织造 Rework DSL → 注入引擎</td><td>ReworkLoop 端到端闭环验证</td></tr>
+                <tr><td>4</td><td><strong>Pipeline 全局异常捕获</strong></td><td>3 个管线引擎全局 recover/fallbackTo，异常上报 WorkOrder</td><td>PipelineFailureSpec（6 场景）</td></tr>
+                <tr><td>5</td><td><strong>设备自发故障注入</strong></td><td>Litho/CDSEM 模拟器运行时随机产生 JobFailed</td><td>ConcurrentWorkOrderChaosSpec（50 WO 并发）</td></tr>
+                <tr><td>6</td><td><strong>WorkOrder 失败传播</strong></td><td>RecordLotFailed 命令 + Projection + UI 面板实时更新</td><td>WorkOrderE2EIntegrationSpec（7 用例）</td></tr>
+            </tbody>
+        </table>
 
         <div class="arch-callout">
-            <strong>已实现：</strong>单 WorkOrder 中途崩溃 → EventSourced 状态恢复 → 断点续传 → OCAP 故障拦截。
-            在 <code>Executing</code> 状态下崩溃，Pipeline 可从已完成阶段后自动恢复。
-        </div>
-
-        <div class="arch-callout red">
-            <strong>已知边界：</strong>若崩溃在 <code>Idle</code> 状态命中（<code>StartExecution</code> 尚未处理），
-            fire-and-forget 消息丢失后缺少上层编排聚合重试。多 WorkOrder 并发场景下，
-            尚无 WorkOrderBatch 聚合或 Watchdog 机制保证所有工单最终启动。
-            这是 M3.5 的后续攻坚方向。
+            <strong>已实现：</strong>单 WorkOrder EventSourced 状态恢复 → 断点续传 → OCAP 故障拦截 → Rework DSL 动态织造。
+            多 WorkOrder 并发通过 ConcurrentWorkOrderChaosSpec。设备自发故障注入已激活。
         </div>
 
         <blockquote>
             <strong>在线演示：</strong>
             <a href="/fab-demo/m35" style="color:var(--purple); font-weight:700;">M3.5 自愈演示 →</a>
-            — 包含 OCAP 返修 + 崩溃注入、Send-Ahead + OCAP、多 WorkOrder 并发混沌三个场景。
-            实时观察 EventSourced 恢复、OCAP 规则触发、断点续传全过程。
+            — 五幕叙事：OCAP 返修、崩溃注入恢复、Send-Ahead + OCAP、多 WorkOrder 并发混沌、事件契约验证。
+            <a href="/m3-roadmap" style="color:var(--amber); font-weight:700;">M3.5 路线图 →</a>
         </blockquote>
     </section>
 
@@ -978,9 +962,8 @@
         <p>技术栈：Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
         <p style="margin-top:4px;">
             <a href="/fab-demo/m35">M3.5 自愈演示</a> ·
-            <a href="/m25">M2.5+ 标准组件库（执行引擎）</a> ·
+            <a href="/m3-roadmap">M3.5 路线图</a> ·
             <a href="/architecture">架构雷达</a> ·
-            <a href="/fab-demo">Fab 闭环演示</a> ·
             架构：洋葱 + DDD + CQRS/ES + Saga · 反应式宣言
         </p>
     </div>
