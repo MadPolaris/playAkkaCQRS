@@ -64,6 +64,15 @@ object FabExecutionModel {
     ocapActions: List[(String, OcapActionPlan)] = Nil
   ) extends CborSerializable
 
+  /** Demo-specific execution profile — bundles scenario config + simulation tuning knobs.
+   *  Separated from [[ExecutionContext]] so kernel code (PipelineStages, FabFlowEngine)
+   *  doesn't import scenario types directly. */
+  case class DemoExecutionProfile(
+    scenario: FabSimulationScenario,
+    speedMultiplier: Double = 1.0,
+    faultProbability: Double = 0.0
+  )
+
   case class FabDemoContext(
     scenario: FabSimulationScenario,
     foupId: String,
@@ -75,6 +84,7 @@ object FabExecutionModel {
     /** @deprecated Prefer `childLotIds("rwk")` — SubLot context switching uses the child maps. */
     reworkLotId: Id,
     adapter: ActorEquipmentAdapter,
+    /** Target for Phase 2-3 removal: UI events should flow via Projection, not direct push. */
     publisher: FabSimulationEvent => Unit,
     ignoreLotReply: ActorRef[LotConfirmation],
     sagaTx: (Id, Id, Set[Id], Set[String], Option[Id]) => Future[FabSagaConfirmation],
@@ -85,12 +95,27 @@ object FabExecutionModel {
     childLotIds: Map[String, Id] = Map.empty,
     ocapRules: List[OcapRuleDefinition] = Nil,
     faultProbability: Double = 0.0
-  )(implicit val ec: ExecutionContext) {
+  )(implicit val ec: ExecutionContext) extends net.imadz.application.chain.ExecutionContext {
+
+    /** Convenience accessor for the demo profile (for gradual migration). */
+    def profile: DemoExecutionProfile = DemoExecutionProfile(scenario, speedMultiplier, faultProbability)
 
     /** Runtime-only Promise storage for AwaitSubLotResult suspension.
      *  Keyed by lotKey ("rwk","pilot", etc.). NOT serialized — re-populated at runtime and on recovery. */
     val awaitPromises: scala.collection.concurrent.TrieMap[String, scala.concurrent.Promise[SubLotResult]] =
       scala.collection.concurrent.TrieMap.empty
+
+    /** Intra-stage progress hook. Default routes through publisher → WebSocket (non-Actor path).
+     *  The Actor path overrides this to persist [[StageProgress]] events via the journal.
+     *
+     *  @demo The default fallback publishes GlobalStatusChanged directly for backward
+     *        compat with non-Actor callers (tests, direct invocation). In the unified Actor
+     *        path this is overridden to go through the journal. */
+    var stageProgressFn: (String, String, String) => Unit =
+      (status, detail, phase) => publisher(net.imadz.domain.events.GlobalStatusChanged(status, detail, phase))
+
+    override def stageProgress(status: String, detail: String, phase: String): Unit =
+      stageProgressFn(status, detail, phase)
   }
 
   // ---- Pipeline error types (M3.5) ----

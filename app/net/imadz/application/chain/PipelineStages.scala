@@ -31,7 +31,7 @@ object PipelineStages {
   // ====================================================================
   def loadFoup(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     emitLedger(state, "PhaseLoad: Load FOUP from Stocker", ctx)
-    ctx.publisher(GlobalStatusChanged("LOADING", "Loading FOUP", "PhaseLoad"))
+    ctx.stageProgress("LOADING", "Loading FOUP", "PhaseLoad")
     ctx.lotRef ! RecordFoupLoaded(ctx.foupId, ctx.scenario.stocker.equipmentId, ctx.ignoreLotReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "LOADING", activeCount(state), 0, "STOCKER", lotId = ctx.scenario.scenarioId))
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, ctx.scenario.stocker.equipmentId, "STOCKER-PORT-1"))
@@ -43,7 +43,7 @@ object PipelineStages {
   // ====================================================================
   def transport(state: FabDemoState, ctx: FabDemoContext, from: String, to: String): Future[FabDemoState] = {
     val s = emitLedger(state, s"PhaseTransport: $from → $to", ctx)
-    ctx.publisher(GlobalStatusChanged("TRANSPORTING", s"$from → $to", "PhaseTransport"))
+    ctx.stageProgress("TRANSPORTING", s"$from → $to", "PhaseTransport")
     val routeMs = ctx.scenario.amhs.routes.get((from, to)).map(_.toMillis).getOrElse(2000L)
     val scaledMs = (routeMs / ctx.speedMultiplier).toLong
     ctx.lotRef ! RecordTransportStarted(ctx.foupId, from, to, scaledMs, ctx.ignoreLotReply)
@@ -60,7 +60,7 @@ object PipelineStages {
   // ====================================================================
   def trackIn(state: FabDemoState, ctx: FabDemoContext, equipId: String, portId: String = "LP1"): Future[FabDemoState] = {
     val s = emitLedger(state, s"PhaseTrackIn: $equipId port $portId", ctx)
-    ctx.publisher(GlobalStatusChanged("TRACK_IN", s"$equipId:$portId loading", "PhaseTrackIn"))
+    ctx.stageProgress("TRACK_IN", s"$equipId:$portId loading", "PhaseTrackIn")
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, equipId, portId))
     val areaType = if (equipId.contains("LITHO")) "LITHO" else if (equipId.contains("CDSEM")) "METROLOGY" else equipId
     ctx.publisher(EquipmentStateChanged(equipId, areaType, "Load", Some(s"lot-${s.ledgerSeq}")))
@@ -73,7 +73,7 @@ object PipelineStages {
   // ====================================================================
   def atEquipment(state: FabDemoState, ctx: FabDemoContext, area: String, equipId: String): Future[FabDemoState] = {
     val s = emitLedger(state, s"PhaseAt$area: FOUP at $area", ctx)
-    ctx.publisher(GlobalStatusChanged("AT_EQP", s"FOUP at $area", s"PhaseAt$area"))
+    ctx.stageProgress("AT_EQP", s"FOUP at $area", s"PhaseAt$area")
     ctx.lotRef ! RecordTransportCompleted(ctx.foupId, equipId, ctx.ignoreLotReply)
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, equipId, s"$equipId-PORT-1"))
     ctx.publisher(FoupStateChanged(ctx.foupId, "AT_EQUIPMENT", activeCount(state), 0, area, lotId = ctx.scenario.scenarioId))
@@ -88,7 +88,7 @@ object PipelineStages {
   // ====================================================================
   def process(state: FabDemoState, ctx: FabDemoContext, equipId: String, recipeId: String, areaType: String): Future[FabDemoState] = {
     val s = emitLedger(state, s"PhaseProcess: $recipeId on $equipId", ctx)
-    ctx.publisher(GlobalStatusChanged("PROCESSING", s"$equipId processing", "PhaseProcess"))
+    ctx.stageProgress("PROCESSING", s"$equipId processing", "PhaseProcess")
     val scaledMs = (ctx.scenario.litho.processingTime.toMillis / ctx.speedMultiplier).toLong
     ctx.lotRef ! RecordEquipmentJobStarted(equipId, recipeId, ctx.ignoreLotReply)
     ctx.publisher(EquipmentStateChanged(equipId, areaType, "Busy", Some(s"job-$recipeId")))
@@ -114,7 +114,7 @@ object PipelineStages {
   // ====================================================================
   def trackOut(state: FabDemoState, ctx: FabDemoContext, equipId: String, portId: String = "LP1"): Future[FabDemoState] = {
     val s = emitLedger(state, s"PhaseTrackOut: $equipId port $portId", ctx)
-    ctx.publisher(GlobalStatusChanged("TRACK_OUT", s"$equipId:$portId unloading", "PhaseTrackOut"))
+    ctx.stageProgress("TRACK_OUT", s"$equipId:$portId unloading", "PhaseTrackOut")
     val areaType = if (equipId.contains("LITHO")) "LITHO" else if (equipId.contains("CDSEM")) "METROLOGY" else equipId
     ctx.publisher(EquipmentStateChanged(equipId, areaType, "Idle", None))
     ctx.publisher(FoupStateChanged(ctx.foupId, "UNLOADED", activeCount(state), 0, equipId, lotId = ctx.scenario.scenarioId))
@@ -126,7 +126,7 @@ object PipelineStages {
   // ====================================================================
   def measure(state: FabDemoState, ctx: FabDemoContext, equipId: String): Future[FabDemoState] = {
     val s = emitLedger(state, "PhaseMeasure: CD-SEM", ctx)
-    ctx.publisher(GlobalStatusChanged("MEASURING", "CD measurement", "PhaseMeasure"))
+    ctx.stageProgress("MEASURING", "CD measurement", "PhaseMeasure")
     val scaledMs = (ctx.scenario.cdSem.processingTime.toMillis / ctx.speedMultiplier).toLong
     ctx.lotRef ! RecordEquipmentJobStarted(equipId, "CD-MEASURE-001", ctx.ignoreLotReply)
     ctx.publisher(EquipmentStateChanged(equipId, "METROLOGY", "Busy", Some("metrology-job")))
@@ -171,7 +171,7 @@ object PipelineStages {
   // ====================================================================
   def sealComplete(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = emitLedger(state, "PhaseComplete: Lot sealed", ctx)
-    ctx.publisher(GlobalStatusChanged("COMPLETED", "Demo completed", "PhaseComplete"))
+    ctx.stageProgress("COMPLETED", "Demo completed", "PhaseComplete")
     ctx.lotRef ! RecordTransportCompleted(ctx.foupId, ctx.scenario.stocker.equipmentId, ctx.ignoreLotReply)
     ctx.lotRef ! SealLot(ctx.ignoreLotReply)
     val totalRework = state.wafers.values.count(_.reworkCount > 0)

@@ -117,10 +117,10 @@ object FabFlowEngine {
         } yield s5).recoverWith {
           case StageFailedException(err) =>
             ctx.publisher(net.imadz.domain.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
-            ctx.publisher(net.imadz.domain.events.GlobalStatusChanged("FAILED", s"${err.stageName} failed: ${err.detail}", "PhaseFailed"))
+            ctx.stageProgress("FAILED", s"${err.stageName} failed: ${err.detail}", "PhaseFailed")
             Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
           case ex: Exception =>
-            ctx.publisher(net.imadz.domain.events.GlobalStatusChanged("ERROR", s"Unexpected: ${ex.getMessage}", "PhaseFailed"))
+            ctx.stageProgress("ERROR", s"Unexpected: ${ex.getMessage}", "PhaseFailed")
             Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
         }
       }
@@ -135,7 +135,7 @@ object FabFlowEngine {
 
   private def loadFoup(state: FabDemoState, ctx: FabDemoContext, routing: Por): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, s"PhaseLoad: Load FOUP — ${routing.productId} (${routing.steps.size} steps)", ctx)
-    ctx.publisher(GlobalStatusChanged("LOADING", s"Starting ${routing.productId}", "PhaseLoad"))
+    ctx.stageProgress("LOADING", s"Starting ${routing.productId}", "PhaseLoad")
     ctx.lotRef ! RecordFoupLoaded(ctx.foupId, StockerEquipId, ctx.ignoreLotReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "LOADING", PipelineStages.activeCount(state), 0, "STOCKER", lotId = routing.productId))
     ctx.publisher(FoupArrivedAtPort(ctx.foupId, StockerEquipId, "STOCKER-PORT-1"))
@@ -158,7 +158,7 @@ object FabFlowEngine {
       s2b <- PipelineStages.trackIn(s2, ctx, CdsemEquipId)
       s3 = PipelineStages.emitLedger(s2b, s"Measure: CD-SEM — ${step.recipeId}", ctx)
       _ = {
-        ctx.publisher(GlobalStatusChanged("MEASURING", "CD measurement", "PhaseMeasure"))
+        ctx.stageProgress("MEASURING", "CD measurement", "PhaseMeasure")
         ctx.lotRef ! RecordEquipmentJobStarted(CdsemEquipId, "CD-MEASURE-001", ctx.ignoreLotReply)
         ctx.publisher(EquipmentStateChanged(CdsemEquipId, "MET", "Busy", Some("metrology-job")))
         ctx.publisher(ProcessingStarted(CdsemEquipId, "CD-MEASURE-001", scaledMs))
@@ -191,7 +191,7 @@ object FabFlowEngine {
     reentryIdx: Int, targetAreaId: String
   )(implicit ec: ExecutionContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, s"Classify: Decision Engine — ${step.stepId}", ctx)
-    ctx.publisher(GlobalStatusChanged("CLASSIFYING", "Decision Engine", "PhaseClassify"))
+    ctx.stageProgress("CLASSIFYING", "Decision Engine", "PhaseClassify")
 
     var updatedWafers = state.wafers
     val dispositions = scala.collection.mutable.Map.empty[String, WaferDisposition]
@@ -343,7 +343,7 @@ object FabFlowEngine {
 
   private def sealComplete(state: FabDemoState, ctx: FabDemoContext, routing: Por): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, s"PhaseComplete: All ${routing.steps.size} steps done — ${routing.productId}", ctx)
-    ctx.publisher(GlobalStatusChanged("COMPLETED", s"${routing.productId} completed: ${state.passCount} PASS, ${state.scrapCount} SCRAP", "PhaseComplete"))
+    ctx.stageProgress("COMPLETED", s"${routing.productId} completed: ${state.passCount} PASS, ${state.scrapCount} SCRAP", "PhaseComplete")
     ctx.lotRef ! SealLot(ctx.ignoreLotReply)
     ctx.lotRef ! CompleteProcess(routing.productId, state.passCount, state.scrapCount, 0, ctx.ignoreLotReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "COMPLETED", 0, 0, "STOCKER", lotId = routing.productId))

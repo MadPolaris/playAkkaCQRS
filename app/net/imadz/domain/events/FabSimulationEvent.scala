@@ -100,7 +100,11 @@ case class DomainEventRecorded(
 // --- M3.5 Self-Healing Events ---
 
 /** Recovery event for crash + self-healing visualization.
-  * recoveryType: "CRASH_DETECTED" | "RECOVERING" | "RECOVERED" | "COMPLETED" */
+  * recoveryType: "CRASH_DETECTED" | "RECOVERING" | "RECOVERED" | "COMPLETED"
+  *
+  * @demo RECOVERING/RECOVERED are a demo UX affordance for the crash-resilience demo.
+  *       In a production EventSourced system, recovery is transparent — the Projection
+  *       replays journal events and the read-model converges without explicit signals. */
 case class RecoveryEvent(
   workOrderId: String,
   recoveryType: String,

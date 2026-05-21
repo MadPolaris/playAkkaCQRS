@@ -2,7 +2,7 @@ package net.imadz.application.chain
 
 import net.imadz.domain.events._
 import net.imadz.application.chain.FabScenarioPipeline.{PipelineStage, _}
-import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState, StageFailedException}
+import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState, StageError, StageFailedException}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
@@ -12,15 +12,17 @@ import scala.util.control.NonFatal
  * runtime dynamic injection (injectHead/appendTail), and crash recovery.
  *
  * Designed to be wrapped by [[FabPipelineExecutionActor]] for EventSourced persistence.
- * Each completed stage triggers `onPhaseComplete` which signals the actor to persist
- * a PhaseDone event.
+ * Each stage lifecycle event (start/complete/fail) triggers a callback which signals
+ * the actor to persist the corresponding domain event.
  *
  * Stage name derivation converts each [[PipelineStage]] variant to a stable string
  * cursor suitable for use as an event-sourcing phase cursor.
  */
 class FabPipelineProcessor(
   ctx: FabDemoContext,
-  onPhaseComplete: (String, Map[String, String], Option[FabDemoState]) => Unit
+  onPhaseStart: String => Unit,
+  onPhaseComplete: (String, Map[String, String], Option[FabDemoState]) => Unit,
+  onPhaseFailed: (String, StageError) => Unit
 ) {
 
   private var queue: Vector[PipelineStage] = Vector.empty
@@ -71,6 +73,8 @@ class FabPipelineProcessor(
     case OcapActionRouter                   => "OcapActionRouter"
     case ExecuteSubProcess(ref)             => s"ExecuteSubProcess_${ref.subProcessType}"
     case AwaitSubLotResult(lotKey)          => s"AwaitSubLotResult_${lotKey}"
+    case PhotoCellReworkPipeline            => "PhotoCellReworkPipeline"
+    case DynamicPorExecution(_, _)          => "DynamicPorExecution"
     case _                                  => stage.getClass.getSimpleName
   }
 
@@ -94,7 +98,6 @@ class FabPipelineProcessor(
   def resume(state: FabDemoState, completedPhases: Set[String])(implicit ec: ExecutionContext): Future[FabDemoState] = {
     val remaining = queue.dropWhile(stage => completedPhases.contains(stageName(stage)))
     if (remaining.size == queue.size) {
-      // Nothing was skipped — this is a fresh start or phases were interleaved
       executeQueue(queue, state, ec)
     } else {
       executeQueue(remaining, state, ec)
@@ -121,22 +124,22 @@ class FabPipelineProcessor(
       case v if v.isEmpty =>
         Future.successful(state)
       case stage +: tail =>
+        val sn = stageName(stage)
+        onPhaseStart(sn)
         runStage(stage, state, ctx).flatMap { nextState =>
-          val sn = stageName(stage)
           val isHighValue = sn.startsWith("Measure") || sn == "Classify" || sn == "M35ClassifyWithOcap"
           val fabState = if (isHighValue) Some(nextState) else None
           onPhaseComplete(sn, Map.empty, fabState)
           executeQueue(tail, nextState, ec)
         }(ec).recoverWith {
           case StageFailedException(err) =>
-            ctx.publisher(PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
-            ctx.publisher(GlobalStatusChanged("FAILED", s"${err.stageName}: ${err.detail}", "PhaseFailed"))
+            onPhaseFailed(sn, err)
             FabScenarioPipeline.invokeOcapInterceptor(state, ctx, err).flatMap { ocapState =>
-              onPhaseComplete(stageName(stage), Map("ocap" -> err.stageName), None)
+              onPhaseComplete(sn, Map("ocap" -> err.stageName), None)
               executeQueue(tail, ocapState, ec)
             }(ec)
           case NonFatal(ex) =>
-            ctx.publisher(GlobalStatusChanged("ERROR", s"Unexpected: ${ex.getMessage}", "PhaseFailed"))
+            onPhaseFailed(sn, StageError(sn, None, "UNEXPECTED", ex.getMessage))
             Future.successful(state)
         }(ec)
     }
@@ -148,9 +151,11 @@ object FabPipelineProcessor {
   def apply(
     stages: Seq[PipelineStage],
     ctx: FabDemoContext,
-    onPhaseComplete: (String, Map[String, String], Option[FabDemoState]) => Unit
+    onPhaseStart: String => Unit,
+    onPhaseComplete: (String, Map[String, String], Option[FabDemoState]) => Unit,
+    onPhaseFailed: (String, StageError) => Unit
   ): FabPipelineProcessor = {
-    val p = new FabPipelineProcessor(ctx, onPhaseComplete)
+    val p = new FabPipelineProcessor(ctx, onPhaseStart, onPhaseComplete, onPhaseFailed)
     p.initialize(stages)
     p
   }

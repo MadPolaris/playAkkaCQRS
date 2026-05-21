@@ -54,9 +54,6 @@ class FabDemoService @Inject()(
   /** Shared M3.5 equipment adapter — persists across pipeline actor crashes so recovery can reuse simulator refs. */
   @volatile private var m35Adapter: Option[ActorEquipmentAdapter] = None
 
-  /** Whether FabPipelineExecutionActor has been registered in sharding. */
-  private var pipelineActorInitialized: Boolean = false
-
   def setSystemWidePublisher(publisher: FabSimulationEvent => Unit): Unit = {
     systemWidePublisher = Some(publisher)
   }
@@ -129,13 +126,18 @@ class FabDemoService @Inject()(
 
     val pipelineFn = FabFlowEngine.runRouting(routing, FabFlowEngine.DefaultDecisionConfig) _
 
-    // Create entities (idempotent) then run pipeline
+    // Create entities (idempotent) then run pipeline via Actor
     // Child lots (rework, scrap) are created lazily inside the pipeline's saga split/scrap stages.
+    val stages = Seq(FabScenarioPipeline.DynamicPorExecution(routing, FabFlowEngine.DefaultDecisionConfig))
     for {
       _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
       _ = spawnDynamicSimulators(routing, adapter, publisher, waferIds)
-      result <- pipelineFn(initialState, ctx)
-    } yield result
+    } yield {
+      val execRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
+      execRef ! FabPipelineExecutionActor.StartExecution(productId, workOrderId, initialState, stages, ctx,
+        system.ignoreRef[FabPipelineExecutionActor.ExecutionReply])
+      initialState
+    }
   }
 
   /** Execute a work order from a RouteDefinition (Route Browser "Start" path).
@@ -224,8 +226,12 @@ class FabDemoService @Inject()(
     for {
       _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
       _ = spawnMinimalSimulators(adapter, publisher)
-      result <- FabScenarioPipeline.runStages(stages, initialState, ctx)
-    } yield result
+    } yield {
+      val execRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
+      execRef ! FabPipelineExecutionActor.StartExecution(productId, workOrderId, initialState, stages, ctx,
+        system.ignoreRef[FabPipelineExecutionActor.ExecutionReply])
+      initialState
+    }
   }
 
   /** Spawn minimal simulators (Litho + CDSEM + AMHS + Stocker) for route-based execution. */
@@ -339,12 +345,17 @@ class FabDemoService @Inject()(
     // Child lots are created lazily inside each pipeline's sagaSplit stage,
     // not upfront — avoids empty child lots appearing in the UI before split.
 
-    val pipelineFn = if (isRework) FabDemoPipeline.runPipeline _ else FabScenarioPipeline.runPipeline _
+    val stages = if (isRework) Seq(FabScenarioPipeline.PhotoCellReworkPipeline)
+                 else FabScenarioPipeline.resolveStages(scenarioId)
 
     for {
       _ <- lotRef.ask[LotConfirmation](ref => CreateLot(s"FAB-$workOrderId", waferUUIDs.map(_.swap), ref, workOrderId = Some(workOrderId)))
-      result <- pipelineFn(initialState, ctx)
-    } yield result
+    } yield {
+      val execRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
+      execRef ! FabPipelineExecutionActor.StartExecution(scenarioId, workOrderId, initialState, stages, ctx,
+        system.ignoreRef[FabPipelineExecutionActor.ExecutionReply])
+      initialState
+    }
   }
 
   /**
@@ -1305,9 +1316,6 @@ class FabDemoService @Inject()(
     }
     val workOrderId = UUID.randomUUID().toString
 
-    // Init FabPipelineExecutionActor in sharding (idempotent)
-    initPipelineActor(publisher)
-
     publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
 
     // Publish a timeline snapshot to initialize the UI
@@ -1381,8 +1389,6 @@ class FabDemoService @Inject()(
     val (baseScenario, stages) = buildMultiWorkOrderChaosScenario(faultProbability)
     val rulePrefixes = Seq("WO-ALPHA", "WO-BRAVO", "WO-CHARLIE")
     val productPrefixes = Seq("ALPHA-01", "BRAVO-01", "CHARLIE-01")
-
-    initPipelineActor(publisher)
 
     // Run 3 work orders concurrently
     rulePrefixes.foreach { prefix =>
@@ -1476,31 +1482,6 @@ class FabDemoService @Inject()(
           }
         }
       )(classicSystem.dispatcher)
-    }
-  }
-
-  /** Idempotent pipeline actor initialization. */
-  private def initPipelineActor(publisher: FabSimulationEvent => Unit): Unit = {
-    // Create a resolver that captures OCAP rules from the service
-    val ocapRulesRef = new java.util.concurrent.atomic.AtomicReference[List[OcapRuleDefinition]](ocapRuleStore.getRules)
-    val dynamicStageResolver: String => Seq[PipelineStage] = { scenarioId =>
-      val rules = ocapRulesRef.get.filter(r => {
-        val routeId = scenarioId match {
-          case "send-ahead-pilot" => "SEND-AHEAD-PILOT"
-          case _                  => "PHOTOCELL-5WAFER"
-        }
-        r.routeId == routeId || r.routeId.isEmpty
-      })
-      FabScenarioPipeline.m35BasicStages(rules)
-    }
-
-    if (!pipelineActorInitialized) {
-      this.synchronized {
-        if (!pipelineActorInitialized) {
-          FabPipelineExecutionActor.init(sharding, m35ContextFactory, m35StateFactory, dynamicStageResolver, publisher)
-          pipelineActorInitialized = true
-        }
-      }
     }
   }
 

@@ -45,6 +45,7 @@
     // --- Demo Lifecycle ---
     sub(S.demoCompleted$, function(data) {
       updateFoupCompleted();
+      updateGlobalStatus({status: 'COMPLETED', detail: 'Demo completed — PASS=' + data.passedWafers + ' REWORK=' + data.reworkedWafers + ' SCRAP=' + data.scrappedWafers, phase: 'PhaseComplete'});
       addTimelineEntry({type: 'RecoveryCompleted', data: data}, true);
     });
     sub(S.demoStarted$, function(data) {

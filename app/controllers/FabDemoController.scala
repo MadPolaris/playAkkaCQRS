@@ -70,7 +70,7 @@ class FabDemoController @Inject()(
   )
 
   // Pipeline timeline projection: subscribes "fab-pipeline" tagged journal events,
-  // converts PhaseDone → PipelineTimelineSnapshot for UI progress bar
+  // converts StageCompleted → PipelineTimelineSnapshot for UI progress bar
   typedSystem.systemActorOf(
     ProjectionBehavior(FabPipelineProjection.createProjection(typedSystem, publishEvent)),
     "fab-pipeline-projection"
@@ -611,9 +611,9 @@ class FabDemoController @Inject()(
   private def pipelineEventToEntry(timestamp: Long, evt: FabPipelineExecutionActor.Event): Option[TimelineEntry] = evt match {
     case FabPipelineExecutionActor.Started(scenarioId, woId, stageCount) =>
       Some(TimelineEntry(timestamp, "pipeline", "Started", s"scenario=$scenarioId, stages=$stageCount"))
-    case FabPipelineExecutionActor.PhaseDone(phase, ts, metadata, _) =>
-      Some(TimelineEntry(timestamp, "pipeline", s"PhaseDone", s"$phase"))
-    case FabPipelineExecutionActor.AllCompleted(scenarioId, woId) =>
+    case FabPipelineExecutionActor.StageCompleted(phase, ts, metadata, _) =>
+      Some(TimelineEntry(timestamp, "pipeline", s"StageCompleted", s"$phase"))
+    case FabPipelineExecutionActor.AllCompleted(scenarioId, woId, _, _, _, _) =>
       Some(TimelineEntry(timestamp, "pipeline", "AllCompleted", s"scenario=$scenarioId"))
     case FabPipelineExecutionActor.ExecutionFailed(phase, reason) =>
       Some(TimelineEntry(timestamp, "pipeline", "ExecutionFailed", s"$phase: $reason"))

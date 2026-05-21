@@ -209,7 +209,7 @@ class PipelineRecoveryChaosSpec extends ScalaTestWithActorTestKit(
 
       // ---- Phase 2: Complete first 6 phases (Litho) ----
       completePhases(ref, lithoPhaseNames)
-      Thread.sleep(300) // allow all PhaseDone events to persist
+      Thread.sleep(300) // allow all StageCompleted events to persist
 
       // ---- Phase 3: Simulate crash ----
       testKit.stop(ref)

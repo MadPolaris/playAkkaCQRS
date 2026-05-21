@@ -28,16 +28,18 @@ object FabScenarioPipeline {
   // Pipeline runner
   // ====================================================================
 
-  def runPipeline(initialState: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
-    val stages = ctx.scenario.scenarioId match {
-      case "send-ahead-pilot" => sendAheadStages
-      case "scrap-downgrade"  => scrapStages
-      case "sampling-demo"    => samplingStages
-      case "hold-release"     => holdReleaseStages
-      case _                  => basicStages
-    }
-    runSequence(stages, initialState, ctx)
+  /** Shared scenario→stages resolution. Single source of truth for static scenario dispatch. */
+  def resolveStages(scenarioId: String): Seq[PipelineStage] = scenarioId match {
+    case "send-ahead-pilot" => sendAheadStages
+    case "scrap-downgrade"  => scrapStages
+    case "sampling-demo"    => samplingStages
+    case "hold-release"     => holdReleaseStages
+    case _                  => basicStages
   }
+
+  /** @deprecated Use [[runStages]] with [[resolveStages]] instead. */
+  def runPipeline(initialState: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] =
+    runStages(resolveStages(ctx.scenario.scenarioId), initialState, ctx)
 
   /** Run an arbitrary sequence of PipelineStages. Public entry point for route-based execution. */
   def runStages(stages: Seq[PipelineStage], init: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
@@ -50,10 +52,10 @@ object FabScenarioPipeline {
         runStage(stage, state, ctx).recoverWith {
           case StageFailedException(err) =>
             ctx.publisher(PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
-            ctx.publisher(GlobalStatusChanged("FAILED", s"${err.stageName}: ${err.detail}", "PhaseFailed"))
+            ctx.stageProgress("FAILED", s"${err.stageName}: ${err.detail}", "PhaseFailed")
             invokeOcapInterceptor(state, ctx, err)
           case ex: Exception =>
-            ctx.publisher(GlobalStatusChanged("ERROR", s"Unexpected: ${ex.getMessage}", "PhaseFailed"))
+            ctx.stageProgress("ERROR", s"Unexpected: ${ex.getMessage}", "PhaseFailed")
             Future.successful(state)
         }(ctx.ec)
       )(ctx.ec)
@@ -101,6 +103,16 @@ object FabScenarioPipeline {
     * re-evaluation for remaining parent wafers instead of proceeding normally. */
   case class AwaitSubLotResult(lotKey: String) extends PipelineStage
 
+  // ---- Macro-stage variants for non-Actor path unification (Phase 3) ----
+
+  /** Runs [[FabDemoPipeline.runPipeline]] as a single composite stage.
+    * Internal steps still emit UI events via ctx.publisher until Phase 3b. */
+  case object PhotoCellReworkPipeline extends PipelineStage
+
+  /** Runs [[FabFlowEngine.runRouting]] as a single composite stage.
+    * Internal POR steps still emit UI events via ctx.publisher until Phase 3b. */
+  case class DynamicPorExecution(routing: net.imadz.domain.values.Por, spec: net.imadz.application.scenario.DecisionConfig) extends PipelineStage
+
   def runStage(stage: PipelineStage, state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = ctx.ec
     stage match {
@@ -127,6 +139,8 @@ object FabScenarioPipeline {
       case M35ClassifyWithOcap(rules) => m35ClassifyWithOcap(state, ctx, rules)
       case OcapActionRouter => ocapActionRouter(state, ctx)
       case AwaitSubLotResult(lotKey) => awaitSubLotResult(state, ctx, lotKey)
+      case PhotoCellReworkPipeline => FabDemoPipeline.runPipeline(state, ctx)
+      case DynamicPorExecution(routing, spec) => FabFlowEngine.runRouting(routing, spec)(state, ctx)
     }
   }
 
@@ -244,7 +258,7 @@ object FabScenarioPipeline {
 
   private def classifyStage(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseClassify: Decision Engine", ctx)
-    ctx.publisher(GlobalStatusChanged("CLASSIFYING", "Decision", "PhaseClassify"))
+    ctx.stageProgress("CLASSIFYING", "Decision", "PhaseClassify")
     val scenId = ctx.scenario.scenarioId
     var updatedWafers = state.wafers
     var scrapWafers = Seq.empty[String]
@@ -314,7 +328,7 @@ object FabScenarioPipeline {
   private def classifyPilotWafer(state: FabDemoState, pilotCtx: FabDemoContext): Future[FabDemoState] = {
     implicit val ec: ExecutionContext = pilotCtx.ec
     val s = PipelineStages.emitLedger(state, "PhaseClassify: Pilot wafer", pilotCtx)
-    pilotCtx.publisher(GlobalStatusChanged("CLASSIFYING", "Classifying pilot wafer", "PhaseClassify"))
+    pilotCtx.stageProgress("CLASSIFYING", "Classifying pilot wafer", "PhaseClassify")
     var updatedWafers = state.wafers
     var pilotPassed = false
 
@@ -349,7 +363,7 @@ object FabScenarioPipeline {
   private def sagaSplit(state: FabDemoState, ctx: FabDemoContext, lotKey: String): Future[FabDemoState] = {
     implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, s"PhaseSplit: Saga Split → $lotKey", ctx)
-    ctx.publisher(GlobalStatusChanged("SPLITTING", s"Saga TCC split → $lotKey", "PhaseSplit"))
+    ctx.stageProgress("SPLITTING", s"Saga TCC split → $lotKey", "PhaseSplit")
     val childLotId = ctx.childLotIds.getOrElse(lotKey, ctx.reworkLotId)
     val childLotRef = ctx.childLotRefs.getOrElse(lotKey, ctx.reworkLotRef)
 
@@ -421,7 +435,7 @@ object FabScenarioPipeline {
 
   private def sagaMerge(state: FabDemoState, ctx: FabDemoContext, lotKey: String): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, s"PhaseMerge: Saga Merge ← $lotKey", ctx)
-    ctx.publisher(GlobalStatusChanged("MERGING", s"Saga Merge ← $lotKey", "PhaseMerge"))
+    ctx.stageProgress("MERGING", s"Saga Merge ← $lotKey", "PhaseMerge")
     val childLotId = ctx.childLotIds.getOrElse(lotKey, ctx.reworkLotId)
     val waferEntries = state.wafers.filter { case (_, info) => info.subLot.contains(lotKey) }
     val moveIds = waferEntries.flatMap { case (wid, _) => ctx.waferUUIDs.get(wid) }.toSet
@@ -475,8 +489,8 @@ object FabScenarioPipeline {
     val scrapCount = scrappedWafers.size
     val scrapReason = s"Rework failed after $maxRework attempts: ${scrappedWafers.keys.mkString(",")}"
 
-    ctx.publisher(GlobalStatusChanged("SUB_PROCESS",
-      s"ReworkLoop: $scrapReason — scrapping child lot $childLotId", "PhaseSubProcess"))
+    ctx.stageProgress("SUB_PROCESS",
+      s"ReworkLoop: $scrapReason — scrapping child lot $childLotId", "PhaseSubProcess")
 
     // Ghost Lot defense: explicit domain event so WorkOrderCompletionProjection sees it
     import net.imadz.application.aggregates.LotProtocol.{FailLot, SealLot}
@@ -505,7 +519,7 @@ object FabScenarioPipeline {
 
   private def holdWafers(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseHold: Hold for engineering review", ctx)
-    ctx.publisher(GlobalStatusChanged("HOLDING", "Engineering review", "PhaseHold"))
+    ctx.stageProgress("HOLDING", "Engineering review", "PhaseHold")
     val holdIds = state.wafers.filter(_._2.subLot.contains("hold")).keys.toSet
     ctx.lotRef ! RecordWafersHeld(holdIds, "Borderline CD", ctx.ignoreLotReply)
     ctx.publisher(FoupStateChanged(ctx.foupId, "HELD", PipelineStages.activeCount(state), holdIds.size, "CDSEM",
@@ -515,7 +529,7 @@ object FabScenarioPipeline {
 
   private def releaseWafers(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseRelease: Release held wafers", ctx)
-    ctx.publisher(GlobalStatusChanged("RELEASING", "Review passed, releasing", "PhaseRelease"))
+    ctx.stageProgress("RELEASING", "Review passed, releasing", "PhaseRelease")
     val holdIds = state.wafers.filter(_._2.subLot.contains("hold")).keys.toSet
     ctx.lotRef ! RecordWafersReleased(holdIds, ctx.ignoreLotReply)
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, reviewApproved = true))
@@ -523,7 +537,7 @@ object FabScenarioPipeline {
 
   private def postReleaseClassify(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhasePostReleaseClassify: Classify released wafers as PASS", ctx)
-    ctx.publisher(GlobalStatusChanged("CLASSIFYING", "Post-release classification", "PhasePostReleaseClassify"))
+    ctx.stageProgress("CLASSIFYING", "Post-release classification", "PhasePostReleaseClassify")
     state.wafers.filter { case (_, info) =>
       info.classification.contains("PASS") && info.subLot.isEmpty
     }.foreach { case (wid, info) =>
@@ -580,8 +594,8 @@ object FabScenarioPipeline {
       case Some((ruleId, actionPlan)) =>
         val s = PipelineStages.emitLedger(state,
           s"PhaseOcapAction: Executing OCAP rule $ruleId: ${actionTypeName(actionPlan)}", ctx)
-        ctx.publisher(GlobalStatusChanged("OCAP_ACTION",
-          s"Rule $ruleId: ${actionTypeName(actionPlan)}", "PhaseOcapAction"))
+        ctx.stageProgress("OCAP_ACTION",
+          s"Rule $ruleId: ${actionTypeName(actionPlan)}", "PhaseOcapAction")
         executeOcapAction(s.copy(ocapActions = Nil), ctx, actionPlan)
       case None =>
         Future.successful(state)
@@ -601,7 +615,7 @@ object FabScenarioPipeline {
       OcapEngine.matchRules(state, rules).headOption match {
         case Some(rule) =>
           val s = PipelineStages.emitLedger(state, s"OCAP: Intercepted ${err.stageName} failure — ${rule.name}", ctx)
-          ctx.publisher(GlobalStatusChanged("OCAP_INTERCEPT", s"${err.stageName} failed: ${err.detail} → ${rule.name}", "PhaseOCAP"))
+          ctx.stageProgress("OCAP_INTERCEPT", s"${err.stageName} failed: ${err.detail} → ${rule.name}", "PhaseOCAP")
           ctx.publisher(OcapActionTriggered(
             ruleId = rule.ruleId, ruleName = rule.name,
             actionType = actionTypeName(rule.actionPlan),
@@ -627,20 +641,20 @@ object FabScenarioPipeline {
           params = Map("reworkRecipeId" -> r.recipeId, "maxReworkCount" -> r.maxCount.toString)))
 
       case s: OcapScrap =>
-        ctx.publisher(GlobalStatusChanged("SCRAPPING", "OCAP Scrap action", "PhaseOCAP"))
+        ctx.stageProgress("SCRAPPING", "OCAP Scrap action", "PhaseOCAP")
         ctx.lotRef ! FailLot(s.reason, "OCAP_SCRAP", ctx.ignoreLotReply)
         runSequence(Seq(ScrapWafers, SealComplete), state, ctx)
 
       case h: OcapHold =>
-        ctx.publisher(GlobalStatusChanged("HOLDING", s"OCAP Hold: ${h.reason}", "PhaseOCAP"))
+        ctx.stageProgress("HOLDING", s"OCAP Hold: ${h.reason}", "PhaseOCAP")
         runSequence(Seq(HoldWafers, WaitForReview(h.durationMs), ReleaseWafers), state, ctx)
 
       case n: OcapNotify =>
-        ctx.publisher(GlobalStatusChanged("NOTIFIED", n.reason, "PhaseOCAP"))
+        ctx.stageProgress("NOTIFIED", n.reason, "PhaseOCAP")
         Future.successful(state)
 
       case a: OcapAdjustRecipe =>
-        ctx.publisher(GlobalStatusChanged("ADJUSTED", s"Recipe ${a.recipeId} offset ${a.offsetNm}nm", "PhaseOCAP"))
+        ctx.stageProgress("ADJUSTED", s"Recipe ${a.recipeId} offset ${a.offsetNm}nm", "PhaseOCAP")
         Future.successful(state)
 
       case OcapComposite(actions) =>
@@ -666,7 +680,7 @@ object FabScenarioPipeline {
   /** Sequential OCAP evaluation (compiled from RouteDefinition OcapFlow/OcapNode). */
   private def ocapEvaluate(state: FabDemoState, ctx: FabDemoContext, rules: List[OcapRuleDefinition]): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseOCAP: Evaluating OCAP rules", ctx)
-    ctx.publisher(GlobalStatusChanged("OCAP", s"Evaluating ${rules.size} OCAP rule(s)", "PhaseOCAP"))
+    ctx.stageProgress("OCAP", s"Evaluating ${rules.size} OCAP rule(s)", "PhaseOCAP")
     OcapEngine.evaluate(s, ctx, rules)(ctx.ec)
   }
 
@@ -684,7 +698,7 @@ object FabScenarioPipeline {
   private def executeSubProcess(state: FabDemoState, ctx: FabDemoContext, ref: SubProcessRef, nodeId: Option[String] = None): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, s"PhaseSubProcess: ${ref.subProcessType} (late-binding)", ctx,
       nodeId = nodeId, subProcess = Some(ref.subProcessType.toString))
-    ctx.publisher(GlobalStatusChanged("SUB_PROCESS", s"Executing sub-process: ${ref.subProcessType}", "PhaseSubProcess"))
+    ctx.stageProgress("SUB_PROCESS", s"Executing sub-process: ${ref.subProcessType}", "PhaseSubProcess")
     implicit val ec: ExecutionContext = ctx.ec
     ref.subProcessType match {
       case SendAheadPilot => runPilotSubFlow(s, ctx)
@@ -694,7 +708,7 @@ object FabScenarioPipeline {
         val needsRework = s.wafers.values.exists(w =>
           w.classification.contains("FAIL") || w.classification.contains("BORDERLINE"))
         if (!needsRework) {
-          ctx.publisher(GlobalStatusChanged("SUB_PROCESS", "ReworkLoop: no wafers need rework, skipping", "PhaseSubProcess"))
+          ctx.stageProgress("SUB_PROCESS", "ReworkLoop: no wafers need rework, skipping", "PhaseSubProcess")
           Future.successful(s)
         } else {
           val childLotRef = ctx.childLotRefs.getOrElse("rwk", ctx.reworkLotRef)
@@ -762,19 +776,19 @@ object FabScenarioPipeline {
     ctx.awaitPromises.get(lotKey) match {
       case Some(promise) =>
         // Normal path: wait for background processing to complete
-        ctx.publisher(GlobalStatusChanged("AWAITING_SUBLOT",
-          s"Waiting for $lotKey sub-lot outcome", "PhaseAwaitSubLotResult"))
+        ctx.stageProgress("AWAITING_SUBLOT",
+          s"Waiting for $lotKey sub-lot outcome", "PhaseAwaitSubLotResult")
         promise.future.map { result =>
           val s = PipelineStages.emitLedger(state,
             s"PhaseAwaitSubLotResult: $lotKey → ${result.outcome}", ctx)
           result.outcome match {
             case "merged" =>
-              ctx.publisher(GlobalStatusChanged("SUB_PROCESS",
-                s"SubLot $lotKey merged back successfully", "PhaseAwaitSubLotResult"))
+              ctx.stageProgress("SUB_PROCESS",
+                s"SubLot $lotKey merged back successfully", "PhaseAwaitSubLotResult")
               result.state.copy(ocapActions = Nil)
             case "scrapped" =>
-              ctx.publisher(GlobalStatusChanged("SUB_PROCESS",
-                s"SubLot $lotKey scrapped — triggering OCAP re-evaluation", "PhaseAwaitSubLotResult"))
+              ctx.stageProgress("SUB_PROCESS",
+                s"SubLot $lotKey scrapped — triggering OCAP re-evaluation", "PhaseAwaitSubLotResult")
               val newActions = reEvaluateOcapForRemainingWafers(result.state, ctx)
               result.state.copy(ocapActions = newActions)
           }
@@ -787,25 +801,46 @@ object FabScenarioPipeline {
         childLotRef.ask[LotConfirmation](ref => GetLotState(ref)).flatMap { childState =>
           childState.phase match {
             case Some(Sealed) =>
-              ctx.publisher(GlobalStatusChanged("AWAITING_SUBLOT",
-                s"Crash recovery: $lotKey sub-lot was scrapped", "PhaseAwaitSubLotResult"))
+              ctx.stageProgress("AWAITING_SUBLOT",
+                s"Crash recovery: $lotKey sub-lot was scrapped", "PhaseAwaitSubLotResult")
               val newActions = reEvaluateOcapForRemainingWafers(state, ctx)
               Future.successful(state.copy(ocapActions = newActions))
             case Some(Completed) | Some(Active) if childState.waferIds.isEmpty =>
-              ctx.publisher(GlobalStatusChanged("AWAITING_SUBLOT",
-                s"Crash recovery: $lotKey sub-lot already merged", "PhaseAwaitSubLotResult"))
+              ctx.stageProgress("AWAITING_SUBLOT",
+                s"Crash recovery: $lotKey sub-lot already merged", "PhaseAwaitSubLotResult")
               Future.successful(state.copy(ocapActions = Nil))
             case _ =>
-              ctx.publisher(GlobalStatusChanged("AWAITING_SUBLOT",
-                s"Crash recovery: $lotKey sub-lot still active — re-arming wait", "PhaseAwaitSubLotResult"))
-              val p = scala.concurrent.Promise[SubLotResult]()
-              ctx.awaitPromises.put(lotKey, p)
-              p.future.map { result =>
-                val newActions = if (result.outcome == "scrapped")
-                  reEvaluateOcapForRemainingWafers(result.state, ctx)
-                else Nil
-                result.state.copy(ocapActions = newActions)
-              }(ec)
+              // Crash recovery: child lot still active. Check wafer classifications
+              // to determine rework outcome without waiting on a lost background Future.
+              val wafers = childState.waferIds
+              val classifications = childState.waferClassifications
+              val allClassified = wafers.nonEmpty && wafers.forall(classifications.contains)
+              if (allClassified) {
+                val hasFailed = classifications.values.exists(c => c == "FAIL" || c == "SCRAP")
+                if (hasFailed) {
+                  ctx.stageProgress("AWAITING_SUBLOT",
+                    s"Crash recovery: $lotKey sub-lot rework failed, scrapping", "PhaseAwaitSubLotResult")
+                  val newActions = reEvaluateOcapForRemainingWafers(state, ctx)
+                  Future.successful(state.copy(ocapActions = newActions))
+                } else {
+                  ctx.stageProgress("AWAITING_SUBLOT",
+                    s"Crash recovery: $lotKey sub-lot rework passed, merging", "PhaseAwaitSubLotResult")
+                  Future.successful(state.copy(ocapActions = Nil))
+                }
+              } else {
+                // Wafers not yet classified — rework was still in-flight at crash time.
+                // Re-arm the wait and re-launch background processing.
+                ctx.stageProgress("AWAITING_SUBLOT",
+                  s"Crash recovery: $lotKey sub-lot still active — re-arming wait", "PhaseAwaitSubLotResult")
+                val p = scala.concurrent.Promise[SubLotResult]()
+                ctx.awaitPromises.put(lotKey, p)
+                p.future.map { result =>
+                  val newActions = if (result.outcome == "scrapped")
+                    reEvaluateOcapForRemainingWafers(result.state, ctx)
+                  else Nil
+                  result.state.copy(ocapActions = newActions)
+                }(ec)
+              }
           }
         }(ec)
     }

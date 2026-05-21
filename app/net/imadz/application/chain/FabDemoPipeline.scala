@@ -67,7 +67,7 @@ object FabDemoPipeline {
   // ====================================================================
   private def classify(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseClassify: Decision Engine classifies wafers", ctx)
-    ctx.publisher(GlobalStatusChanged("CLASSIFYING", "Decision Engine classifying", "PhaseClassify"))
+    ctx.stageProgress("CLASSIFYING", "Decision Engine classifying", "PhaseClassify")
 
     val decisionConfig = ctx.scenario.decision
     val maxRework = decisionConfig.maxReworkCount
@@ -237,7 +237,7 @@ object FabDemoPipeline {
   private def sagaSplit(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, "PhaseSplit: Saga SplitLot (TCC)", ctx)
-    ctx.publisher(GlobalStatusChanged("SPLITTING", "Saga TCC split — rework wafers", "PhaseSplit"))
+    ctx.stageProgress("SPLITTING", "Saga TCC split — rework wafers", "PhaseSplit")
 
     // Lazy-create rework lot (idempotent — no-op if already exists)
     val createRework: Future[LotConfirmation] =
@@ -281,7 +281,7 @@ object FabDemoPipeline {
   private def sagaMerge(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, "PhaseMerge: Saga MergeLot (TCC)", ctx)
-    ctx.publisher(GlobalStatusChanged("MERGING", "Saga TCC merge — wafers → source lot", "PhaseMerge"))
+    ctx.stageProgress("MERGING", "Saga TCC merge — wafers → source lot", "PhaseMerge")
 
     val uuidToName: Map[Id, String] = ctx.waferUUIDs.map(_.swap)
     ctx.reworkLotRef.ask[LotConfirmation](ref => GetLotState(ref)).flatMap { reworkState =>
@@ -341,7 +341,7 @@ object FabDemoPipeline {
   private def sagaScrap(state: FabDemoState, ctx: FabDemoContext, scrapWaferIds: Seq[String]): Future[FabDemoState] = {
     implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, "PhaseScrap: Saga Scrap (TCC)", ctx)
-    ctx.publisher(GlobalStatusChanged("SCRAPPING", "Saga TCC — scrap wafers", "PhaseScrap"))
+    ctx.stageProgress("SCRAPPING", "Saga TCC — scrap wafers", "PhaseScrap")
 
     val scrapLotId = ctx.scrapLotId.get
     val scrapWaferUUIDs: Set[Id] = scrapWaferIds.flatMap(ctx.waferUUIDs.get).toSet
