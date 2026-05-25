@@ -147,7 +147,7 @@ class ApplicationBootstrap @Inject()(
       sourceLotId = sourceLotId,
       reworkLotId = reworkLotId,
       adapter = adapter,
-      publisher = _ => (),
+      publisher = net.imadz.application.services.FabDemoPublisher.systemPublisher,
       ignoreLotReply = system.ignoreRef,
       sagaTx = sagaTxFn,
       speedMultiplier = 1.0,

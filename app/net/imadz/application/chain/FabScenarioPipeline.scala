@@ -829,11 +829,21 @@ object FabScenarioPipeline {
                 }
               } else {
                 // Wafers not yet classified — rework was still in-flight at crash time.
-                // Re-arm the wait and re-launch background processing.
+                // Re-arm the wait and re-launch background rework processing
+                // so the Promise gets resolved (without re-doing sagaSplit — wafers are
+                // already in the child lot from the pre-crash split).
                 ctx.stageProgress("AWAITING_SUBLOT",
-                  s"Crash recovery: $lotKey sub-lot still active — re-arming wait", "PhaseAwaitSubLotResult")
+                  s"Crash recovery: $lotKey sub-lot still active — re-launching rework", "PhaseAwaitSubLotResult")
                 val p = scala.concurrent.Promise[SubLotResult]()
                 ctx.awaitPromises.put(lotKey, p)
+                val childCtx = ctx.copy(lotRef = childLotRef)
+                val altRoute = reworkAlternateRoute(
+                  ctx.scenario.litho.equipmentId,
+                  "REWORK-LITHO-001",
+                  ctx.scenario.cdSem.equipmentId)
+                val childLotId = ctx.childLotIds.getOrElse(lotKey, ctx.reworkLotId)
+                launchReworkSubProcess(state, ctx, childCtx, childLotRef, childLotId,
+                  altRoute, maxCount = 3, p)
                 p.future.map { result =>
                   val newActions = if (result.outcome == "scrapped")
                     reEvaluateOcapForRemainingWafers(result.state, ctx)

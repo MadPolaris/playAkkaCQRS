@@ -56,6 +56,7 @@ class FabDemoService @Inject()(
 
   def setSystemWidePublisher(publisher: FabSimulationEvent => Unit): Unit = {
     systemWidePublisher = Some(publisher)
+    FabDemoPublisher.systemPublisher = publisher
   }
 
   // WorkOrder aggregate init moved to FabBootstrap (no-arg init)

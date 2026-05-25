@@ -6,7 +6,7 @@ import akka.cluster.sharding.typed.scaladsl.{ClusterSharding, Entity, EntityType
 import akka.persistence.typed.scaladsl.{Effect, EventSourcedBehavior, Recovery}
 import akka.persistence.typed.{PersistenceId, RecoveryCompleted => AkkaRecoveryCompleted}
 import net.imadz.application.chain.FabScenarioPipeline.PipelineStage
-import net.imadz.domain.events.{FabSimulationEvent, RecoveryEvent, PipelineTimelineSnapshot, GlobalStatusChanged, RecoveryCompleted}
+import net.imadz.domain.events.{FabSimulationEvent, GlobalStatusChanged, RecoveryEvent}
 import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState}
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
@@ -76,9 +76,7 @@ object FabPipelineExecutionActor {
       fabState: Option[FabDemoState] = None
   ) extends Command
 
-  /** Internal: entire pipeline completed successfully. Carries the final state and foupId
-    * so the handler can publish [[RecoveryCompleted]] from within actor message processing,
-    * ensuring it never fires from a surviving Future after actor crash. */
+  /** Internal: entire pipeline completed successfully. */
   final case class PipelineSucceeded(
       finalState: FabDemoState,
       foupId: String
@@ -102,40 +100,12 @@ object FabPipelineExecutionActor {
   /** Internal: intra-stage progress notification (replaces ctx.publisher(GlobalStatusChanged)). */
   final case class StageProgressEvent(status: String, detail: String, phase: String) extends Command
 
-  /** Internal: crash recovery lifecycle event.
-   *  Replaces the former publisher(RecoveryEvent) + publisher(GlobalStatusChanged) bypass.
-   *
-   *  @demo Recovering/Recovered statuses are a demo UX affordance so the front-end
-   *        can display a recovery progress bar during crash-resilience demos.
-   *        In a production EventSourced system, recovery is transparent —
-   *        the Projection replays events from the journal and the read-model
-   *        converges to the same state without explicit "recovering" signals. */
-  final case class RecoveryProgressEvent(
-      status: String,
-      workOrderId: String,
-      eventsReplayed: Int,
-      phasesSkipped: Int,
-      recoveryTimeMs: Long,
-      detail: String
-  ) extends Command
-
   // ---- Events ----
 
   final case class StageProgress(
       status: String,
       detail: String,
       phase: String,
-      timestamp: Long
-  ) extends Event
-
-  /** @demo Recovery UX affordance (see [[RecoveryProgressEvent]]). */
-  final case class RecoveryProgress(
-      status: String,
-      workOrderId: String,
-      eventsReplayed: Int,
-      phasesSkipped: Int,
-      recoveryTimeMs: Long,
-      detail: String,
       timestamp: Long
   ) extends Event
 
@@ -249,14 +219,16 @@ object FabPipelineExecutionActor {
         .receiveSignal {
           case (execState: Executing, AkkaRecoveryCompleted) =>
             // Crash recovery: reconstruct context + initial state, resume processing from last checkpoint.
-            // RECOVERING/RECOVERED events are a demo UX affordance.
-            // In production, recovery is transparent — the journal replay converges the read-model.
+            // RECOVERING/RECOVERED RecoveryEvent + GlobalStatusChanged are demo UX affordance.
+            // Published directly via publisher (not journal) — production recovery is transparent.
             val recStart = System.currentTimeMillis()
-            ctx.self ! RecoveryProgressEvent("RECOVERING", execState.workOrderId,
+            publisher(GlobalStatusChanged("RECOVERING", s"Crash recovery for ${execState.workOrderId}", "Recovery"))
+            publisher(RecoveryEvent(
+              execState.workOrderId, "RECOVERING",
               eventsReplayed = execState.completedPhases.size,
               phasesSkipped = execState.completedCount,
               recoveryTimeMs = recStart - startTime,
-              detail = s"Recovering: ${execState.completedCount} phases completed, resuming from phase ${execState.completedCount}")
+              detail = s"Recovering: ${execState.completedCount} phases completed, resuming from phase ${execState.completedCount}"))
             try {
               val recoveryCtx = contextFactory(execState.scenarioId, execState.workOrderId)
               recoveryCtx.stageProgressFn = (status, detail, phase) =>
@@ -271,18 +243,20 @@ object FabPipelineExecutionActor {
 
               processor.resumeFromIndex(initState, execState.completedCount).onComplete {
                 case Success(finalState) =>
-                  ctx.self ! RecoveryProgressEvent("RECOVERED", execState.workOrderId,
+                  publisher(RecoveryEvent(
+                    execState.workOrderId, "RECOVERED",
                     eventsReplayed = execState.completedPhases.size,
                     phasesSkipped = execState.completedCount,
                     recoveryTimeMs = System.currentTimeMillis() - recStart,
-                    detail = s"Recovery succeeded: ${execState.completedCount} phases skipped, resuming pipeline")
+                    detail = s"Recovery succeeded: ${execState.completedCount} phases skipped, resuming pipeline"))
                   ctx.self ! PipelineSucceeded(finalState, recoveryCtx.foupId)
                 case Failure(e) =>
-                  ctx.self ! RecoveryProgressEvent("RECOVERY_FAILED", execState.workOrderId,
+                  publisher(RecoveryEvent(
+                    execState.workOrderId, "RECOVERY_FAILED",
                     eventsReplayed = execState.completedPhases.size,
                     phasesSkipped = execState.completedCount,
                     recoveryTimeMs = System.currentTimeMillis() - recStart,
-                    detail = s"Recovery failed: ${e.getMessage}")
+                    detail = s"Recovery failed: ${e.getMessage}"))
                   ctx.self ! PipelineFailed("recovery", e.getMessage)
               }(ec)
 
@@ -349,10 +323,6 @@ object FabPipelineExecutionActor {
       case (_: Executing, StageProgressEvent(status, detail, phase)) =>
         Effect.persist(StageProgress(status, detail, phase, System.currentTimeMillis()))
 
-      // ---- Recovery lifecycle event (replaces publisher(RecoveryEvent) + publisher(GlobalStatusChanged)) ----
-      case (_: Executing, RecoveryProgressEvent(status, woId, replayed, skipped, timeMs, detail)) =>
-        Effect.persist(RecoveryProgress(status, woId, replayed, skipped, timeMs, detail, System.currentTimeMillis()))
-
       // ---- Pipeline fully done ----
       case (_: Executing, PipelineSucceeded(finalState, foupId)) =>
         val execState = state.asInstanceOf[Executing]
@@ -362,9 +332,7 @@ object FabPipelineExecutionActor {
         val reworkCount = wafers.count(_.reworkCount > 0)
         Effect.persist(AllCompleted(execState.scenarioId, execState.workOrderId,
           totalWafers = wafers.size, passedWafers = passCount,
-          reworkedWafers = reworkCount, scrappedWafers = scrapCount)).thenRun { _ =>
-          () // RecoveryCompleted now derived by Projection from AllCompleted stats
-        }
+          reworkedWafers = reworkCount, scrappedWafers = scrapCount))
 
       // ---- Pipeline failed ----
       case (_: Executing, PipelineFailed(phase, reason)) =>
@@ -414,12 +382,6 @@ object FabPipelineExecutionActor {
       case (_: Failed, StageProgressEvent(_, _, _)) =>
         Effect.none
 
-      case (_: Completed, RecoveryProgressEvent(_, _, _, _, _, _)) =>
-        Effect.none
-
-      case (_: Failed, RecoveryProgressEvent(_, _, _, _, _, _)) =>
-        Effect.none
-
       // ---- Already idle/completed/failed, reject new Start ----
       case (s, StartExecution(_, _, _, _, _, replyTo)) =>
         ctx.log.warn(
@@ -457,9 +419,6 @@ object FabPipelineExecutionActor {
       case (e: Executing, StageProgress(_, _, _, _)) =>
         e
 
-      case (e: Executing, RecoveryProgress(_, _, _, _, _, _, _)) =>
-        e
-
       case (e: Executing, AllCompleted(_, _, _, _, _, _)) =>
         Completed(e.scenarioId, e.workOrderId)
 
@@ -477,9 +436,6 @@ object FabPipelineExecutionActor {
         state
 
       case (_: Completed, StageProgress(_, _, _, _)) =>
-        state
-
-      case (_: Completed, RecoveryProgress(_, _, _, _, _, _, _)) =>
         state
 
       case _ =>

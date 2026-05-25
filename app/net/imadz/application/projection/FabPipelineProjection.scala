@@ -12,7 +12,7 @@ import akka.projection.scaladsl.{ExactlyOnceProjection, SourceProvider}
 import net.imadz.common.application.projection.{ProjectionSourceHelpers, ScalikeJdbcSession}
 import net.imadz.application.chain.FabPipelineExecutionActor
 import net.imadz.application.chain.FabPipelineExecutionActor._
-import net.imadz.domain.events.{FabSimulationEvent, GlobalStatusChanged, PipelineStageFailed, PipelineTimelineSnapshot, RecoveryCompleted, RecoveryEvent}
+import net.imadz.domain.events.{FabSimulationEvent, GlobalStatusChanged, PipelineStageFailed, PipelineTimelineSnapshot, RecoveryCompleted}
 import org.slf4j.LoggerFactory
 
 import scala.collection.concurrent.TrieMap
@@ -165,24 +165,6 @@ class FabPipelineProjectionHandler(publishToUI: FabSimulationEvent => Unit)
 
       case sp: StageProgress =>
         publishToUI(GlobalStatusChanged(sp.status, sp.detail, sp.phase))
-
-      // @demo Recovery UX affordance: In production, recovery is transparent —
-      // the journal replay converges the read-model without explicit signals.
-      case rp: RecoveryProgress =>
-        publishToUI(GlobalStatusChanged(rp.status, rp.detail, "Recovery"))
-        publishToUI(RecoveryEvent(rp.workOrderId, rp.status, rp.eventsReplayed, rp.phasesSkipped, rp.recoveryTimeMs, rp.detail))
-        states.get(woId).foreach { vs =>
-          publishToUI(PipelineTimelineSnapshot(
-            workOrderId = woId,
-            totalPhases = vs.totalPhases,
-            completedPhases = vs.completedPhases,
-            currentPhase = Some(rp.status),
-            currentPhaseIndex = vs.completedPhases,
-            failedPhases = Seq.empty,
-            recoveredPhases = if (rp.status == "RECOVERED") (1 to rp.phasesSkipped).map(i => s"Phase-$i").toSeq else Seq.empty,
-            ocapTriggers = 0
-          ))
-        }
 
       case ef: ExecutionFailed =>
         publishToUI(GlobalStatusChanged("FAILED", s"${ef.phase}: ${ef.reason}", "PhaseFailed"))
