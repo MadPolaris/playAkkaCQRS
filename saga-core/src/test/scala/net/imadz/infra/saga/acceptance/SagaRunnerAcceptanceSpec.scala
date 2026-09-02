@@ -52,31 +52,20 @@ class SagaRunnerAcceptanceSpec extends ScalaTestWithActorTestKit(
 
   private val classic = system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem]
 
-  private val spawnedExecutorNames = new java.util.concurrent.ConcurrentHashMap[String, ActorRef[StepExecutor.Command]]()
-  private def factory(name: String): ActorRef[StepExecutor.Command] = {
-    import akka.util.Timeout
-    val existing = spawnedExecutorNames.get(name)
-    if (existing != null) existing
-    else {
-      val ref = system.systemActorOf(
-        StepExecutor[String, String, Any](
-          PersistenceId.ofUniqueId(s"exec-$name"),
-          context = 0,
-          defaultMaxRetries = 5,
-          initialRetryDelay = 100.millis,
-          circuitBreakerSettings = StepExecutor.CircuitBreakerSettings(5, 10.seconds, 1.second),
-          extendedSystem = classic
-        ),
-        s"exec-$name"
-      )
-      spawnedExecutorNames.put(name, ref)
-      ref
-    }
-  }
+  // Executors spawn as coordinator children; the pid is deterministic per executor name.
+  private def stepExecutorBehavior(name: String): akka.actor.typed.Behavior[StepExecutor.Command] =
+    StepExecutor[String, String, Any](
+      PersistenceId.ofUniqueId(s"exec-$name"),
+      context = 0,
+      defaultMaxRetries = 5,
+      initialRetryDelay = 100.millis,
+      circuitBreakerSettings = StepExecutor.CircuitBreakerSettings(5, 10.seconds, 1.second),
+      extendedSystem = classic
+    )
 
   private val sharding = ClusterSharding(system)
   sharding.init(Entity(SagaTransactionCoordinator.entityTypeKey) { entityContext =>
-    SagaTransactionCoordinator(PersistenceId.ofUniqueId(entityContext.entityId), factory, 30.seconds)(ec, 5.seconds)
+    SagaTransactionCoordinator(PersistenceId.ofUniqueId(entityContext.entityId), stepExecutorBehavior, 30.seconds)(ec, 5.seconds)
   })
   private val coordinatorRef: String => akka.cluster.sharding.typed.scaladsl.EntityRef[SagaTransactionCoordinator.Command] =
     txId => sharding.entityRefFor(SagaTransactionCoordinator.entityTypeKey, txId)

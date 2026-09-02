@@ -75,8 +75,12 @@ curl -d {} http://127.0.0.1:9000/withdraw/1c0d06fc-f108-4b62-b1f6-50eca6e50541/1
 # Get the remaining balance of account B
 curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
 
-# Transfer from account A to account B
+# Transfer from account A to account B (async: returns the txId — the caller's idempotency key — immediately)
 curl -d {} http://127.0.0.1:9000/transfer/1c0d06fc-f108-4b62-b1f6-50eca6e50541/1048f264-73e7-4ac5-9925-7fe3ddb46491/10
+# => 202 {"transactionId": "...", "status": "InProgress"} (fast completions return the terminal confirmation directly)
+
+# Poll the transfer status (durable across entity restarts / node crashes)
+curl http://127.0.0.1:9000/transfer/<transactionId>
 
 # Get the remaining balance of account A
 curl http://127.0.0.1:9000/balance/1c0d06fc-f108-4b62-b1f6-50eca6e50541

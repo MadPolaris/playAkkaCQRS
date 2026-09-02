@@ -42,7 +42,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
   private val ec = system.executionContext
   private implicit val scheduler: akka.actor.typed.Scheduler = system.scheduler
 
-  private def createEventSourcedTestKit(stepExecutorCreator: String => ActorRef[StepExecutor.Command],
+  private def createEventSourcedTestKit(stepExecutorBehavior: String => akka.actor.typed.Behavior[StepExecutor.Command],
                                         persistenceId: String = s"test-saga-coordinator-${java.util.UUID.randomUUID()}") = {
     EventSourcedBehaviorTestKit[
       SagaTransactionCoordinator.Command,
@@ -52,7 +52,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
       system,
       SagaTransactionCoordinator(
         PersistenceId.ofUniqueId(persistenceId),
-        stepExecutorCreator
+        stepExecutorBehavior
       )
     )
   }
@@ -70,7 +70,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
   "StepExecutor and SagaTransactionCoordinator Integration" should {
 
     "successfully complete a transaction with multiple steps across different phases" in {
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit(name => stepExecutorBehavior(system.classicSystem.asInstanceOf[ExtendedActorSystem])(name))
       val definition = registerDefinition("int-ok", steps = Seq(
         logicalStep("p1", AlwaysOkRawParticipant), logicalStep("p2", AlwaysOkRawParticipant)))
 
@@ -82,7 +82,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     }
 
     "handle failure in Prepare phase and initiate compensation" in {
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit(name => stepExecutorBehavior(system.classicSystem.asInstanceOf[ExtendedActorSystem])(name))
       // Fails prepare only; its compensate succeeds, so the transaction reaches Failed.
       val failingPrepare = new CountingParticipant("pf")(ec, scheduler)
       failingPrepare.prepareScript = Script.BusinessError("60003")
@@ -97,7 +97,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     }
 
     "handle failure in Commit phase and compensate all steps" in {
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit(name => stepExecutorBehavior(system.classicSystem.asInstanceOf[ExtendedActorSystem])(name))
       // Fails commit only; its compensate succeeds, so the transaction reaches Failed.
       val failingCommit = new CountingParticipant("cf")(ec, scheduler)
       failingCommit.commitScript = Script.BusinessError("60003")
@@ -114,7 +114,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
     "retry a step with temporary failure" in {
       val retryingParticipant = new RetryingParticipant()
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit(name => stepExecutorBehavior(system.classicSystem.asInstanceOf[ExtendedActorSystem])(name))
       val definition = registerDefinition("int-retry", steps = Seq(
         logicalStep("p1", retryingParticipant, maxRetries = 5)))
 
@@ -126,7 +126,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
     "handle circuit breaker behavior" in {
       val circuitBreakerParticipant = new CircuitBreakerParticipant()
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit(name => stepExecutorBehavior(system.classicSystem.asInstanceOf[ExtendedActorSystem])(name))
       val definition = registerDefinition("int-cb", steps = Seq(
         SagaStep("circuit-breaker-step", circuitBreakerParticipant, net.imadz.infra.saga.dsl.ResiliencePolicy(maxRetries = 10, timeoutPerAttempt = 1.second))))
 
@@ -139,7 +139,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
 
     "handle timeout in a step" in {
       val timeoutParticipant = new TimeoutParticipant()
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit(name => stepExecutorBehavior(system.classicSystem.asInstanceOf[ExtendedActorSystem])(name))
       val definition = registerDefinition("int-timeout", steps = Seq(
         SagaStep("timeout-step", timeoutParticipant, net.imadz.infra.saga.dsl.ResiliencePolicy(maxRetries = 2, timeoutPerAttempt = 500.millis)),
         logicalStep("compensate-step", AlwaysOkRawParticipant)))
@@ -152,7 +152,7 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     }
 
     "handle partial compensation" in {
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => createStepExecutor(system.classicSystem.asInstanceOf[ExtendedActorSystem]))
+      val eventSourcedTestKit = createEventSourcedTestKit(name => stepExecutorBehavior(system.classicSystem.asInstanceOf[ExtendedActorSystem])(name))
       val definition = registerDefinition("int-partial", steps = Seq(
         logicalStep("p1", AlwaysOkRawParticipant), logicalStep("p2", AlwaysOkRawParticipant),
         logicalStep("c1", AlwaysOkRawParticipant), logicalStep("c2", AlwaysFailingParticipant),
@@ -166,15 +166,15 @@ class StepExecutorSagaCoordinatorIntegrationSpec extends ScalaTestWithActorTestK
     }
   }
 
-  private def createStepExecutor(extendedActorSystem: ExtendedActorSystem, circuitBreakerSettings: CircuitBreakerSettings = CircuitBreakerSettings(5, 30.seconds, 30.seconds)) = {
-    spawn(StepExecutor[Any, Any, Any](
-      PersistenceId.ofUniqueId(s"step-executor-${java.util.UUID.randomUUID()}"),
+  private def stepExecutorBehavior(extendedActorSystem: ExtendedActorSystem, circuitBreakerSettings: CircuitBreakerSettings = CircuitBreakerSettings(5, 30.seconds, 30.seconds))(
+      name: String): akka.actor.typed.Behavior[StepExecutor.Command] =
+    StepExecutor[Any, Any, Any](
+      PersistenceId.ofUniqueId(s"step-executor-$name-${java.util.UUID.randomUUID()}"),
       defaultMaxRetries = 5,
       initialRetryDelay = 100.millis,
       circuitBreakerSettings = circuitBreakerSettings,
       context = 0,
       extendedSystem = extendedActorSystem
-    ))
-  }
+    )
 
 }

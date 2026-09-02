@@ -69,8 +69,12 @@ curl -d {} http://127.0.0.1:9000/withdraw/1c0d06fc-f108-4b62-b1f6-50eca6e50541/1
 # 获取账户B剩余额度
 curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
 
-# 从账户A到账户B转账
+# 从账户A到账户B转账（异步：立即返回 txId，即调用方幂等键）
 curl -d {} http://127.0.0.1:9000/transfer/1c0d06fc-f108-4b62-b1f6-50eca6e50541/1048f264-73e7-4ac5-9925-7fe3ddb46491/10
+# => 202 {"transactionId": "...", "status": "InProgress"}（快速完成时直接返回终态确认）
+
+# 轮询转账状态（跨实体重启/节点崩溃持久可见）
+curl http://127.0.0.1:9000/transfer/<transactionId>
 
 # 获取账户A剩余额度
 curl http://127.0.0.1:9000/balance/1c0d06fc-f108-4b62-b1f6-50eca6e50541

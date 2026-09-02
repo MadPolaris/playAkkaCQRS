@@ -42,17 +42,17 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
   private implicit val ec: scala.concurrent.ExecutionContext = system.executionContext
   private implicit val scheduler: akka.actor.typed.Scheduler = system.scheduler
 
-  private def coordinatorKit(pid: String, factory: String => ActorRef[StepExecutor.Command], globalTimeout: FiniteDuration = 20.seconds) =
+  private def coordinatorKit(pid: String, executorBehavior: String => akka.actor.typed.Behavior[StepExecutor.Command], globalTimeout: FiniteDuration = 20.seconds) =
     EventSourcedBehaviorTestKit[Command, Event, State](
       system,
-      SagaTransactionCoordinator(PersistenceId.ofUniqueId(pid), factory, globalTimeout)(ec, 5.seconds)
+      SagaTransactionCoordinator(PersistenceId.ofUniqueId(pid), executorBehavior, globalTimeout)(ec, 5.seconds)
     )
 
   private def argsBytesOf(args: TransferArgs): Array[Byte] =
     net.imadz.infra.saga.dsl.ArgsCodec.playJson[TransferArgs].encode(args)
 
-  private def completingExecutor(calls: java.util.concurrent.atomic.AtomicInteger): ActorRef[StepExecutor.Command] =
-    spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+  private def completingExecutor(calls: java.util.concurrent.atomic.AtomicInteger): akka.actor.typed.Behavior[StepExecutor.Command] =
+    Behaviors.receiveMessage[StepExecutor.Command] {
       case StepExecutor.Attach(transactionId, step, replyTo, _) =>
         calls.incrementAndGet()
         replyTo.foreach(_ ! StepExecutor.StepCompleted(transactionId, step.stepId, SagaResult.empty()))
@@ -62,10 +62,15 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
           StepExecutor.State[Any, Any, Any](status = StepExecutor.Succeed, result = Some(SagaResult.empty[Any]()))
         Behaviors.same
       case _ => Behaviors.same
-    })
+    }
 
-  private def hangingExecutor(): ActorRef[StepExecutor.Command] =
-    spawn(Behaviors.receiveMessage[StepExecutor.Command] { case _ => Behaviors.same })
+  private def hangingExecutor(): akka.actor.typed.Behavior[StepExecutor.Command] =
+    Behaviors.receiveMessage[StepExecutor.Command] {
+      case qs: StepExecutor.QueryStatus[_, _, _] =>
+        qs.replyTo.asInstanceOf[ActorRef[StepExecutor.State[Any, Any, Any]]] ! StepExecutor.State[Any, Any, Any](status = StepExecutor.Ongoing)
+        Behaviors.same
+      case _ => Behaviors.same
+    }
 
   // ------------------------------------------------------------------
   // AC-1.1 — expand correctness
@@ -348,25 +353,17 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
       val definition = registerDefinition("ac14-def", steps = Seq(
         SagaStep("s", participant, ResiliencePolicy(maxRetries = 3, recovery = RecoveryBehavior.RetryIfOngoing), 1)))
 
-      // real executors with a deterministic pid per executor name; they survive the coordinator crash
-      val execRefs = new java.util.concurrent.ConcurrentHashMap[String, ActorRef[StepExecutor.Command]]()
-      def factory(name: String): ActorRef[StepExecutor.Command] = {
-        val existing = execRefs.get(name)
-        if (existing != null) existing
-        else {
-          val ref = spawn(StepExecutor[String, String, Any](
-            PersistenceId.ofUniqueId(s"ac14-exec-$name"),
-            context = 0,
-            defaultMaxRetries = 5,
-            initialRetryDelay = 100.millis,
-            circuitBreakerSettings = StepExecutor.CircuitBreakerSettings(5, 10.seconds, 1.second),
-            extendedSystem = system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem]))
-          execRefs.put(name, ref)
-          ref
-        }
-      }
+      // real executors with a deterministic pid per executor name (spawned as coordinator children)
+      def executorBehavior(name: String): akka.actor.typed.Behavior[StepExecutor.Command] =
+        StepExecutor[String, String, Any](
+          PersistenceId.ofUniqueId(s"ac14-exec-$name"),
+          context = 0,
+          defaultMaxRetries = 5,
+          initialRetryDelay = 100.millis,
+          circuitBreakerSettings = StepExecutor.CircuitBreakerSettings(5, 10.seconds, 1.second),
+          extendedSystem = system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem])
 
-      val kit = coordinatorKit("ac14-tx", factory)
+      val kit = coordinatorKit("ac14-tx", executorBehavior)
       val startProbe = createTestProbe[SagaStartReply]()
       val completionProbe = createTestProbe[TransactionResult]()
       kit.runCommand(StartSaga("tx-14", "ac14-def", 1, argsBytesOf(TransferArgs("a", "b", 1)), "t", singleStep = false, Some(startProbe.ref), Some(completionProbe.ref)))
@@ -375,9 +372,10 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
 
       // coordinator crash: journal replay → RecoveredInProgress → steps rematerialized from
       // (definitionRef, args) — the participant is rebuilt, never read back from the journal.
+      // The crashed executor child is respawned from its journal as Ongoing.
       kit.restart()
 
-      // the surviving executor replays as Ongoing; RetryIfOngoing re-issues the SAME generation once
+      // the respawned executor replays as Ongoing; RetryIfOngoing re-issues the SAME generation once
       eventually { calls.get() shouldBe 2 }
 
       // the recovered invocation drives the transaction to completion end to end. The in-memory

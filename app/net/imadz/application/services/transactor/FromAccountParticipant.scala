@@ -1,58 +1,49 @@
 package net.imadz.application.services.transactor
 
-
-import akka.util.Timeout
+import akka.actor.typed.Scheduler
 import net.imadz.application.aggregates.CreditBalanceProtocol._
-
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
-import net.imadz.infra.saga.SagaParticipant
-import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, ParticipantEffect, SagaResult}
+import net.imadz.infra.saga.SagaParticipant.SagaResult
+import net.imadz.infra.saga.dsl.{AskParticipant, ErrorAction, ErrorRules, PhaseAsk}
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 
-case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: ExecutionContext) extends SagaParticipant[iMadzError, String, MoneyTransferContext] {
+/** TCC participant of the paying side: reserve -> deduct -> release, all via the
+  * sharded CreditBalance aggregate. Pure data — never journaled (saga_v3). */
+object FromAccountParticipant {
+  private val Rules: ErrorRules[iMadzError] = ErrorRules(
+    business = { case iMadzError("60003", _) | iMadzError("60004", _) => ErrorAction.NonRetryable },
+    describe = e => s"${e.code}: ${e.message}"
+  )
+}
 
-  implicit val timeout: Timeout = 5.seconds
+case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: ExecutionContext, scheduler: Scheduler)
+    extends AskParticipant[iMadzError, String, MoneyTransferContext](
+      rules = FromAccountParticipant.Rules,
+      askTimeout = 5.seconds
+    ) {
 
+  override protected val prepareBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
+    Some(PhaseAsk.ask[ReserveFunds, FundsReservationConfirmation, iMadzError, String, MoneyTransferContext](
+      ref = ctx => ctx.repository.findCreditBalanceByUserId(fromUserId),
+      command = (txId, replyTo) => ReserveFunds(Id.of(txId), amount, replyTo),
+      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+    ))
 
-  override def doPrepare(transactionId: String, context: MoneyTransferContext, traceId: String): ParticipantEffect[iMadzError, String] = {
-    val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
-    fromAccountRef.ask(ReserveFunds(Id.of(transactionId), amount, _))
-      .mapTo[FundsReservationConfirmation]
-      .map(confirmation => {
-        confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
-          .getOrElse(Right(SagaResult[String](confirmation.transferId.toString)))
-      })
-  }
+  override protected val commitBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
+    Some(PhaseAsk.ask[DeductFunds, FundsDeductionConfirmation, iMadzError, String, MoneyTransferContext](
+      ref = ctx => ctx.repository.findCreditBalanceByUserId(fromUserId),
+      command = (txId, replyTo) => DeductFunds(Id.of(txId), replyTo),
+      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+    ))
 
-
-  override def doCommit(transactionId: String, context: MoneyTransferContext, traceId: String): ParticipantEffect[iMadzError, String] = {
-    val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
-
-    fromAccountRef.ask(DeductFunds(Id.of(transactionId), _))
-      .mapTo[FundsDeductionConfirmation]
-      .map(confirmation => {
-        confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
-          .getOrElse(Right(SagaResult[String](confirmation.transferId.toString)))
-      })
-  }
-
-  override def doCompensate(transactionId: String, context: MoneyTransferContext, traceId: String): ParticipantEffect[iMadzError, String] = {
-    val fromAccountRef = context.repository.findCreditBalanceByUserId(fromUserId)
-    fromAccountRef.ask(ReleaseReservedFunds(Id.of(transactionId), _))
-      .mapTo[FundsReleaseConfirmation]
-      .map(confirmation => {
-        confirmation.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
-          .getOrElse(Right(SagaResult(confirmation.transferId.toString)))
-      })
-  }
-
-  override protected def customClassification: PartialFunction[Throwable, SagaParticipant.RetryableOrNotException] = {
-    case iMadzError("60003", message) => NonRetryableFailure(message)
-    case iMadzError("60004", message) => NonRetryableFailure(message)
-    case iMadzError(code, message) => NonRetryableFailure(message)
-  }
+  override protected val compensateBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
+    Some(PhaseAsk.ask[ReleaseReservedFunds, FundsReleaseConfirmation, iMadzError, String, MoneyTransferContext](
+      ref = ctx => ctx.repository.findCreditBalanceByUserId(fromUserId),
+      command = (txId, replyTo) => ReleaseReservedFunds(Id.of(txId), replyTo),
+      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+    ))
 }

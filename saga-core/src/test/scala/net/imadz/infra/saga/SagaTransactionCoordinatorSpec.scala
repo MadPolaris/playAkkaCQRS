@@ -40,7 +40,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
   private val ec = system.executionContext
   private implicit val scheduler: akka.actor.typed.Scheduler = system.scheduler
 
-  private def createEventSourcedTestKit(stepExecutorCreator: String => ActorRef[StepExecutor.Command],
+  private def createEventSourcedTestKit(stepExecutorBehavior: String => akka.actor.typed.Behavior[StepExecutor.Command],
                                         persistenceId: String = "test-saga-coordinator",
                                         globalTimeout: FiniteDuration = 5.seconds) = {
     EventSourcedBehaviorTestKit[
@@ -51,14 +51,14 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       system,
       SagaTransactionCoordinator(
         PersistenceId.ofUniqueId(persistenceId),
-        stepExecutorCreator,
+        stepExecutorBehavior,
         globalTimeout = globalTimeout
       )(ec, 5.seconds)
     )
   }
 
-  private def createSuccessfulStepExecutor(): ActorRef[StepExecutor.Command] = {
-    spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+  private def successfulStepExecutorBehavior(): akka.actor.typed.Behavior[StepExecutor.Command] =
+    Behaviors.receiveMessage[StepExecutor.Command] {
       case StepExecutor.Attach(transactionId, step, replyTo, _) =>
         replyTo.foreach(_ ! StepExecutor.StepCompleted(transactionId, step.stepId, SagaResult.empty()))
         Behaviors.stopped
@@ -67,11 +67,10 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
           StepExecutor.State[Any, Any, Any](status = StepExecutor.Succeed, result = Some(SagaResult.empty[Any]()))
         Behaviors.same
       case _ => Behaviors.same
-    })
-  }
+    }
 
-  private def createFailingStepExecutor(): ActorRef[StepExecutor.Command] = {
-    spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+  private def failingStepExecutorBehavior(): akka.actor.typed.Behavior[StepExecutor.Command] =
+    Behaviors.receiveMessage[StepExecutor.Command] {
       case StepExecutor.Attach(transactionId, step, replyTo, _) =>
         replyTo.foreach(_ ! StepExecutor.StepFailed(transactionId, step.stepId, NonRetryableFailure("Test failure")))
         Behaviors.stopped
@@ -79,8 +78,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
         qs.replyTo ! StepExecutor.State(status = StepExecutor.Failed, lastError = Some(NonRetryableFailure("Test failure")))
         Behaviors.same
       case _ => Behaviors.same
-    })
-  }
+    }
 
   private def start(kit: EventSourcedBehaviorTestKit[SagaTransactionCoordinator.Command, SagaTransactionCoordinator.Event, SagaTransactionCoordinator.State],
                     definition: SagaDefinition[String, Any, TransferArgs],
@@ -98,7 +96,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
   "SagaTransactionCoordinator" should {
     "successfully complete a transaction" in {
       val definition = registerDefinition("spec-ok", steps = Seq(logicalStep("s1", AlwaysOkRawParticipant), logicalStep("s2", AlwaysOkRawParticipant)))
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => createSuccessfulStepExecutor(), persistenceId = "spec-ok-tx")
+      val eventSourcedTestKit = createEventSourcedTestKit(_ => successfulStepExecutorBehavior(), persistenceId = "spec-ok-tx")
       val transactionId = "test-transaction"
       val completionProbe = start(eventSourcedTestKit, definition, transactionId)
 
@@ -112,7 +110,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
     "handle failure during PreparePhase and initiate compensation" in {
       val definition = registerDefinition("spec-pfail", steps = Seq(logicalStep("s1", AlwaysOkRawParticipant)))
       val eventSourcedTestKit = createEventSourcedTestKit(
-        name => if (name.endsWith("prepare")) createFailingStepExecutor() else createSuccessfulStepExecutor(),
+        name => if (name.endsWith("prepare")) failingStepExecutorBehavior() else successfulStepExecutorBehavior(),
         persistenceId = "spec-pfail-tx")
       val transactionId = "failed-transaction"
       val completionProbe = start(eventSourcedTestKit, definition, transactionId)
@@ -127,7 +125,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       val definition = registerDefinition("spec-partial", steps = Seq(
         logicalStep("compensate1", AlwaysOkRawParticipant), logicalStep("compensate2", AlwaysOkRawParticipant)))
       val eventSourcedTestKit = createEventSourcedTestKit(
-        name => if (name.endsWith("commit") || name.endsWith("compensate")) createFailingStepExecutor() else createSuccessfulStepExecutor(),
+        name => if (name.endsWith("commit") || name.endsWith("compensate")) failingStepExecutorBehavior() else successfulStepExecutorBehavior(),
         persistenceId = "spec-partial-tx")
       val transactionId = "compensate-partial-fail-transaction"
       val completionProbe = start(eventSourcedTestKit, definition, transactionId)
@@ -143,8 +141,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       val transactionId = "recover-in-progress-transaction"
 
       var shouldHang = true
-      def hangingStepExecutorCreator(): ActorRef[StepExecutor.Command] = {
-        spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+      def hangingStepExecutorBehavior(): akka.actor.typed.Behavior[StepExecutor.Command] = Behaviors.receiveMessage[StepExecutor.Command] {
           case StepExecutor.Attach(transactionId, step, replyTo, _) =>
             if (shouldHang) {
                Behaviors.same // Hangs
@@ -158,10 +155,9 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
             else replyAs ! StepExecutor.State[Any, Any, Any](status = StepExecutor.Succeed, result = Some(SagaResult.empty[Any]()))
             Behaviors.same
           case _ => Behaviors.same
-        })
-      }
+        }
 
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => hangingStepExecutorCreator(), persistenceId = "test-saga-recover", globalTimeout = 20.seconds)
+      val eventSourcedTestKit = createEventSourcedTestKit(_ => hangingStepExecutorBehavior(), persistenceId = "test-saga-recover", globalTimeout = 20.seconds)
       start(eventSourcedTestKit, definition, transactionId)
 
       // 2. Restart/Start the coordinator to trigger recovery
@@ -183,13 +179,13 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       // so the transaction lands in Failed rather than Suspended.
       val eventSourcedTestKit = createEventSourcedTestKit(
             name => if (name.endsWith("prepare")) {
-              spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+              Behaviors.receiveMessage[StepExecutor.Command] {
                  case StepExecutor.QueryStatus(replyTo) =>
                     replyTo ! StepExecutor.State(status = StepExecutor.Ongoing)
                     Behaviors.same
                  case _ => Behaviors.same
-              })
-            } else createSuccessfulStepExecutor(),
+              }
+            } else successfulStepExecutorBehavior(),
             persistenceId = "test-saga-timeout-test",
             globalTimeout = 200.millis
       )
@@ -206,8 +202,7 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
       val definition = registerDefinition("spec-asktimeout", steps = Seq(logicalStep("step1", AlwaysOkRawParticipant)))
       val transactionId = "timeout-query-status-transaction"
 
-      def slowStepExecutorCreator(): ActorRef[StepExecutor.Command] = {
-        spawn(Behaviors.receiveMessage[StepExecutor.Command] {
+      def slowStepExecutorBehavior(): akka.actor.typed.Behavior[StepExecutor.Command] = Behaviors.receiveMessage[StepExecutor.Command] {
           case StepExecutor.Attach(transactionId, step, replyTo, traceId) =>
             // Do not reply immediately to simulate ask timeout
             Behaviors.same
@@ -220,10 +215,9 @@ class SagaTransactionCoordinatorSpec extends ScalaTestWithActorTestKit(
             Behaviors.same
           case msg =>
             Behaviors.same
-        })
-      }
+        }
 
-      val eventSourcedTestKit = createEventSourcedTestKit(_ => slowStepExecutorCreator(), persistenceId = "test-saga-ask-timeout", globalTimeout = 20.seconds)
+      val eventSourcedTestKit = createEventSourcedTestKit(_ => slowStepExecutorBehavior(), persistenceId = "test-saga-ask-timeout", globalTimeout = 20.seconds)
       start(eventSourcedTestKit, definition, transactionId)
 
       nextJournalEvent(eventSourcedTestKit, "test-saga-ask-timeout") { case net.imadz.infra.saga.proto.saga_v3.SagaTransactionCoordinatorEventPO.Event.Started(_) => }

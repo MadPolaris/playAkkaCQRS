@@ -9,13 +9,13 @@ import net.imadz.application.aggregates.CreditBalanceProtocol.CreditBalanceConfi
 import net.imadz.application.aggregates.repository.CreditBalanceRepository
 import net.imadz.application.projection.repository.MonthlyIncomeAndExpenseSummaryRepository
 import net.imadz.application.queries.{GetBalanceQuery, GetRecent12MonthsIncomeAndExpenseReport}
-import net.imadz.application.services.transactor.MoneyTransferTransactionRepository
 import net.imadz.application.services.{CreateCreditBalanceService, DepositService, MoneyTransferService, WithdrawService}
 import net.imadz.common.CommonTypes.{Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.common.application.projection.ScalikeJdbcSetup
 import net.imadz.domain.values.Money
-import net.imadz.infra.saga.repository.TransactionCoordinatorRepository
+import net.imadz.infra.saga.SagaTransactionCoordinator.{StatusSnapshot, TransactionResult}
+import net.imadz.infra.saga.dsl.SagaStartRejectedException
 import net.imadz.infrastructure.bootstrap._
 import play.api.libs.json._
 import play.api.mvc._
@@ -25,24 +25,22 @@ import javax.inject._
 import scala.concurrent.ExecutionContext
 
 /**
- * This controller creates an `Action` to handle HTTP requests to the
- * application's home page.
- */
+  * This controller creates an `Action` to handle HTTP requests to the
+  * application's home page.
+  */
 @Singleton
 class HomeController @Inject()(
-                                val system: ActorSystem,
-                                val sharding: ClusterSharding,
-                                val monthlyQuery: GetRecent12MonthsIncomeAndExpenseReport,
-                                val monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
-                                val creditBalanceRepository: CreditBalanceRepository,
-                                val transactionRepository: MoneyTransferTransactionRepository,
-                                val getBalanceQuery: GetBalanceQuery,
-                                val depositService: DepositService,
-                                val moneyTransferService: MoneyTransferService,
-                                val withdrawService: WithdrawService,
-                                val controllerComponents: ControllerComponents
-//                                , val bootstrap: net.imadz.infrastructure.bootstrap.ApplicationBootstrap
-                              )(implicit executionContext: ExecutionContext) extends BaseController {
+                                 val system: ActorSystem,
+                                 val sharding: ClusterSharding,
+                                 val monthlyQuery: GetRecent12MonthsIncomeAndExpenseReport,
+                                 val monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
+                                 val creditBalanceRepository: CreditBalanceRepository,
+                                 val getBalanceQuery: GetBalanceQuery,
+                                 val depositService: DepositService,
+                                 val moneyTransferService: MoneyTransferService,
+                                 val withdrawService: WithdrawService,
+                                 val controllerComponents: ControllerComponents
+                               )(implicit executionContext: ExecutionContext) extends BaseController {
   val typedSystem: typed.ActorSystem[Nothing] = system.toTyped
   ScalikeJdbcSetup.init(Adapter.toTyped(system))
 
@@ -125,12 +123,62 @@ class HomeController @Inject()(
     override def writes(o: Id): JsValue = JsString(o.toString)
   }
 
+  implicit val statusSnapshotWrites: Writes[StatusSnapshot] = (s: StatusSnapshot) => Json.obj(
+    "transactionId" -> s.transactionId,
+    "definition" -> Json.obj("name" -> s.definitionName, "version" -> s.definitionVersion),
+    "status" -> s.status,
+    "currentPhase" -> s.currentPhase,
+    "currentStepGroup" -> s.currentStepGroup,
+    "isPaused" -> s.isPaused,
+    "failReason" -> s.failReason.map(JsString(_)).getOrElse[JsValue](JsNull),
+    "steps" -> Json.toJson(s.steps.map { st =>
+      Json.obj(
+        "stepId" -> st.stepId,
+        "phase" -> st.phase,
+        "participant" -> st.participantName,
+        "stepGroup" -> st.stepGroup,
+        "status" -> st.status,
+        "retries" -> st.retries,
+        "error" -> st.error.map(e => Json.obj("message" -> e.message, "type" -> e.errorType, "retryable" -> e.isRetryable)).getOrElse[JsValue](JsNull))
+    }))
+
+  /** saga_v3 async transfer contract: returns the transactionId (the caller's idempotency
+    * key) as soon as the start is accepted; poll GET /transfer/:transactionId for status.
+    * Fast completions and start rejections are surfaced synchronously when they win the
+    * start-ack race. */
   def transfer(fromUserId: String, toUserId: String, amount: Double): Action[AnyContent] = Action.async { implicit request =>
-    moneyTransferService.transfer(Id.of(fromUserId), Id.of(toUserId), Money(amount, Currency.getInstance("CNY"))).map { confirmation =>
-      Ok(Json.toJson(confirmation))
+    moneyTransferService.transfer(Id.of(fromUserId), Id.of(toUserId), Money(amount, Currency.getInstance("CNY"))).map {
+      case submission if submission.result.isCompleted =>
+        submission.result.value.get match {
+          case scala.util.Success(result) => Ok(Json.toJson(toConfirmation(result)))
+          case scala.util.Failure(rejected: SagaStartRejectedException) =>
+            UnprocessableEntity(Json.obj("error" -> rejected.getMessage))
+          case scala.util.Failure(ex) =>
+            Accepted(Json.obj("transactionId" -> submission.transactionId.toString, "status" -> "Accepted", "note" -> ex.getMessage))
+        }
+      case submission =>
+        Accepted(Json.obj("transactionId" -> submission.transactionId.toString, "status" -> "InProgress"))
     }.recover {
+      case rejected: SagaStartRejectedException => UnprocessableEntity(Json.obj("error" -> rejected.getMessage))
       case ex: Exception => InternalServerError(ex.getMessage)
     }
   }
+
+  /** Durable status polling for a transfer started via POST /transfer. */
+  def transferStatus(transactionId: String): Action[AnyContent] = Action.async { implicit request =>
+    moneyTransferService.statusOf(transactionId).map {
+      case Some(snapshot) => Ok(Json.toJson(snapshot)(statusSnapshotWrites))
+      case None => NotFound(Json.obj("error" -> s"unknown transaction $transactionId"))
+    }
+  }
+
+  private def toConfirmation(result: TransactionResult): JsValue = Json.obj(
+    "transactionId" -> result.snapshot.transactionId,
+    "successful" -> result.successful,
+    "failReason" -> (if (result.failReason == null || result.failReason.isEmpty) JsNull else JsString(result.failReason)),
+    "status" -> result.snapshot.status,
+    "steps" -> Json.toJson(result.snapshot.steps.map { st =>
+      Json.obj("stepId" -> st.stepId, "phase" -> st.phase, "status" -> st.status, "retries" -> st.retries)
+    }))
 }
 

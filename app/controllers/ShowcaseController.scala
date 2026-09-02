@@ -9,22 +9,32 @@ import akka.persistence.query.scaladsl.{CurrentEventsByPersistenceIdQuery, ReadJ
 import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Keep, MergeHub, Sink, Source}
 import akka.contrib.persistence.mongodb.MongoReadJournal
-import net.imadz.application.services.transactor.DynamicShowcaseParticipant
+import net.imadz.application.services.transactor.{ShowcaseParticipant, ShowcaseSagaDefinition}
 import net.imadz.infra.saga.SagaProgressEvent
-import play.api.libs.json.{JsValue, Json, Writes}
+import net.imadz.infra.saga.SagaTransactionCoordinator
+import net.imadz.infra.saga.persistence.{SagaTransactionCoordinatorEventAdapter, StepExecutorEventAdapter}
+import net.imadz.infra.saga.proto.saga_v3.{SagaTransactionCoordinatorEventPO, StepExecutorEventPO}
+import net.imadz.infrastructure.bootstrap.SagaEngineBootstrap
+import play.api.libs.json.{JsNull, JsString, JsValue, Json, Writes}
 import play.api.mvc._
 
 import javax.inject.{Inject, Singleton}
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 
 @Singleton
 class ShowcaseController @Inject()(val controllerComponents: ControllerComponents,
-                                   implicit val system: akka.actor.ActorSystem,
-                                   implicit val mat: Materializer,
-                                   implicit val ec: ExecutionContext) extends BaseController {
+                                    implicit val system: akka.actor.ActorSystem,
+                                    implicit val mat: Materializer,
+                                    implicit val ec: ExecutionContext) extends BaseController {
 
   private val readJournal = PersistenceQuery(system).readJournalFor[ReadJournal with CurrentEventsByPersistenceIdQuery](MongoReadJournal.Identifier)
   implicit val typedSystem: ActorSystem[Nothing] = system.toTyped
+  private implicit val scheduler: akka.actor.typed.Scheduler = typedSystem.scheduler
+
+  // --- Saga runner (engine sharding is initialized in ApplicationBootstrap) ---
+  private val sharding = ClusterSharding(typedSystem)
+  private val runner = ShowcaseSagaDefinition.runner(typedSystem, txId => sharding.entityRefFor(SagaTransactionCoordinator.entityTypeKey, txId))
 
   // --- JSON Serialization ---
   implicit val sagaProgressEventWrites: Writes[SagaProgressEvent] = Writes {
@@ -53,96 +63,93 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
 
   def injectFault(stepId: String, behavior: String) = Action {
     val b = behavior.toLowerCase match {
-      case "success" => DynamicShowcaseParticipant.Success
-      case "failretryable" => DynamicShowcaseParticipant.FailRetryable
-      case "failnonretryable" => DynamicShowcaseParticipant.FailNonRetryable
-      case "timeout" => DynamicShowcaseParticipant.Timeout
-      case "failtwicethensucceed" => DynamicShowcaseParticipant.FailTwiceThenSucceed
-      case _ => DynamicShowcaseParticipant.Success
+      case "success" => ShowcaseParticipant.Success
+      case "failretryable" => ShowcaseParticipant.FailRetryable
+      case "failnonretryable" => ShowcaseParticipant.FailNonRetryable
+      case "timeout" => ShowcaseParticipant.Timeout
+      case "failtwicethensucceed" => ShowcaseParticipant.FailTwiceThenSucceed
+      case _ => ShowcaseParticipant.Success
     }
-    DynamicShowcaseParticipant.setBehavior(stepId, b)
+    ShowcaseParticipant.setBehavior(stepId, b)
     Ok(Json.obj("status" -> "ok", "stepId" -> stepId, "behavior" -> behavior))
   }
 
-  def triggerShowcase(singleStep: Boolean) = Action {
-    import net.imadz.infra.saga.{SagaTransactionStep, SagaPhase}
-    import net.imadz.infra.saga.SagaTransactionCoordinator.StartTransaction
-    val sharding = ClusterSharding(typedSystem)
+  def triggerShowcase(singleStep: Boolean) = Action { implicit request: Request[AnyContent] =>
     val transactionId = java.util.UUID.randomUUID().toString
     val traceId = s"TRACE-${transactionId.substring(0, 8)}"
-    val steps = List(
-      SagaTransactionStep("Step-A", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.PreparePhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-A", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.CommitPhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-A", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-A"), 3, stepGroup = 1),
-      SagaTransactionStep("Step-B", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-B"), 3, stepGroup = 2),
-      SagaTransactionStep("Step-C", SagaPhase.CompensatePhase, new DynamicShowcaseParticipant("Step-C"), 3, stepGroup = 2)
-    )
-    import net.imadz.application.services.MoneyTransferService
-    sharding.entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! StartTransaction(transactionId, steps, None, traceId, singleStep)
+    // The saga definition lives in the registry; start it through the runner.
+    runner.run(transactionId, ShowcaseSagaDefinition.ShowcaseArgs(), traceId, singleStep)
     Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId, "traceId" -> traceId))
   }
 
-  def proceed(transactionId: String) = Action {
-    import net.imadz.application.services.MoneyTransferService
-    ClusterSharding(typedSystem).entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! net.imadz.infra.saga.SagaTransactionCoordinator.ProceedNext(None)
-    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId))
+  /** Admin ops ride the runner so the completion channel stays attached. */
+  def proceed(transactionId: String) = Action.async { implicit request: Request[AnyContent] =>
+    runner.admin.proceed(transactionId).map(r => Ok(resultJson(transactionId, r)))
+      .recover { case ex => Ok(Json.obj("status" -> "timeout", "transactionId" -> transactionId, "error" -> ex.getMessage)) }
   }
 
-  def fixStep(transactionId: String, stepId: String, phase: String) = Action {
+  def fixStep(transactionId: String, stepId: String, phase: String) = Action { implicit request: Request[AnyContent] =>
     import net.imadz.infra.saga.SagaPhase
-    import net.imadz.application.services.MoneyTransferService
     val p = phase.toLowerCase match { case "prepare" => SagaPhase.PreparePhase; case "commit" => SagaPhase.CommitPhase; case "compensate" => SagaPhase.CompensatePhase; case _ => SagaPhase.PreparePhase }
-    ClusterSharding(typedSystem).entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! net.imadz.infra.saga.SagaTransactionCoordinator.ManualFixStep(stepId, p, None)
-    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId))
+    runner.admin.fixStep(transactionId, stepId, p)
+    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId, "stepId" -> stepId, "phase" -> phase))
   }
 
-  def resume(transactionId: String) = Action {
-    import net.imadz.application.services.MoneyTransferService
-    ClusterSharding(typedSystem).entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! net.imadz.infra.saga.SagaTransactionCoordinator.ResolveSuspended(None)
-    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId))
+  def resume(transactionId: String) = Action.async { implicit request: Request[AnyContent] =>
+    runner.admin.resolveSuspended(transactionId).map(r => Ok(resultJson(transactionId, r)))
+      .recover { case ex => Ok(Json.obj("status" -> "timeout", "transactionId" -> transactionId, "error" -> ex.getMessage)) }
   }
 
-  def retryPhase(transactionId: String) = Action {
-    import net.imadz.application.services.MoneyTransferService
-    ClusterSharding(typedSystem).entityRefFor(MoneyTransferService.moneyTransferCoordinatorKey, transactionId) ! net.imadz.infra.saga.SagaTransactionCoordinator.RetryCurrentPhase(None)
-    Ok(Json.obj("status" -> "ok", "transactionId" -> transactionId))
+  def retryPhase(transactionId: String) = Action.async { implicit request: Request[AnyContent] =>
+    runner.admin.retryPhase(transactionId).map(r => Ok(resultJson(transactionId, r)))
+      .recover { case ex => Ok(Json.obj("status" -> "timeout", "transactionId" -> transactionId, "error" -> ex.getMessage)) }
   }
 
-  // --- Historical Replay API ---
+  def showcaseStatus(transactionId: String) = Action.async { implicit request: Request[AnyContent] =>
+    runner.statusOf(transactionId).map {
+      case Some(snapshot) => Ok(Json.obj(
+        "transactionId" -> snapshot.transactionId,
+        "status" -> snapshot.status,
+        "currentPhase" -> snapshot.currentPhase,
+        "currentStepGroup" -> snapshot.currentStepGroup,
+        "isPaused" -> snapshot.isPaused,
+        "failReason" -> snapshot.failReason.map(JsString(_)).getOrElse[JsValue](JsNull),
+        "steps" -> snapshot.steps.map(st => Json.obj(
+          "stepId" -> st.stepId, "phase" -> st.phase, "status" -> st.status, "retries" -> st.retries))))
+      case None => NotFound(Json.obj("error" -> s"unknown transaction $transactionId"))
+    }
+  }
+
+  // --- Historical Replay API (saga_v3 journal: coordinator + executor pids) ---
   def getHistory(transactionId: String) = Action.async {
-    import net.imadz.infra.saga.SagaTransactionCoordinator
-    import net.imadz.infra.saga.persistence.{SagaTransactionCoordinatorEventAdapter, StepExecutorEventAdapter}
-    import akka.actor.ExtendedActorSystem
+    val coordAdapter = new SagaTransactionCoordinatorEventAdapter(system.asInstanceOf[akka.actor.ExtendedActorSystem])
+    val stepAdapter = new StepExecutorEventAdapter(system.asInstanceOf[akka.actor.ExtendedActorSystem])
+    val coordinatorPid = s"${SagaEngineBootstrap.CoordinatorPidPrefix}$transactionId"
 
-    val coordAdapter = new SagaTransactionCoordinatorEventAdapter(system.asInstanceOf[ExtendedActorSystem])
-    val stepAdapter = new StepExecutorEventAdapter(system.asInstanceOf[ExtendedActorSystem])
-    val coordinatorId = s"Saga-MoneyTransfer|$transactionId"
-
-    readJournal.currentEventsByPersistenceId(coordinatorId, 0, Long.MaxValue).runWith(Sink.seq).flatMap { coordEnvelopes =>
+    readJournal.currentEventsByPersistenceId(coordinatorPid, 0, Long.MaxValue).runWith(Sink.seq).flatMap { coordEnvelopes =>
       val coordEventsWithTs = coordEnvelopes.flatMap { env =>
         val evt = env.event match {
-          case po: net.imadz.infra.saga.proto.saga_v2.SagaTransactionCoordinatorEventPO => coordAdapter.fromJournal(po, "").events.headOption
+          case po: SagaTransactionCoordinatorEventPO => coordAdapter.fromJournal(po, "").events.headOption
           case other => Some(other.asInstanceOf[SagaTransactionCoordinator.Event])
         }
         evt.map(e => (env.timestamp, e))
       }
 
-      val stepsDef = coordEventsWithTs.map(_._2).collectFirst { case e: SagaTransactionCoordinator.TransactionStarted => e.steps }.getOrElse(Nil)
-      
+      // saga_v3: the coordinator journal carries static step descriptors
+      val stepsDef = coordEventsWithTs.map(_._2).collectFirst {
+        case e: SagaTransactionCoordinator.TransactionStarted => e.steps
+      }.getOrElse(Nil)
+
       val queryTasks = for {
         s <- stepsDef
         p <- List(net.imadz.infra.saga.SagaPhase.PreparePhase, net.imadz.infra.saga.SagaPhase.CommitPhase, net.imadz.infra.saga.SagaPhase.CompensatePhase)
         suffix <- List(p.toString, p.toString.toLowerCase.replace("phase", ""))
-      } yield (s"$transactionId-${s.stepId}-$suffix", s.stepId, p.toString.toLowerCase.replace("phase", ""))
+      } yield (s"${SagaEngineBootstrap.StepExecutorPidPrefix}$transactionId-${s.stepId}-$suffix", s.stepId, p.toString.toLowerCase.replace("phase", ""))
 
       Future.sequence(queryTasks.distinct.map { case (pid, sid, ph) =>
         readJournal.currentEventsByPersistenceId(pid, 0, Long.MaxValue).map { env =>
           val evt = env.event match {
-            case po: net.imadz.infra.saga.proto.saga_v2.StepExecutorEventPO => stepAdapter.fromJournal(po, "").events.headOption
+            case po: StepExecutorEventPO => stepAdapter.fromJournal(po, "").events.headOption
             case other => Some(other.asInstanceOf[net.imadz.infra.saga.StepExecutor.Event])
           }
           (env.timestamp, sid, ph, evt)
@@ -154,6 +161,13 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
       }
     }
   }
+
+  private def resultJson(transactionId: String, r: SagaTransactionCoordinator.TransactionResult): JsValue = Json.obj(
+    "status" -> "ok",
+    "transactionId" -> transactionId,
+    "successful" -> r.successful,
+    "transactionStatus" -> r.snapshot.status,
+    "failReason" -> (if (r.failReason == null || r.failReason.isEmpty) JsNull else JsString(r.failReason)))
 
   private def buildHistory(txId: String, coordWithTs: Seq[(Long, net.imadz.infra.saga.SagaTransactionCoordinator.Event)], stepEvts: Seq[(Long, String, String, net.imadz.infra.saga.StepExecutor.Event)]): Seq[JsValue] = {
     import net.imadz.infra.saga.SagaTransactionCoordinator._
@@ -172,7 +186,7 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
 
     val stepEnvelopes = stepEvts.map { case (ts, sid, ph, evt) =>
       val pEvt = evt match {
-        case _: ExecutionStarted[_, _, _] => SagaProgressEvent.StepOngoing(txId, sid, ph, "")
+        case _: ExecutionStarted => SagaProgressEvent.StepOngoing(txId, sid, ph, "")
         case OperationSucceeded(_) => SagaProgressEvent.StepCompleted(txId, sid, ph, "", isManual = false)
         case ManualFixCompleted(_) => SagaProgressEvent.StepCompleted(txId, sid, ph, "", isManual = true)
         case OperationFailed(err) => SagaProgressEvent.StepFailed(txId, sid, ph, err.message, "")
@@ -183,7 +197,7 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
     }
 
     (coordEnvelopes ++ stepEnvelopes).filter(_._2 != null).sortBy { case (ts, evt) =>
-      // 核心修正：因果律权重系统
+      // 因果律权重系统：物理时间戳为大背景，相位优先级解决微小偏差
       val phasePriority = evt match {
         case _: SagaProgressEvent.TransactionStarted => 0
         case e: SagaProgressEvent.StepOngoing => getPhaseWeight(e.phase)
@@ -192,7 +206,6 @@ class ShowcaseController @Inject()(val controllerComponents: ControllerComponent
         case _: SagaProgressEvent.TransactionCompleted | _: SagaProgressEvent.TransactionFailed | _: SagaProgressEvent.TransactionSuspended => 1000
         case _ => 500
       }
-      // 最终排序：物理时间戳为大背景，相位优先级解决微小偏差
       (ts, phasePriority)
     }.map { case (ts, evt) =>
       Json.obj("timestamp" -> ts, "event" -> Json.toJson(evt.asInstanceOf[SagaProgressEvent])(sagaProgressEventWrites))

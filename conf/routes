@@ -12,6 +12,7 @@ GET     /balance/:userId                controllers.HomeController.getBalance(us
 POST    /deposit/:userId/:amount        controllers.HomeController.deposit(userId: String, amount: Double)
 POST    /withdraw/:userId/:amount       controllers.HomeController.withdraw(userId: String, amount: Double)
 POST    /transfer/:fromUserId/:toUserId/:amount   controllers.HomeController.transfer(fromUserId: String, toUserId: String, amount: Double)
+GET     /transfer/:transactionId                 controllers.HomeController.transferStatus(transactionId: String)
 
 # Showcase
 GET     /showcase                   controllers.ShowcaseController.index()
@@ -22,4 +23,5 @@ POST    /api/saga/proceed/:transactionId          controllers.ShowcaseController
 POST    /api/saga/fix-step/:transactionId/:stepId/:phase controllers.ShowcaseController.fixStep(transactionId: String, stepId: String, phase: String)
 POST    /api/saga/resume/:transactionId           controllers.ShowcaseController.resume(transactionId: String)
 POST    /api/saga/retry-phase/:transactionId      controllers.ShowcaseController.retryPhase(transactionId: String)
+GET     /api/saga/status/:transactionId          controllers.ShowcaseController.showcaseStatus(transactionId: String)
 GET     /api/saga/history/:transactionId          controllers.ShowcaseController.getHistory(transactionId: String)

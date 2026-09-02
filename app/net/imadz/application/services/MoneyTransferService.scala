@@ -1,51 +1,60 @@
 package net.imadz.application.services
 
 import akka.actor.typed.Scheduler
-import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
-import net.imadz.infra.saga.SagaTransactionCoordinator
-// [NEW] 引入适配器扩展方法 .toTyped
 import akka.actor.typed.scaladsl.adapter._
-import akka.cluster.sharding.typed.scaladsl.EntityRef
-import akka.util.Timeout
-import net.imadz.application.services.transactor.MoneyTransferProtocol._
-import net.imadz.application.services.transactor.MoneyTransferTransactionRepository
-import net.imadz.common.CommonTypes.{ApplicationService, Id}
+import akka.cluster.sharding.typed.scaladsl.ClusterSharding
+import net.imadz.application.services.transactor.MoneyTransferSagaDefinition
+import net.imadz.common.CommonTypes.{ApplicationService, Id, iMadzError}
 import net.imadz.common.Id
 import net.imadz.domain.values.Money
+import net.imadz.infra.saga.SagaTransactionCoordinator.{StatusSnapshot, TransactionResult}
+import net.imadz.infra.saga.dsl.{SagaRunner, SagaStartRejectedException}
+import net.imadz.infrastructure.bootstrap.SagaEngineBootstrap
 
 import javax.inject.Inject
-import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
-// [CHANGE] 构造函数注入 classicSystem: akka.actor.ActorSystem
+/** Submission handle: the transaction id (idempotency key) plus the terminal-result
+  * future the caller may inspect or ignore (durable callers poll statusOf instead). */
+final case class TransferSubmission(transactionId: Id, result: Future[TransactionResult])
+
 object MoneyTransferService {
-
-  val moneyTransferCoordinatorKey = EntityTypeKey[SagaTransactionCoordinator.Command]("Saga-MoneyTransfer")
+  /** Window in which an immediate start rejection (preCheck / unknown definition / ask
+    * failure) is surfaced synchronously; anything longer is treated as accepted. */
+  private val StartAckWindow: FiniteDuration = 2.seconds
 }
 
-class MoneyTransferService @Inject()(classicSystem: akka.actor.ActorSystem, transactionRepository: MoneyTransferTransactionRepository) extends ApplicationService {
+class MoneyTransferService @Inject()(classicSystem: akka.actor.ActorSystem,
+                                      sharding: ClusterSharding) extends ApplicationService with SagaEngineBootstrap {
 
-  // [NEW] 手动转换为 Typed ActorSystem
   private val system = classicSystem.toTyped
-
-  private implicit val timeout: Timeout = 120.seconds
   private implicit val ec: ExecutionContext = system.executionContext
-  implicit val scheduler: Scheduler = system.scheduler
+  private implicit val scheduler: Scheduler = system.scheduler
 
-  def transfer(fromUserId: Id, toUserId: Id, amount: Money): Future[TransactionResultConfirmation] = {
-    val transactionId = Id.of(java.util.UUID.randomUUID().toString)
-    for {
-      completionResult <- initiateTransaction(fromUserId, toUserId, amount, transactionId)
-    } yield completionResult
+  private val runner: SagaRunner[iMadzError, MoneyTransferSagaDefinition.TransferArgs] =
+    MoneyTransferSagaDefinition.runner(system, txId => coordinatorRef(sharding, txId))
+
+  /** Starts (or resumes — idempotent per txId) a money transfer. Returns as soon as the
+    * start is accepted; the terminal result arrives via `result` or by polling statusOf. */
+  def transfer(fromUserId: Id, toUserId: Id, amount: Money): Future[TransferSubmission] = {
+    val transactionId = Id.gen
+    val terminal = runner.run(
+      transactionId.toString,
+      MoneyTransferSagaDefinition.TransferArgs.of(fromUserId.toString, toUserId.toString, amount))
+    val submission = TransferSubmission(transactionId, terminal)
+    Future.firstCompletedOf(Seq(
+      terminal.transformWith {
+        case Success(result) => Future.successful(submission.copy(result = Future.successful(result))) // fast completion
+        case Failure(ex: SagaStartRejectedException) => Future.failed(ex)                              // fast rejection
+        case Failure(_) => Future.successful(submission)                                               // mid-flight failure — poll statusOf
+      },
+      akka.pattern.after(MoneyTransferService.StartAckWindow, system.classicSystem.scheduler)(Future.successful(submission))
+    ))
   }
 
-  private def initiateTransaction(fromUserId: Id, toUserId: Id, amount: Money, transactionId: Id): Future[TransactionResultConfirmation] = {
-    val transactionRef = getTransactionRef(transactionId)
-    // EntityRef 的 ask 不需要像 ActorRef 那样 import AskPattern，它自带 ask 方法
-    transactionRef.ask(ref => InitiateMoneyTransferTransaction(fromUserId, toUserId, amount, ref))
-  }
-
-  private def getTransactionRef(transactionId: Id): EntityRef[MoneyTransferTransactionCommand] = {
-    transactionRepository.findTransactionById(transactionId)
-  }
+  /** Durable status polling — survives entity restarts and node crashes. */
+  def statusOf(transactionId: String): Future[Option[StatusSnapshot]] =
+    runner.statusOf(transactionId)
 }

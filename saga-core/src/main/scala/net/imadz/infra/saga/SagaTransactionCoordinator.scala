@@ -48,7 +48,7 @@ object SagaTransactionCoordinator {
   case object MaterializeFailed extends StartRejection
   case class PreCheckFailed(code: String, message: String) extends StartRejection
 
-  /** Rich status query — live step states for the current position, coarse for the rest. */
+  /** Rich status query �?live step states for the current position, coarse for the rest. */
   case class GetTransactionStatus(transactionId: String, replyTo: ActorRef[Option[StatusSnapshot]]) extends Command
 
   case object TransactionTimeout extends Command
@@ -123,7 +123,7 @@ object SagaTransactionCoordinator {
                         isRetryable: Boolean
                       )
 
-  /** Wire-safe terminal result — carries a snapshot, never the engine State. */
+  /** Wire-safe terminal result �?carries a snapshot, never the engine State. */
   case class TransactionResult(successful: Boolean, snapshot: StatusSnapshot, failReason: String = "") extends CborSerializable
 
   case class StatusSnapshot(
@@ -153,7 +153,7 @@ object SagaTransactionCoordinator {
                                error: Option[ErrorInfo] = None
                              ) extends CborSerializable
 
-  // Events — steps persist as static descriptors, participants never enter the journal
+  // Events �?steps persist as static descriptors, participants never enter the journal
   sealed trait Event extends CborSerializable
   case class TransactionStarted(transactionId: String,
                                 definitionName: String,
@@ -172,7 +172,7 @@ object SagaTransactionCoordinator {
   case class TransactionResolved(transactionId: String) extends Event
   case class TransactionRetried(transactionId: String, phase: TransactionPhase) extends Event
 
-  // State — descriptors only; participant instances live in the node-local materialization cache
+  // State �?descriptors only; participant instances live in the node-local materialization cache
   case class State(
                     transactionId: Option[String] = None,
                     definitionName: Option[String] = None,
@@ -205,7 +205,7 @@ object SagaTransactionCoordinator {
 
   class SagaDefinitionDriftException(message: String) extends RuntimeException(message)
 
-  /** Node-local cache of materialized (participant-carrying) steps — populated at StartSaga
+  /** Node-local cache of materialized (participant-carrying) steps �?populated at StartSaga
     * (pre-materialization) and lazily re-materialized after passivation/restart. */
   final class MaterializedSteps {
     private var cache: Map[String, SagaTransactionStep[Any, Any, Any]] = Map.empty
@@ -227,20 +227,23 @@ object SagaTransactionCoordinator {
   }
 
   def apply(
-             persistenceId: PersistenceId,
-             stepExecutorFactory: String => ActorRef[StepExecutor.Command],
-             globalTimeout: FiniteDuration = 5.minutes
-           )(implicit ec: ExecutionContext, timeout: Timeout): Behavior[Command] = Behaviors.setup { context =>
+              persistenceId: PersistenceId,
+              stepExecutorBehavior: String => Behavior[StepExecutor.Command],
+              globalTimeout: FiniteDuration = 5.minutes
+            )(implicit ec: ExecutionContext, timeout: Timeout): Behavior[Command] = Behaviors.setup { context =>
     Behaviors.withTimers { timers =>
       val cache = new MaterializedSteps
       var phaseInFlight = false // transient double-fire guard for group re-drives; reset on result receipt/recovery
 
+      val selectedTag = tags(math.abs(persistenceId.id.hashCode % tags.size))
+
       EventSourcedBehavior[Command, Event, State](
         persistenceId = persistenceId,
         emptyState = State(),
-        commandHandler = commandHandler(context, timers, stepExecutorFactory, globalTimeout, cache, () => phaseInFlight, b => phaseInFlight = b),
+        commandHandler = commandHandler(context, timers, stepExecutorBehavior, globalTimeout, cache, () => phaseInFlight, b => phaseInFlight = b),
         eventHandler = eventHandler
       )
+        .withTagger(_ => Set(selectedTag))
         // saga_v3 journal: domain events are persisted as proto POs (same pattern as StepExecutor).
         .eventAdapter(new SagaTransactionCoordinatorEventAdapter(context.system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem]))
         .receiveSignal {
@@ -249,7 +252,7 @@ object SagaTransactionCoordinator {
           if ((state.status == InProgress || state.status == Compensating) && !state.isPaused) {
             timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, globalTimeout)
             context.log.info(s"[TraceID: ${state.traceId}] RecoveryCompleted: resuming transaction ${state.transactionId.getOrElse("")} from phase ${state.currentPhase}")
-            // Cannot persist inside receiveSignal — delegate materialization/suspension to a self-command.
+            // Cannot persist inside receiveSignal �?delegate materialization/suspension to a self-command.
             context.self ! RecoveredInProgress
           } else if (state.isPaused) {
             context.log.info(s"[TraceID: ${state.traceId}] Transaction ${state.transactionId.getOrElse("")} recovered in PAUSED state. Waiting for ProceedNext.")
@@ -260,7 +263,7 @@ object SagaTransactionCoordinator {
 
   // ============================================================
   // Materialization: participants are rebuilt from (definition, args).
-  // Pure computation — always runs inside command bodies, never in thenRun/receiveSignal.
+  // Pure computation �?always runs inside command bodies, never in thenRun/receiveSignal.
   // ============================================================
 
   private def materialize(state: State): Try[List[SagaTransactionStep[Any, Any, Any]]] =
@@ -275,7 +278,7 @@ object SagaTransactionCoordinator {
       _ <- validateStructure(state.steps, steps)
     } yield steps
 
-  /** Structural (stepId + phase + group) validation — resilience values are tunable and
+  /** Structural (stepId + phase + group) validation �?resilience values are tunable and
     * may drift between versions without suspending in-flight transactions. */
   private def validateStructure(persisted: List[StepDescriptor], materialized: List[SagaTransactionStep[_, _, _]]): Try[Unit] = {
     val persistedKeys = persisted.map(d => (d.stepId, d.phase.toString, d.stepGroup)).sorted
@@ -292,7 +295,7 @@ object SagaTransactionCoordinator {
   def commandHandler(
                       context: ActorContext[Command],
                       timers: akka.actor.typed.scaladsl.TimerScheduler[Command],
-                      stepExecutorFactory: String => ActorRef[StepExecutor.Command],
+                      stepExecutorBehavior: String => Behavior[StepExecutor.Command],
                       globalTimeout: FiniteDuration,
                       cache: MaterializedSteps,
                       isInFlight: () => Boolean,
@@ -300,7 +303,7 @@ object SagaTransactionCoordinator {
                     )(implicit ec: ExecutionContext, timeout: Timeout): (State, Command) => Effect[Event, State] = { (state, command) =>
     command match {
       case StartSaga(transactionId, definitionName, definitionVersion, argsBytes, reqTraceId, singleStep, startReply, completionReply) =>
-        handleStartSaga(context, state, timers, transactionId, definitionName, definitionVersion, argsBytes, reqTraceId, singleStep, startReply, completionReply, globalTimeout, stepExecutorFactory, cache)
+        handleStartSaga(context, state, timers, transactionId, definitionName, definitionVersion, argsBytes, reqTraceId, singleStep, startReply, completionReply, globalTimeout, stepExecutorBehavior, cache)
 
       case GetTransactionStatus(txId, replyTo) =>
         handleGetTransactionStatus(context, state, cache, txId, replyTo)
@@ -312,7 +315,7 @@ object SagaTransactionCoordinator {
             suspendEffect(context, state, s"materialize failed after recovery: ${ex.getMessage}", completionReply = None)
           case Success(steps) =>
             cache.put(steps)
-            Effect.none.thenRun(_ => executePhase(context, state, stepExecutorFactory, cache, completionReply = None))
+            Effect.none.thenRun(_ => executePhase(context, state, stepExecutorBehavior, cache, completionReply = None))
         }
 
       case TransactionTimeout =>
@@ -320,7 +323,7 @@ object SagaTransactionCoordinator {
         // operator, not by the global timeout; the timer restarts on resume.
         if ((state.status == InProgress || state.status == Compensating) && !state.isPaused) {
           context.log.warn(s"[TraceID: ${state.traceId}] Transaction ${state.transactionId.getOrElse("")} timed out at phase ${state.currentPhase}")
-          handlePhaseFailure(context, state, state.currentPhase, NonRetryableFailure("Global transaction timeout"), stepExecutorFactory, cache, completionReply = None)
+          handlePhaseFailure(context, state, state.currentPhase, NonRetryableFailure("Global transaction timeout"), stepExecutorBehavior, cache, completionReply = None)
         } else {
           Effect.none
         }
@@ -334,7 +337,7 @@ object SagaTransactionCoordinator {
               .persist[Event, State](TransactionResumed(state.transactionId.get, state.traceId))
               .thenRun { (stateNew: State) =>
                 context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(SagaProgressEvent.StepOngoing(stateNew.transactionId.get, "SYSTEM", "RESUME", stateNew.traceId))
-                executePhase(context, stateNew, stepExecutorFactory, cache, completionReply)
+                executePhase(context, stateNew, stepExecutorBehavior, cache, completionReply)
               }
         }
 
@@ -351,13 +354,13 @@ object SagaTransactionCoordinator {
               .persist[Event, State](TransactionResolved(state.transactionId.get))
               .thenRun { (stateNew: State) =>
                 context.log.info(s"[TraceID: ${state.traceId}] Resolving suspended transaction ${state.transactionId.getOrElse("")}, re-executing phase ${stateNew.currentPhase} at group ${stateNew.currentStepGroup}")
-                executePhase(context, stateNew, stepExecutorFactory, cache, completionReply)
+                executePhase(context, stateNew, stepExecutorBehavior, cache, completionReply)
               }
         }
 
       case ProceedNextGroup(completionReply) =>
         if (isInFlight()) {
-          context.log.info(s"[TraceID: ${state.traceId}] Ignoring ProceedNextGroup — a phase dispatch is already in flight")
+          context.log.info(s"[TraceID: ${state.traceId}] Ignoring ProceedNextGroup �?a phase dispatch is already in flight")
           Effect.none
         } else if ((state.status == InProgress || state.status == Compensating) && !state.isPaused) {
           ensureMaterialized(cache, state) match {
@@ -365,7 +368,7 @@ object SagaTransactionCoordinator {
             case Success(_) =>
               context.log.info(s"[TraceID: ${state.traceId}] Proceeding to next group ${state.currentStepGroup} in phase ${state.currentPhase}")
               Effect.none.thenRun { (_: State) =>
-                executePhase(context, state, stepExecutorFactory, cache, completionReply)
+                executePhase(context, state, stepExecutorBehavior, cache, completionReply)
               }
           }
         } else {
@@ -381,7 +384,7 @@ object SagaTransactionCoordinator {
             timers.startSingleTimer(TransactionTimeoutKey, TransactionTimeout, globalTimeout)
             Effect.persist(TransactionRetried(state.transactionId.get, phaseToRetry)).thenRun { (stateNew: State) =>
               context.log.info(s"[TraceID: ${state.traceId}] Retrying phase ${stateNew.currentPhase} at group ${stateNew.currentStepGroup}")
-              executePhase(context, stateNew, stepExecutorFactory, cache, completionReply)
+              executePhase(context, stateNew, stepExecutorBehavior, cache, completionReply)
             }
         }
 
@@ -391,9 +394,8 @@ object SagaTransactionCoordinator {
             cache.get(stepId, phase) match {
               case Some(step) =>
                 val name = s"$tid-$stepId-$phase"
-                val executor = findOrSpawn(context, stepExecutorFactory, name)
-                // 不直接等待 StepExecutor 的回复，因为 ResolveSuspended 会重新触发 executePhase 并收集结果
-                executor ! StepExecutor.ManualFix(None)
+                val executor = findOrSpawn(context, stepExecutorBehavior, name)
+                // 不直接等�?StepExecutor 的回复，因为 ResolveSuspended 会重新触�?executePhase 并收集结�?                executor ! StepExecutor.ManualFix(None)
                 ()
               case None =>
                 // The step may not be materialized (e.g. executor never attached); attempt lazy materialization.
@@ -403,7 +405,7 @@ object SagaTransactionCoordinator {
                     cache.get(stepId, phase) match {
                       case Some(step) =>
                         val name = s"$tid-$stepId-$phase"
-                        findOrSpawn(context, stepExecutorFactory, name) ! StepExecutor.ManualFix(None)
+                        findOrSpawn(context, stepExecutorBehavior, name) ! StepExecutor.ManualFix(None)
                         ()
                       case None =>
                         context.log.warn(s"Step $stepId not found in phase $phase for transaction $tid")
@@ -424,11 +426,11 @@ object SagaTransactionCoordinator {
 
       case PhaseCompleted(phase, results, completionReply) =>
         setInFlight(false)
-        handlePhaseCompletion(context, state, phase, results, stepExecutorFactory, cache, completionReply)
+        handlePhaseCompletion(context, state, phase, results, stepExecutorBehavior, cache, completionReply)
 
       case PhaseFailure(phase, error, completionReply) =>
         setInFlight(false)
-        handlePhaseFailure(context, state, phase, error, stepExecutorFactory, cache, completionReply)
+        handlePhaseFailure(context, state, phase, error, stepExecutorBehavior, cache, completionReply)
 
       case StatusCollected(states, replyTo) =>
         replyTo ! Some(richSnapshot(state, states))
@@ -455,7 +457,7 @@ object SagaTransactionCoordinator {
                                startReply: Option[ActorRef[SagaStartReply]],
                                completionReply: Option[ActorRef[TransactionResult]],
                                globalTimeout: FiniteDuration,
-                               stepExecutorFactory: String => ActorRef[StepExecutor.Command],
+                               stepExecutorBehavior: String => Behavior[StepExecutor.Command],
                                cache: MaterializedSteps
                              )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
     val argsHash = net.imadz.infra.saga.dsl.ArgsHash.sha256(argsBytes)
@@ -486,7 +488,7 @@ object SagaTransactionCoordinator {
                         startReply.foreach(_ ! MaterializeFailed)
                         Effect.none
                       case Success(steps) =>
-                        startFreshTransaction(context, timers, transactionId, definitionName, definitionVersion, argsBytes, argsHash, steps, reqTraceId, singleStep, startReply, completionReply, globalTimeout, stepExecutorFactory, cache)
+                        startFreshTransaction(context, timers, transactionId, definitionName, definitionVersion, argsBytes, argsHash, steps, reqTraceId, singleStep, startReply, completionReply, globalTimeout, stepExecutorBehavior, cache)
                     }
                 }
             }
@@ -528,7 +530,7 @@ object SagaTransactionCoordinator {
                                      startReply: Option[ActorRef[SagaStartReply]],
                                      completionReply: Option[ActorRef[TransactionResult]],
                                      globalTimeout: FiniteDuration,
-                                     stepExecutorFactory: String => ActorRef[StepExecutor.Command],
+                                     stepExecutorBehavior: String => Behavior[StepExecutor.Command],
                                      cache: MaterializedSteps
                                    )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
     val traceId = if (reqTraceId.isEmpty) transactionId else reqTraceId
@@ -543,7 +545,7 @@ object SagaTransactionCoordinator {
         if (singleStep) {
           context.self ! TransactionPaused(transactionId, traceId)
         } else {
-          executePhase(context, stateNew, stepExecutorFactory, cache, completionReply)
+          executePhase(context, stateNew, stepExecutorBehavior, cache, completionReply)
         }
       }
   }
@@ -596,7 +598,7 @@ object SagaTransactionCoordinator {
   }
 
   /** Coarse snapshot: everything derivable from persisted coordinator state.
-    * Synchronous — usable inside command handlers (no child asks). */
+    * Synchronous �?usable inside command handlers (no child asks). */
   private def coarseSnapshot(state: State): StatusSnapshot = {
     val compensating = state.currentPhase == CompensatePhase
     def stepStatus(d: StepDescriptor): String = {
@@ -666,7 +668,7 @@ object SagaTransactionCoordinator {
                                      state: State,
                                      phase: TransactionPhase,
                                      results: List[Either[RetryableOrNotException, Any]],
-                                     stepExecutorFactory: String => ActorRef[StepExecutor.Command],
+                                     stepExecutorBehavior: String => Behavior[StepExecutor.Command],
                                      cache: MaterializedSteps,
                                      completionReply: Option[ActorRef[TransactionResult]]
                                    )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
@@ -685,7 +687,7 @@ object SagaTransactionCoordinator {
                    context.self ! ProceedNextGroup(completionReply)
                 }
              }
-          case None => // All groups in Prepare finished — the commit steps must be materializable
+          case None => // All groups in Prepare finished �?the commit steps must be materializable
             ensureMaterialized(cache, state) match {
               case Failure(ex) => suspendEffect(context, state, s"materialize failed: ${ex.getMessage}", completionReply)
               case Success(_) =>
@@ -695,7 +697,7 @@ object SagaTransactionCoordinator {
                       context.self ! TransactionPaused(stateNew.transactionId.get, stateNew.traceId)
                    }
                 } else {
-                   persistEffect.thenRun { (stateNew: State) => executePhase(context, stateNew, stepExecutorFactory, cache, completionReply) }
+                   persistEffect.thenRun { (stateNew: State) => executePhase(context, stateNew, stepExecutorBehavior, cache, completionReply) }
                 }
             }
         }
@@ -747,12 +749,12 @@ object SagaTransactionCoordinator {
                                   state: State,
                                   phase: TransactionPhase,
                                   error: RetryableOrNotException,
-                                  stepExecutorFactory: String => ActorRef[StepExecutor.Command],
+                                  stepExecutorBehavior: String => Behavior[StepExecutor.Command],
                                   cache: MaterializedSteps,
                                   completionReply: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, timeout: Timeout): Effect[Event, State] = {
     if (phase != CompensatePhase) {
-      // The compensate steps are needed next — materialize in this command body.
+      // The compensate steps are needed next �?materialize in this command body.
       ensureMaterialized(cache, state) match {
         case Failure(ex) =>
           // Keep the original business failure reason and return to the correct compensation
@@ -773,7 +775,7 @@ object SagaTransactionCoordinator {
              }
           } else {
              persistEffect.thenRun { (stateNew: State) =>
-                executePhase(context, stateNew, stepExecutorFactory, cache, completionReply)
+                executePhase(context, stateNew, stepExecutorBehavior, cache, completionReply)
              }
           }
       }
@@ -806,13 +808,14 @@ object SagaTransactionCoordinator {
   private def executorName(transactionId: String, step: SagaTransactionStep[_, _, _]): String =
     s"$transactionId-${step.stepId}-${step.phase}"
 
-  private def findOrSpawn(context: ActorContext[Command], stepExecutorFactory: String => ActorRef[StepExecutor.Command], name: String): ActorRef[StepExecutor.Command] =
-    context.child(name).map(_.asInstanceOf[ActorRef[StepExecutor.Command]]).getOrElse(stepExecutorFactory(name))
+  private def findOrSpawn(context: ActorContext[Command], stepExecutorBehavior: String => Behavior[StepExecutor.Command], name: String): ActorRef[StepExecutor.Command] =
+    context.child(name).map(_.asInstanceOf[ActorRef[StepExecutor.Command]])
+      .getOrElse(context.spawn(stepExecutorBehavior(name), name))
 
   private def executePhase(
                                   context: ActorContext[Command],
                                   state: State,
-                                  stepExecutorFactory: String => ActorRef[StepExecutor.Command],
+                                  stepExecutorBehavior: String => Behavior[StepExecutor.Command],
                                   cache: MaterializedSteps,
                                   completionReply: Option[ActorRef[TransactionResult]]
                                 )(implicit ec: ExecutionContext, askTimeout: Timeout): Unit = {
@@ -833,7 +836,7 @@ object SagaTransactionCoordinator {
 
     val futureResults: Future[List[StepResult[Any, Any, Any]]] = Future.sequence(
       stepsInPhase.map { step =>
-        val stepExecutor = findOrSpawn(context, stepExecutorFactory, executorName(state.transactionId.get, step))
+        val stepExecutor = findOrSpawn(context, stepExecutorBehavior, executorName(state.transactionId.get, step))
         stepExecutor.ask((ref: ActorRef[StepResult[Any, Any, Any]]) => StepExecutor.Attach[Any, Any, Any](state.transactionId.get, step, Some(ref), state.traceId))(askTimeout, scheduler)
           .mapTo[StepResult[Any, Any, Any]]
           .recoverWith {
