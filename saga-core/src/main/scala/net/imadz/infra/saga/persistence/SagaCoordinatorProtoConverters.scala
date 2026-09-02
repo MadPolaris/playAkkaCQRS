@@ -1,17 +1,20 @@
 package net.imadz.infra.saga.persistence.converters
 
-import net.imadz.common.serialization.{PrimitiveConverter, SerializationExtensionImpl}
+import net.imadz.common.serialization.PrimitiveConverter
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.SagaTransactionCoordinator._
-import net.imadz.infra.saga.proto.saga_v2._
+import net.imadz.infra.saga.proto.saga_v3._
 import net.imadz.infra.saga.serialization.SagaExecutorConverter
 
 /**
  * SagaCoordinatorProtoConverters
  * 职责：
  * 1. 定义 SagaTransactionCoordinator 相关事件的 ProtoConverter
- * 2. 混入 SagaStepProtoMapper 以复用 Step 的转换能力
+ * 2. 混入 SagaExecutorConverter 以复用 StepDescriptor 的转换能力
  * 3. 混入 PrimitiveConverter 以获得基础转换能力
+ *
+ * v3: TransactionStarted records (definition name+version, args, argsHash, step descriptors);
+ * participants never enter the journal.
  */
 trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecutorConverter {
 
@@ -37,14 +40,22 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
   object TransactionStartedConv extends ProtoConverter[TransactionStarted, TransactionStartedPO] {
     override def toProto(e: TransactionStarted): TransactionStartedPO = TransactionStartedPO(
       transactionId = e.transactionId,
-      steps = e.steps.map(SagaStepConv.toProto),
+      definitionName = e.definitionName,
+      definitionVersion = e.definitionVersion,
+      args = com.google.protobuf.ByteString.copyFrom(e.argsBytes),
+      argsHash = e.argsHash,
+      steps = e.steps.map(StepDescriptorConv.toProto),
       traceId = e.traceId,
       singleStep = e.singleStep
     )
 
     override def fromProto(p: TransactionStartedPO): TransactionStarted = TransactionStarted(
       transactionId = p.transactionId,
-      steps = p.steps.map(SagaStepConv.fromProto).toList,
+      definitionName = p.definitionName,
+      definitionVersion = p.definitionVersion,
+      argsBytes = p.args.toByteArray,
+      argsHash = p.argsHash,
+      steps = p.steps.map(StepDescriptorConv.fromProto).toList,
       traceId = p.traceId,
       singleStep = p.singleStep
     )
@@ -159,45 +170,6 @@ trait SagaCoordinatorProtoConverters extends PrimitiveConverter with SagaExecuto
 
     override def fromProto(p: TransactionResolvedPO): TransactionResolved = TransactionResolved(
       transactionId = p.transactionId
-    )
-  }
-
-  object CoordinatorStateConv extends ProtoConverter[State, CoordinatorStatePO] {
-    override def toProto(s: State): CoordinatorStatePO = CoordinatorStatePO(
-      transactionId = s.transactionId.getOrElse(""),
-      steps = s.steps.map(SagaStepConv.toProto),
-      currentPhase = PhaseConv.toProto(s.currentPhase),
-      status = s.status match {
-        case Created => CoordinatorStatusPO.TRANSACTION_CREATED
-        case InProgress => CoordinatorStatusPO.TRANSACTION_IN_PROGRESS
-        case Completed => CoordinatorStatusPO.TRANSACTION_COMPLETED
-        case Failed => CoordinatorStatusPO.TRANSACTION_FAILED
-        case Compensating => CoordinatorStatusPO.TRANSACTION_COMPENSATING
-        case Suspended => CoordinatorStatusPO.TRANSACTION_SUSPENDED
-      },
-      traceId = s.traceId,
-      singleStep = s.singleStep,
-      isPaused = s.isPaused,
-      currentStepGroup = s.currentStepGroup
-    )
-
-    override def fromProto(p: CoordinatorStatePO): State = State(
-      transactionId = Some(p.transactionId).filter(_.nonEmpty),
-      steps = p.steps.map(SagaStepConv.fromProto).toList,
-      currentPhase = PhaseConv.fromProto(p.currentPhase),
-      status = p.status match {
-        case CoordinatorStatusPO.TRANSACTION_CREATED => Created
-        case CoordinatorStatusPO.TRANSACTION_IN_PROGRESS => InProgress
-        case CoordinatorStatusPO.TRANSACTION_COMPLETED => Completed
-        case CoordinatorStatusPO.TRANSACTION_FAILED => Failed
-        case CoordinatorStatusPO.TRANSACTION_COMPENSATING => Compensating
-        case CoordinatorStatusPO.TRANSACTION_SUSPENDED => Suspended
-        case _ => Created
-      },
-      traceId = p.traceId,
-      singleStep = p.singleStep,
-      isPaused = p.isPaused,
-      currentStepGroup = if (p.currentStepGroup == 0) 1 else p.currentStepGroup
     )
   }
 }

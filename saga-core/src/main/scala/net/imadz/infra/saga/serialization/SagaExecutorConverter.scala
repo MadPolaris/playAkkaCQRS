@@ -3,20 +3,23 @@ package net.imadz.infra.saga.serialization
 import akka.actor.ExtendedActorSystem
 import akka.serialization.Serializers
 import com.google.protobuf.ByteString
-import net.imadz.common.serialization.{PrimitiveConverter, SerializationExtension}
+import net.imadz.common.serialization.PrimitiveConverter
 import net.imadz.infra.saga.SagaParticipant.{NonRetryableFailure, RetryableFailure, RetryableOrNotException}
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.StepExecutor.{Event, ExecutionStarted, ManualFixCompleted, OperationFailed, RetryScheduled}
-import net.imadz.infra.saga.proto.saga_v2._
-import net.imadz.infra.saga.{SagaParticipant, SagaTransactionStep}
+import net.imadz.infra.saga.proto.saga_v3._
 
 import scala.concurrent.duration._
 
+/**
+ * Proto converters for StepExecutor events. Participants are NOT converted — the journal
+ * only carries static step descriptors; participants are rebuilt from the registered
+ * SagaDefinition at recovery time.
+ */
 trait SagaExecutorConverter extends PrimitiveConverter {
   def system: ExtendedActorSystem
 
   protected lazy val serialization = akka.serialization.SerializationExtension(system)
-  protected lazy val extension = SerializationExtension(system)
 
   object RetryScheduledConv extends ProtoConverter[RetryScheduled, RetryScheduledPO] {
     override def toProto(domain: RetryScheduled): RetryScheduledPO = RetryScheduledPO(
@@ -38,23 +41,58 @@ trait SagaExecutorConverter extends PrimitiveConverter {
     }
   }
 
-  object ExecutionStartedConv extends ProtoConverter[ExecutionStarted[_, _, _], ExecutionStartedPO] {
+  object StepDescriptorConv extends ProtoConverter[net.imadz.infra.saga.StepDescriptor, StepDescriptorPO] {
+    override def toProto(d: net.imadz.infra.saga.StepDescriptor): StepDescriptorPO = StepDescriptorPO(
+      stepId = d.stepId,
+      phase = d.phase match {
+        case PreparePhase    => TransactionPhasePO.PREPARE_PHASE
+        case CommitPhase     => TransactionPhasePO.COMMIT_PHASE
+        case CompensatePhase => TransactionPhasePO.COMPENSATE_PHASE
+      },
+      participantName = d.participantName,
+      stepGroup = d.stepGroup,
+      maxRetries = d.maxRetries,
+      timeoutDurationMillis = d.timeoutDuration.toMillis,
+      retryWhenRecoveredOngoing = d.retryWhenRecoveredOngoing,
+      circuitBreaker = d.circuitBreaker.map(cb => CircuitBreakerPO(cb.maxFailures, cb.callTimeout.toMillis, cb.resetTimeout.toMillis))
+    )
 
-    override def toProto(domain: ExecutionStarted[_, _, _]): ExecutionStartedPO = {
+    override def fromProto(p: StepDescriptorPO): net.imadz.infra.saga.StepDescriptor =
+      net.imadz.infra.saga.StepDescriptor(
+        stepId = p.stepId,
+        phase = p.phase match {
+          case TransactionPhasePO.PREPARE_PHASE    => PreparePhase
+          case TransactionPhasePO.COMMIT_PHASE     => CommitPhase
+          case TransactionPhasePO.COMPENSATE_PHASE => CompensatePhase
+          case _                                   => PreparePhase
+        },
+        participantName = p.participantName,
+        stepGroup = if (p.stepGroup == 0) 1 else p.stepGroup,
+        maxRetries = p.maxRetries,
+        timeoutDuration = p.timeoutDurationMillis.millis,
+        retryWhenRecoveredOngoing = p.retryWhenRecoveredOngoing,
+        circuitBreaker = p.circuitBreaker.map(cb =>
+          net.imadz.infra.saga.StepExecutor.CircuitBreakerSettings(cb.maxFailures, cb.callTimeoutMillis.millis, cb.resetTimeoutMillis.millis))
+      )
+  }
+
+  object ExecutionStartedConv extends ProtoConverter[ExecutionStarted, ExecutionStartedPO] {
+
+    override def toProto(domain: ExecutionStarted): ExecutionStartedPO = {
       ExecutionStartedPO(
         transactionId = domain.transactionId,
-        transactionStep = Some(SagaStepConv.toProto(domain.transactionStep)), // 调用 Trait
+        step = Some(StepDescriptorConv.toProto(domain.step)),
         replyToPath = domain.replyToPath,
         traceId = domain.traceId
       )
     }
 
-    override def fromProto(proto: ExecutionStartedPO): ExecutionStarted[_, _, _] = {
+    override def fromProto(proto: ExecutionStartedPO): ExecutionStarted = {
       ExecutionStarted(
         transactionId = proto.transactionId,
-        transactionStep = proto.transactionStep
-          .map(SagaStepConv.fromProto)
-          .getOrElse(throw new IllegalArgumentException(s"proto.startedEvent.transactionStep should not be None: ${proto.transactionId}")),
+        step = proto.step
+          .map(StepDescriptorConv.fromProto)
+          .getOrElse(throw new IllegalArgumentException(s"proto.startedEvent.step should not be None: ${proto.transactionId}")),
         replyToPath = proto.replyToPath,
         traceId = proto.traceId
       )
@@ -130,61 +168,5 @@ trait SagaExecutorConverter extends PrimitiveConverter {
       else NonRetryableFailure(proto.message)
     }
   }
-
-  object SagaStepConv extends ProtoConverter[SagaTransactionStep[_, _, _], SagaTransactionStepPO] {
-
-    def toProto(step: SagaTransactionStep[_, _, _]): SagaTransactionStepPO = {
-      // 1. 找策略
-      val strategy = extension.strategyFor(step.participant.getClass)
-      // 2. 转字节
-      val payloadBytes = strategy.toBinary(step.participant)
-      val typeName = strategy.manifest
-
-      // 3. 组装 PO
-      SagaTransactionStepPO(
-        stepId = step.stepId,
-        // Phase 转换逻辑
-        phase = step.phase match {
-          case PreparePhase => TransactionPhasePO.PREPARE_PHASE
-          case CommitPhase => TransactionPhasePO.COMMIT_PHASE
-          case CompensatePhase => TransactionPhasePO.COMPENSATE_PHASE
-        },
-        participant = Some(SagaParticipantPO(typeName, ByteString.copyFrom(payloadBytes))),
-        maxRetries = step.maxRetries,
-        timeoutDurationMillis = step.timeoutDuration.toMillis,
-        retryWhenRecoveredOngoing = step.retryWhenRecoveredOngoing,
-        stepGroup = step.stepGroup
-      )
-    }
-
-    def fromProto(stepPO: SagaTransactionStepPO): SagaTransactionStep[Any, Any, Any] = {
-      val genericParticipant = stepPO.participant.getOrElse(throw new IllegalArgumentException("Missing participant"))
-
-      // 1. 找策略
-      val strategy = extension.strategyFor(genericParticipant.typeName)
-      // 2. 转对象
-      val participant = strategy.fromBinary(genericParticipant.payload.toByteArray)
-        .asInstanceOf[SagaParticipant[Any, Any, Any]]
-
-      // 3. 组装 Step
-      SagaTransactionStep[Any, Any, Any](
-        stepId = stepPO.stepId,
-        phase = stepPO.phase match {
-          case TransactionPhasePO.PREPARE_PHASE => PreparePhase
-          case TransactionPhasePO.COMMIT_PHASE => CommitPhase
-          case TransactionPhasePO.COMPENSATE_PHASE => CompensatePhase
-          case _ => PreparePhase
-        },
-        participant = participant,
-        maxRetries = stepPO.maxRetries,
-        timeoutDuration = stepPO.timeoutDurationMillis.millis,
-        retryWhenRecoveredOngoing = stepPO.retryWhenRecoveredOngoing,
-        stepGroup = if (stepPO.stepGroup == 0) 1 else stepPO.stepGroup
-      )
-
-    }
-
-  }
-
 
 }

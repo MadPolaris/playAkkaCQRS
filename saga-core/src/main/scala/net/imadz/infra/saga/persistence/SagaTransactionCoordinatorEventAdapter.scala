@@ -2,10 +2,9 @@ package net.imadz.infra.saga.persistence
 
 import akka.actor.ExtendedActorSystem
 import akka.persistence.typed.{EventAdapter, EventSeq}
-import net.imadz.common.serialization.SerializationExtension
 import net.imadz.infra.saga.SagaTransactionCoordinator
 import net.imadz.infra.saga.persistence.converters.SagaCoordinatorProtoConverters
-import net.imadz.infra.saga.proto.saga_v2._
+import net.imadz.infra.saga.proto.saga_v3._
 
 import scala.concurrent.ExecutionContext
 

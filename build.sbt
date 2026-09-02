@@ -3,6 +3,10 @@ organization := "net.imadz"
 logLevel := Level.Warn
 version := "1.0-SNAPSHOT"
 
+// Acceptance gate runner (plan §9): G0.1 + G1 today; G0.2 (app) and G0.3 (codegen)
+// join after Phase B / Phase C. Any FAIL breaks the build (non-zero exit).
+addCommandAlias("acceptance", ";sagaCore/test")
+
 val akkaVersion = "2.6.20"
 val AkkaManagementVersion = "1.1.4"
 val AkkaPersistenceJdbcVersion = "5.1.0"

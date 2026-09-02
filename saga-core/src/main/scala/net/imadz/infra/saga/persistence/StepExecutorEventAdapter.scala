@@ -3,8 +3,8 @@ package net.imadz.infra.saga.persistence
 import akka.actor.ExtendedActorSystem
 import akka.persistence.typed.{EventAdapter, EventSeq}
 import net.imadz.infra.saga.StepExecutor._
-import net.imadz.infra.saga.proto.saga_v2.StepExecutorEventPO.Event.{Failed, Rescheduled, Started, Succeed}
-import net.imadz.infra.saga.proto.saga_v2._
+import net.imadz.infra.saga.proto.saga_v3.StepExecutorEventPO.Event.{Failed, Rescheduled, Started, Succeed}
+import net.imadz.infra.saga.proto.saga_v3._
 import net.imadz.infra.saga.serialization.SagaExecutorConverter
 
 /**

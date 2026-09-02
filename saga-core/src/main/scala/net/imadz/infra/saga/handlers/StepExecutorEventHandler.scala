@@ -1,15 +1,14 @@
 package net.imadz.infra.saga.handlers
 
 import net.imadz.infra.saga.SagaParticipant.SagaResult
-import net.imadz.infra.saga.SagaTransactionStep
 import net.imadz.infra.saga.StepExecutor._
 
 object StepExecutorEventHandler {
   def eventHandler[E, R, C]: (State[E, R, C], Event) => State[E, R, C] = { (state, event) =>
     event match {
-      case ExecutionStarted(transactionId, step, replyTo, traceId) =>
+      case ExecutionStarted(transactionId, stepDescriptor, replyTo, traceId) =>
         state.copy(transactionId = Some(transactionId),
-          step = Some(step.asInstanceOf[SagaTransactionStep[E, R, C]]), status = Ongoing,
+          stepDescriptor = Some(stepDescriptor), status = Ongoing,
           replyTo = Some(replyTo), traceId = Some(traceId))
       case OperationSucceeded(result) =>
         state.copy(status = Succeed, result = Some(result.asInstanceOf[SagaResult[R]]))

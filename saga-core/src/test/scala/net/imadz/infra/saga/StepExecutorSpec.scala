@@ -18,36 +18,21 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
   ConfigFactory.parseString(
     """
       |akka {
-      |  extensions = ["net.imadz.common.serialization.SerializationExtension"]
       |  actor {
-      |    serializers {
-      |      saga-transaction-step-test = "net.imadz.infra.saga.SagaTransactionStepSerializerForTest"
-      |    }
-      |    serialization-identifiers {
-      |      "net.imadz.infra.saga.SagaTransactionStepSerializerForTest" = 9999
-      |    }
       |    allow-java-serialization = on
       |    warn-about-java-serializer-usage = off
-      |    serialization-bindings {
-      |      "net.imadz.infra.saga.SagaTransactionStep" = saga-transaction-step-test
-      |      "java.io.Serializable" = java
-      |    }
       |  }
+      |akka.actor.testkit.typed.single-expect-default = 10s
+      |akka.actor.testkit.typed.serialize-messages = off
+      |akka.actor.testkit.typed.serialize-creators = off
+      |akka.actor.testkit.typed.serialization.verify = off
+      |akka.persistence.testkit.events.serialize = off
       |}
       |""".stripMargin
   ).withFallback(EventSourcedBehaviorTestKit.config)
 ) with AnyWordSpecLike with BeforeAndAfterEach with Eventually {
 
   private val circuitBreakerSettings = CircuitBreakerSettings(maxFailures = 3, callTimeout = 10.seconds, resetTimeout = 1.second)
-
-  override protected def beforeAll(): Unit = {
-    super.beforeAll()
-    val ext = net.imadz.common.serialization.SerializationExtension(system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem])
-    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(SuccessfulParticipant))
-    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(AlwaysFailingParticipant))
-    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(NonRetryableFailingParticipant))
-    ext.registerStrategy(TestParticipantSerializerStrategy.forObject(TimeoutParticipant()))
-  }
 
   private def stepExecutorBehavior(persistenceId: String) = {
       StepExecutor[String, String, Any](
@@ -74,7 +59,7 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
         2
       )
 
-      ref ! Start[String, String, Any]("trx1", reserveFromAccount, Some(probe.ref), "test-trace-id")
+      ref ! Attach[String, String, Any]("trx1", reserveFromAccount, Some(probe.ref), "test-trace-id")
 
       // Wait for completion message
       probe.expectMessage(20.seconds, StepCompleted[String, String, Any](
@@ -96,7 +81,7 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
         2
       )
 
-      ref ! Start("trx6", nonRetryableStep, Some(probe.ref), "test-trace-id")
+      ref ! Attach("trx6", nonRetryableStep, Some(probe.ref), "test-trace-id")
 
       // Wait for completion with failure
       val failedResult = probe.receiveMessage(20.seconds).asInstanceOf[StepFailed[String, String, Any]]
@@ -106,11 +91,11 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
     "handle query status while ongoing" in {
       val persistenceId = "test-step-executor-query"
       val ref = spawn(stepExecutorBehavior(persistenceId))
-      
+
       val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, TimeoutParticipant(), 2)
       val probe = createTestProbe[StepResult[String, String, Any]]()
-      
-      ref ! Start("trx-persist", step, Some(probe.ref), "test-trace-id")
+
+      ref ! Attach("trx-persist", step, Some(probe.ref), "test-trace-id")
 
       // Verify QueryStatus while it's ongoing
       val queryProbe = createTestProbe[State[String, String, Any]]()
@@ -119,6 +104,8 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
       state.transactionId shouldBe Some("trx-persist")
       state.traceId shouldBe Some("test-trace-id")
       state.status shouldBe Ongoing
+      state.stepDescriptor.map(_.stepId) shouldBe Some("step1")
+      state.stepDescriptor.map(_.participantName) shouldBe Some("TimeoutParticipant")
     }
 
     "idempotency: return cached result for already succeeded step" in {
@@ -127,18 +114,18 @@ class StepExecutorSpec extends ScalaTestWithActorTestKit(
       val probe = createTestProbe[StepResult[String, String, Any]]()
 
       val step = SagaTransactionStep[String, String, Any]("step1", PreparePhase, SuccessfulParticipant, 2)
-      
+
       // 1. First execution
-      ref ! Start("trx-idempotent", step, Some(probe.ref), "test-trace-id")
+      ref ! Attach("trx-idempotent", step, Some(probe.ref), "test-trace-id")
       probe.expectMessage(20.seconds, StepCompleted[String, String, Any]("trx-idempotent", "step1", SagaResult("Prepared")))
-      
+
       // 2. Start a new instance to simulate a new sharded incarnation (since the old one stopped)
       val ref2 = spawn(stepExecutorBehavior(persistenceId))
 
       // 3. Second execution with same trxId/step
       val probe2 = createTestProbe[StepResult[String, String, Any]]()
-      ref2 ! Start("trx-idempotent", step, Some(probe2.ref), "test-trace-id")
-      
+      ref2 ! Attach("trx-idempotent", step, Some(probe2.ref), "test-trace-id")
+
       // Should return cached result without re-executing
       probe2.expectMessage(20.seconds, StepCompleted[String, String, Any]("trx-idempotent", "step1", SagaResult("Prepared")))
     }

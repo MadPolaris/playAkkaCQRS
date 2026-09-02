@@ -57,7 +57,7 @@ case class TimeoutParticipant() extends SagaParticipant[String, String, Any] wit
   override protected def customClassification: PartialFunction[Throwable, RetryableOrNotException] = PartialFunction.empty
 }
 
-case class CircuitBreakerParticipant() extends SagaParticipant[RetryableOrNotException, String, Any] with CborSerializable {
+case class CircuitBreakerParticipant() extends SagaParticipant[String, String, Any] with CborSerializable {
   private var attempts = 0
   override def doPrepare(transactionId: String, context: Any, traceId: String) = {
     attempts += 1

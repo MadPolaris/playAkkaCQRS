@@ -1,0 +1,164 @@
+syntax = "proto3";
+
+package net.imadz.infra.saga;
+
+option java_multiple_files = true;
+option java_package = "net.imadz.infra.saga.proto";
+
+// ============================================================
+// saga_v3: participants are NO LONGER persisted in the journal.
+// The journal records (definition name + version, args, step
+// descriptors); participants are deterministically rebuilt from
+// the registered SagaDefinition at recovery time.
+// ============================================================
+
+// Enums
+enum TransactionPhasePO {
+  PREPARE_PHASE = 0;
+  COMMIT_PHASE = 1;
+  COMPENSATE_PHASE = 2;
+}
+
+enum CoordinatorStatusPO {
+  TRANSACTION_CREATED = 0;
+  TRANSACTION_IN_PROGRESS = 1;
+  TRANSACTION_COMPLETED = 2;
+  TRANSACTION_FAILED = 3;
+  TRANSACTION_COMPENSATING = 4;
+  TRANSACTION_SUSPENDED = 5;
+}
+
+// Static definition data of one step (no participant payload).
+message CircuitBreakerPO {
+  int32 max_failures = 1;
+  int64 call_timeout_millis = 2;
+  int64 reset_timeout_millis = 3;
+}
+
+message StepDescriptorPO {
+  string step_id = 1;
+  TransactionPhasePO phase = 2;
+  string participant_name = 3;
+  int32 step_group = 4;
+  int32 max_retries = 5;
+  int64 timeout_duration_millis = 6;
+  bool retry_when_recovered_ongoing = 7;
+  CircuitBreakerPO circuit_breaker = 8;
+}
+
+message RetryableOrNotExceptionPO {
+  bool is_retryable = 1;
+  string message = 2;
+}
+
+// ---------------- StepExecutor events ----------------
+
+message ExecutionStartedPO {
+  string transaction_id = 1;
+  StepDescriptorPO step = 2;
+  string replyToPath = 3;
+  string trace_id = 4;
+}
+
+message OperationSucceededPO {
+  string resultType = 1;
+  bytes result = 2; // serialized business result (kept: the only business serialization point)
+}
+
+message ManualFixCompletedPO {
+  string resultType = 1;
+  bytes result = 2;
+}
+
+message OperationFailedPO {
+  RetryableOrNotExceptionPO error = 1;
+}
+
+message RetryScheduledPO {
+  int32 retry_count = 1;
+}
+
+message StepExecutorEventPO {
+  oneof event {
+    ExecutionStartedPO started = 1;
+    OperationSucceededPO succeed = 2;
+    OperationFailedPO failed = 3;
+    RetryScheduledPO rescheduled = 4;
+    ManualFixCompletedPO manual_fixed = 5;
+  }
+}
+
+// ---------------- Coordinator events ----------------
+
+message TransactionStartedPO {
+  string transaction_id = 1;
+  string definition_name = 2;
+  int32 definition_version = 3;
+  bytes args = 4;
+  string args_hash = 5;
+  repeated StepDescriptorPO steps = 6;
+  string trace_id = 7;
+  bool single_step = 8;
+}
+
+message TransactionPausedPO {
+  string transaction_id = 1;
+  string trace_id = 2;
+}
+
+message TransactionResumedPO {
+  string transaction_id = 1;
+  string trace_id = 2;
+}
+
+message PhaseSucceededPO {
+  TransactionPhasePO phase = 1;
+}
+
+message PhaseFailedPO {
+  TransactionPhasePO phase = 1;
+}
+
+message TransactionCompletedPO {
+  string transaction_id = 1;
+}
+
+message TransactionFailedPO {
+  string transaction_id = 1;
+  string reason = 2;
+}
+
+message TransactionSuspendedPO {
+  string transaction_id = 1;
+  string reason = 2;
+}
+
+message TransactionResolvedPO {
+  string transaction_id = 1;
+}
+
+message StepGroupSucceededPO {
+  TransactionPhasePO phase = 1;
+  int32 group = 2;
+}
+
+message TransactionRetriedPO {
+  string transaction_id = 1;
+  TransactionPhasePO phase = 2;
+}
+
+message SagaTransactionCoordinatorEventPO {
+  oneof event {
+    TransactionStartedPO started = 1;
+    PhaseSucceededPO phaseSucceeded = 2;
+    PhaseFailedPO phaseFailed = 3;
+    TransactionCompletedPO transactionCompleted = 4;
+    TransactionFailedPO transactionFailed = 5;
+    TransactionSuspendedPO suspended = 6;
+    TransactionPausedPO paused = 7;
+    TransactionResumedPO resumed = 8;
+    TransactionResolvedPO resolved = 9;
+    StepGroupSucceededPO stepGroupSucceeded = 10;
+    TransactionRetriedPO retried = 11;
+  }
+}
