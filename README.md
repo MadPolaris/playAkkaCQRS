@@ -1,414 +1,242 @@
 # Play Akka CQRS
 
-[English](README.md) | [中文](README-zh.md)
+**English** | [中文](README-zh.md)
+
+[![Scala](https://img.shields.io/badge/Scala-2.13-DC322F?logo=scala&logoColor=white)](https://www.scala-lang.org/)
+[![Akka Typed](https://img.shields.io/badge/Akka%20Typed-2.6.20-15AAFF)](https://akka.io/)
+[![Play Framework](https://img.shields.io/badge/Play-2.8.18-000000?logo=playframework&logoColor=white)](https://www.playframework.com/)
+[![JDK](https://img.shields.io/badge/JDK-11-437291?logo=openjdk)](https://jdk.java.net/11/)
+[![Tests](https://img.shields.io/badge/tests-62%20passing-brightgreen)](#testing)
+
+A minimal-but-complete **DDD + CQRS + Event Sourcing** reference application built on **Akka Typed Cluster Sharding**, featuring a banking domain (accounts, deposits, withdrawals, transfers) driven end-to-end by a **TCC (Try-Confirm/Cancel) Saga engine** with a type-safe declarative DSL.
+
+> **TL;DR** — Deposit and withdraw money through a CQRS write model (MongoDB event journal), watch read models materialize in MySQL via Akka Projections, and run cross-aggregate money transfers as fully event-sourced, crash-recoverable TCC sagas. A built-in Showcase lets you inject faults into a live saga and watch it retry, compensate, suspend, and recover.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Modules](#modules)
+- [Quick Start](#quick-start)
+- [HTTP API Reference](#http-api-reference)
+- [The Saga Showcase](#the-saga-showcase)
+- [Testing](#testing)
+- [Documentation Map](#documentation-map)
+- [Project Layout](#project-layout)
+- [Tech Stack](#tech-stack)
+
+## Features
+
+| Area | What you get |
+|---|---|
+| **DDD tactical design** | Onion architecture: pure domain model (entities, value objects, invariant rules, domain service), application services, thin adapters. See the [DDD Guide](docs/DDD_GUIDE.md). |
+| **CQRS** | Write side: cluster-sharded `EventSourcedBehavior` aggregates with a MongoDB journal. Read side: Akka Projections materialize MySQL read models (monthly income/expense summary) and saga business events. |
+| **Event Sourcing** | Domain events serialized to Protobuf via event adapters; snapshots every 100 events; tag-based event streams feed projections. |
+| **TCC Saga engine** | Try-Confirm/Cancel distributed transactions with per-step resilience (retries, timeouts, circuit breaker), parallel execution groups, reverse compensation, suspension + manual-fix recovery, single-step debugging. See the [Saga Guide](docs/SAGA_GUIDE.md). |
+| **Crash recoverable** | Both aggregates *and* saga coordinators/executors are event-sourced: kill any node, restart, and in-flight transactions resume from the journal. |
+| **Live observability** | Saga progress events stream over WebSocket (`/ws/saga/events`) into the Showcase UI. |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Clients
+        B["Browser / curl"]
+    end
+
+    subgraph "Write Side (Command)"
+        C["Controllers"] --> S["Application Services"]
+        S --> A["CreditBalance Aggregates<br/>Cluster Sharding + EventSourcedBehavior"]
+        S --> SG["Saga Runner / Coordinator<br/>(money transfer = TCC saga)"]
+        SG --> A
+        A --> J[("MongoDB<br/>Event Journal")]
+        SG --- SJ[("MongoDB<br/>Saga Journal")]
+    end
+
+    subgraph "Read Side (Query)"
+        J -- "tag streams" --> PR["Akka Projections<br/>(exactly-once, JDBC)"]
+        PR --> M[("MySQL<br/>Monthly Summary")]
+        Q1["GetBalanceQuery"] -. asks live state .-> A
+        Q2["Report Query"] --> M
+    end
+
+    B --> C
+    B --> Q1
+```
+
+Key consistency points:
+
+- **Balance queries** ask the (sharded, in-memory) aggregate — always consistent with the write side.
+- **Monthly reports** come from the MySQL read model — eventually consistent, updated by an exactly-once projection.
+- **Money transfers** never touch two aggregates in one ACID transaction; instead a TCC saga reserves → confirms / compensates each account (see [Saga Guide](docs/SAGA_GUIDE.md#how-a-transfer-works)).
+
+## Modules
+
+| Module | Purpose |
+|---|---|
+| `root` | The Play web application: DDD banking domain (`app/net/imadz/{domain,application,infrastructure}`), controllers, projections, showcase. |
+| `saga-core` | The reusable TCC saga engine (`net.imadz.infra.saga`): declarative DSL + sharded event-sourced coordinator/executors + protobuf persistence. Independently testable, zero dependency on Play. |
+| `common-core` | Shared kernel: Akka Typed helpers (`CommandHandlerReplyingBehavior`, `CborSerializable`), the `InvariantRule` abstraction, ScalikeJDBC projection setup. |
 
 ## Quick Start
 
-> Make sure following local ports is available before launching
-> - 2551, for akka remoting and clustering
-> - 27015, for event journal
-> - 3308, for read side database
-
-### 1. Install Scala using Coursier by following these command line steps:
-   First, install Coursier. You can run the following commands in your terminal:
-
-Linux
-```bash
-curl -fL https://github.com/coursier/launchers/raw/master/cs-x86_64-pc-linux.gz | gzip -d > cs
-chmod +x cs
-./cs setup
-```
-Windows
-```shell
-iex "& { $(irm https://git.io/coursier-cli-windows) }"
-
-```
-
-macOS
-```bash
-curl -fL https://github.com/coursier/launchers/raw/master/cs-x86_64-apple-darwin.gz | gzip -d > cs
-chmod +x cs
-./cs setup
-```
-
-Then, install Scala using Coursier:
+**Prerequisites:** JDK 11, sbt (any recent runner; project pins 1.4.9), Docker.
 
 ```bash
-cs install scala
-```
-Ensure Scala is successfully installed by checking the version:
+git clone <this-repo>
+cd playAkkaCQRS
 
-```bash
-scala -version
-```
-These steps will install Scala using Coursier and set up the environment.
-
-### 2. Launch Event Journal (MongoDB) and Read Side Database (MySQL)
-
-```bash
+# 1. Start MongoDB (event journal, :27017) and MySQL (read side, :3308)
 docker-compose up -d
-```
 
-### 3. Launch Demo CQRS Service
-
-```bash
+# 2. Run the app (dev mode; HTTP on :9806)
 sbt run
 ```
 
-> Running on Apple Silicon Chipset
-> ```bash
-> sbt -Djna.nosys=true clean run
-> ```
+> Ports: HTTP **9806**, Akka artery **25561**, MongoDB **27017**, MySQL host **3308**.
+> If you previously ran an *older* version of the compose stack, run `docker-compose down -v` once — the MySQL init script only executes on first volume creation.
 
-### 4. Test service with Command Line
+### Try it (userId must be a UUID)
 
 ```bash
-# Get the remaining balance of account A
-curl http://127.0.0.1:9000/balance/1c0d06fc-f108-4b62-b1f6-50eca6e50541
+BASE=http://127.0.0.1:9806
+ALICE=1c0d06fc-f108-4b62-b1f6-50eca6e50541   # any UUID
+BOB=1048f264-73e7-4ac5-9925-7fe3ddb46491     # any UUID
 
-# Deposit into account A
-curl -d {} http://127.0.0.1:9000/deposit/1c0d06fc-f108-4b62-b1f6-50eca6e50541/30.43
+# Deposit 100 CNY to Alice
+curl -X POST "$BASE/deposit/$ALICE/100"
+# => {"balances":[{"amount":100,"currency":"CNY"}]}
 
-# Withdraw from account A
-curl -d {} http://127.0.0.1:9000/withdraw/1c0d06fc-f108-4b62-b1f6-50eca6e50541/10
+# Check balance (read from the live aggregate)
+curl "$BASE/balance/$ALICE"
 
-# Get the remaining balance of account B
-curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
+# Withdraw 30
+curl -X POST "$BASE/withdraw/$ALICE/30"
 
-# Transfer from account A to account B (async: returns the txId — the caller's idempotency key — immediately)
-curl -d {} http://127.0.0.1:9000/transfer/1c0d06fc-f108-4b62-b1f6-50eca6e50541/1048f264-73e7-4ac5-9925-7fe3ddb46491/10
-# => 202 {"transactionId": "...", "status": "InProgress"} (fast completions return the terminal confirmation directly)
+# Transfer 10 Alice -> Bob — a TCC saga runs; fast completion returns the
+# terminal result synchronously, otherwise 202 + transactionId
+curl -X POST "$BASE/transfer/$ALICE/$BOB/10"
 
-# Poll the transfer status (durable across entity restarts / node crashes)
-curl http://127.0.0.1:9000/transfer/<transactionId>
-
-# Get the remaining balance of account A
-curl http://127.0.0.1:9000/balance/1c0d06fc-f108-4b62-b1f6-50eca6e50541
-
-# Get the remaining balance of account B
-curl http://127.0.0.1:9000/balance/1048f264-73e7-4ac5-9925-7fe3ddb46491
+# Poll a transfer's durable saga status
+curl "$BASE/transfer/<transactionId>"
 ```
 
-## Overview
-
-This project aims to establish a scaffold for a Scala single microservice code project. It includes the following
-features:
-
-- Onion Architecture, which includes three layers: domain, application, and infrastructure.
-- Akka is used to implement the standard EventSourcing + CQRS technical architecture.
-    - Akka EventSourcedBehaviors are used to build DDD Aggregates.
-    - Akka Projection is used to build materialized views to deeply optimize complex Queries.
-- Play Framework is used as the Web Server to define Controllers.
-- A simplified implementation of a SAGA-style distributed transaction coordinator is included, which includes
-  consistency and persistence operations for multiple participants, abandoning atomicity and isolation.
-
-This document first introduces the concepts and relationships of the components in the scaffold, and then provides
-detailed code examples in order.
-
-> The Scala programming language is known for its strong expressiveness, which means less code volume. It also means
-> less tokens are consumed when interacting with artificial intelligence like Claude3.5 or ChatGPT.
-> In addition, to make up for the shortcomings of artificial intelligence in problem decomposition and the limitation of
-> context window length, the scaffold tries to decompose components into smaller parts as much as possible. Although it
-> increases the cost of architectural cognition, it gains better modularity capabilities, such as smaller scope for local
-> reasoning, coding, debugging, and unit testing.
-
-## Onion Architecture Internal Components and Relationships
-
-### Principles
-
-The Onion Architecture separates business complexity from technical complexity, and within business complexity, it
-further separates domain complexity from use case complexity. The general correspondence is as follows:
-
-- Business Complexity
-    - Domain Complexity: Domain Layer.
-        - Enterprise business domain logic that is independent of specific business application scenarios.
-    - Use Case Complexity: Application Layer.
-        - The specific scenario or product implementation of the enterprise business domain rules, and the logic for
-          interaction with users or other businesses.
-        - Since this scaffold uses EventSourcing, it also introduces some of the Akka EventSourcedBehavior series of
-          APIs.
-- Technical Complexity: Infrastructure Layer.
-
-### Partial Directory Structure Example
+### Run the acceptance suite
 
 ```bash
-├── controllers
-│         ├── HomeController.scala
-│         └── filter
-│             └── LoggingFilter.scala
-├── net
-│         └── imadz
-│             ├── application                            # Onion Application Layer
-│             │         ├── aggregates                   # Aggregations
-│             │         │         ├── CreditBalanceAggregate.scala
-│             │         │         ├── behaviors          # Aggregation Behaviors: Command Handlers
-│             │         │         │         └── CreditBalanceBehaviors.scala
-│             │         │         ├── factories          # Aggregation Factories
-│             │         │         │         └── CreditBalanceAggregateFactory.scala
-│             │         │         └── repository         # Aggregation Repositories
-│             │         │             └── CreditBalanceRepository.scala
-│             │         ├── projection                   # Projection for building Read side DB (materialized view)
-│             │         │         ├── MonthlyIncomeAndExpenseSummaryProjection.scala
-│             │         │         ├── MonthlyIncomeAndExpenseSummaryProjectionHandler.scala
-│             │         │         ├── ScalikeJdbcSession.scala
-│             │         │         ├── ScalikeJdbcSetup.scala
-│             │         │         └── repository         # Projection Repository
-│             │         │             └── MonthlyIncomeAndExpendsSummaryRepository.scala
-│             │         ├── queries                      # Queries based on Aggregate or Materialized view implementing Read Model
-│             │         │         ├── GetBalanceQuery.scala
-│             │         │         └── GetRecent12MonthsIncomeAndExpenseReport.scala
-│             │         └── services                     # Application Services
-│             │             ├── CreateCreditBalanceService.scala
-│             │             ├── DepositService.scala
-│             │             ├── MoneyTransferService.scala
-│             │             ├── WithdrawService.scala
-│             │             └── transactor               # Utilities for application services
-│             │                 ├── MoneyTransferSagaTransactor.scala
-│             │                 ├── MoneyTransferSagaTransactorBehaviors.scala
-│             │                 └── MoneyTransferTransactionRepository.scala
-│             ├── common
-│             │         ├── CborSerializable.scala
-│             │         ├── CommonTypes.scala
-│             │         ├── application
-│             │         │         └── CommandHandlerReplyingBehavior.scala
-│             │         └── serialization
-│             │             └── ObjectIdOffsetSerializer.scala
-│             ├── domain                                 # Onion Domain Layer
-│             │         ├── entities                     # Domain Entities
-│             │         │         ├── CreditBalanceEntity.scala
-│             │         │         └── behaviors          # Domain Entity Behaviors: Event Handler
-│             │         │             └── CreditBalanceEventHandler.scala
-│             │         ├── invariants                    # Invariant Rules (Business Validations)
-│             │         │         ├── AddInitialOnlyOnceRule.scala
-│             │         │         ├── DepositRule.scala
-│             │         │         └── WithdrawRule.scala
-│             │         ├── services                     # Domain Services
-│             │         │         └── TransferDomainService.scala
-│             │         └── values                       # Domain Value Objects
-│             │             └── Money.scala
-│             ├── infra                                  # Infra Utilities, can be extracted into dedicated project
-│             │         └── saga                         # Saga Component
-│             │             ├── ForSaga.scala
-│             │             ├── SagaParticipant.scala
-│             │             ├── SagaTransactionCoordinator.scala
-│             │             ├── StepExecutor.scala
-│             │             ├── handlers
-│             │             │         ├── StepExecutorCommandHandler.scala
-│             │             │         ├── StepExecutorEventHandler.scala
-│             │             │         └── StepExecutorRecoveryHandler.scala
-│             │             ├── repository
-│             │             │         ├── SagaTransactionCoordinatorRepositoryImpl.scala
-│             │             │         └── TransactionCoordinatorRepository.scala
-│             │             └── serialization
-│             │                 ├── AkkaSerializationWrapper.scala
-│             │                 ├── SagaSerializer.scala
-│             │                 └── SagaTransactionStepSerializer.scala
-│             └── infrastructure                        # Onion Infrastructure Layer 
-│                 ├── SuffixCollectionNames.scala
-│                 ├── bootstrap                         # Components Bootstrap
-│                 │         ├── CreditBalanceBootstrap.scala
-│                 │         ├── MonthlyIncomeAndExpenseBootstrap.scala
-│                 │         └── SagaTransactionCoordinatorBootstrap.scala
-│                 ├── persistence                       # Event Adapters and Snapshot Adapters for Event Sourcing
-│                 │         ├── CreditBalanceEventAdapter.scala
-│                 │         ├── CreditBalanceSnapshotAdapter.scala
-│                 │         ├── ParticipantAdapter.scala
-│                 │         ├── SagaTransactionCoordinatorEventAdapter.scala
-│                 │         └── StepExecutorEventAdapter.scala
-│                 └── repositories                      # Repository Implementations for aggregates, projections and services 
-│                     ├── aggregate
-│                     │         └── CreditBalanceRepositoryImpl.scala
-│                     ├── projection
-│                     │         └── MonthlyIncomeAndExpenseSummaryRepositoryImpl.scala
-│                     └── service
-│                         └── MoneyTransferTransactionRepositoryImpl.scala
-├── protobuf                                            # Protobuf files for akka remoting, akka persistence and so on.
-│         ├── credits.proto
-│         ├── saga_participant.proto
-│         ├── saga_v2.proto
-│         ├── saga_v2_test.proto
-│         └── transactions.proto
-└── views
-    ├── index.scala.html
-    └── main.scala.html
+sbt acceptance        # alias for `test`: saga-core 53 cases (AC-1.1..AC-1.12 + AC-MF) + app tests
+sbt sagaCore/test     # saga engine only — in-memory journal, no external services needed
 ```
 
-### Domain Layer Components
+## HTTP API Reference
 
-![Domain Layer Components](docs/domain-layer.png "Domain Layer Components")
+### Banking
 
-A brief introduction to the objects in the diagram from top to bottom in a non-strictly independent manner. For a deeper
-understanding, it is necessary to read the classics DDD or IDDD:
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/balance/:userId` | Current balances (list of `{amount, currency}`) — asked from the live aggregate. `userId` **must be a UUID**. |
+| `POST` | `/deposit/:userId/:amount` | Deposit (CNY). Returns the new balance confirmation. |
+| `POST` | `/withdraw/:userId/:amount` | Withdraw (CNY). Fails if funds are insufficient. |
+| `POST` | `/transfer/:from/:to/:amount` | Money transfer as a TCC saga. Returns the terminal `TransactionResult` when fast, else `202 {"transactionId": ...}`. |
+| `GET` | `/transfer/:transactionId` | Durable saga status snapshot — survives restarts. |
 
-- ValueObject:
-    - Immutable objects, without unique identifiers. They are defined by property values, such as currency, dates, etc.
+### Saga Showcase & ops
 
-- DomainEvent:
-    - Represents significant events that occur in the domain, which can trigger other operations or state changes.
-      Domain events are also very important glue in the microservice system architecture, used to disseminate business
-      changes between systems, with far superior information volume compared to CDC at the database level.
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/showcase` | Browser UI wired to the live event WebSocket. |
+| `GET` | `/ws/saga/events` | WebSocket stream of saga progress events. |
+| `POST` | `/api/saga/trigger-showcase/:singleStep` | Start a showcase saga (`singleStep=true` pauses before each group). |
+| `GET` | `/api/saga/status/:transactionId` | Status snapshot (per-step, per-phase). |
+| `GET` | `/api/saga/history/:transactionId` | Persisted saga event history. |
+| `POST` | `/api/saga/inject-fault/:stepId/:behavior` | Set a participant script: `success` \| `failretryable` \| `failnonretryable` \| `timeout` \| `failtwicethensucceed`. |
+| `POST` | `/api/saga/proceed/:transactionId` | Advance a paused (single-step) transaction by one group. |
+| `POST` | `/api/saga/fix-step/:transactionId/:stepId/:phase` | Mark a step as externally fixed (journaled). |
+| `POST` | `/api/saga/resume/:transactionId` | Re-drive a suspended transaction to its terminal state. |
+| `POST` | `/api/saga/retry-phase/:transactionId` | Retry the current phase. |
 
-- Entity:
-    - Objects with unique identifiers. The RootEntity is the core of the aggregate, representing the overall state of
-      the aggregate.
+## The Saga Showcase
 
-- InvariantRule:
-    - Objects that define domain invariant guard rules, used to validate business rules and decide which events to produce.
+Open `http://127.0.0.1:9806/showcase`, then drive the five demo paths:
 
-- EventHandler:
-    - Components responsible for responding to and processing domain events.
+| # | Path | How to trigger | What you should see |
+|---|---|---|---|
+| 1 | Group parallelism | Trigger (single-step off) | Step-A runs, then Step-B/Step-C prepare+commit; transaction `Completed`. |
+| 2 | Self-healing retry | Inject `failtwicethensucceed` on Step-B, trigger | Step-B fails twice (retry #1, #2) then succeeds; transaction `Completed`. |
+| 3 | Reverse compensation | Inject `failnonretryable` on Step-B, trigger | Already-prepared steps get compensated; transaction `Failed`. |
+| 4 | Suspension + manual fix | Inject `failnonretryable` on **Step-C**, trigger, wait for `Suspended`, reset Step-C, `fix-step` + `resume` | Transaction reaches terminal `Failed` ("transaction failed but compensated"). |
+| 5 | Single-step debugging | Trigger with `singleStep=true` | Transaction pauses before each group; use `proceed` to advance. |
 
-- DomainService:
-    - Services that encapsulate domain logic that does not belong to entities or value objects.
+The equivalent REST walkthrough is scripted in [`docs/SAGA_GUIDE.md`](docs/SAGA_GUIDE.md#showcase-walkthrough).
 
-Relationships:
+## Testing
 
-- Entities and value objects are the basic building blocks of the domain model.
-- Domain events are generated by entities or domain services and are processed by event handlers.
-- Invariant rules are applied to entities and value objects to ensure the execution of business rules.
-- Domain services coordinate the interaction between entities, value objects, and invariant rules.
+| Suite | Cases | Needs external services? |
+|---|---|---|
+| `saga-core` acceptance + unit (`sbt sagaCore/test`) | 53 — covers acceptance criteria **AC-1.1 … AC-1.12** and **AC-MF** (manual-fix recovery) | No — in-memory persistence testkit |
+| App tests (`sbt test`) | 9 — command-helper behavior | No |
 
-These concepts together form the core elements of Domain-Driven Design (DDD), used to model complex business domains.
+`AC-1.x` are the engine's acceptance criteria (idempotent start, crash recovery, generation guards, definition-drift protection, resilience activation, serialization bindings, runner completion bridge, …). The full matrix lives in the [Saga Guide](docs/SAGA_GUIDE.md#acceptance-criteria).
 
-### Application Layer Components
+## Documentation Map
 
-![Application Layer Components](docs/application-layer.png "Application Layer Components")
+| Document | Content |
+|---|---|
+| [docs/DDD_GUIDE.md](docs/DDD_GUIDE.md) / [中文](docs/DDD_GUIDE-zh.md) | **How DDD concepts land in this codebase**: every tactical pattern (value object, aggregate root, invariant rule, domain service, repository, factory, projection…) mapped to exact files, with counts and code excerpts. |
+| [docs/SAGA_GUIDE.md](docs/SAGA_GUIDE.md) / [中文](docs/SAGA_GUIDE-zh.md) | **The TCC saga engine**: DSL in 4 steps, resilience policies, execution groups, ops & manual intervention, persistence (saga_v3 protobuf), acceptance criteria, showcase walkthrough. |
+| [saga-core/README.md](saga-core/README.md) | 中文 quick reference for the saga-core module. |
+| [docs/SAGA_ENGINE_README.md](docs/SAGA_ENGINE_README.md) | Historical v2.0 engine whitepaper (superseded by the guide above; kept for the step-by-step integration checklist). |
+| `docs/*.puml` | PlantUML sequence diagrams (coordinator, step executor, saga lifecycle). |
+| `knowledge_base/` | Per-artifact coding conventions used when scaffolding new code. |
 
-# DDD and Akka Event Sourcing Concepts
+## Project Layout
 
-- Aggregate:
-    - Encapsulates the Root Entity.
-    - In Akka Event Sourcing, technical complexity is added, so it is separated into the Application Layer.
+```
+playAkkaCQRS
+├── app/                                  # Play application (root module)
+│   ├── controllers/                      #   HTTP endpoints (HomeController, ShowcaseController)
+│   ├── views/                            #   Server-rendered pages (incl. Saga Showcase UI)
+│   └── net/imadz/
+│       ├── domain/                       # ← pure business logic (13 files)
+│       │   ├── entities/                 #    CreditBalance state + 7 domain events
+│       │   ├── entities/behaviors/       #    event → state evolution (pure function)
+│       │   ├── invariants/               #    9 invariant rules (Deposit/Withdraw/Reserve/…)
+│       │   ├── services/                 #    TransferDomainService
+│       │   └── values/                   #    Money value object
+│       ├── application/                  # ← use cases (22 files)
+│       │   ├── aggregates/               #    aggregate wiring: protocol, behaviors, factory, repository
+│       │   ├── services/                 #    Deposit/Withdraw/Create/MoneyTransfer services
+│       │   │   └── transactor/           #    TCC participants + saga definitions
+│       │   ├── queries/                  #    balance & monthly-report queries
+│       │   └── projection/               #    read-side projections (MySQL summary, saga events)
+│       ├── infrastructure/               # ← adapters (11 files)
+│       │   ├── bootstrap/                #    startup wiring (sharding, projections, saga engine)
+│       │   ├── persistence/              #    event/snapshot adapters (Protobuf)
+│       │   └── repositories/             #    aggregate + read-side repository impls
+│       └── modules/                      #    Guice bootstrap module
+├── saga-core/                            # TCC saga engine (independent module)
+│   └── src/main/scala/net/imadz/infra/saga/
+│       ├── dsl/                          # SagaDefinition, SagaStep, SagaRunner, SagaRegistry…
+│       ├── handlers/                     # StepExecutor command/event handlers
+│       ├── persistence/                  # journal event adapters (saga_v3 protobuf)
+│       └── …                             # coordinator, step executor, participant SPI
+├── common-core/                          # shared kernel (invariant rule SPI, serialization)
+├── conf/                                 # application/cluster/persistence/projection configs, routes, DDL
+├── docs/                                 # guides (DDD, saga), diagrams, historical whitepaper
+├── docker-compose.yaml                   # MongoDB 6 + MySQL 8 for local runs
+└── build.sbt                             # 3 modules; `acceptance` alias; dev port 9806
+```
 
-- Command:
-    - The operational protocol accepted by the aggregate.
+## Tech Stack
 
-- CommandHandler:
-    - Handles commands sent to the aggregate.
-    - Generally expressed in a functional signature (Command, State) => Effect[Event, State].
-    - In the architectural terminology of this framework, it corresponds to (Command, RootEntity) =>
-      Effect[DomainEvent, RootEntity].
-
-- Projection:
-    - Akka Projection factory, used to build CQRS materialized views.
-
-- ProjectionHandler:
-    - Event handlers managed by Akka Projection.
-    - Accept domain events, complete ETL transformation.
-    - Store the new data model through the ProjectionRepository.
-
-- ProjectionRepository:
-    - The repository interface for materialized views.
-
-- Query:
-    - Used for business queries.
-
-- AggregateFactory:
-    - A factory for building aggregates.
-
-- AggregateRepository:
-    - A repository for obtaining or saving aggregates.
-
-- ApplicationService:
-    - Completes user requests at the granularity of use cases or complex business tasks.
-
-- ProcessHandler:
-    - Initiates or advances business processes based on business changes in the system.
-
-- DomainEventPublisher:
-    - An interface for sending domain events to a message queue.
-
-Relationships:
-
-- Aggregates contain commands and command handlers.
-- Command handlers convert commands into domain events.
-- Projections register projection handlers.
-- Projection handlers use projection repositories to build read-side databases.
-- Application services distribute commands and queries.
-- Queries read data from the aggregate model or projection repository.
-- Aggregate repositories and factories manage and construct aggregates.
-- Projections use aggregate tags and event streams.
-- Projection handlers and process handlers consume domain events.
-- Process handlers can load and create new aggregates.
-
-These concepts together form a system architecture based on DDD and Akka Event Sourcing, implementing Command Query
-Responsibility Segregation (CQRS) and Event Sourcing patterns.
-
-### Infrastructure Layer Components
-
-> For the components of the microservice system, it is not yet complete, and more features such as resilience, circuit
-> breakers, rate limiting, security, log aggregation, business embedding, APM monitoring, distributed tracing, back
-> pressure, API version control, fault injection, configuration management, health checks, performance testing with
-> Gatling, reactive database access, Kafka integration, asynchronous IO, and deployment CICD, Akka service discovery and
-> load balancing, and internationalization will be added later.
-![Infrastructure Layer Components](docs/infrastructure.png "Infrastructure Layer Components")
-
-# Infrastructure Layer (Infrastructure Layer) Details
-
-The Infrastructure Layer contains the technical implementation details of the system, mainly including the following
-parts:
-
-- Event Sourcing
-    - DomainEventProto: Protocol Buffers definition of domain events.
-    - SnapshotProto: Protocol Buffers definition of snapshots.
-    - DomainEventPersistentAdapter: Adapter for domain event persistence.
-    - SnapshotPersistentAdapter: Adapter for snapshot persistence.
-    - AggregateBootstrap: Aggregate bootstrap program.
-    - ProjectionBootstrap: Projection bootstrap program.
-
-- Database Repository
-    - AggregateRepositoryImpl: Implementation of the aggregate repository.
-    - ProjectionRepositoryImpl: Implementation of the projection repository.
-
-- RESTful Services
-    - Controller: REST API controller.
-
-- WebSocket Services
-    - WebSocketController: WebSocket controller.
-
-- gRPC Services (Not yet implemented)
-    - ClientStub: gRPC client stub.
-    - ServerStub: gRPC server stub.
-    - gRPCMessageType: gRPC message type.
-
-- Messaging
-    - MessageProducer: Message producer.
-    - MessageConsumer: Message consumer.
-    - MessageProtocol: Message protocol.
-
-- Dependency Injection
-    - Injection: Dependency injection related to specific frameworks.
-
-Key Relationships:
-
-- AggregateRepositoryImpl and ProjectionRepositoryImpl implement the repository interfaces defined in the Application
-  Layer.
-- Controller, WebSocketController, and ServerStub use ApplicationService.
-- MessageProducer implements the DomainEventPublisher interface.
-- DomainEventPersistentAdapter and SnapshotPersistentAdapter interact with the Event Journal and Snapshot Journal.
-- Dependency injection (Injection) is responsible for binding and providing the implementation instances of various
-  interfaces.
-
-External System Interactions:
-
-- Call Controller through HTTP.
-- Interact with ClientStub and ServerStub through gRPC.
-
-Data Storage:
-
-- Relational databases for non-event sourcing data storage.
-- Read-side databases for query optimization.
-- Event logs and snapshot logs for event sourcing.
-
-Message Queues:
-
-- MessageProducer sends messages to the message queue.
-- MessageConsumer receives messages from the message queue.
-
-### About Akka EventSourcing + CQRS
-
-As mentioned earlier, this scaffold adopts a different structure attempt, placing the parts of the Aggregate that are
-unrelated to Akka in the Domain layer, and the Akka-based parts of the Aggregate in the Application layer.
-In addition, during the Akka EventSourcing process, Akka events and snapshot serialization use the protobuf protocol,
-and the corresponding Adapter is registered through the initialization bootstrap.
-
+| Layer | Technology |
+|---|---|
+| HTTP | Play Framework 2.8.18 (Akka HTTP backend), server-rendered Twirl views + WebSocket |
+| Concurrency / clustering | Akka Typed 2.6.20 — Cluster Sharding, Cluster Singleton-free design, Artery remoting (25561) |
+| Persistence | akka-persistence-mongo (journal + snapshots) → MongoDB 6 |
+| Read side | Akka Projections 1.2.5 (JDBC, exactly-once) → MySQL 8 via ScalikeJDBC + HikariCP |
+| Serialization | Protobuf (scalapb) event adapters for journals; jackson-cbor for cluster messages |
+| Saga | `saga-core` — TCC, event-sourced, sharded (see [Saga Guide](docs/SAGA_GUIDE.md)) |
+| Build / test | sbt 1.4.9, ScalaTest 3.2.15, akka persistence testkit, sbt-protoc |

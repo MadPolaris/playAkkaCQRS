@@ -1,3 +1,6 @@
+> 📖 完整指南：[docs/SAGA_GUIDE-zh.md](../docs/SAGA_GUIDE-zh.md)（中文） / [docs/SAGA_GUIDE.md](../docs/SAGA_GUIDE.md)（EN）
+> 本文件是该模块的中文速查表。
+
 # Saga Core
 
 `saga-core` 是一个基于 Akka Typed 和 Event Sourcing 构建的工业级分布式事务协调引擎。它实现了 TCC（Try-Confirm-Cancel）模式，支持高并发、强一致性、以及复杂的混合编排（串行+并行）逻辑。

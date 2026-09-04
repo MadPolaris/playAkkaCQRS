@@ -13,11 +13,10 @@ target
 *.txt
 *.json
 *.db
-*.txt
-*.md
 .g8
 /.metals
 /project/project/.bloop
 /.bloop
 /project/.bloop
 /.vscode
+/.zcode

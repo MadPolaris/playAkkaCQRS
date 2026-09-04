@@ -1,3 +1,7 @@
+> **Note (2026-09):** This v2.0 whitepaper predates the saga_v3 declarative DSL and is
+> superseded by **[SAGA_GUIDE.md](SAGA_GUIDE.md)** (EN) / **[SAGA_GUIDE-zh.md](SAGA_GUIDE-zh.md)** (中文).
+> The step-by-step integration checklist in §4 below is still accurate and kept as reference.
+
 这里是为您翻译的 `SAGA_ENGINE_README.md` 英文版。
 
 您可以直接保存为 `SAGA_ENGINE_README-en.md`。
