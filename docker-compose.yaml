@@ -2,21 +2,21 @@ version: '3.8'
 
 services:
   mongodb:
-    image: mongo:latest
+    image: mongo:6
     ports:
       - "27017:27017"
     environment:
-      MONGO_INITDB_DATABASE: cqrs-demo-journal
+      MONGO_INITDB_DATABASE: playakka-cqrs-v3
     volumes:
       - mongodb_data:/data/db
 
   mysql:
-    image: mysql:8.0
+    image: mysql:8
     ports:
       - "3308:3306"
     environment:
       MYSQL_ROOT_PASSWORD: 1q2w3e4r5t
-      MYSQL_DATABASE: cqrs_jdbc_demo
+      MYSQL_DATABASE: playakka_cqrs_v3
       MYSQL_ROOT_HOST: '%'
     command: --default-authentication-plugin=mysql_native_password
     volumes:

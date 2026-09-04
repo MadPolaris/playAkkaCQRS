@@ -7,6 +7,10 @@ version := "1.0-SNAPSHOT"
 // joins after Phase C. E2E gates (G2 live-infra) are manual. Any FAIL breaks the build.
 addCommandAlias("acceptance", "test")
 
+// Dev-mode HTTP port: Play's `sbt run` ignores `play.server.http.port` in application.conf,
+// so the 9806 isolation promised there is pinned here (matches conf/application.conf).
+play.sbt.PlayImport.PlayKeys.playDefaultPort := 9806
+
 val akkaVersion = "2.6.20"
 val AkkaManagementVersion = "1.1.4"
 val AkkaPersistenceJdbcVersion = "5.1.0"

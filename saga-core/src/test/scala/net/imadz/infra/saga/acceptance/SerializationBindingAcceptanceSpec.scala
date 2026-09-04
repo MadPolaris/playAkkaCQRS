@@ -32,7 +32,9 @@ class SerializationBindingAcceptanceSpec extends ScalaTestWithActorTestKit(
     classOf[SagaTransactionCoordinator.TransactionResult],
     classOf[SagaTransactionCoordinator.StatusSnapshot],
     classOf[SagaTransactionCoordinator.StepSpecSnapshot],
-    classOf[SagaTransactionCoordinator.GetTransactionStatus]
+    classOf[SagaTransactionCoordinator.GetTransactionStatus],
+    classOf[SagaTransactionCoordinator.ManualFixStep],
+    classOf[SagaTransactionCoordinator.StepManuallyFixed]
   )
 
   "AC-1.9 serialization bindings" should {

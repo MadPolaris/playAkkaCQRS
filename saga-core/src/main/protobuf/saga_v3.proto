@@ -113,10 +113,12 @@ message TransactionResumedPO {
 
 message PhaseSucceededPO {
   TransactionPhasePO phase = 1;
+  repeated StepOutcomePO outcomes = 2;
 }
 
 message PhaseFailedPO {
   TransactionPhasePO phase = 1;
+  repeated StepOutcomePO outcomes = 2;
 }
 
 message TransactionCompletedPO {
@@ -140,10 +142,24 @@ message TransactionResolvedPO {
 message StepGroupSucceededPO {
   TransactionPhasePO phase = 1;
   int32 group = 2;
+  repeated StepOutcomePO outcomes = 3;
 }
 
 message TransactionRetriedPO {
   string transaction_id = 1;
+  TransactionPhasePO phase = 2;
+}
+
+// Journaled per-step result (v3.1): recorded with phase-completion events so status
+// snapshots stay exact after executors stop. Empty lists in pre-existing journals.
+message StepOutcomePO {
+  string step_id = 1;
+  TransactionPhasePO phase = 2;
+  string status = 3;
+}
+
+message StepManuallyFixedPO {
+  string step_id = 1;
   TransactionPhasePO phase = 2;
 }
 
@@ -160,5 +176,6 @@ message SagaTransactionCoordinatorEventPO {
     TransactionResolvedPO resolved = 9;
     StepGroupSucceededPO stepGroupSucceeded = 10;
     TransactionRetriedPO retried = 11;
+    StepManuallyFixedPO stepManuallyFixed = 12;
   }
 }

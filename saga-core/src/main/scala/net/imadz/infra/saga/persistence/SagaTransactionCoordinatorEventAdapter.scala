@@ -56,6 +56,9 @@ class SagaTransactionCoordinatorEventAdapter(override val system: ExtendedActorS
       case evt: SagaTransactionCoordinator.StepGroupSucceeded =>
         SagaTransactionCoordinatorEventPO.Event.StepGroupSucceeded(StepGroupSucceededConv.toProto(evt))
 
+      case evt: SagaTransactionCoordinator.StepManuallyFixed =>
+        SagaTransactionCoordinatorEventPO.Event.StepManuallyFixed(StepManuallyFixedConv.toProto(evt))
+
       case evt: SagaTransactionCoordinator.TransactionRetried =>
         SagaTransactionCoordinatorEventPO.Event.Retried(TransactionRetriedConv.toProto(evt))
     }
@@ -93,6 +96,9 @@ class SagaTransactionCoordinatorEventAdapter(override val system: ExtendedActorS
 
       case SagaTransactionCoordinatorEventPO.Event.StepGroupSucceeded(po) =>
         EventSeq.single(StepGroupSucceededConv.fromProto(po))
+
+      case SagaTransactionCoordinatorEventPO.Event.StepManuallyFixed(po) =>
+        EventSeq.single(StepManuallyFixedConv.fromProto(po))
 
       case SagaTransactionCoordinatorEventPO.Event.Retried(po) =>
         EventSeq.single(TransactionRetriedConv.fromProto(po))

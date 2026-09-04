@@ -162,8 +162,12 @@ class SagaRunnerAcceptanceSpec extends ScalaTestWithActorTestKit(
       unknown shouldBe None
 
       Await.result(runner.run("tx-ac12-status", TransferArgs("a", "b", 1)), 30.seconds)
-      val known = Await.result(runner.statusOf("tx-ac12-status"), 15.seconds)
-      known.map(_.status) shouldBe Some(SagaTransactionCoordinator.Completed.toString)
+      // entity resurrection + replay after the terminal stop can transiently exceed a single
+      // ask budget under load — poll instead of a fixed Await (was flakily timing out at 15s)
+      eventually(timeout(30.seconds), interval(200.millis)) {
+        val known = Await.result(runner.statusOf("tx-ac12-status"), 15.seconds)
+        known.map(_.status) shouldBe Some(SagaTransactionCoordinator.Completed.toString)
+      }
     }
 
     "support the singleStep debug mode and admin.proceed" in {
