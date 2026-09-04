@@ -20,3 +20,4 @@ target
 /project/.bloop
 /.vscode
 /.zcode
+*.DS_Store

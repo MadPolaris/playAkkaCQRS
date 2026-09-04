@@ -1,58 +1,42 @@
 @startuml
     participant Client
-    participant SagaTransactionCoordinator
+    participant SagaTransactionCoordinator as STC
+    participant ExecutionPlan
     participant StepExecutor
-    participant EventSourcedBehavior
+    participant EventSourcedBehavior as ESB
 
-    Client->>SagaTransactionCoordinator: StartTransaction
-    SagaTransactionCoordinator->>EventSourcedBehavior: Persist(TransactionStarted)
-    EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
-    SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(PreparePhase)
+    Client->>STC: StartTransaction(steps)
+    STC->>ESB: Persist(TransactionStarted)
+    ESB-->>STC: State Updated
+    
+    STC->>ExecutionPlan: new(steps)
+    STC->>STC: startPhase(PreparePhase)
 
-    loop For each step in PreparePhase
-        SagaTransactionCoordinator->>StepExecutor: Start
-        StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
+    loop For each StepGroup in phase
+        STC->>ESB: Persist(StepGroupStarted)
+        loop For each step in StepGroup
+            STC->>StepExecutor: Start(step)
+            StepExecutor-->>STC: StepResult (InternalStepResult)
+            STC->>ESB: Persist(StepResultReceived)
+        end
+        STC->>STC: PhaseCompleted?
+        alt Group Completed
+            STC->>ESB: Persist(StepGroupSucceeded)
+        end
     end
 
-    alt All steps successful
-        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted(PreparePhase)
-        SagaTransactionCoordinator->>EventSourcedBehavior: Persist(PhaseSucceeded(PreparePhase))
-        EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
-        SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CommitPhase)
-
-        loop For each step in CommitPhase
-            SagaTransactionCoordinator->>StepExecutor: Start
-            StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
-        end
-
-        alt All steps successful
-            SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted(CommitPhase)
-            SagaTransactionCoordinator->>EventSourcedBehavior: Persist(PhaseSucceeded(CommitPhase), TransactionCompleted)
-            EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
-            SagaTransactionCoordinator-->>Client: TransactionResult(successful=true)
-        else Any step failed
-            SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseFailed(CommitPhase)
-            SagaTransactionCoordinator->>EventSourcedBehavior: Persist(TransactionFailed)
-            EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
-            SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CompensatePhase)
-        end
-    else Any step failed
-        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseFailed(PreparePhase)
-        SagaTransactionCoordinator->>EventSourcedBehavior: Persist(TransactionFailed)
-        EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
-        SagaTransactionCoordinator->>SagaTransactionCoordinator: executePhase(CompensatePhase)
-    end
-
-    opt CompensatePhase
-        loop For each step in CompensatePhase
-            SagaTransactionCoordinator->>StepExecutor: Start
-            StepExecutor-->>SagaTransactionCoordinator: StepResult (Completed/Failed)
-        end
-
-        SagaTransactionCoordinator->>SagaTransactionCoordinator: PhaseCompleted/PhaseFailed(CompensatePhase)
-        SagaTransactionCoordinator->>EventSourcedBehavior: Persist(PhaseSucceeded(CompensatePhase)/TransactionFailed)
-        EventSourcedBehavior-->>SagaTransactionCoordinator: State Updated
-        SagaTransactionCoordinator-->>Client: TransactionResult(successful=false)
+    alt All steps in Prepare successful
+        STC->>ESB: Persist(PhaseSucceeded(PreparePhase))
+        STC->>STC: startPhase(CommitPhase)
+        ... Repeat StepGroup Loop for Commit ...
+        STC->>ESB: Persist(TransactionCompleted)
+        STC-->>Client: TransactionResult(successful=true)
+    else Any step in Prepare/Commit failed
+        STC->>ESB: Persist(PhaseFailed)
+        STC->>STC: startPhase(CompensatePhase)
+        ... Repeat StepGroup Loop for Compensate (Only successful steps) ...
+        STC->>ESB: Persist(TransactionFailed)
+        STC-->>Client: TransactionResult(successful=false)
     end
 @enduml
 

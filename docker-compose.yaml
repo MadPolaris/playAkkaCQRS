@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   mongodb:
@@ -9,6 +9,13 @@ services:
       MONGO_INITDB_DATABASE: playakka-cqrs-v3
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet | grep -q 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
 
   mysql:
     image: mysql:8
@@ -16,12 +23,44 @@ services:
       - "3308:3306"
     environment:
       MYSQL_ROOT_PASSWORD: 1q2w3e4r5t
-      MYSQL_DATABASE: playakka_cqrs_v3
-      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: cqrs_jdbc_demo
+      MYSQL_ROOT_HOST: "%"
     command: --default-authentication-plugin=mysql_native_password
     volumes:
       - mysql_data:/var/lib/mysql
       - ./conf/sql/1.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "localhost",
+          "-u",
+          "root",
+          "-p1q2w3e4r5t",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+
+  app:
+    image: zhongdj/minimal-cqrs:latest
+    ports:
+      - "80:9000"
+    environment:
+      PLAY_HTTP_SECRET_KEY: "L4PSb0cxSlvekLFmErLOofFzfMpcNqutjwwoCimb4NKDie+f7NzsbvV7LFe/hf4V"
+    volumes:
+      - ./logs:/opt/docker/logs
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   mongodb_data:

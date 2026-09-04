@@ -1,0 +1,136 @@
+@()(implicit messages: Messages)
+@import helper._
+<!DOCTYPE html>
+<html lang="@messages.lang.code">
+<head>
+  <meta charset="UTF-8">
+  <title>Route Designer — @Messages("fab.brand")</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+      --fg: #e6edf3; --fg-muted: #8b949e;
+      --accent: #58a6ff; --amber: #f59e0b; --green: #3fb950;
+      --red: #f85149; --purple: #a855f7;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.5;
+      height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+    }
+    /* Header */
+    .header {
+      background: rgba(13,17,23,0.92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border); padding: 0 20px;
+      display: flex; align-items: center; height: 44px; gap: 16px; flex-shrink: 0;
+    }
+    .header .logo { font-weight: 700; font-size: 0.9rem; color: var(--fg); text-decoration: none; }
+    .header nav { display: flex; gap: 8px; margin-left: auto; }
+    .header nav a { color: var(--fg-muted); text-decoration: none; font-size: 0.78rem; padding: 4px 10px; border-radius: 4px; }
+    .header nav a:hover { color: var(--fg); background: var(--bg-alt); }
+    .header nav a.active { color: var(--amber); font-weight: 600; }
+    .header nav a.nav-lang { border: 1px solid var(--border); margin-left: 4px; }
+
+    /* Main Layout */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Panels */
+    .panel {
+      background: var(--bg-alt); border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono','Fira Code',monospace; font-size: 0.68rem;
+    }
+    .panel .panel-content {
+      padding: 6px 16px; max-height: 600px; overflow-y: auto;
+      transition: max-height 0.35s ease, padding 0.3s;
+    }
+    .panel.collapsed .panel-content {
+      max-height: 0; padding: 0 16px; overflow: hidden;
+    }
+    .panel .panel-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 0;
+      padding: 6px 16px; background: var(--bg-alt); z-index: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    .panel.collapsed .panel-header { border-bottom: none; }
+    .panel .panel-header h3 { font-size: 0.75rem; font-weight: 700; color: var(--fg-muted); }
+    .panel .panel-header button {
+      background: none; border: 1px solid var(--border); color: var(--fg-muted);
+      font-size: 0.6rem; padding: 1px 8px; border-radius: 3px; cursor: pointer;
+    }
+    .panel .panel-header button:hover { color: var(--fg); border-color: var(--fg-muted); }
+
+    /* Graph panel */
+    .graph-panel { flex: 1; min-height: 200px; }
+    .graph-panel .panel-content { max-height: none; flex: 1; min-height: 180px; }
+
+    /* Browser panel */
+    .browser-panel { flex: 0; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/" class="logo">@Messages("fab.brand")</a>
+  <nav>
+    <a href="/">@Messages("fab.nav.home")</a>
+    <a href="/saga">@Messages("fab.nav.saga")</a>
+    <a href="/dag">@Messages("fab.nav.dag")</a>
+    <a href="/m3-demo">@Messages("fab.nav.m3")</a>
+    <a href="/fab-demo">@Messages("fab.nav.fabdemo")</a>
+    <a href="/fab-designer" class="active">Route Designer</a>
+    @if(messages.lang.code == "zh") {
+      <a href="/fab-designer?lang=en" class="nav-link nav-lang">@Messages("fab.nav.lang")</a>
+    } else {
+      <a href="/fab-designer?lang=zh" class="nav-link nav-lang">@Messages("fab.nav.lang")</a>
+    }
+  </nav>
+</div>
+
+<div class="main">
+  <!-- Route Graph Panel -->
+  <div class="panel graph-panel" id="routeGraphPanel">
+    <div class="panel-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3>🗺 Route Graph</h3>
+        <button onclick="toggleRouteGraphPanel()" title="Toggle panel">▲ Collapse</button>
+      </div>
+      <span id="routeGraphScenario" style="font-size:10px;color:var(--fg-muted)"></span>
+    </div>
+    <div class="panel-content" id="routeGraphContent" style="width:100%; min-height:140px; overflow-x:auto">
+      <p style="color:var(--fg-muted);font-size:12px;padding:20px">Select a route from the browser below to view its graph.</p>
+    </div>
+  </div>
+
+  <!-- Route Browser Panel -->
+  <div class="panel browser-panel" id="routeBrowserPanel">
+    <div class="panel-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3>📋 Route Browser</h3>
+        <button onclick="toggleRouteBrowserPanel()" title="Toggle panel">▲ Collapse</button>
+      </div>
+      <span style="font-size:10px;color:var(--fg-muted)">Defined routes in RoutingRepository</span>
+    </div>
+    <div class="panel-content" id="routeBrowserContent" style="width:100%; padding:8px">
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <button onclick="seedRoutes()" style="background:var(--accent);color:#fff;border:none;padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">🌱 Seed Default Routes</button>
+        <button onclick="fetchRouteList()" style="background:var(--bg-alt);color:var(--fg);border:1px solid var(--border);padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px">🔄 Refresh List</button>
+      </div>
+      <div id="routeList" style="font-size:11px;color:var(--fg-muted)">
+        <p>Click "Seed Default Routes" to populate, then "Refresh List" to view.</p>
+      </div>
+      <div id="routeStepsPreview" style="font-size:11px;margin-top:8px;padding:8px;background:var(--bg-alt);border-radius:4px;display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+window.__i18n = {
+  lang: "@messages.lang.code",
+  t: function(key) { return this[key] || key; }
+};
+</script>
+<script src="@routes.Assets.versioned("javascripts/route_graph.js")" type="text/javascript"></script>
+<script src="@routes.Assets.versioned("javascripts/fab_demo_designer.js")" type="text/javascript"></script>
+</body>
+</html>

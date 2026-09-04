@@ -21,28 +21,28 @@ object ToAccountParticipant {
 }
 
 case class ToAccountParticipant(toUserId: Id, amount: Money)(implicit ec: ExecutionContext, scheduler: Scheduler)
-    extends AskParticipant[iMadzError, String, MoneyTransferContext](
+    extends AskParticipant[iMadzError, String, AppSagaContext](
       rules = ToAccountParticipant.Rules,
       askTimeout = 5.seconds
     ) {
 
-  override protected val prepareBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
-    Some(PhaseAsk.ask[RecordIncomingCredits, RecordIncomingCreditsConfirmation, iMadzError, String, MoneyTransferContext](
-      ref = ctx => ctx.repository.findCreditBalanceByUserId(toUserId),
+  override protected val prepareBinding: Option[PhaseAsk[iMadzError, String, AppSagaContext]] =
+    Some(PhaseAsk.ask[RecordIncomingCredits, RecordIncomingCreditsConfirmation, iMadzError, String, AppSagaContext](
+      ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
       command = (txId, replyTo) => RecordIncomingCredits(Id.of(txId), amount, replyTo),
       mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
     ))
 
-  override protected val commitBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
-    Some(PhaseAsk.ask[CommitIncomingCredits, CommitIncomingCreditsConfirmation, iMadzError, String, MoneyTransferContext](
-      ref = ctx => ctx.repository.findCreditBalanceByUserId(toUserId),
+  override protected val commitBinding: Option[PhaseAsk[iMadzError, String, AppSagaContext]] =
+    Some(PhaseAsk.ask[CommitIncomingCredits, CommitIncomingCreditsConfirmation, iMadzError, String, AppSagaContext](
+      ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
       command = (txId, replyTo) => CommitIncomingCredits(Id.of(txId), replyTo),
       mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
     ))
 
-  override protected val compensateBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
-    Some(PhaseAsk.ask[CancelIncomingCredit, CancelIncomingCreditConfirmation, iMadzError, String, MoneyTransferContext](
-      ref = ctx => ctx.repository.findCreditBalanceByUserId(toUserId),
+  override protected val compensateBinding: Option[PhaseAsk[iMadzError, String, AppSagaContext]] =
+    Some(PhaseAsk.ask[CancelIncomingCredit, CancelIncomingCreditConfirmation, iMadzError, String, AppSagaContext](
+      ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
       command = (txId, replyTo) => CancelIncomingCredit(Id.of(txId), replyTo),
       mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
     ))

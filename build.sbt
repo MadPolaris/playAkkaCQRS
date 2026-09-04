@@ -1,15 +1,28 @@
 name := """minimal-cqrs"""
-organization := "net.imadz"
+
+inThisBuild(List(
+  organization := "net.imadz",
+  organizationName := "MadPolaris",
+  organizationHomepage := Some(url("https://github.com/MadPolaris")),
+  homepage := Some(url("https://github.com/MadPolaris/playAkkaCQRS")),
+  licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+  developers := List(
+    Developer(
+      "MadPolaris",
+      "MadPolaris Team",
+      "zhongdj@gmail.com",
+      url("https://github.com/MadPolaris")
+    )
+  ),
+  sonatypeCredentialHost := "central.sonatype.com"
+))
+
 logLevel := Level.Warn
-version := "1.0-SNAPSHOT"
 
 // Acceptance gate runner (plan §9): G0.1 (saga-core) + G0.2 (app) today; G0.3 (codegen)
 // joins after Phase C. E2E gates (G2 live-infra) are manual. Any FAIL breaks the build.
 addCommandAlias("acceptance", "test")
 
-// Dev-mode HTTP port: Play's `sbt run` ignores `play.server.http.port` in application.conf,
-// so the 9806 isolation promised there is pinned here (matches conf/application.conf).
-play.sbt.PlayImport.PlayKeys.playDefaultPort := 9806
 
 val akkaVersion = "2.6.20"
 val AkkaManagementVersion = "1.1.4"
@@ -20,8 +33,6 @@ val SlickVersion = "3.3.3"
 val MongoPluginVersion = "3.0.8"
 
 lazy val commonSettings = Seq(
-  organization := "net.imadz",
-  version := "1.0-SNAPSHOT",
   scalaVersion := "2.13.14",
   semanticdbEnabled := true,
   semanticdbVersion := "4.9.7",
@@ -50,7 +61,9 @@ lazy val commonSettings = Seq(
     "com.typesafe.play" %% "play-json" % "2.9.3",
     "com.google.guava" % "guava" % "30.1.1-jre",
     "com.typesafe.akka" %% "akka-http-core" % "10.2.7",
-    "org.slf4j" % "slf4j-api" % "2.0.4"
+    "org.slf4j" % "slf4j-api" % "2.0.4",
+    "org.scalatest" %% "scalatest" % "3.2.15" % Test,
+    "ch.qos.logback" % "logback-classic" % "1.4.5" % Test
   )
 )
 
@@ -97,14 +110,44 @@ lazy val sagaCore = (project in file("saga-core"))
     )
   )
 
-lazy val root = (project in file("."))
-  .enablePlugins(PlayScala, JavaAppPackaging, DockerPlugin)
-  .dependsOn(commonCore, sagaCore)
-  .aggregate(commonCore, sagaCore)
+lazy val dagEngineCore = (project in file("dag-engine-core"))
+  .dependsOn(commonCore)
   .settings(
     commonSettings,
+    name := "dag-engine-core",
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
+      "com.typesafe.akka" %% "akka-persistence-typed" % akkaVersion,
+      "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion
+    )
+  )
+
+lazy val fabSimulation = (project in file("fab-simulation"))
+  .settings(
+    commonSettings,
+    name := "fab-simulation",
+    libraryDependencies ++= Seq(
+      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion
+    )
+  )
+
+lazy val root = (project in file("."))
+  .enablePlugins(PlayScala, JavaAppPackaging, DockerPlugin)
+  .dependsOn(commonCore, sagaCore, dagEngineCore, fabSimulation)
+  .aggregate(commonCore, sagaCore, dagEngineCore, fabSimulation)
+  .settings(
+    commonSettings,
+    publish / skip := true,
     name := "minimal-cqrs",
-    dockerBaseImage := "docker.io/library/adoptopenjdk:11-jre-hotspot",
+    dockerBaseImage := "eclipse-temurin:11-jre",
+    dockerExposedPorts := Seq(9000),
+    Docker / daemonUser := "daemon",
+    dockerEntrypoint := Seq("sh", "-c", "mkdir -p /opt/docker/logs && exec bin/minimal-cqrs"),
+    dockerUpdateLatest := true,
+    bashScriptExtraDefines += """addJava "-Dconfig.resource=docker.conf"""",
+    Universal / mappings := (Universal / mappings).value.filterNot {
+      case (_, name) => name.contains("logback-test.xml")
+    },
     dockerUsername := sys.props.get("docker.username"),
     dockerRepository := sys.props.get("docker.registry"),
     ThisBuild / dynverSeparator := "-",
@@ -161,6 +204,7 @@ lazy val root = (project in file("."))
     libraryDependencies += "nl.gn0s1s" %% "base64" % "0.2.2",
     libraryDependencies += "com.github.jwt-scala" %% "jwt-play" % "9.1.2",
     libraryDependencies += "org.mongodb.scala" %% "mongo-scala-driver" % "4.11.0",
+	libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "2.3.0",
     
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-remote" % akkaVersion,

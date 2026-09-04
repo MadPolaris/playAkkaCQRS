@@ -1,0 +1,366 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="@messages.lang.code">
+<head>
+    <meta charset="UTF-8">
+    <title>@messages("showcase.title")</title>
+    <meta name="description" content="Saga 分布式事务协调器——Backward Recovery 补偿机制，Prepare/Commit/Compensate 三阶段，支持 SUSPENDED 状态手动修复。Akka Persistence + Event Sourcing 实现。">
+    <meta name="keywords" content="Saga, 分布式事务, 补偿, Backward Recovery, Akka, Event Sourcing, CQRS">
+    <style>
+        :root { --bg-alt: #252525; --border: #444; --fg: #e0e0e0; --fg-muted: #999; --accent: #00d4ff; --font: 'Segoe UI', sans-serif; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #1a1a1a; color: #e0e0e0; margin: 0; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 { color: #00d4ff; border-bottom: 2px solid #333; padding-bottom: 10px; text-align: center; }
+
+        .header-top { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; margin-bottom: 20px; }
+        .lang-switcher { font-size: 0.9rem; }
+        .lang-switcher > a { color: #00d4ff; text-decoration: none; margin-left: 10px; padding: 2px 8px; border: 1px solid #444; border-radius: 4px; }
+        .lang-switcher > a:hover { background: #333; }
+        .lang-switcher > a.active { background: #00d4ff; color: #000; border-color: #00d4ff; }
+
+        /* Dropdown */
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn {
+            color: #999; font-size: 0.82rem; font-weight: 500;
+            padding: 2px 8px; border-radius: 4px; cursor: pointer;
+            background: transparent; border: 1px solid #444; font-family: inherit;
+            display: flex; align-items: center; gap: 4px; transition: all 0.15s;
+        }
+        .nav-dropdown-btn:hover, .nav-dropdown:hover .nav-dropdown-btn { color: #e0e0e0; background: #333; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu {
+            position: absolute; top: 100%; left: 0; margin-top: 4px;
+            background: #252525; border: 1px solid #444; border-radius: 8px;
+            min-width: 230px; padding: 4px; display: none; z-index: 100;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item {
+            display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+            border-radius: 6px; text-decoration: none; color: #e0e0e0;
+            font-size: 0.8rem; font-weight: 500; transition: all 0.1s;
+        }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge {
+            font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+            flex-shrink: 0; min-width: 36px; text-align: center;
+        }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+.badge-m3 { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .badge-ddd { background: rgba(0,212,255,0.12); color: #00d4ff; }
+        .mm-active { background: rgba(255,255,255,0.05); }
+
+        .dashboard { display: grid; grid-template-columns: 350px 1fr; gap: 30px; margin-top: 20px; }
+
+        .control-panel { background: #252525; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); align-self: start; }
+        .control-panel h2 { font-size: 1.2rem; margin-top: 0; color: #ffca28; border-left: 4px solid #ffca28; padding-left: 10px; }
+        .btn { display: block; width: 100%; padding: 12px; margin-bottom: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-align: center; transition: all 0.2s; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .btn:hover { transform: translateY(-1px); filter: brightness(1.1); box-shadow: 0 6px 10px rgba(0,0,0,0.2); }
+        .btn:active { transform: translateY(1px) scale(0.98); filter: brightness(0.9); box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-primary:hover { background: #0056b3; transform: translateY(-1px); }
+        .btn-warning { background: #ffca28; color: #000; }
+        .btn-warning:hover { background: #ffb300; }
+        .btn-success { background: #2e7d32; color: white; }
+        .btn-success:hover { background: #1b5e20; }
+        .btn-danger { background: #c62828; color: white; }
+        .btn-danger:hover { background: #b71c1c; }
+        .btn-info { background: #17a2b8; color: white; }
+        .btn-info:hover { background: #138496; }
+        .btn-small { padding: 4px 8px; font-size: 0.7rem; width: auto; display: inline-block; margin: 0; }
+
+        .fault-injection { margin-top: 20px; border-top: 1px solid #444; padding-top: 20px; }
+        .step-config { margin-bottom: 15px; }
+        .step-name { font-weight: bold; margin-bottom: 5px; display: block; color: #aaa; font-size: 0.8rem; }
+        select { width: 100%; padding: 8px; background: #333; color: white; border: 1px solid #555; border-radius: 4px; }
+
+        .visualization { background: #252525; padding: 30px; border-radius: 8px; min-height: 800px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .phase-column { display: flex; flex-direction: column; align-items: center; border: 1px solid #333; border-radius: 8px; padding: 15px; background: rgba(0,0,0,0.2); }
+        .phase-header { font-weight: bold; margin-bottom: 20px; padding: 5px 15px; border-radius: 20px; font-size: 0.9rem; }
+
+        .group-row { display: flex; justify-content: center; gap: 20px; width: 100%; margin-bottom: 30px; position: relative; padding: 10px; border: 1px dashed #444; border-radius: 6px; }
+        .group-row::before { content: "Group " attr(data-group); position: absolute; top: -10px; left: 10px; background: #252525; padding: 0 5px; font-size: 0.6rem; color: #888; }
+
+        .group-connector { height: 20px; width: 2px; background: #444; margin-top: -30px; margin-bottom: 10px; }
+
+        .node { width: 130px; height: 65px; background: #444; border: 2px solid #666; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; transition: all 0.5s; font-size: 0.8rem; }
+        .node .label { font-weight: bold; }
+        .node .info { font-size: 0.6rem; color: #aaa; }
+
+        .node .fix-btn {
+            display: none;
+            position: absolute;
+            bottom: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        .node.failed .fix-btn, .node.retrying .fix-btn, .node.suspended .fix-btn { display: block !important; }
+
+        .node.pending { background: #3a3a3a; color: #888; }
+        .node.ongoing { background: #0056b3; border-color: #00d4ff; box-shadow: 0 0 15px #00d4ff; animation: pulse 1.5s infinite; color: white; }
+        .node.success { background: #1b5e20; border-color: #4caf50; color: white; }
+        .node.failed { background: #b71c1c; border-color: #f44336; color: white; }
+        .node.retrying { background: #e65100; border-color: #ffca28; border-style: dashed; color: white; }
+        .node.suspended { border: 3px solid #ff9800 !important; }
+
+        @@keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .logs-container { grid-column: span 3; margin-top: 20px; }
+        .logs { background: #000; padding: 15px; border-radius: 8px; height: 180px; overflow-y: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.8rem; border: 1px solid #333; }
+        .log-entry { margin-bottom: 4px; border-left: 3px solid #555; padding-left: 8px; }
+        .log-time { color: #888; margin-right: 10px; }
+        .log-type { font-weight: bold; margin-right: 10px; }
+
+        .type-TransactionStarted { color: #ffca28; }
+        .type-StepOngoing { color: #00d4ff; }
+        .type-StepCompleted { color: #4caf50; }
+        .type-StepFailed { color: #f44336; }
+        .type-DomainEventPublished { color: #9c27b0; font-weight: bold; }
+        .type-TransactionCompleted { color: #4caf50; background: rgba(76, 175, 80, 0.1); }
+        .type-TransactionSuspended { color: #ff9800; background: rgba(255, 152, 0, 0.1); }
+
+        .admin-fix-panel { margin-top: 20px; padding: 10px; background: #333; border-radius: 4px; border-left: 4px solid #c62828; }
+        .admin-fix-panel input { width: 100%; padding: 8px; margin-bottom: 10px; background: #222; color: #fff; border: 1px solid #555; box-sizing: border-box; }
+
+        .replay-panel { margin-top: 20px; padding: 15px; background: #2a2a2a; border-radius: 8px; border-top: 4px solid #17a2b8; }
+        .replay-panel input { width: 100%; padding: 10px; background: #111; color: #00d4ff; border: 1px solid #444; border-radius: 4px; margin-bottom: 10px; font-family: monospace; }
+
+        .scenario-info { margin-top: 15px; padding: 12px; background: rgba(0, 212, 255, 0.1); border-radius: 4px; border-left: 4px solid #00d4ff; font-size: 0.85rem; }
+        .scenario-info h3 { margin: 0 0 5px 0; font-size: 0.9rem; color: #00d4ff; }
+        .scenario-info p { margin: 0; line-height: 1.4; color: #ccc; }
+        .scenario-info .expectation { margin-top: 8px; font-style: italic; color: #ffca28; }
+
+        .event-dot { pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-top">
+            <h1>@messages("showcase.header")</h1>
+            <div class="lang-switcher">
+                <a href="/">Home</a>
+                <div class="nav-dropdown">
+                    <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
+                    <div class="nav-dropdown-menu">
+                        <a href="/en/m1" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m1">M1</span>Saga Distributed TX</a>
+                        <a href="/en/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
+                        <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Dynamic Orchestration</a>
+                    </div>
+                </div>
+                <div class="nav-dropdown">
+                    <span class="nav-dropdown-btn">Live Demo <span class="arrow">▾</span></span>
+                    <div class="nav-dropdown-menu">
+                        <a href="/saga" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                        <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
+                        <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Self-Healing</a>
+                    </div>
+                </div>
+                <div class="nav-dropdown">
+                    <span class="nav-dropdown-btn">DDD Practices <span class="arrow">▾</span></span>
+                    <div class="nav-dropdown-menu">
+                        <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection Pipeline</a>
+                        <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>Architecture Radar</a>
+                    </div>
+                </div>
+                <a href="/saga/docs/overview">Docs</a>
+                <a href="/lang/en" class="@if(messages.lang.code == "en"){active}">EN</a>
+                <a href="/lang/zh" class="@if(messages.lang.code == "zh"){active}">中文</a>
+            </div>
+        </div>
+        <div class="dashboard">
+            <div class="control-panel">
+                <h2>@messages("showcase.control_panel")</h2>
+
+                <div class="step-config">
+                    <span class="step-name">@messages("showcase.scenario")</span>
+                    <select id="scenarioId">
+                        <option value="happy">@messages("showcase.scenario.happy")</option>
+                        <option value="retry">@messages("showcase.scenario.retry")</option>
+                        <option value="compensation">@messages("showcase.scenario.compensation")</option>
+                        <option value="commit-failure">@messages("showcase.scenario.commit_failure")</option>
+                        <option value="partial-group">@messages("showcase.scenario.partial_group")</option>
+                        <option value="suspended">@messages("showcase.scenario.suspended")</option>
+                        <option value="timeout">@messages("showcase.scenario.timeout")</option>
+                        <option value="custom">@messages("showcase.scenario.custom")</option>
+                    </select>
+                </div>
+
+                <div id="scenarioDescription" class="scenario-info">
+                    <h3>@messages("showcase.scenario_details")</h3>
+                    <p id="scenarioText">@messages("showcase.select_scenario")</p>
+                    <div id="scenarioExpectation" class="expectation"></div>
+                </div>
+
+                <div style="margin-top: 15px; margin-bottom: 15px; padding: 10px; background: #333; border-radius: 4px;">
+                    <input type="checkbox" id="singleStepMode"> <label for="singleStepMode">@messages("showcase.single_step")</label>
+                </div>
+                <button class="btn btn-primary" id="startBtn">@messages("showcase.start_transaction")</button>
+                <button class="btn btn-warning" id="proceedBtn" style="display:none;">@messages("showcase.proceed")</button>
+                <button class="btn btn-danger" id="retryBtn" style="display:none;">@messages("showcase.retry_phase")</button>
+                <button class="btn btn-success" id="resumeBtn" style="display:none;">@messages("showcase.resume")</button>
+
+                <div id="statusInfo" style="margin: 10px 0; font-weight: bold; text-align: center; color: #ffca28;">@messages("showcase.ready")</div>
+
+                <div class="replay-panel">
+                    <h3 style="font-size: 0.9rem; color: #17a2b8; margin-top: 0;">@messages("showcase.time_machine")</h3>
+                    <input type="text" id="replayTxId" placeholder="@messages("showcase.tx_id_placeholder")">
+                    <button class="btn btn-info" id="replayBtn">@messages("showcase.replay_history")</button>
+                </div>
+
+                <div class="admin-fix-panel" id="manualFixPanel" style="display:none;">
+                    <h3 style="font-size: 0.9rem; color: #f44336; margin-top: 0;">@messages("showcase.emergency_fix")</h3>
+                    <input type="text" id="manualStepId" placeholder="@messages("showcase.step_id_placeholder")">
+                    <select id="manualPhase" style="margin-bottom: 10px;">
+                        <option value="prepare">@messages("showcase.phase.prepare")</option>
+                        <option value="commit">@messages("showcase.phase.commit")</option>
+                        <option value="compensate" selected>@messages("showcase.phase.compensate")</option>
+                    </select>
+                    <button class="btn btn-success btn-small" id="manualFixBtn">@messages("showcase.apply_fix")</button>
+                </div>
+
+                <div class="fault-injection">
+                    <h2>@messages("showcase.fault_injection")</h2>
+                    <div class="step-config">
+                        <span class="step-name">@messages("showcase.step_behavior", "Step-A")</span>
+                        <select id="config-Step-A">
+                            <option value="success">@messages("showcase.behavior.success")</option>
+                            <option value="failretryable">@messages("showcase.behavior.fail_retryable")</option>
+                            <option value="failnonretryable">@messages("showcase.behavior.fail_non_retryable")</option>
+                        </select>
+                    </div>
+                    <div class="step-config">
+                        <span class="step-name">@messages("showcase.step_behavior", "Step-B")</span>
+                        <select id="config-Step-B">
+                            <option value="success">@messages("showcase.behavior.success")</option>
+                            <option value="failretryable">@messages("showcase.behavior.fail_retryable")</option>
+                            <option value="failnonretryable">@messages("showcase.behavior.fail_non_retryable")</option>
+                        </select>
+                    </div>
+                    <div class="step-config">
+                        <span class="step-name">@messages("showcase.step_behavior", "Step-C")</span>
+                        <select id="config-Step-C">
+                            <option value="success">@messages("showcase.behavior.success")</option>
+                            <option value="failretryable">@messages("showcase.behavior.fail_retryable")</option>
+                            <option value="failnonretryable">@messages("showcase.behavior.fail_non_retryable")</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="visualization" id="dagContainer">
+                <div id="coordinator-node" style="grid-column: span 3; display: flex; justify-content: center; margin-bottom: 10px;">
+                    <div class="node coordinator success" id="coordinator" style="width: 200px; background: #0056b3; border-color: #00d4ff; color: white;">
+                        <span class="label">Saga Coordinator</span>
+                        <span class="info" id="coord-status">Idle</span>
+                    </div>
+                </div>
+                <div class="phase-column" id="col-prepare">
+                    <div class="phase-header" style="background: #ffca28; color: #000;">@messages("showcase.phase.PREPARE_H")</div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
+                </div>
+                <div class="phase-column" id="col-commit">
+                    <div class="phase-header" style="background: #4caf50; color: #fff;">@messages("showcase.phase.COMMIT_H")</div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
+                </div>
+                <div class="phase-column" id="col-compensate">
+                    <div class="phase-header" style="background: #f44336; color: #fff;">@messages("showcase.phase.COMPENSATE_H")</div>
+                    <div style="color: #666; font-style: italic; margin-top: 20px;">@messages("showcase.ready")</div>
+                </div>
+
+                <div class="logs-container">
+                    <div class="logs" id="logContainer">
+                        <div class="log-entry"><span class="log-time">--:--:--</span> <span class="log-type">@messages("showcase.log.System")</span> @messages("showcase.system_ready")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.__sagaI18n = {
+            log: {
+                TransactionStarted: '@Html(messages("showcase.log.TransactionStarted"))',
+                StepOngoing: '@Html(messages("showcase.log.StepOngoing"))',
+                StepCompleted: '@Html(messages("showcase.log.StepCompleted"))',
+                is_manual: '@Html(messages("showcase.log.is_manual"))',
+                StepFailed: '@Html(messages("showcase.log.StepFailed"))',
+                StepRetrying: '@Html(messages("showcase.log.StepRetrying"))',
+                PhaseCompleted: '@Html(messages("showcase.log.PhaseCompleted"))',
+                StepGroupStarted: '@Html(messages("showcase.log.StepGroupStarted"))',
+                TransactionCompleted: '@Html(messages("showcase.log.TransactionCompleted"))',
+                TransactionFailed: '@Html(messages("showcase.log.TransactionFailed"))',
+                TransactionSuspended: '@Html(messages("showcase.log.TransactionSuspended"))',
+                Paused: '@Html(messages("showcase.log.Paused"))',
+                TimeMachineLoading: '@Html(messages("showcase.log.TimeMachineLoading"))',
+                TimeMachineNoHistory: '@Html(messages("showcase.log.TimeMachineNoHistory"))',
+                TimeMachineStarting: '@Html(messages("showcase.log.TimeMachineStarting"))',
+                TimeMachineFinished: '@Html(messages("showcase.log.TimeMachineFinished"))',
+                ManuallyFixed: '@Html(messages("showcase.log.ManuallyFixed"))',
+                DomainEventPublished: '@Html(messages("showcase.log.DomainEventPublished"))',
+                System: '@Html(messages("showcase.log.System"))'
+            },
+            status: {
+                InProgress: '@Html(messages("showcase.status.InProgress"))',
+                Completed: '@Html(messages("showcase.status.Completed"))',
+                Failed: '@Html(messages("showcase.status.Failed"))',
+                Suspended: '@Html(messages("showcase.status.Suspended"))'
+            },
+            ui: {
+                fix_btn: '@Html(messages("showcase.fix_btn"))',
+                enter_txid: '@Html(messages("showcase.ui.enter_txid"))'
+            }
+        };
+        window.__sagaPhaseLabels = {
+            PREPARE: '@Html(messages("showcase.phase.PREPARE_H"))',
+            COMMIT: '@Html(messages("showcase.phase.COMMIT_H"))',
+            COMPENSATE: '@Html(messages("showcase.phase.COMPENSATE_H"))'
+        };
+        window.__sagaScenarioInfo = {
+            'happy': {
+                description: '@Html(messages("showcase.scenario.happy.desc"))',
+                expectation: '@Html(messages("showcase.scenario.happy.expect"))'
+            },
+            'retry': {
+                description: '@Html(messages("showcase.scenario.retry.desc"))',
+                expectation: '@Html(messages("showcase.scenario.retry.expect"))'
+            },
+            'compensation': {
+                description: '@Html(messages("showcase.scenario.compensation.desc"))',
+                expectation: '@Html(messages("showcase.scenario.compensation.expect"))'
+            },
+            'commit-failure': {
+                description: '@Html(messages("showcase.scenario.commit_failure.desc"))',
+                expectation: '@Html(messages("showcase.scenario.commit_failure.expect"))'
+            },
+            'partial-group': {
+                description: '@Html(messages("showcase.scenario.partial_group.desc"))',
+                expectation: '@Html(messages("showcase.scenario.partial_group.expect"))'
+            },
+            'suspended': {
+                description: '@Html(messages("showcase.scenario.suspended.desc"))',
+                expectation: '@Html(messages("showcase.scenario.suspended.expect"))'
+            },
+            'timeout': {
+                description: '@Html(messages("showcase.scenario.timeout.desc"))',
+                expectation: '@Html(messages("showcase.scenario.timeout.expect"))'
+            },
+            'custom': {
+                description: '@Html(messages("showcase.scenario.custom.desc"))',
+                expectation: '@Html(messages("showcase.scenario.custom.expect"))'
+            }
+        };
+    </script>
+    <script src="@routes.Assets.versioned("javascripts/graph_engine.js")" type="text/javascript"></script>
+    <script src="@routes.Assets.versioned("javascripts/saga_showcase.js")" type="text/javascript"></script>
+</body>
+</html>

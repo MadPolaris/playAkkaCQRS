@@ -1,5 +1,725 @@
 @()
 
-@main("Welcome to Play") {
-  <h1>Welcome to Play!</h1>
-}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Reactive MES Kernel — for Fab Factories</title>
+    <meta name="description" content="Open-source reactive MES kernel for semiconductor wafer fabs. Event Sourcing replaces giant transactions, Saga replaces stored procedures, stream-batch unified DAG engine orchestrates cross-system workflows.">
+    <meta name="keywords" content="MES, CQRS, Event Sourcing, Akka, Saga, DAG, semiconductor, wafer fab, manufacturing, reactive">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --accent-emphasis: #1f6feb;
+            --success: #3fb950; --warning: #d29922; --danger: #f85149;
+            --purple: #a371f7; --orange: #f0883e;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg); color: var(--fg); line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ---- Header ---- */
+        .header {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(13, 17, 23, 0.88); backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--border); padding: 0 24px;
+        }
+        .header-inner {
+            max-width: 1200px; margin: 0 auto;
+            display: flex; align-items: center; height: 56px; gap: 24px;
+        }
+        .logo { font-weight: 700; font-size: 1.05rem; color: var(--fg); text-decoration: none; display: flex; align-items: center; gap: 8px; }
+        .logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg, var(--accent), var(--purple)); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; }
+        .nav-links { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+        .nav-link {
+            color: var(--fg-muted); text-decoration: none; font-size: 0.82rem; font-weight: 500;
+            padding: 6px 14px; border-radius: 6px; transition: all 0.15s;
+        }
+        .nav-link:hover { color: var(--fg); background: var(--bg-alt); }
+        .nav-sep { display: inline-block; width: 1px; height: 18px; background: var(--border); margin: 0 6px; align-self: center; }
+        .nav-anchor { color: var(--fg-muted); }
+        .nav-anchor:hover { color: var(--fg); }
+        .nav-lang { border: 1px solid var(--border); }
+
+        /* Dropdown */
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn {
+            color: var(--fg-muted); font-size: 0.82rem; font-weight: 500;
+            padding: 6px 14px; border-radius: 6px; cursor: pointer;
+            background: transparent; border: none; font-family: var(--font);
+            display: flex; align-items: center; gap: 4px; transition: all 0.15s;
+        }
+        .nav-dropdown-btn:hover, .nav-dropdown:hover .nav-dropdown-btn {
+            color: var(--fg); background: var(--bg-alt);
+        }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu {
+            position: absolute; top: 100%; left: 0; margin-top: 4px;
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px;
+            min-width: 230px; padding: 4px; display: none; z-index: 100;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item {
+            display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+            border-radius: 6px; text-decoration: none; color: var(--fg);
+            font-size: 0.8rem; font-weight: 500; transition: all 0.1s;
+        }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge {
+            font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px;
+            flex-shrink: 0; min-width: 36px; text-align: center;
+        }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+.badge-m3 { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+
+        /* ---- Hero ---- */
+        .hero {
+            max-width: 1200px; margin: 0 auto; padding: 80px 24px 60px;
+            text-align: center;
+        }
+        .hero-badge {
+            display: inline-block; font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 1.5px; color: var(--accent); border: 1px solid var(--border);
+            padding: 4px 14px; border-radius: 20px; margin-bottom: 24px;
+        }
+        .hero h1 { font-size: 2.8rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 16px; }
+        .hero h1 span.grad { background: linear-gradient(135deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .hero p.lead { font-size: 1.15rem; color: var(--fg-muted); max-width: 720px; margin: 0 auto 32px; }
+        .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 10px 22px; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+            text-decoration: none; transition: all 0.15s; cursor: pointer; border: 1px solid transparent;
+        }
+        .btn-primary { background: var(--accent-emphasis); color: #fff; }
+        .btn-primary:hover { background: #1c5ec9; }
+        .btn-outline { border-color: var(--border); color: var(--fg); }
+        .btn-outline:hover { background: var(--bg-alt); border-color: var(--fg-muted); }
+
+        /* ---- Section ---- */
+        .section { max-width: 1200px; margin: 0 auto; padding: 0 24px 80px; }
+        .section-title {
+            font-size: 1.5rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.02em;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .section-title .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .section-desc { color: var(--fg-muted); margin-bottom: 32px; font-size: 0.95rem; max-width: 720px; }
+
+        /* ---- Story Box ---- */
+        .story-box {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
+            padding: 32px; margin-bottom: 32px;
+        }
+        .story-box .big-number {
+            font-size: 3rem; font-weight: 800; letter-spacing: -0.03em;
+            background: linear-gradient(135deg, var(--danger), var(--orange));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            line-height: 1.1; margin-bottom: 8px;
+        }
+        .story-box .source {
+            font-size: 0.75rem; color: var(--fg-subtle); margin-top: 16px;
+            border-top: 1px solid var(--border); padding-top: 16px;
+        }
+        .story-insight {
+            background: rgba(248, 81, 73, 0.06); border-left: 3px solid var(--danger);
+            padding: 16px 20px; border-radius: 0 8px 8px 0; margin-top: 20px;
+        }
+        .story-insight p { color: var(--fg-muted); font-size: 0.9rem; }
+
+        /* ---- Pain Points ---- */
+        .pain-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin-top: 24px; }
+        .pain-item {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+            padding: 20px;
+        }
+        .pain-item h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; color: var(--danger); }
+        .pain-item p { color: var(--fg-muted); font-size: 0.84rem; }
+
+        /* ---- Roadmap ---- */
+        .roadmap { display: flex; flex-direction: column; gap: 0; margin-top: 24px; }
+        .roadmap-item {
+            display: flex; gap: 20px; padding: 24px 0; border-bottom: 1px solid var(--border);
+            align-items: flex-start;
+        }
+        .roadmap-item:last-child { border-bottom: none; }
+        .roadmap-marker {
+            width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+            font-size: 0.85rem; font-weight: 800; flex-shrink: 0;
+        }
+        .roadmap-marker.done { background: rgba(63, 185, 80, 0.15); color: var(--success); border: 2px solid var(--success); }
+        .roadmap-marker.next { background: rgba(168, 85, 247, 0.12); color: var(--purple); border: 2px solid var(--purple); }
+        .roadmap-body h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+        .roadmap-body p { color: var(--fg-muted); font-size: 0.84rem; }
+        .roadmap-body .badge {
+            display: inline-block; font-size: 0.65rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+            margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .badge-done { background: rgba(63,185,80,0.12); color: var(--success); }
+        .badge-explore { background: rgba(168,85,247,0.12); color: var(--purple); }
+
+        /* ---- Cards ---- */
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+        .card-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .card {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
+            padding: 28px; transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .card:hover { border-color: var(--fg-muted); box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .card-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin-bottom: 16px; }
+        .card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+        .card p { color: var(--fg-muted); font-size: 0.88rem; margin-bottom: 16px; }
+        .card-link { color: var(--accent); font-weight: 600; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+        .card-link:hover { text-decoration: underline; }
+        .card-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+        .tag { font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(88, 166, 255, 0.12); color: var(--accent); }
+        .fab-tag { font-size: 0.68rem; font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(248, 129, 73, 0.12); color: var(--orange); }
+
+        /* ---- Feature list ---- */
+        .feature-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+        .feature-item { padding: 20px; border-left: 2px solid var(--border); }
+        .feature-item h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 6px; }
+        .feature-item p { color: var(--fg-muted); font-size: 0.84rem; }
+
+        /* ---- Manifesto pillars ---- */
+        .pillar-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+        .pillar {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
+            padding: 28px; text-align: center;
+        }
+        .pillar-icon { font-size: 2.2rem; margin-bottom: 12px; }
+        .pillar h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 6px; }
+        .pillar p { color: var(--fg-muted); font-size: 0.82rem; }
+        .pillar .fab-note { margin-top: 12px; font-size: 0.75rem; color: var(--accent); font-weight: 600; }
+
+        /* ---- Comparison table ---- */
+        .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th, td { padding: 12px 18px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: var(--bg-alt); font-weight: 700; color: var(--fg-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        td { color: var(--fg); }
+        td.muted { color: var(--fg-muted); }
+        tr:last-child td { border-bottom: none; }
+
+        /* ---- Solution mapping table ---- */
+        .map-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-top: 24px; }
+        .map-table th, .map-table td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--border); }
+        .map-table th { background: var(--bg-alt); font-weight: 700; color: var(--fg-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .map-table td.pain { color: var(--danger); font-weight: 600; }
+        .map-table td.fix { color: var(--success); }
+
+        /* ---- CTA ---- */
+        .cta-section {
+            background: linear-gradient(135deg, rgba(31, 111, 235, 0.08), rgba(163, 113, 247, 0.08));
+            border: 1px solid var(--border); border-radius: 12px; padding: 40px; text-align: center;
+        }
+        .cta-section h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 12px; letter-spacing: -0.02em; }
+        .cta-section p { color: var(--fg-muted); font-size: 0.95rem; margin-bottom: 24px; max-width: 640px; margin-left: auto; margin-right: auto; }
+        .cta-section .cta-links { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+        /* ---- Hosting grid ---- */
+        .host-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+        .host-card {
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+            padding: 22px;
+        }
+        .host-card h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 4px; }
+        .host-card .tier { font-size: 0.72rem; color: var(--success); font-weight: 600; margin-bottom: 8px; }
+        .host-card p { color: var(--fg-muted); font-size: 0.8rem; }
+
+        /* ---- Architecture diagram ---- */
+        .arch-diagram {
+            display: flex; flex-direction: column; gap: 4px;
+            background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px;
+            padding: 32px; max-width: 720px; margin: 0 auto;
+        }
+        .arch-layer {
+            border-radius: 8px; padding: 16px 20px; text-align: center;
+            font-weight: 700; font-size: 0.85rem;
+        }
+        .arch-layer.infra { background: rgba(148, 163, 184, 0.08); border: 1px dashed #475569; color: #94a3b8; }
+        .arch-layer.app { background: rgba(59, 130, 246, 0.08); border: 1px dashed #3b82f6; color: #60a5fa; margin: 0 20px; }
+        .arch-layer.domain { background: rgba(251, 191, 36, 0.08); border: 1px dashed #fbbf24; color: #fbbf24; margin: 0 44px; }
+        .arch-arrow { text-align: center; color: var(--fg-subtle); font-size: 0.7rem; padding: 2px 0; }
+        .arch-side { display: flex; gap: 12px; margin-top: 16px; font-size: 0.72rem; color: var(--fg-muted); justify-content: center; flex-wrap: wrap; }
+        .arch-side span { background: var(--bg); padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border); }
+
+        /* ---- Footer ---- */
+        .footer {
+            border-top: 1px solid var(--border); padding: 32px 24px;
+            text-align: center; color: var(--fg-muted); font-size: 0.8rem;
+        }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        /* ---- Responsive ---- */
+        @@media (max-width: 768px) {
+            .hero h1 { font-size: 1.8rem; }
+            .header-inner { flex-wrap: wrap; height: auto; padding: 10px 0; }
+            .card-grid, .card-grid-2, .pillar-grid, .feature-list, .host-grid, .pain-grid { grid-template-columns: 1fr; }
+            .arch-layer.app { margin: 0 8px; }
+            .arch-layer.domain { margin: 0 18px; }
+            .story-box .big-number { font-size: 2rem; }
+            .roadmap-item { flex-direction: column; gap: 12px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ==================== HEADER ==================== -->
+<header class="header">
+    <div class="header-inner">
+        <a href="/" class="logo">
+            <span class="logo-icon">⚡</span> Reactive MES Kernel
+        </a>
+        <nav class="nav-links">
+            <a href="#problem" class="nav-link nav-anchor">The Problem</a>
+            <a href="#solution" class="nav-link nav-anchor">Roadmap</a>
+            <a href="#showcases" class="nav-link nav-anchor">Live Demos</a>
+            <a href="#reactive" class="nav-link nav-anchor">Reactive</a>
+            <a href="#event-sourcing" class="nav-link nav-anchor">CQRS/ES</a>
+            <span class="nav-sep"></span>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Coordinator</a>
+                    <a href="/en/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>Stream-Batch DAG Engine</a>
+                    <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Self-Healing Orchestration</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">Live Demo <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Self-Healing</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD Practices <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection Pipeline</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>Architecture Radar</a>
+                </div>
+            </div>
+            <a href="/zh" class="nav-link nav-lang">中文</a>
+        </nav>
+    </div>
+</header>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero">
+    <div class="hero-badge">Open Source · MES Kernel</div>
+    <h1>
+        <span class="grad">1.58 Million Rows.</span><br>
+        One Database Transaction.<br>
+        One Lot Start.
+    </h1>
+    <p class="lead">
+        Siemens Opcenter EX CR's High Performance Engine technical reference (July 2021)
+        documents a Multi-Level Start transaction that writes <strong>1,580,003 database records</strong>
+        in a single Oracle transaction — executed through a chain of stored procedures
+        (<code>clfExecute</code>, <code>clffunc*</code>). Most of those records are audit trail,
+        history tables, and cross-reference inserts — data that belongs to downstream process
+        steps, not the current operation. But because the database transaction is the only
+        consistency guarantee, everything is crammed into one atomic write.
+        <br><br>
+        <strong>Now project this to 2nm.</strong>
+        GAA nanosheet transistors. 2,000–3,000+ process steps per wafer (vs. ~1,000 at 7nm).
+        Multi-patterning at every critical layer. In-line metrology at every step.
+        That 1.58 million rows per Lot is not the ceiling — it's the starting point.
+        At 2nm, we're looking at <strong>5 to 15 million rows per Lot transaction</strong>.
+        Oracle and DB2 can execute it — but can they do it while keeping the tool waiting
+        under a second? Can they recover from a mid-transaction failure in under a minute?
+        <br><br>
+        <strong>What if there's a better way?</strong>
+        An open-source reactive MES kernel targeting six nines of reliability.
+        Event sourcing instead of giant transactions. Sagas instead of stored procedures.
+        A streaming DAG execution engine that orchestrates across systems.
+        <br><br>
+        Milestones 1, 2, 2.5+ are live. M3 architecture and prototype are live.
+        M3.5 (self-healing) and M3.9 (cluster resilience) are the next two milestones —
+        we're defining them <em>with</em> the Fab industry.
+    </p>
+    <div class="hero-actions">
+        <a href="#problem" class="btn btn-primary">Read the Story</a>
+        <a href="/projection" class="btn btn-outline">▶ Live Demo</a>
+        <a href="https://github.com/MadPolaris/playAkkaCQRS" class="btn btn-outline">GitHub ↗</a>
+    </div>
+</section>
+
+<!-- ==================== THE PROBLEM ==================== -->
+<section class="section" id="problem">
+    <h2 class="section-title"><span class="dot" style="background:var(--danger)"></span> The Database-Centric Dead End</h2>
+    <p class="section-desc">
+        This is not a straw man. It's a real case from Siemens/HPE in semiconductor manufacturing.
+    </p>
+
+    <div class="story-box">
+        <div class="big-number">1,580,003</div>
+        <p style="font-size:1.1rem; font-weight:600;">database records, in a single Oracle transaction. For one Multi-Level Lot Start.</p>
+        <p style="color:var(--fg-muted); margin-top:8px;">
+            The mechanism? JSON payloads sent to stored procedures (<code>clfExecute</code>, <code>clffunc*</code>)
+            that parse and execute SQL in bulk on the database server — what Siemens calls the
+            "High Performance Engine" (HPE), a separately licensed feature of Opcenter EX CR.
+            No unit tests. No version control for the stored procedure logic. No horizontal scaling.
+        </p>
+
+        <div class="story-insight">
+            <p><strong>The kicker:</strong> The vast majority of those 1.58 million records aren't needed for the
+            current operation. They're history tables (HistoryMainline, StartHistoryDetail, HistoryCrossRef),
+            current status snapshots, cross-reference indexes, step-pass counters — data that exists to
+            serve <em>downstream</em> queries and audit requirements. But because the database transaction is
+            the only consistency guarantee, everything is chained into one atomic write. The downstream's
+            data pressure gets dragged upstream, and the Lot Start slows to the speed of the largest insert.</p>
+        </div>
+
+        <div class="source">
+            Source: Siemens Opcenter EX CR — Technical Reference: High Performance Engine, Release 8G.1 (July 2021).
+        </div>
+    </div>
+
+    <div class="story-box" style="margin-top:24px; border-color: var(--purple);">
+        <h3 style="font-size:1rem; font-weight:700; margin-bottom:8px; color:var(--purple);">
+            🔮 Project to 2nm GAA
+        </h3>
+        <p style="color:var(--fg-muted); font-size:0.9rem;">
+            The 1.58M-row reference is from the 7nm/5nm era (~1,000 process steps per wafer).
+            At 2nm — with GAA nanosheet transistors, high-NA EUV, and 2,000–3,000+ process steps —
+            the number of containers, history records, and cross-references per Lot explodes.
+            <strong>Conservative estimate: 5–15 million rows per Lot transaction.</strong>
+        </p>
+        <p style="color:var(--fg-muted); font-size:0.9rem; margin-top:8px;">
+            Can Oracle or DB2 execute a 15-million-row stored procedure? Technically yes.
+            But while holding locks across dozens of tables? While the tool sits idle?
+            Can it recover from a mid-transaction failure — not in hours, but in seconds?
+            At 2nm, the stored-procedure approach doesn't just hurt performance —
+            it becomes the bottleneck that caps throughput for the entire Fab.
+        </p>
+    </div>
+
+    <div class="pain-grid">
+        <div class="pain-item">
+            <h4>Tool Waiting = Capacity Loss</h4>
+            <p>Giant transactions hold locks while tools sit idle. In a Fab, every minute of idle tool time is lost revenue that can never be recovered.</p>
+        </div>
+        <div class="pain-item">
+            <h4>Cross-System State Drift</h4>
+            <p>MES says the wafer is at Step 47. EAP says Step 46. RMS has no record. These inconsistencies cause wrong dispatching and wrong recipes — silently.</p>
+        </div>
+        <div class="pain-item">
+            <h4>Brittle Recovery</h4>
+            <p>When a stored procedure spanning 1.58M rows (or 10M+ at 2nm) fails mid-execution, recovery is manual. Hours of downtime while operators and DBAs figure out partial state. No automatic compensation, no partial progress preserved.</p>
+        </div>
+        <div class="pain-item">
+            <h4>Throughput Ceiling at 2nm</h4>
+            <p>A Fab producing 100K wafers/month at 3,000 steps each generates an event storm that dwarfs current MES loads. The stored-procedure-in-a-single-transaction approach doesn't scale — each Lot Start becomes a serialization point.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== THE SOLUTION ==================== -->
+<section class="section" id="solution">
+    <h2 class="section-title"><span class="dot" style="background:var(--success)"></span> A Different Path</h2>
+    <p class="section-desc">
+        The root cause isn't "the database is too slow." It's that the <strong>consistency boundary is drawn in the wrong place</strong>.
+        Audit trail records, history snapshots, cross-reference indexes — they don't belong in the same transaction
+        as the current operation. Cross-system alignment shouldn't rely on foreign keys — it should be event-driven,
+        eventually consistent. Process orchestration shouldn't be hard-coded in JSON-driven stored procedures —
+        it should be explicit, testable, and evolvable DAGs.
+        <br><br>
+        This matters now. At 2nm, it becomes existential for Fab throughput.
+    </p>
+
+    <div class="table-wrap" style="margin-bottom:40px;">
+        <table class="map-table">
+            <thead>
+                <tr><th>Fab Pain Point</th><th>Reactive Approach</th></tr>
+            </thead>
+            <tbody>
+                <tr><td class="pain">1.58M-row giant transaction</td><td class="fix">Saga splits it into independent steps. Only the data needed <em>right now</em> is locked. Downstream writes are event-driven and asynchronous.</td></tr>
+                <tr><td class="pain">Cross-system state inconsistency</td><td class="fix">Event sourcing gives a complete, immutable audit log. Projections subscribe to event streams to keep each system's read model eventually consistent.</td></tr>
+                <tr><td class="pain">Tool waiting on data readiness</td><td class="fix">Asynchronous message-driven communication eliminates blocking. A tool sends a signal and gets an immediate acknowledgment — processing happens behind the scenes.</td></tr>
+                <tr><td class="pain">Manual failure recovery</td><td class="fix">Saga auto-compensation rolls back completed steps on failure. Supervision hierarchies restart failed components automatically. No manual intervention needed for known failure modes.</td></tr>
+                <tr><td class="pain">Peak throughput scaling</td><td class="fix">Cluster Sharding distributes entities across nodes. Horizontal scaling has no single bottleneck. Each aggregate handles its own events independently.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Milestone Roadmap -->
+    <h3 style="font-size:1.1rem; font-weight:700; margin-bottom:16px; letter-spacing:-0.02em;">
+        Engineering Milestones — Building the Kernel Step by Step
+    </h3>
+
+    <div class="roadmap">
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M1</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">Production Quality — Live</span>
+                <h4>Saga Distributed Transaction Coordinator</h4>
+                <p>Splits giant transactions into independent Try-Confirm/Cancel steps. Only locks the resources needed right now. Automatic compensation on failure. Suspended transactions support manual intervention via emergency fix panel. This directly addresses the 1.58M-row transaction problem.</p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M2</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">Production Quality — Live</span>
+                <h4>Streaming-Batch Multi-Level DAG Execution Engine</h4>
+                <p>A 5-level DAG execution engine: 23 Persistent FSMs with 4 built-in resilience patterns — supervision with auto-restart, timeout resource protection, compensating recovery to eventual consistency. Each node independently versionable, testable, and deployable. Unified pipeline handles both streaming and batch workloads, with a communication layer that encapsulates heterogeneous external systems. <a href="/dag" style="color:var(--accent);font-weight:600;">Watch M2 demo →</a></p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker done">M2.5</div>
+            <div class="roadmap-body">
+                <span class="badge badge-done">Production Quality — Live</span>
+                <h4>Standard Component Library — Fix Once, Apply Everywhere</h4>
+                <p>6 standard components replace 4 hand-written FSM templates: SubBatchProcessor, ResultClassifier, ReconfirmHandler, ReBatchRouter, AreaScheduler, and ExceptionScheduler. Same pipeline handles recharge and purchase — only error-code mapping differs. One fix point, every instance updated globally. M3 Fab dynamic process orchestration reuses all 6 components directly. <a href="/en/m2" style="color:var(--accent);font-weight:600;">Read the Explainer →</a> <a href="/dag" style="color:var(--accent);font-weight:600;">Live Demo →</a></p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M3</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">Architecture — Prototype Running</span>
+                <h4>M3 · Fact-Driven Fab Decision Kernel — Dynamic Process Weaving + MU Lifecycle</h4>
+                <p>A decision layer on top of M2.5+. POR Repository holds baseline process routes. Dynamic Flow Assembler weaves ChainDSL in real-time based on facts — PASS advances, FAIL triggers rework DSL, BORDERLINE re-verifies. Saga + LotContext (MU Account Matrix) guarantee atomicity of every dynamically woven segment. All 6 M2.5+ standard components reused without modification. Prototype code runs in FabDemo. <a href="/en/m3" style="color:var(--accent);font-weight:600;">Explore M3 →</a></p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M3.5</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">In Progress — Single-WO Self-Healing Ready</span>
+                <h4>M3.5 · Self-Healing Decision Kernel — 0 Stuck WorkOrders</h4>
+                <p>The critical step from "static script" to "reactive kernel." Single WorkOrder EventSourced breakpoint resume: FabPipelineExecutionActor recovers state via journal replay on crash, resumeFromIndex skips completed phases and continues from breakpoint. Pipeline Stage failure → OCAP intercepts → dynamically weaves Rework DSL → Saga guarantees atomicity → WorkOrder converges correctly. Equipment injects spontaneous faults. Multi-WorkOrder concurrent chaos testing (202 tests). <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">M3.5 Self-Healing Demo →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">Roadmap →</a></p>
+            </div>
+        </div>
+        <div class="roadmap-item">
+            <div class="roadmap-marker next">M3.9</div>
+            <div class="roadmap-body">
+                <span class="badge badge-explore">Planned — After M3.5</span>
+                <h4>M3.9 · Cluster Resilience — 0 Lost Events</h4>
+                <p>Akka Cluster multi-node deployment. Kill one node — WorkOrders don't stall, events don't drop, UI recovers automatically. 50 concurrent WorkOrders across 3 nodes. The reactive MES kernel v1.0 is complete when M3.5 + M3.9 are both proven.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== LIVE DEMOS ==================== -->
+<section class="section" id="showcases">
+    <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> See It In Action</h2>
+    <p class="section-desc">
+        Six interactive demos connected to the same live system, organized by milestone and best-practice layers.
+    </p>
+
+    <div class="card-grid-2">
+        <div class="card">
+            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">Compensation</span></div>
+            <h3>Saga TCC Demo</h3>
+            <p>A distributed money transfer flowing through the Saga state machine. Watch the Prepare → Commit → Compensate lifecycle. Inject faults at any step. See automatic retries, backward recovery, and suspended-transaction recovery in real time.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: MES ↔ EAP ↔ RMS data alignment</p>
+            <br>
+            <a href="/saga" class="card-link">Open Demo →</a>
+        </div>
+        <div class="card">
+            <div class="card-icon" style="background:rgba(240,136,62,0.12);color:var(--orange)">⚙️</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M2</span><span class="tag">DAG</span><span class="tag">FSM</span><span class="tag">Resilience</span><span class="tag">Stream-Batch</span></div>
+            <h3>DAG Execution Engine</h3>
+            <p>23 Akka Persistent FSMs collaborate across 5 levels to orchestrate a salary deposit scenario. Step through 5 phases, watch 4 resilience patterns — Orchestrator, Protector, Communicator, Compensator — in real time. Click any node to drill into its state machine.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: DAG orchestration across MES, EAP, RMS, SPC</p>
+            <br>
+            <a href="/dag" class="card-link">Open Demo →</a>
+        </div>
+    </div>
+
+    <div class="card-grid-2" style="margin-top: 24px;">
+        <div class="card">
+            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🧩</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M2.5+</span><span class="tag">Component Library</span><span class="tag">Fix Once</span></div>
+            <h3>M2.5+ Standard Component Library</h3>
+            <p>6 standard components replace 4 hand-written FSM templates. Same pipeline handles recharge and purchase — only the error-code mapping differs. SMS notification reuses the same pipeline stages. One fix point, every instance updated globally. M3 Fab dynamic process orchestration reuses all 6 components directly.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: SubBatchProcessor → any equipment area; ResultClassifier → any quality gate</p>
+            <br>
+            <a href="/en/m2" class="card-link">Read the Explainer →</a>
+            <a href="/dag" class="card-link" style="margin-left:16px;">Open Live Demo →</a>
+        </div>
+    </div>
+
+
+    <div class="card-grid-2" style="margin-top: 24px;">
+        <div class="card">
+            <div class="card-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">🏭</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">Decision Layer</span><span class="tag">Dynamic Weaving</span><span class="tag">MU Matrix</span></div>
+            <h3>M3 Fact-Driven Fab Decision Kernel</h3>
+            <p>Decision layer for Fab environments. POR → Dynamic Flow Assembler → Saga/LotContext → ChainDSL injection into M2.5+. Dynamically weaves process routes based on real-time facts from the factory floor. MU Account Matrix (Lot/Wafer/Die) tracks every manufacturing unit as an event-sourcing projection. Zero modification to M2.5+ execution engine.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: POR→Assembler→Saga/LotContext→ChainDSL; fact-driven closed loop</p>
+            <br>
+            <a href="/en/m3" class="card-link">Explore M3 →</a>
+        </div>
+        <div class="card">
+            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🛡️</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M3.5</span><span class="tag">Self-Healing</span><span class="tag">OCAP</span><span class="tag">Breakpoint Resume</span></div>
+            <h3>M3.5 Self-Healing Decision Kernel</h3>
+            <p>Single WorkOrder EventSourced crash recovery. FabPipelineExecutionActor recovers state via journal replay on crash, resumeFromIndex skips completed phases and continues from breakpoint. OCAP rule engine intercepts faults and executes Rework/Scrap/Hold/Notify actions. OCAP-Rework DSL dynamic weaving. Concurrent multi-WorkOrder chaos testing. 202 tests.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Actor crash - Journal replay recovery - Breakpoint resume - OCAP fault interception - Dynamic Rework DSL</p>
+            <br>
+            <a href="/fab-demo/m35" class="card-link">Open M3.5 Self-Healing Demo →</a>
+        </div>
+    </div>
+
+    <h3 style="font-size:1rem; font-weight:700; margin: 36px 0 16px; color: var(--fg-muted); letter-spacing: -0.02em;">
+        Architecture & CQRS Deep Dive
+    </h3>
+    <div class="card-grid-2">
+        <div class="card">
+            <div class="card-icon" style="background:rgba(63,185,80,0.12);color:var(--success)">📊</div>
+            <div class="card-tags"><span class="tag">CQRS</span><span class="tag">Projection</span><span class="tag">Event Flow</span></div>
+            <h3>CQRS Projection Pipeline</h3>
+            <p>Deposit, withdraw, and transfer funds. Watch domain events travel from Aggregate → Journal (MongoDB) → Projection Handler → Read Model (MySQL) — with animated SVG particles tracing the pipeline.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Event stream from tool signal to real-time dashboard</p>
+            <br>
+            <a href="/projection" class="card-link">Open Pipeline →</a>
+        </div>
+        <div class="card">
+            <div class="card-icon" style="background:rgba(88,166,255,0.12);color:var(--accent)">🎯</div>
+            <div class="card-tags"><span class="tag">DDD</span><span class="tag">Onion Architecture</span><span class="tag">Dependencies</span></div>
+            <h3>Architecture Radar</h3>
+            <p>Explore 36+ components across Domain, Application, and Infrastructure layers. Toggle dependency edges, click any component to see its design constraints and source paths. The full code architecture, visualized.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Kernel codebase map for contributors</p>
+            <br>
+            <a href="/architecture" class="card-link">Open Radar →</a>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== CTA: INVITATION ==================== -->
+<section class="section" id="collaborate">
+    <div class="cta-section">
+        <h2>M3.5 &amp; M3.9 — Define the Reactive MES Kernel With Us</h2>
+        <p>
+            M1, M2, M2.5+, and M3 architecture are running in production-quality code.
+            M3.5 (self-healing decision kernel) and M3.9 (cluster resilience) are the next two milestones
+            that will complete the reactive MES kernel v1.0.
+            <br><br>
+            If you're a Fab engineer, an automation architect, or a manufacturing systems expert —
+            we want to hear about the failure scenarios, recovery expectations, and cluster
+            requirements that matter most on your factory floor.
+            What does "never stuck" mean for your operations? What recovery time is acceptable?
+        </p>
+        <div class="cta-links">
+            <a href="https://github.com/MadPolaris/playAkkaCQRS/discussions" class="btn btn-primary">GitHub Discussions</a>
+            <a href="https://github.com/MadPolaris/playAkkaCQRS/issues/new" class="btn btn-outline">Open an Issue</a>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== REACTIVE MANIFESTO ==================== -->
+<section class="section" id="reactive">
+    <h2 class="section-title"><span class="dot" style="background:var(--purple)"></span> The Reactive Foundation</h2>
+    <p class="section-desc">
+        The four pillars of the
+        <a href="https://www.reactivemanifesto.org/" style="color:var(--accent)">Reactive Manifesto</a>
+        are not abstract principles — they map directly to what a Fab control system demands.
+        Built on <strong>Akka</strong> (the reference implementation of the Reactive Manifesto, created by its original author Jonas Bon&eacute;r).
+    </p>
+
+    <div class="pillar-grid">
+        <div class="pillar">
+            <div class="pillar-icon">📨</div>
+            <h3>Message-Driven</h3>
+            <p>Asynchronous message-passing is the backbone. Loose coupling and location transparency enable independent scaling of each subsystem — EAP signals, MES state changes, SPC alerts all flow as messages.</p>
+            <div class="fab-note">Fab: Tool signals arrive as messages, never block the sender</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">🛡️</div>
+            <h3>Resilient</h3>
+            <p>Failures are contained within individual components. Supervision hierarchies isolate faults so a single tool integration failure doesn't cascade across the entire Fab control system.</p>
+            <div class="fab-note">Fab: One EAP connection failure doesn't take down MES</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">📈</div>
+            <h3>Elastic</h3>
+            <p>Scale up and down with load. Cluster Sharding distributes entity instances across nodes — when a new Fab line comes online, the system absorbs it without rewiring.</p>
+            <div class="fab-note">Fab: Add a new production line without re-architecting</div>
+        </div>
+        <div class="pillar">
+            <div class="pillar-icon">⚡</div>
+            <h3>Responsive</h3>
+            <p>Rapid, consistent response times under all conditions. Non-blocking I/O and back-pressure ensure predictable latency — the instant feedback loop that Fab operations depend on.</p>
+            <div class="fab-note">Fab: Tool dispatch responds in milliseconds, not seconds</div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== EVENT SOURCING + CQRS ==================== -->
+<section class="section" id="event-sourcing">
+    <h2 class="section-title"><span class="dot" style="background:var(--orange)"></span> Event Sourcing &times; CQRS</h2>
+    <p class="section-desc">
+        Event Sourcing and CQRS are the two patterns that make the reactive MES kernel work.
+        They solve problems that database-centric architectures can't.
+    </p>
+
+    <div class="feature-list">
+        <div class="feature-item" style="border-left-color: var(--accent)">
+            <h4>Event Sourcing</h4>
+            <p>State is derived by replaying an immutable event journal. Every state change — tool assignment, wafer move, recipe execution — is captured as a domain event. Complete audit trail, temporal queries (what was the state at 14:03:27?), and reliable debugging. Akka Persistence handles journaling and snapshots.</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--success)">
+            <h4>CQRS — Separate Reads from Writes</h4>
+            <p>Commands mutate state on the write side (event-sourced aggregates). Queries read from optimized projections (MySQL). The write side stays fast because it only appends events. The read side is free to denormalize, index, and optimize for every query pattern independently.</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--warning)">
+            <h4>Real-Time Projections</h4>
+            <p>Akka Projections transform the event stream into read-model tables. Each projection subscribes to tagged events from a specific aggregate type, processes them transactionally, and updates MySQL — providing eventually-consistent views with at-least-once delivery guarantees.</p>
+        </div>
+        <div class="feature-item" style="border-left-color: var(--purple)">
+            <h4>Saga Pattern (TCC)</h4>
+            <p>Distributed transactions without distributed locks. Try-Confirm/Cancel: each step reserves resources (Prepare), then either commits or compensates. Failures trigger backward recovery — only steps that succeeded in Prepare get compensated. Suspended transactions support manual intervention.</p>
+        </div>
+    </div>
+
+    <div class="table-wrap" style="margin-top: 32px;">
+        <table>
+            <thead>
+                <tr><th>Capability</th><th>Database-Centric (Stored Procedures)</th><th>Event Sourcing + CQRS</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Audit Trail</td><td class="muted">Manual logging via triggers, incomplete</td><td>Every state change is an event — immutable, complete history</td></tr>
+                <tr><td>Read Performance</td><td class="muted">Contended by writes in the same transaction</td><td>Dedicated read models, independently scaled per query pattern</td></tr>
+                <tr><td>Debugging</td><td class="muted">"What was the state at 2:03pm?" — guess from backups</td><td>Replay events to any point in time, deterministically</td></tr>
+                <tr><td>Schema Evolution</td><td class="muted">Destructive migrations, stored procedure versioning nightmares</td><td>Append-only events; upcasters handle schema evolution non-destructively</td></tr>
+                <tr><td>Cross-System Integration</td><td class="muted">Batch ETL, polling, foreign keys across databases</td><td>Real-time event streams; push-based projections keep all systems aligned</td></tr>
+                <tr><td>Failure Recovery</td><td class="muted">Manual intervention, hours of downtime. At 2nm scale (10M+ rows), partial failure analysis alone takes hours</td><td>Saga auto-compensation + supervision hierarchies; automatic for known failure modes. Each step recovers independently</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
+<footer class="footer">
+    <p>
+        Built with <a href="https://www.playframework.com/">Play Framework</a>,
+        <a href="https://akka.io/">Akka</a>,
+        <a href="https://scala-lang.org/">Scala</a> &nbsp;|&nbsp;
+        Architecture: Onion + DDD + CQRS/ES + Saga &nbsp;|&nbsp;
+        <a href="https://www.reactivemanifesto.org/">The Reactive Manifesto</a>
+    </p>
+    <p style="margin-top:6px;">
+        Event Journal: MongoDB &nbsp;|&nbsp; Read Model: MySQL &nbsp;|&nbsp; Serialization: Protobuf (ScalaPB)
+    </p>
+    <p style="margin-top:6px;">
+        Contact: <a href="mailto:dev.polaris.metadata@@gmail.com">dev.polaris.metadata@@gmail.com</a>
+    </p>
+</footer>
+
+</body>
+</html>

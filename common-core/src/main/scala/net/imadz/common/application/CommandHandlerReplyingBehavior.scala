@@ -43,6 +43,25 @@ object CommandHandlerReplyingBehavior {
         events => Effect.persist(events).thenReply(replyTo)(helper.createSuccessReply(param))
       )
     }
+
+    /**
+     * [NEW] 支持发布事件到 EventStream 的回复方法
+     */
+    def replyWithAndPublish(replyTo: ActorRef[Reply])(implicit context: akka.actor.typed.scaladsl.ActorContext[_]): Effect[Event, State] = {
+      val param = helper.toParam(state, command)
+      rule(state, param).fold(
+        error => Effect.reply(replyTo)(helper.createFailureReply(param)(error)),
+        events => {
+          Effect.persist(events)
+            .thenRun { _: State => 
+              events.foreach { e => 
+                context.system.eventStream ! akka.actor.typed.eventstream.EventStream.Publish(e) 
+              }
+            }
+            .thenReply(replyTo)(helper.createSuccessReply(param))
+        }
+      )
+    }
   }
 
   /**

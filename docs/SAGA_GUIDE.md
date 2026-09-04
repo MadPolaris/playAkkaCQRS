@@ -4,7 +4,7 @@ English | [中文](SAGA_GUIDE-zh.md)
 
 `net.imadz.infra.saga` is a **TCC (Try-Confirm/Cancel) distributed-transaction engine** built on Akka Typed Cluster Sharding and Event Sourcing. Every piece of saga state — the transaction, and each step of each phase — is an event-sourced actor, so in-flight sagas survive node crashes without any external transaction log.
 
-Other guides: [README](../README.md) · [DDD Guide](DDD_GUIDE.md)
+Other guides: [README](../README.md) · Legacy banking-domain guide: [DDD_GUIDE.md](legacy/DDD_GUIDE.md) (EN) / [DDD_GUIDE-zh.md](legacy/DDD_GUIDE-zh.md) (中文)
 
 ---
 

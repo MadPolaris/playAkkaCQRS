@@ -21,28 +21,28 @@ object FromAccountParticipant {
 }
 
 case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: ExecutionContext, scheduler: Scheduler)
-    extends AskParticipant[iMadzError, String, MoneyTransferContext](
+    extends AskParticipant[iMadzError, String, AppSagaContext](
       rules = FromAccountParticipant.Rules,
       askTimeout = 5.seconds
     ) {
 
-  override protected val prepareBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
-    Some(PhaseAsk.ask[ReserveFunds, FundsReservationConfirmation, iMadzError, String, MoneyTransferContext](
-      ref = ctx => ctx.repository.findCreditBalanceByUserId(fromUserId),
+  override protected val prepareBinding: Option[PhaseAsk[iMadzError, String, AppSagaContext]] =
+    Some(PhaseAsk.ask[ReserveFunds, FundsReservationConfirmation, iMadzError, String, AppSagaContext](
+      ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
       command = (txId, replyTo) => ReserveFunds(Id.of(txId), amount, replyTo),
       mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
     ))
 
-  override protected val commitBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
-    Some(PhaseAsk.ask[DeductFunds, FundsDeductionConfirmation, iMadzError, String, MoneyTransferContext](
-      ref = ctx => ctx.repository.findCreditBalanceByUserId(fromUserId),
+  override protected val commitBinding: Option[PhaseAsk[iMadzError, String, AppSagaContext]] =
+    Some(PhaseAsk.ask[DeductFunds, FundsDeductionConfirmation, iMadzError, String, AppSagaContext](
+      ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
       command = (txId, replyTo) => DeductFunds(Id.of(txId), replyTo),
       mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
     ))
 
-  override protected val compensateBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
-    Some(PhaseAsk.ask[ReleaseReservedFunds, FundsReleaseConfirmation, iMadzError, String, MoneyTransferContext](
-      ref = ctx => ctx.repository.findCreditBalanceByUserId(fromUserId),
+  override protected val compensateBinding: Option[PhaseAsk[iMadzError, String, AppSagaContext]] =
+    Some(PhaseAsk.ask[ReleaseReservedFunds, FundsReleaseConfirmation, iMadzError, String, AppSagaContext](
+      ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
       command = (txId, replyTo) => ReleaseReservedFunds(Id.of(txId), replyTo),
       mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
     ))

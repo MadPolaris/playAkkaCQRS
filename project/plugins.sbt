@@ -8,7 +8,7 @@ addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.6")
 addSbtPlugin("ch.epfl.scala"             % "sbt-version-policy"        % "1.0.0-RC5")
 addSbtPlugin("com.codecommit"            % "sbt-github-actions"        % "0.10.1")
 addSbtPlugin("com.eed3si9n"              % "sbt-buildinfo"             % "0.10.0")
-addSbtPlugin("com.geirsson"              % "sbt-ci-release"            % "1.5.7")
+addSbtPlugin("com.github.sbt"             % "sbt-ci-release"            % "1.6.1")
 addSbtPlugin("com.github.cb372"          % "sbt-explicit-dependencies" % "0.2.16")
 //addSbtPlugin("org.typelevel"             % "sbt-tpolecat"              % "0.5.1")
 addSbtPlugin("net.vonbuchholtz"          % "sbt-dependency-check"      % "5.1.0")
@@ -17,6 +17,7 @@ addSbtPlugin("org.scalameta"             % "sbt-scalafmt"              % "2.4.2"
 addSbtPlugin("org.scalastyle"           %% "scalastyle-sbt-plugin"     % "1.0.0")
 addSbtPlugin("org.wartremover"           % "sbt-wartremover"           % "3.1.6")
 disablePlugins(sbt.plugins.JUnitXmlReportPlugin)
+addSbtPlugin("org.scoverage" % "sbt-scoverage" % "2.3.0")
 addSbtPlugin("nz.co.bottech" % "sbt-scala2plantuml" % "0.3.0")
 
 

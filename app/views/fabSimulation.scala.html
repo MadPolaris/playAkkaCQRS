@@ -1,0 +1,591 @@
+@()(implicit messages: Messages)
+@import helper._
+<!DOCTYPE html>
+<html lang="@messages.lang.code">
+<head>
+  <meta charset="UTF-8">
+  <title>@Messages("fab.title")</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+      --fg: #e6edf3; --fg-muted: #8b949e;
+      --accent: #58a6ff; --amber: #f59e0b; --green: #3fb950;
+      --red: #f85149; --purple: #a855f7;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.5;
+      height: 100vh; overflow: hidden;
+    }
+    /* Header */
+    .header {
+      background: rgba(13,17,23,0.92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border); padding: 0 20px;
+      display: flex; align-items: center; height: 44px; gap: 16px;
+    }
+    .header .logo { font-weight: 700; font-size: 0.9rem; color: var(--fg); text-decoration: none; }
+    .header nav { display: flex; gap: 8px; margin-left: auto; }
+    .header nav a { color: var(--fg-muted); text-decoration: none; font-size: 0.78rem; padding: 4px 10px; border-radius: 4px; }
+    .header nav a:hover { color: var(--fg); background: var(--bg-alt); }
+    .header nav a.active { color: var(--amber); font-weight: 600; }
+    .header nav a.nav-lang { border: 1px solid var(--border); margin-left: 4px; }
+
+    /* Control Bar */
+    .controls {
+      display: flex; align-items: center; gap: 12px; padding: 8px 20px;
+      background: var(--bg-alt); border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .controls button {
+      background: var(--bg-alt); border: 1px solid var(--border); color: var(--fg);
+      padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.78rem;
+      transition: all 0.15s;
+    }
+    .controls button:hover { border-color: var(--fg-muted); }
+    .controls button.primary { background: var(--amber); color: #000; border-color: var(--amber); font-weight: 600; }
+    .controls button.danger { border-color: var(--red); color: var(--red); }
+    .controls select {
+      background: var(--bg-alt); border: 1px solid var(--border); color: var(--fg);
+      padding: 6px 10px; border-radius: 6px; font-size: 0.78rem;
+    }
+    .controls label { font-size: 0.75rem; color: var(--fg-muted); display: flex; align-items: center; gap: 4px; }
+    .controls input[type=range] { width: 80px; }
+
+    /* Main Layout */
+    .main { display: flex; flex-direction: column; height: calc(100vh - 86px); }
+
+    /* Factory Floor */
+    .factory-floor {
+      flex: 1; min-height: 360px; background: #0a0e14;
+      border-bottom: 1px solid var(--border); position: relative; overflow: hidden;
+    }
+    .factory-floor svg { width: 100%; height: 100%; }
+
+    /* Aggregate State Panel */
+    .aggregate-panel {
+      background: var(--bg-alt); border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono','Fira Code',monospace; font-size: 0.68rem;
+    }
+    .aggregate-panel .panel-content {
+      padding: 6px 16px; max-height: 220px; overflow-y: auto;
+      transition: max-height 0.35s ease, padding 0.3s;
+    }
+    .aggregate-panel.collapsed .panel-content {
+      max-height: 0; padding: 0 16px; overflow: hidden;
+    }
+    .aggregate-panel .panel-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 0;
+      padding: 6px 16px; background: var(--bg-alt); z-index: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    .aggregate-panel.collapsed .panel-header { border-bottom: none; }
+    .aggregate-panel .panel-header h3 { font-size: 0.75rem; font-weight: 700; color: var(--fg-muted); }
+    .aggregate-panel .panel-header button {
+      background: none; border: 1px solid var(--border); color: var(--fg-muted);
+      font-size: 0.6rem; padding: 1px 8px; border-radius: 3px; cursor: pointer;
+    }
+    .aggregate-panel .panel-header button:hover { color: var(--fg); border-color: var(--fg-muted); }
+    .agg-lot-row { display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 4px; }
+    .agg-lot-row .lot-card {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      padding: 3px 10px; font-size: 0.65rem;
+    }
+    .agg-lot-row .lot-card .lot-id { font-weight: 700; color: var(--amber); }
+    .agg-lot-row .lot-card .lot-stat { color: var(--fg-muted); }
+    .agg-tree-table { width: 100%; border-collapse: collapse; }
+    .agg-tree-table th { text-align: left; padding: 2px 6px; color: var(--fg-muted); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 0.65rem; }
+    .agg-tree-table td { padding: 2px 6px; border-bottom: 1px solid rgba(48,54,61,0.3); white-space: nowrap; font-size: 0.65rem; }
+    .agg-tree-table .lot-row { background: rgba(245,158,11,0.06); }
+    .agg-tree-table .lot-row td { font-weight: 700; color: var(--amber); border-bottom: 1px solid rgba(245,158,11,0.25); }
+    .agg-tree-table .lot-row.rwk td { color: var(--purple); background: rgba(168,85,247,0.06); border-bottom-color: rgba(168,85,247,0.25); }
+    .agg-tree-table .wafer-row td:first-child { padding-left: 22px; }
+    .agg-tree-table .status-Active { color: var(--accent); }
+    .agg-tree-table .status-Scrapped { color: var(--red); }
+    .agg-tree-table .cls-PASS { color: var(--green); }
+    .agg-tree-table .cls-FAIL { color: var(--amber); }
+    .agg-tree-table .cls-SCRAP { color: var(--red); }
+    .agg-tree-table .cls-Pending { color: var(--fg-muted); }
+    .agg-tree-table .cls-BORDERLINE { color: var(--amber); }
+
+    /* Bottom Panel */
+    .bottom-panel {
+      height: 342px; display: flex; border-top: 1px solid var(--border);
+    }
+    .timeline {
+      flex: 2; overflow-y: auto; padding: 8px 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.68rem;
+      background: var(--bg);
+    }
+    .timeline .entry { padding: 2px 0; border-bottom: 1px solid rgba(48,54,61,0.4); }
+    .timeline .entry .ts { color: var(--fg-muted); margin-right: 8px; }
+    .timeline .entry.pass { color: var(--green); }
+    .timeline .entry.fail { color: var(--red); }
+    .timeline .entry.rework { color: var(--amber); }
+    .timeline .entry.transport { color: var(--accent); }
+    .summary {
+      flex: 0.7; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+      background: var(--bg-alt);
+    }
+    .summary h3 { font-size: 0.8rem; font-weight: 700; color: var(--fg-muted); margin-bottom: 2px; }
+    .stat-row { display: flex; justify-content: space-between; font-size: 0.75rem; }
+    .stat-row .label { color: var(--fg-muted); }
+    .stat-row .value { font-weight: 600; }
+    .stat-row .value.pass { color: var(--green); }
+    .stat-row .value.fail { color: var(--red); }
+
+    /* SVG elements */
+    .eq-node { cursor: pointer; transition: opacity 0.3s; }
+    .eq-node:hover { opacity: 0.85; }
+    .eq-label { fill: var(--fg); font-size: 10px; font-weight: 600; text-anchor: middle; }
+    .eq-status { font-size: 8px; text-anchor: middle; }
+    .foup-icon { transition: transform 0.5s ease-in-out; }
+
+    /* Classification wheel */
+    .wafer-dot { transition: fill 0.3s; }
+
+    /* Event Sourcing Ledger */
+    .ledger-panel {
+      background: var(--bg); border-left: 1px solid var(--border);
+      padding: 6px 8px; overflow-y: auto; flex: 1.5; min-width: 300px;
+    }
+    .ledger-panel h3 { font-size: 0.75rem; font-weight: 700; color: var(--fg-muted); margin-bottom: 4px; }
+    .ledger-table { width: 100%; border-collapse: collapse; font-family: 'SF Mono','Fira Code',monospace; font-size: 0.58rem; }
+    .ledger-table th { text-align: left; padding: 1px 3px; border-bottom: 1px solid var(--border); color: var(--fg-muted); position: sticky; top: 0; background: var(--bg); }
+    .ledger-table td { padding: 1px 3px; border-bottom: 1px solid rgba(48,54,61,0.3); white-space: nowrap; }
+    .ledger-table tr.active { background: rgba(88,166,255,0.15); }
+    .ledger-table tr.active td { color: var(--accent); font-weight: 600; }
+    .ledger-table tr.done td { color: var(--fg-muted); opacity: 0.5; }
+    .ledger-table td.seq { color: var(--fg-muted); text-align: right; }
+
+    /* Domain Event Sidebar */
+    .de-sidebar {
+      position: relative; flex: 0 0 0px; overflow: visible;
+      border-left: 1px solid var(--border); transition: flex 0.3s ease;
+    }
+    .de-sidebar.open { flex: 0 0 320px; }
+    .de-sidebar-tab {
+      position: absolute; right: 0; top: 0; z-index: 10;
+      writing-mode: vertical-rl; text-orientation: mixed;
+      padding: 10px 6px; background: var(--bg-alt); border-left: 1px solid var(--border);
+      border-bottom: 1px solid var(--border); border-bottom-left-radius: 6px;
+      color: var(--fg-muted); font-size: 0.7rem; font-weight: 600;
+      cursor: pointer; user-select: none; letter-spacing: 2px;
+    }
+    .de-sidebar.open .de-sidebar-tab { right: 320px; }
+    .de-sidebar-body {
+      display: none; flex-direction: column; height: 100%;
+      padding: 4px 0;
+    }
+    .de-sidebar.open .de-sidebar-body { display: flex; }
+    .de-sidebar-body h3 {
+      font-size: 0.7rem; font-weight: 700; color: var(--fg-muted);
+      padding: 2px 8px 4px 8px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .de-list {
+      flex: 1; overflow-y: auto; padding: 2px 6px;
+      font-family: 'SF Mono','Fira Code',monospace; font-size: 0.58rem;
+    }
+    .de-list .de-entry {
+      padding: 2px 4px; border-bottom: 1px solid rgba(48,54,61,0.2);
+    }
+    .de-entry .de-ts { color: var(--fg-muted); font-size: 0.5rem; }
+    .de-entry .de-type { color: var(--accent); font-weight: 600; }
+    .de-entry .de-data { color: var(--fg); word-break: break-all; font-size: 0.52rem; }
+    .de-entry .de-agg-id { color: var(--fg-muted); font-size: 0.45rem; margin-left: 4px; }
+
+    /* Layer filter bar */
+    .de-filter-bar { display: flex; gap: 3px; padding: 3px 6px; border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
+    .de-filter-btn { background: var(--bg-alt); border: 1px solid var(--border); color: var(--fg-muted); font-size: 0.55rem; padding: 2px 6px; border-radius: 3px; cursor: pointer; font-family: inherit; }
+    .de-filter-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .de-layer-badge { font-size: 0.45rem; opacity: 0.7; }
+
+    /* Layer groups */
+    .de-layer-group { margin: 2px 0; }
+    .de-layer-header { padding: 3px 6px; cursor: pointer; user-select: none; font-size: 0.6rem; font-weight: 600; color: var(--fg-muted); background: var(--bg-alt); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 4px; }
+    .de-layer-header:hover { opacity: 0.8; }
+    .de-layer-arrow { font-size: 0.5rem; width: 12px; text-align: center; }
+    .de-layer-name { flex: 1; }
+    .de-layer-count { font-size: 0.5rem; opacity: 0.6; }
+    .de-layer-events { }
+    .de-more { color: var(--fg-muted); font-style: italic; text-align: center; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/" class="logo">@Messages("fab.brand")</a>
+  <nav>
+    <a href="/">@Messages("fab.nav.home")</a>
+    <a href="/saga">@Messages("fab.nav.saga")</a>
+    <a href="/dag">@Messages("fab.nav.dag")</a>
+    <a href="/m3-demo">@Messages("fab.nav.m3")</a>
+    <a href="/fab-demo" class="active">@Messages("fab.nav.fabdemo")</a>
+    <a href="/fab-demo/m35">M3.5</a>
+    <a href="/fab-designer">Route Designer</a>
+    @if(messages.lang.code == "zh") {
+      <a href="/fab-demo?lang=en" class="nav-link nav-lang">@Messages("fab.nav.lang")</a>
+    } else {
+      <a href="/fab-demo?lang=zh" class="nav-link nav-lang">@Messages("fab.nav.lang")</a>
+    }
+  </nav>
+</div>
+
+<div class="controls" id="controls">
+  <button class="primary" onclick="startDemo()">@Messages("fab.controls.start")</button>
+  <select id="scenarioSelect">
+    <option value="photo-cell-5wafer">@Messages("fab.scenario_photo")</option>
+  </select>
+  <button onclick="pauseDemo()">@Messages("fab.controls.pause")</button>
+  <button onclick="resumeDemo()">@Messages("fab.controls.resume")</button>
+  <label>@Messages("fab.controls.speed") <input type="range" id="speedSlider" min="1" max="10" value="1" oninput="adjustSpeed(this.value)"></label>
+  <span id="speedLabel" style="font-size:0.75rem;color:var(--fg-muted)">1x</span>
+  <button class="danger" onclick="injectFault('LITHO-01','hardware_fault')">@Messages("fab.controls.fault")</button>
+  <span id="stepProgress" style="font-family:'SF Mono','Fira Code',monospace;font-size:0.68rem;color:var(--amber);min-width:220px;text-align:center;display:none"></span>
+  <span style="margin-left:auto;font-size:0.7rem;color:var(--fg-muted)" id="globalStatusText">@Messages("fab.controls.ready")</span>
+</div>
+
+<div class="main">
+  <!-- Factory Floor SVG -->
+  <div class="factory-floor" id="factoryFloor">
+    <svg id="factorySvg" viewBox="0 0 1000 460" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowBlue" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#58a6ff"/>
+        </marker>
+        <marker id="arrowAmber" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#f59e0b"/>
+        </marker>
+        <marker id="arrowGreen" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#3fb950"/>
+        </marker>
+        <marker id="arrowPurple" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#a855f7"/>
+        </marker>
+        <marker id="arrowRed" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#f85149"/>
+        </marker>
+      </defs>
+
+      <!-- Decision Engine -->
+      <g class="eq-node" id="eq-decision">
+        <rect x="294" y="4" width="260" height="40" rx="8" fill="#161b22" stroke="#f59e0b" stroke-width="2"/>
+        <text x="424" y="17" text-anchor="middle" font-size="9" fill="#e6edf3" font-weight="600">@Messages("fab.decision_engine")</text>
+        <text x="424" y="29" text-anchor="middle" font-size="6.5" fill="#8b949e">@Messages("fab.decision_sub")</text>
+        <text x="424" y="40" text-anchor="middle" font-size="6" fill="#6e7681" id="status-decision">@Messages("fab.decision_wait")</text>
+      </g>
+
+      <!-- Command Bus lines -->
+      <polyline points="304,44 304,70 63,70 63,95" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+      <polyline points="424,44 424,70 384,70 384,95" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+      <polyline points="544,44 544,70 264,70 264,230" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+      <text id="busCommandLabel" x="424" y="60" text-anchor="middle" font-size="5.5" fill="#58a6ff" font-family="monospace" opacity="0">--</text>
+
+      <!-- ====== ROW 1 ====== -->
+      <g class="eq-node" id="eq-stocker">
+        <rect x="22" y="95" width="82" height="18" rx="3" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <text x="30" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.stocker")</text>
+        <text x="96" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-stocker">@Messages("fab.js.status_idle")</text>
+        <rect x="22" y="113" width="82" height="112" rx="3" fill="#0d1117" stroke="#30363d" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="63" y="175" text-anchor="middle" font-size="5" fill="#8b949e" opacity="0.5">@Messages("fab.stocker_storage")</text>
+      </g>
+
+      <g class="eq-node" id="eq-clean">
+        <rect x="144" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#06b6d4" stroke-width="1.5"/>
+        <text x="148" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.clean")</text>
+        <text x="216" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-clean">@Messages("fab.js.status_idle")</text>
+        <rect x="144" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="184" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.clean_sub")</text>
+      </g>
+
+      <g class="eq-node" id="eq-diff">
+        <rect x="264" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#f97316" stroke-width="1.5"/>
+        <text x="268" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.diff")</text>
+        <text x="336" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-diff">@Messages("fab.js.status_idle")</text>
+        <rect x="264" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="304" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.diff_sub")</text>
+      </g>
+
+      <g class="eq-node" id="eq-litho">
+        <rect x="384" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="388" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.litho")</text>
+        <text x="456" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-litho">@Messages("fab.js.status_idle")</text>
+        <rect x="384" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="424" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.litho_sub")</text>
+      </g>
+
+      <g class="eq-node" id="eq-etch">
+        <rect x="504" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="508" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.etch")</text>
+        <text x="576" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-etch">@Messages("fab.js.status_idle")</text>
+        <rect x="504" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="544" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.etch_sub")</text>
+      </g>
+
+      <g class="eq-node" id="eq-implant">
+        <rect x="624" y="95" width="80" height="18" rx="3" fill="#161b22" stroke="#ec4899" stroke-width="1.5"/>
+        <text x="628" y="107" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.impl")</text>
+        <text x="696" y="107" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-implant">@Messages("fab.js.status_idle")</text>
+        <rect x="624" y="113" width="80" height="42" rx="3" fill="#0d1117" stroke="#ec4899" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="664" y="138" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.impl_sub")</text>
+      </g>
+
+      <!-- Row 1 transport lines -->
+      <line x1="104" y1="140" x2="144" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="224" y1="140" x2="264" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="344" y1="140" x2="384" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="464" y1="140" x2="504" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="584" y1="140" x2="624" y2="140" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <polyline points="664,155 664,205 544,205 544,230" stroke="#58a6ff" stroke-width="1.5"
+                stroke-opacity="0.35" fill="none" marker-end="url(#arrowBlue)"/>
+
+      <!-- ====== ROW 2 ====== -->
+      <g class="eq-node" id="eq-dep">
+        <rect x="504" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#14b8a6" stroke-width="1.5"/>
+        <text x="508" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.dep")</text>
+        <text x="576" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dep">@Messages("fab.js.status_idle")</text>
+        <rect x="504" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#14b8a6" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="544" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.dep_sub")</text>
+      </g>
+
+      <g class="eq-node" id="eq-cmp">
+        <rect x="384" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#eab308" stroke-width="1.5"/>
+        <text x="388" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.cmp")</text>
+        <text x="456" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cmp">@Messages("fab.js.status_idle")</text>
+        <rect x="384" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#eab308" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="424" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.cmp_sub")</text>
+      </g>
+
+      <g class="eq-node" id="eq-met">
+        <rect x="264" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="268" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.met")</text>
+        <text x="336" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cdsem">@Messages("fab.js.status_idle")</text>
+        <rect x="264" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="304" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.met_sub")</text>
+      </g>
+
+      <g class="eq-node" id="eq-dry">
+        <rect x="144" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#64748b" stroke-width="1.5"/>
+        <text x="148" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.dry")</text>
+        <text x="216" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dry">@Messages("fab.js.status_idle")</text>
+        <rect x="144" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#64748b" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="184" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.dry_sub")</text>
+      </g>
+
+      <g class="eq-node" id="eq-log">
+        <rect x="624" y="230" width="80" height="18" rx="3" fill="#161b22" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="628" y="242" font-size="6.5" fill="#e6edf3" font-weight="600">@Messages("fab.log")</text>
+        <text x="696" y="242" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-log">@Messages("fab.js.status_idle")</text>
+        <rect x="624" y="248" width="80" height="42" rx="3" fill="#0d1117" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="664" y="273" text-anchor="middle" font-size="5.5" fill="#8b949e" opacity="0.5">@Messages("fab.log_sub")</text>
+      </g>
+
+      <!-- Row 2 transport lines -->
+      <line x1="504" y1="275" x2="464" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="384" y1="275" x2="344" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="264" y1="275" x2="224" y2="275" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+
+      <!-- Return to Stocker -->
+      <polyline points="144,275 110,275 110,185 104,185" stroke="#3fb950" stroke-width="1.8"
+                stroke-opacity="0.4" stroke-dasharray="5 4" fill="none" marker-end="url(#arrowGreen)"/>
+      <text x="115" y="230" text-anchor="middle" font-size="5" fill="#3fb950" opacity="0.4">@Messages("fab.transport_return")</text>
+
+      <!-- Rework: MET->LITHO -->
+      <line x1="304" y1="248" x2="424" y2="155" stroke="#f59e0b" stroke-width="1.5"
+            stroke-opacity="0.45" stroke-dasharray="5 3" marker-end="url(#arrowAmber)"/>
+      <text x="364" y="200" text-anchor="middle" font-size="5" fill="#f59e0b" opacity="0.4">@Messages("fab.rework")</text>
+
+      <!-- Scrap Path -->
+      <line id="scrapPathLine" x1="304" y1="290" x2="304" y2="310" stroke="#f85149" stroke-width="1.8" stroke-opacity="0.45"
+            stroke-dasharray="4 3" marker-end="url(#arrowRed)"/>
+
+      <!-- Scrap Bin -->
+      <g id="scrapBin" opacity="0.75" transform="translate(234, 320)">
+        <rect x="0" y="0" width="140" height="20" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5"/>
+        <text x="70" y="13" text-anchor="middle" font-size="7" fill="#f85149" font-weight="600">@Messages("fab.scrap_bin")</text>
+        <rect x="0" y="20" width="140" height="60" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="70" y="36" text-anchor="middle" font-size="6" fill="#f87168">@Messages("fab.scrap_sub")</text>
+        <text x="70" y="58" text-anchor="middle" font-size="8" fill="#f85149" font-weight="700" id="scrapCount">@Messages("fab.scrap_count")</text>
+        <g id="scrapWaferDots" transform="translate(0, 20)"></g>
+      </g>
+
+      <!-- FOUP Icons -->
+      <rect id="foupIcon" x="55" y="170" width="16" height="10" rx="2" fill="#f59e0b" opacity="0"/>
+      <text id="foupLotLabel" x="55" y="165" text-anchor="start" font-size="5.5" fill="#f59e0b" font-family="monospace" opacity="0">--</text>
+      <rect id="reworkFoupIcon" x="304" y="265" width="16" height="10" rx="2" fill="#a855f7" opacity="0"/>
+      <text id="reworkFoupLabel" x="304" y="260" text-anchor="start" font-size="5.5" fill="#a855f7" font-family="monospace" opacity="0">--</text>
+      <text id="splitMergeLabel" x="424" y="320" text-anchor="middle" font-size="8" fill="#a855f7" font-family="monospace" opacity="0">--</text>
+
+      <!-- Classification Wheel -->
+      <g transform="translate(870, 4)">
+        <circle cx="32" cy="28" r="24" fill="none" stroke="#30363d" stroke-width="1.5"/>
+        <text x="32" y="32" text-anchor="middle" font-size="7" fill="var(--fg-muted)">@Messages("fab.wafer_class")</text>
+        <circle id="wd-0" cx="32" cy="12" r="3.5" fill="#30363d"/>
+        <circle id="wd-1" cx="44" cy="19" r="3.5" fill="#30363d"/>
+        <circle id="wd-2" cx="44" cy="37" r="3.5" fill="#30363d"/>
+        <circle id="wd-3" cx="32" cy="44" r="3.5" fill="#30363d"/>
+        <circle id="wd-4" cx="20" cy="37" r="3.5" fill="#30363d"/>
+        <text x="32" y="65" text-anchor="middle" font-size="5.5" fill="#3fb950">@Messages("fab.wafer_pass")</text>
+        <text x="32" y="74" text-anchor="middle" font-size="5.5" fill="#f59e0b">@Messages("fab.wafer_borderline")</text>
+        <text x="32" y="83" text-anchor="middle" font-size="5.5" fill="#f85149">@Messages("fab.wafer_fail")</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Aggregate State Panel -->
+  <div class="aggregate-panel" id="aggregatePanel">
+    <div class="panel-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3>@Messages("fab.aggregate_title")</h3>
+        <button onclick="toggleAggregatePanel()" title="Toggle panel">@Messages("fab.aggregate_collapse")</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input id="entityWorkOrderInput" type="text" placeholder="WorkOrder ID" style="background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:2px 6px;font-size:11px;border-radius:3px;width:220px" />
+        <button onclick="fetchEntityState()" title="Query real entity state from ClusterSharding" style="font-size:11px;padding:2px 8px">⟳ Entity State</button>
+      </div>
+    </div>
+    <div class="panel-content" id="aggregateContent">
+      <table class="agg-tree-table" id="aggTreeTable">
+        <thead><tr>@Messages("fab.aggregate_cols").split("\\|").map { col => <th>@col</th> }</tr></thead>
+        <tbody id="aggTreeBody">
+          <tr><td colspan="5" style="color:var(--fg-muted)">@Messages("fab.aggregate_placeholder")</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Route Graph Panel -->
+  <div class="aggregate-panel" id="routeGraphPanel">
+    <div class="panel-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3>🗺 Route Graph</h3>
+        <button onclick="toggleRouteGraphPanel()" title="Toggle panel">▲ Collapse</button>
+      </div>
+      <span id="routeGraphScenario" style="font-size:10px;color:var(--fg-muted)"></span>
+    </div>
+    <div class="panel-content" id="routeGraphContent" style="width:100%; min-height:140px; overflow-x:auto">
+      <p style="color:var(--fg-muted);font-size:12px;padding:20px">Select a scenario to view its route.</p>
+    </div>
+  </div>
+
+  <!-- Bottom Panel -->
+  <div class="bottom-panel">
+    <div class="timeline" id="timeline">
+      <div class="entry"><span class="ts">--:--:--</span> @Messages("fab.timeline_ready")</div>
+    </div>
+    <div class="summary" id="summary">
+      <h3>@Messages("fab.lot_summary")</h3>
+      <div class="stat-row"><span class="label">@Messages("fab.sum_active")</span><span class="value" id="sum-active">-</span></div>
+      <div class="stat-row"><span class="label">@Messages("fab.sum_passed")</span><span class="value pass" id="sum-pass">-</span></div>
+      <div class="stat-row"><span class="label">@Messages("fab.sum_reworked")</span><span class="value" id="sum-rework" style="color:var(--amber)">-</span></div>
+      <div class="stat-row"><span class="label">@Messages("fab.sum_scrapped")</span><span class="value fail" id="sum-scrap">-</span></div>
+    </div>
+    <div class="ledger-panel" id="ledgerPanel">
+      <h3>@Messages("fab.ledger_title")</h3>
+      <div style="overflow-x:auto;max-height:calc(100% - 20px);">
+        <table class="ledger-table" id="ledgerTable">
+          <thead>
+            <tr>@Messages("fab.ledger_cols").split("\\|").map { col => <th @if(col=="#"){class="seq"}>@col</th> }</tr>
+          </thead>
+          <tbody id="ledgerBody">
+            <tr><td colspan="7" style="color:var(--fg-muted)">@Messages("fab.ledger_placeholder")</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Domain Event Sidebar -->
+    <div class="de-sidebar" id="deSidebar">
+      <div class="de-sidebar-tab" onclick="toggleDomainSidebar()">@Messages("fab.de_sidebar")</div>
+      <div class="de-sidebar-body">
+        <h3>📋 @Messages("fab.de_sidebar") <span style="font-weight:400;font-size:0.6rem;color:var(--fg-muted)" id="deCount">0</span></h3>
+        <div class="de-list" id="deList">
+          <div class="de-entry"><span class="de-ts">--</span> <span class="de-data">@Messages("fab.de_placeholder")</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- i18n messages -->
+<script>
+window.__i18n = {
+  lang: "@messages.lang.code",
+  phase_load: "@Messages("fab.js.phase_load")",
+  phase_transport: "@Messages("fab.js.phase_transport")",
+  phase_at_eqp: "@Messages("fab.js.phase_at_eqp")",
+  phase_process: "@Messages("fab.js.phase_process")",
+  phase_measure: "@Messages("fab.js.phase_measure")",
+  phase_decide: "@Messages("fab.js.phase_decide")",
+  phase_split: "@Messages("fab.js.phase_split")",
+  phase_rework: "@Messages("fab.js.phase_rework")",
+  phase_return: "@Messages("fab.js.phase_return")",
+  phase_complete: "@Messages("fab.js.phase_complete")",
+  status_idle: "@Messages("fab.js.status_idle")",
+  status_processing: "@Messages("fab.js.status_processing")",
+  status_measuring: "@Messages("fab.js.status_measuring")",
+  status_pass: "@Messages("fab.js.status_pass")",
+  status_fail: "@Messages("fab.js.status_fail")",
+  status_scrap: "@Messages("fab.js.status_scrap")",
+  status_borderline: "@Messages("fab.js.status_borderline")",
+  status_skip: "@Messages("fab.js.status_skip")",
+  status_hold: "@Messages("fab.js.status_hold")",
+  saga_initiated: "@Messages("fab.js.saga_initiated")",
+  saga_committed: "@Messages("fab.js.saga_committed")",
+  saga_completed: "@Messages("fab.js.saga_completed")",
+  saga_compensated: "@Messages("fab.js.saga_compensated")",
+  saga_failed: "@Messages("fab.js.saga_failed")",
+  demo_started: "@Messages("fab.js.demo_started")",
+  demo_completed: "@Messages("fab.js.demo_completed")",
+  layer_chain: "@Messages("fab.js.layer_chain")",
+  layer_saga: "@Messages("fab.js.layer_saga")",
+  layer_aggregate: "@Messages("fab.js.layer_aggregate")",
+  layer_process: "@Messages("fab.js.layer_process")",
+  all_layers: "@Messages("fab.js.all_layers")",
+  unknown_lot: "@Messages("fab.js.unknown_lot")",
+  unknown_wafer: "@Messages("fab.js.unknown_wafer")",
+  step_progress: "@Messages("fab.js.step_progress")",
+  step_no_measure: "@Messages("fab.js.step_no_measure")",
+  status_busy: "@Messages("fab.js.status_busy")",
+  status_transporting: "@Messages("fab.js.status_transporting")",
+  timeline_ready: "@Messages("fab.timeline_ready")",
+  controls_ready: "@Messages("fab.controls.ready")",
+  decision_wait: "@Messages("fab.decision_wait")",
+  scrap_count: "@Messages("fab.scrap_count")",
+  aggregate_placeholder: "@Messages("fab.aggregate_placeholder")",
+  de_placeholder: "@Messages("fab.de_placeholder")",
+  t: function(key) { return this[key] || key; },
+  statusMap: {
+    "Idle": "@Messages("fab.js.status_idle")",
+    "Processing": "@Messages("fab.js.status_processing")",
+    "Measuring": "@Messages("fab.js.status_measuring")",
+    "PASS": "@Messages("fab.js.status_pass")",
+    "FAIL": "@Messages("fab.js.status_fail")",
+    "SCRAP": "@Messages("fab.js.status_scrap")",
+    "BORDERLINE": "@Messages("fab.js.status_borderline")",
+    "SKIP": "@Messages("fab.js.status_skip")",
+    "ON HOLD": "@Messages("fab.js.status_hold")",
+    "Active": "@Messages("fab.js.status_processing")",
+    "Scrapped": "@Messages("fab.js.status_scrap")",
+    "Skipped": "@Messages("fab.js.status_skip")",
+    "OnHold": "@Messages("fab.js.status_hold")"
+  },
+  layerMap: {
+    "Chain": "@Messages("fab.js.layer_chain")",
+    "Saga": "@Messages("fab.js.layer_saga")",
+    "Lot": "@Messages("fab.js.layer_aggregate")",
+    "Wafer": "@Messages("fab.js.layer_aggregate")",
+    "FabProcess": "@Messages("fab.js.layer_process")"
+  }
+};
+</script>
+<script src="https://unpkg.com/rxjs@@7/dist/bundles/rxjs.umd.min.js"></script>
+<script src="@routes.Assets.versioned("javascripts/fab_observable.js")" type="text/javascript"></script>
+<script src="@routes.Assets.versioned("javascripts/route_graph.js")" type="text/javascript"></script>
+<script src="@routes.Assets.versioned("javascripts/fab_demo_simulation.js")" type="text/javascript"></script>
+</body>
+</html>

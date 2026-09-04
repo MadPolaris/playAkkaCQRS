@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package net.imadz.infrastructure.proto;
+
+option java_multiple_files = true;
+
+// --- Events ---
+
+message WorkOrderCreatedPO {
+  string work_order_id = 1;
+  string product_id = 2;
+  repeated string wafer_ids = 3;
+  int32 wafer_count = 4;
+  int32 total_lots = 5;
+}
+
+message LotCompletionRecordedPO {
+  string work_order_id = 1;
+  string lot_id = 2;
+  int32 pass_count = 3;
+  int32 scrap_count = 4;
+  int32 rework_count = 5;
+}
+
+message WorkOrderCompletedPO {
+  int32 pass_count = 1;
+  int32 scrap_count = 2;
+  int32 rework_count = 3;
+}
+
+message WorkOrderFailedPO {
+  string error = 1;
+}
+
+// --- Event Union ---
+
+message WorkOrderEventPO {
+  oneof event {
+    WorkOrderCreatedPO work_order_created = 1;
+    WorkOrderCompletedPO work_order_completed = 2;
+    WorkOrderFailedPO work_order_failed = 3;
+    LotCompletionRecordedPO lot_completion_recorded = 4;
+  }
+}
+
+// --- State Snapshot ---
+
+message WorkOrderStatePO {
+  string phase = 1;
+  string work_order_id = 2;
+  string product_id = 3;
+  repeated string wafer_ids = 4;
+  int32 pass_count = 5;
+  int32 scrap_count = 6;
+  int32 rework_count = 7;
+  string error = 8;
+  int32 total_lots = 9;
+  int32 completed_lot_count = 10;
+  repeated string completed_lot_ids = 11;
+  int32 accum_pass_count = 12;
+  int32 accum_scrap_count = 13;
+  int32 accum_rework_count = 14;
+}

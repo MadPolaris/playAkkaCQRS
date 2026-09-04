@@ -1,0 +1,454 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M2 · 流批一体多层级 DAG 执行引擎</title>
+    <meta name="description" content="M2 流批一体多层级 DAG 执行引擎——23 个 Akka Persistent FSM 跨 5 层级协作，内建 4 种弹性模式，统一管道处理流式与批量负载。">
+    <meta name="keywords" content="DAG, 执行引擎, Akka, FSM, 流批一体, Saga, 补偿, 自愈, 容错, 外部系统">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6;
+            --code-bg: #0f172a;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.7; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center; padding: 80px 0 50px;
+            border-bottom: 1px solid var(--border); margin-bottom: 50px;
+        }
+        header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 12px; }
+        header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+        header h1 .m2 { color: var(--accent); }
+        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 720px; margin-left: auto; margin-right: auto; }
+        header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+        .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .badge-dag { background: rgba(88,166,255,0.15); color: var(--accent); }
+        .badge-fsm { background: rgba(63,185,80,0.15); color: var(--green); }
+        .badge-prod { background: rgba(63,185,80,0.15); color: var(--green); }
+
+        .nav-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; font-size: 0.82rem; align-items: center; flex-wrap: wrap; }
+        .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links > a:hover { text-decoration: underline; }
+        .nav-links > a.primary { background: var(--accent); color: #000; padding: 6px 16px; border-radius: 6px; font-weight: 700; }
+        .nav-links > a.primary:hover { background: #3b82f6; text-decoration: none; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn { color: var(--accent); font-size: 0.82rem; font-weight: 500; cursor: pointer; background: transparent; border: none; font-family: var(--font); display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .nav-dropdown-btn:hover { text-decoration: underline; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; min-width: 220px; padding: 4px; display: none; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.8rem; font-weight: 500; transition: all 0.1s; }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m3 { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .mm-active { background: rgba(255,255,255,0.05); }
+
+        section { margin-bottom: 60px; }
+        h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: var(--fg); }
+        h4 { font-size: 0.92rem; font-weight: 700; margin: 20px 0 8px; color: var(--fg); }
+
+        .ps-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .ps-table th { background: var(--bg-alt); padding: 14px 18px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
+        .ps-table td { padding: 14px 18px; border-top: 1px solid var(--border); }
+        .ps-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+        .comp-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; transition: border-color 0.2s; }
+        .comp-card:hover { border-color: var(--fg-muted); }
+        .comp-card .comp-icon { font-size: 1.5rem; margin-bottom: 10px; }
+        .comp-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+        .comp-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.6; }
+
+        .arch-callout { background: rgba(88,166,255,0.04); border-left: 3px solid var(--accent); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
+        .arch-callout strong { color: var(--fg); }
+        .arch-callout.red { border-left-color: var(--red); background: rgba(248,81,73,0.04); }
+        .arch-callout.purple { border-left-color: var(--purple); background: rgba(168,85,247,0.04); }
+        .file-ref { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted); }
+
+        .arch-svg-wrap { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 20px 12px 10px; margin: 20px 0; text-align: center; overflow-x: auto; }
+        .arch-svg { width: 100%; max-width: 1000px; }
+
+        blockquote { border-left: 3px solid var(--accent); padding: 12px 18px; margin: 16px 0; background: rgba(88,166,255,0.04); font-size: 0.82rem; color: var(--fg-muted); border-radius: 0 6px 6px 0; }
+        blockquote strong { color: var(--fg); }
+
+        .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        @@media (max-width: 768px) {
+            .comp-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ==================== HERO ==================== -->
+    <header>
+        <div class="kicker">M2 · 反应式跨系统编排引擎</div>
+        <h1>
+            <span class="m2">流批一体多层级 DAG 执行引擎</span>
+        </h1>
+        <p class="tagline">
+            23 个 Akka Persistent FSM 跨 5 层级协作，内建 4 种弹性模式。
+            统一管道同时处理<strong>流式</strong>与<strong>批量</strong>负载。
+            通信层封装异构外部系统——每个节点独立版本化、测试和部署。
+            这是从"单系统事务"迈向"跨系统编排"的第二步。
+        </p>
+        <div class="badge-row">
+            <span class="badge badge-dag">多层级 DAG</span>
+            <span class="badge badge-fsm">23 Persistent FSM</span>
+            <span class="badge badge-prod">线上质量 · 已完成</span>
+        </div>
+        <nav class="nav-links">
+            <a href="/">首页</a>
+            <a href="/dag" style="color:#58a6ff; font-weight:700;">在线演示</a>
+            <a href="/en/m2" style="color:#58a6ff; font-weight:700;">EN</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务</a>
+                    <a href="/m2" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m2">M2</span>DAG 执行引擎</a>
+                    <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>动态工序编排</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">在线演示 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 引擎</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈编排</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD 架构实践 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection 管道</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>架构雷达</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ==================== SECTION 1: 为什么需要 DAG 执行引擎 ==================== -->
+    <section>
+        <h2>一、为什么需要 DAG 执行引擎</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M1 Saga 解决了<strong>单个分布式事务</strong>的原子性问题。但在真实业务场景中，
+            一个操作往往涉及多个外部系统的<strong>长链路编排</strong>——定时触发、文件生成、SFTP 上传、
+            轮询结果、分类处理、异常路由、通知下游——这不是一个简单的请求-响应能覆盖的。
+            M2 DAG 执行引擎将跨系统流程建模为<strong>有向无环图（DAG）</strong>，每个节点是一个独立的 Persistent FSM，
+            边代表数据流和依赖关系。
+        </p>
+
+        <table class="ps-table" style="margin-top:20px;">
+            <thead><tr><th style="width:22%">维度</th><th style="width:39%">传统存储过程编排</th><th style="width:39%">M2 DAG 执行引擎</th></tr></thead>
+            <tbody>
+                <tr><td><strong>流程定义</strong></td><td>JSON → 存储过程调用链，运行时不可见</td><td><strong>显式 DAG</strong>——节点和边在代码中声明，编译时检查</td></tr>
+                <tr><td><strong>节点独立性</strong></td><td>存储过程间隐式依赖，一处失败全局回滚</td><td>每个 FSM 独立持久化、测试、部署——<strong>爆炸半径限制在单个节点</strong></td></tr>
+                <tr><td><strong>外部系统集成</strong></td><td>DB Link、批量 ETL、轮询</td><td>统一通信层——SFTP/HTTP/消息队列，封装在可重试的异步边界内</td></tr>
+                <tr><td><strong>弹性模式</strong></td><td>无——失败靠人工</td><td>4 种内建模式：监督重启、超时保护、补偿恢复、最终一致</td></tr>
+                <tr><td><strong>流批一体</strong></td><td>流式和批量两套系统，逻辑重复</td><td>同一套 DAG 管道同时处理实时事件和批量文件</td></tr>
+                <tr><td><strong>可观测性</strong></td><td>日志文件 grep</td><td>每个 FSM 的状态转换作为事件持久化——click→drill→debug</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>薪资存入场景：</strong>M2 的 Demonstrator 是一个发薪日薪资自动存入流程——定时触发 →
+            数据预处理（生成文件 / 上传 SFTP / 轮询响应 / 解析 / 分类）→ 额度预留 → 并发执行（充值 + 申购两条并行链路）→
+            补偿收尾。涉及 4 个外部系统（银行 SFTP、核心账户 API、基金申购平台 P2B、短信通道），23 个 FSM 协同完成。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 2: 5 层级架构 ==================== -->
+    <section>
+        <h2>二、5 层级 DAG 架构全景</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M2 将跨系统编排拆分为 5 个垂直层级，每层有明确的职责边界。层级之间的数据流是单向的——
+            上层向下传递指令，下层向上反馈结果。异常通过补偿回路回到上层。
+        </p>
+
+        <div class="arch-svg-wrap">
+            <div style="font-size:0.75rem; color:var(--fg-subtle); margin-bottom:10px;">
+                L0 触发层 → L1 编排层 → L2 执行与资源层 → L3 业务链路层 → L4 通信层 → L5 补偿释放层
+            </div>
+            <svg class="arch-svg" viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <marker id="ahBlue" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#58a6ff"/></marker>
+                    <marker id="ahMuted" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#8b949e"/></marker>
+                    <marker id="ahAmber" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f59e0b"/></marker>
+                    <marker id="ahRed" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f87171"/></marker>
+                    <marker id="ahGreen" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#3fb950"/></marker>
+                    <marker id="ahPurple" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#a855f7"/></marker>
+                    <filter id="nodeShadow" x="-10%" y="-20%" width="130%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/></filter>
+                    <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(96,165,250,0.18)"/><stop offset="100%" stop-color="rgba(96,165,250,0.05)"/></linearGradient>
+                    <linearGradient id="gAmber" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(251,191,36,0.18)"/><stop offset="100%" stop-color="rgba(251,191,36,0.05)"/></linearGradient>
+                    <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(248,113,113,0.18)"/><stop offset="100%" stop-color="rgba(248,113,113,0.05)"/></linearGradient>
+                    <linearGradient id="gPurple" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(168,85,247,0.18)"/><stop offset="100%" stop-color="rgba(168,85,247,0.05)"/></linearGradient>
+                    <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="rgba(74,222,128,0.18)"/><stop offset="100%" stop-color="rgba(74,222,128,0.05)"/></linearGradient>
+                </defs>
+
+                <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif">
+
+                <!-- L0: Trigger Layer -->
+                <rect x="30" y="10" width="940" height="70" rx="10" fill="rgba(59,130,246,0.03)" stroke="rgba(59,130,246,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="10" width="5" height="70" rx="2" fill="#38bdf8" fill-opacity="0.5"/>
+                <text x="50" y="33" fill="#38bdf8" font-size="12" font-weight="700" letter-spacing="1">L0 · 触发层 Trigger Layer</text>
+                <rect x="55" y="44" width="180" height="28" rx="5" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.35" stroke-width="1.2"/>
+                <text x="145" y="62" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Quartz Cron 调度器</text>
+                <text x="255" y="62" fill="#8b949e" font-size="8" font-weight="500">定时触发 · 声明式入口</text>
+                <path d="M 250 58 L 280 58" fill="none" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#ahBlue)"/>
+
+                <!-- L1: Orchestration -->
+                <rect x="30" y="90" width="940" height="100" rx="10" fill="rgba(245,158,11,0.03)" stroke="rgba(245,158,11,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="90" width="5" height="100" rx="2" fill="#f59e0b" fill-opacity="0.5"/>
+                <text x="50" y="113" fill="#f59e0b" font-size="12" font-weight="700" letter-spacing="1">L1 · 编排层 Orchestration</text>
+                <rect x="55" y="126" width="180" height="50" rx="6" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.35" stroke-width="1.2"/>
+                <text x="145" y="148" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">JobActor (编排器)</text>
+                <text x="145" y="166" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">作业拆分 · 批次管理</text>
+                <path d="M 235 151 L 265 151" fill="none" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#ahAmber)"/>
+                <rect x="270" y="126" width="180" height="50" rx="6" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.35" stroke-width="1.2"/>
+                <text x="360" y="148" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">PreBatchActor (编排器)</text>
+                <text x="360" y="166" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">数据预处理调度</text>
+                <path d="M 450 151 L 480 151" fill="none" stroke="#f59e0b" stroke-width="1.5" marker-end="url(#ahAmber)"/>
+                <rect x="485" y="126" width="180" height="50" rx="6" fill="url(#gRed)" stroke="#f87171" stroke-opacity="0.35" stroke-width="1.2"/>
+                <text x="575" y="148" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">ReBatchActor (补偿器)</text>
+                <text x="575" y="166" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">死循环重试 · 最终成功</text>
+                <path d="M 575 176 L 575 210" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ahMuted)"/>
+
+                <!-- L2: Execution & Resources -->
+                <rect x="30" y="200" width="940" height="115" rx="10" fill="rgba(63,185,80,0.03)" stroke="rgba(63,185,80,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="200" width="5" height="115" rx="2" fill="#3fb950" fill-opacity="0.5"/>
+                <text x="50" y="223" fill="#3fb950" font-size="12" font-weight="700" letter-spacing="1">L2 · 执行与资源层 Execution &amp; Resources</text>
+                <!-- Row 1 -->
+                <rect x="55" y="238" width="150" height="36" rx="5" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.35" stroke-width="1"/>
+                <text x="130" y="260" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">BatchMaster</text>
+                <rect x="220" y="238" width="170" height="36" rx="5" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.35" stroke-width="1"/>
+                <text x="305" y="260" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">BatchItemCreationActor</text>
+                <rect x="405" y="238" width="150" height="36" rx="5" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.35" stroke-width="1"/>
+                <text x="480" y="260" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">BatchWorker × N</text>
+                <!-- Row 2 -->
+                <rect x="55" y="278" width="250" height="28" rx="5" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="180" y="296" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">UserQuotaReservation (保护器)</text>
+                <rect x="320" y="278" width="250" height="28" rx="5" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="445" y="296" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">QuotaRelease × 2 (保护器)</text>
+                <text x="590" y="296" fill="#8b949e" font-size="7.5" font-weight="500">超时自动释放</text>
+                <path d="M 500 310 L 500 340" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ahMuted)"/>
+
+                <!-- L3: Business Chain -->
+                <rect x="30" y="325" width="940" height="110" rx="10" fill="rgba(168,85,247,0.03)" stroke="rgba(168,85,247,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="325" width="5" height="110" rx="2" fill="#a855f7" fill-opacity="0.5"/>
+                <text x="50" y="348" fill="#a855f7" font-size="12" font-weight="700" letter-spacing="1">L3 · 业务链路层 Business Chain — 充值 ♻ 申购 两条并行链路</text>
+                <rect x="55" y="362" width="370" height="28" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="240" y="380" fill="#e6edf3" font-size="8.5" font-weight="700" text-anchor="middle">充值链: Request → Response → Reconfirm → Success/Failure → NotifyP2B</text>
+                <rect x="440" y="362" width="370" height="28" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="625" y="380" fill="#e6edf3" font-size="8.5" font-weight="700" text-anchor="middle">申购链: Request → Response → Reconfirm → Success/Failure → NotifyP2B</text>
+                <rect x="55" y="396" width="800" height="28" rx="5" fill="rgba(168,85,247,0.04)" stroke="#a855f7" stroke-opacity="0.15" stroke-width="1"/>
+                <text x="455" y="414" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">每条链路 6 个 FSM：Request · Response · Reconfirm · Success · Failure · Reminder (SMS)</text>
+                <path d="M 500 435 L 500 470" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ahMuted)"/>
+
+                <!-- L4: Communication -->
+                <rect x="30" y="450" width="940" height="75" rx="10" fill="rgba(20,184,166,0.03)" stroke="rgba(20,184,166,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="450" width="5" height="75" rx="2" fill="#14b8a6" fill-opacity="0.5"/>
+                <text x="50" y="473" fill="#14b8a6" font-size="12" font-weight="700" letter-spacing="1">L4 · 通信层 Communication — 统一外部系统网关</text>
+                <rect x="55" y="486" width="200" height="30" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="155" y="505" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">SftpService (银行 SFTP)</text>
+                <rect x="270" y="486" width="200" height="30" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="370" y="505" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">CoreAccountAPI (核心账户)</text>
+                <rect x="485" y="486" width="200" height="30" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="585" y="505" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">P2B Platform (基金申购)</text>
+                <rect x="700" y="486" width="160" height="30" rx="5" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="780" y="505" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">SMS 通道</text>
+                <path d="M 500 520 L 500 550" fill="none" stroke="#8b949e" stroke-width="1.5" marker-end="url(#ahMuted)"/>
+
+                <!-- L5: Compensation Release -->
+                <rect x="30" y="535" width="940" height="65" rx="10" fill="rgba(248,81,73,0.03)" stroke="rgba(248,81,73,0.18)" stroke-width="1.2"/>
+                <rect x="30" y="535" width="5" height="65" rx="2" fill="#f87171" fill-opacity="0.5"/>
+                <text x="50" y="558" fill="#f87171" font-size="12" font-weight="700" letter-spacing="1">L5 · 补偿释放层 Compensation &amp; Release</text>
+                <rect x="55" y="568" width="250" height="24" rx="5" fill="url(#gRed)" stroke="#f87171" stroke-opacity="0.3" stroke-width="1"/>
+                <text x="180" y="585" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">用户额度释放 + 总额度释放 (保护器)</text>
+                <text x="320" y="585" fill="#8b949e" font-size="7.5" font-weight="500">保证资源最终释放 · 不掉锁</text>
+
+                <!-- Cross-layer flows -->
+                <text x="490" y="620" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">4 种弹性模式: 编排器 Orchestrator · 保护器 Protector · 通信器 Communicator · 补偿器 Compensator</text>
+                <text x="490" y="638" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle">23 个 Akka Persistent FSM · 131 条 DAG 边 · 4 个外部系统网关 · 5 层级单向数据流</text>
+
+                </g>
+            </svg>
+        </div>
+
+        <h3>层级职责速览</h3>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:12%">层级</th><th style="width:18%">弹性角色</th><th style="width:38%">包含 Actor</th><th style="width:32%">核心职责</th></tr></thead>
+            <tbody>
+                <tr><td><strong style="color:#38bdf8">L0 触发层</strong></td><td>编排器</td><td>Quartz Cron 调度器 (1 个)</td><td>定时触发作业——DAG 由事件激活，不是存储过程调用链</td></tr>
+                <tr><td><strong style="color:#f59e0b">L1 编排层</strong></td><td>编排器 + 补偿器</td><td>JobActor · PreBatchActor · ReBatchActor (3 个)</td><td>作业拆分、批次管理、失败补偿——ReBatchActor 死循环重试直到成功</td></tr>
+                <tr><td><strong style="color:#3fb950">L2 执行与资源层</strong></td><td>编排器 + 保护器</td><td>BatchMaster · BatchItemCreationActor · BatchWorker×N · UserQuotaReservation · QuotaRelease×2 (6 个)</td><td>批量创建、并发执行、额度锁——保护器声明不变量，引擎强制执行</td></tr>
+                <tr><td><strong style="color:#a855f7">L3 业务链路层</strong></td><td>通信器</td><td>充值链 + 申购链 (各 6 个 FSM，共 12 个)</td><td>Request → Response → Reconfirm → Success/Failure → Notify——双链路并行</td></tr>
+                <tr><td><strong style="color:#14b8a6">L4 通信层</strong></td><td>通信器 + 辅助</td><td>SftpService · CoreAccountAPI · P2B Platform · SMS 通道 (4 个网关)</td><td>异构外部系统封装——SFTP/HTTP/SMS，可重试异步边界</td></tr>
+                <tr><td><strong style="color:#f87171">L5 补偿释放层</strong></td><td>保护器</td><td>用户额度释放 + 总额度释放 (2 个)</td><td>无论成功失败，保证资源最终释放——不掉锁</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- ==================== SECTION 3: 4 种弹性模式 ==================== -->
+    <section>
+        <h2>三、4 种弹性模式</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            M2 的 23 个 FSM 内建了 4 种弹性模式。这不是事后贴上的 try-catch——每个 FSM 的类型本身就是一种弹性策略。
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(59,130,246,0.3);">
+                <div class="comp-icon">🎯</div>
+                <h4>Orchestrator 编排器</h4>
+                <p>负责作业拆分、批次管理和阶段推进。每完成一个阶段，持续检查下一个阶段的前置条件。
+                如果子节点失败，Orchestrator 决定是重试还是启动补偿链。
+                对应 Actor：JobActor、PreBatchActor、BatchMaster。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
+                <div class="comp-icon">🛡️</div>
+                <h4>Protector 保护器</h4>
+                <p>声明系统不变量，并由引擎强制执行。例如：<strong>"锁在 30 秒后自动释放"</strong>——
+                即便节点崩溃，恢复后计时器仍会触发释放。保护器不是 try-finally，它是不变量的持久化守卫。
+                对应 Actor：UserQuotaReservation、QuotaRelease。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
+                <div class="comp-icon">📡</div>
+                <h4>Communicator 通信器</h4>
+                <p>封装与外部系统的所有交互。将 SFTP 上传、HTTP 请求、轮询响应<strong>统一建模为异步消息</strong>。
+                外部不确定性被隔离在可重试的边界内。断路器保护下游系统。
+                对应 Actor：L3 全部 12 个业务链路 FSM + L4 全部网关。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(248,81,73,0.3);">
+                <div class="comp-icon">↩️</div>
+                <h4>Compensator 补偿器</h4>
+                <p>最终的兜底机制。只要补偿器在运行，就没有失败会被遗漏。
+                ReBatchActor 以<strong>死循环重试</strong>的方式确保最终成功——每次失败后自动重新排队。
+                补偿释放层保证所有被锁定的资源最终被释放。</p>
+            </div>
+        </div>
+
+        <blockquote>
+            <strong>为什么 4 种模式就够了：</strong>跨系统编排中的每一个参与者，其行为都可以归类为这 4 种角色之一。
+            编排器负责"推进"，保护器负责"守护"，通信器负责"对话"，补偿器负责"兜底"。
+            这 4 种模式的组合覆盖了从定时触发到最终资源释放的完整闭环。
+        </blockquote>
+    </section>
+
+    <!-- ==================== SECTION 4: 流批一体 ==================== -->
+    <section>
+        <h2>四、流批一体管道</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            传统架构中，流式（实时消息）和批量（文件传输）需要两套独立的处理系统——
+            不同的触发机制、不同的执行路径、不同的错误处理。M2 通过统一的 DAG 管道将两者合并。
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(88,166,255,0.3);">
+                <div class="comp-icon">📂</div>
+                <h4>批量路径（Batch）</h4>
+                <p>Cron 定时触发 → 生成文件 → SFTP 上传 → 轮询响应文件 → 解析 + 分类 →
+                逐条创建子批次 → 并发处理 → 结果汇总。适用于薪资日批量存入、对账文件处理。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(63,185,80,0.3);">
+                <div class="comp-icon">⚡</div>
+                <h4>流式路径（Streaming）</h4>
+                <p>跳过文件生成和 SFTP——直接从消息队列/HTTP 接收事件 → 解析 + 分类 →
+                逐条创建子批次 → 并发处理 → 结果汇总。适用于实时交易、即时通知。</p>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>共用的核心：</strong>无论批量还是流式入口，L2 以下的执行管道完全一致——
+            BatchWorker 的并发处理、业务链路层的请求-响应-确认-通知模式、
+            补偿释放层的资源回收——全部复用，零重复代码。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 5: 演进到 M2.5+ ==================== -->
+    <section>
+        <h2>五、从 M2 到 M2.5+：从手写 FSM 到标准组件</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            M2 证明了"跨系统 DAG 编排引擎"的可行性——23 个 Persistent FSM 协同完成了复杂的薪资存入场景。
+            但它也暴露了一个核心限制：<strong>每个业务场景需要手写 23 个 FSM</strong>。
+            从薪资存入到 Fab 设备通讯，尽管流程结构高度相似（文件生成→上传→轮询→解析→分类→路由），
+            但每个场景需要重新编写全部 FSM。M2.5+ 将这些模式抽象为 6 个<strong>标准组件</strong>——
+            修复一次，全局生效。
+        </p>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:24%">M2 手写 FSM</th><th style="width:24%">M2.5+ 标准组件</th><th style="width:52%">提升</th></tr></thead>
+            <tbody>
+                <tr><td>PreBatchActor + BatchMaster + BatchItemCreationActor (编排器)</td><td><strong>AreaScheduler</strong> (Process Manager)</td><td>物理约束成批 · 时间窗口 · 配置化而非代码</td></tr>
+                <tr><td>BatchWorker + 6 个协议 FSM (通信器)</td><td><strong>SubBatchProcessor</strong> (6 阶段 Future 链)</td><td>fileGen→upload→waitAck→poll→parse→classify——可插拔特质</td></tr>
+                <tr><td>3 种硬编码错误分类</td><td><strong>ResultClassifier</strong> (ErrorCodeMapping)</td><td>配置化错误码→分类映射——PASS/BORDERLINE/FAIL/SCRAP</td></tr>
+                <tr><td>ReBatchActor (补偿器)</td><td><strong>ReBatchRouter</strong> (PolicyBased)</td><td>RetrySameArea / RouteToArea / Scrap / ManualIntervention</td></tr>
+                <tr><td>SftpService / CoreAccountAPI / P2B / SMS</td><td><strong>Connector + Codec</strong> (可插拔)</td><td>SFTP→SECS/GEM · XML→JSON/SECS-II——只换连接器</td></tr>
+                <tr><td>QuotaReservation + QuotaRelease (保护器)</td><td><strong>ChainExecutionActor</strong> (EventSourced)</td><td>4 个通用事件覆盖所有业务链路 · 自愈恢复 · 幂等执行</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout purple">
+            <strong>演进的核心证明：</strong>M2.5+ 用 16 个运行时组件（~2000 行 Scala）替代了 M2 的 23 个手写 FSM（~6000 行 Java），
+            同时获得了<strong>跨业务场景复用</strong>能力。充值、申购、SMS 通知、Fab 设备通讯——同一套组件，只换配置。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 6: 在线演示 ==================== -->
+    <section>
+        <h2>六、在线演示</h2>
+
+        <div class="comp-card" style="border-color: rgba(88,166,255,0.4); margin-top:16px;">
+            <div class="comp-icon">⚙️</div>
+            <h4>DAG 执行引擎交互演示</h4>
+            <p>23 个 Akka Persistent FSM 跨 5 层级协作，完成薪资存入场景的完整编排。
+            逐步推进 5 个阶段，观察编排器、保护器、通信器、补偿器 4 种弹性模式的实时运作。
+            点击任意 DAG 节点深入状态机内部——查看幸福路径、故障路径和超时路径。
+            支持故障注入、自动播放和单步执行。</p>
+            <p class="file-ref" style="margin-top:8px;">路由: /dag · 23 FSM · 4 外部系统 · 131 条 DAG 边 · FSM 查看器</p>
+            <p style="margin-top:12px;">
+                <a href="/dag" style="color:var(--accent); font-weight:700; font-size:1rem; text-decoration:none;">打开演示 →</a>
+            </p>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+        <p>技术栈：Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
+        <p style="margin-top:4px;">
+            <a href="/m1">M1 Saga 分布式事务</a> ·
+            <a href="/m3">M3 动态工序编排</a> ·
+            <a href="/architecture">架构雷达</a>
+        </p>
+        <p style="margin-top:4px; color: var(--fg-subtle);">
+            架构：洋葱 + DDD + CQRS/ES + Saga · 反应式宣言
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

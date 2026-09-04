@@ -5,6 +5,11 @@
 
 # An example controller showing a sample home page
 GET     /                           controllers.HomeController.index()
+GET     /zh                         controllers.HomeController.indexZh()
+
+# SEO
+GET     /robots.txt                 controllers.Assets.at(path="/public", file="robots.txt")
+GET     /sitemap.xml                controllers.Assets.at(path="/public", file="sitemap.xml")
 
 # Map static resources from the /public folder to the /assets URL path
 GET     /assets/*file                   controllers.Assets.versioned(path="/public", file: Asset)
@@ -14,14 +19,74 @@ POST    /withdraw/:userId/:amount       controllers.HomeController.withdraw(user
 POST    /transfer/:fromUserId/:toUserId/:amount   controllers.HomeController.transfer(fromUserId: String, toUserId: String, amount: Double)
 GET     /transfer/:transactionId                 controllers.HomeController.transferStatus(transactionId: String)
 
-# Showcase
-GET     /showcase                   controllers.ShowcaseController.index()
+# Saga
+GET     /saga                       controllers.ShowcaseController.index()
+GET     /saga/docs/:page            controllers.ShowcaseController.sagaDocs(page: String)
+GET     /lang/:code                 controllers.ShowcaseController.setLang(code: String)
 GET     /ws/saga/events             controllers.ShowcaseController.socket
 POST    /api/saga/inject-fault/:stepId/:behavior  controllers.ShowcaseController.injectFault(stepId: String, behavior: String)
 POST    /api/saga/trigger-showcase/:singleStep    controllers.ShowcaseController.triggerShowcase(singleStep: Boolean)
+POST    /api/saga/trigger-scenario/:scenarioId/:singleStep controllers.ShowcaseController.triggerScenario(scenarioId: String, singleStep: Boolean)
 POST    /api/saga/proceed/:transactionId          controllers.ShowcaseController.proceed(transactionId: String)
 POST    /api/saga/fix-step/:transactionId/:stepId/:phase controllers.ShowcaseController.fixStep(transactionId: String, stepId: String, phase: String)
 POST    /api/saga/resume/:transactionId           controllers.ShowcaseController.resume(transactionId: String)
 POST    /api/saga/retry-phase/:transactionId      controllers.ShowcaseController.retryPhase(transactionId: String)
 GET     /api/saga/status/:transactionId          controllers.ShowcaseController.showcaseStatus(transactionId: String)
 GET     /api/saga/history/:transactionId          controllers.ShowcaseController.getHistory(transactionId: String)
+
+# Architecture & Projection & DAG
+GET     /architecture               controllers.DddGuideController.index()
+GET     /projection                 controllers.DddGuideController.projectionShowcase()
+GET     /dag                        controllers.DddGuideController.m2Demo()
+# M1 Saga
+GET     /m1                         controllers.DddGuideController.sagaExplore()
+GET     /en/m1                      controllers.DddGuideController.sagaEn()
+
+# M2 DAG
+GET     /m2                         controllers.DddGuideController.m2Explore()
+GET     /en/m2                      controllers.DddGuideController.m2En()
+
+# M3 & M2.5+
+GET     /m3                         controllers.DddGuideController.m3Explore()
+GET     /en/m3                      controllers.DddGuideController.m3En()
+GET     /m3-roadmap                 controllers.DddGuideController.m3Roadmap()
+GET     /en/m3-roadmap              controllers.DddGuideController.m3RoadmapEn()
+GET     /m3-demo                    controllers.DddGuideController.m3Demo()
+GET     /api/projection/status      controllers.DddGuideController.getProjectionStatus()
+GET     /api/aggregate/balances/:ids controllers.DddGuideController.getBalances(ids: String)
+
+# Fab Demo
+GET     /fab-demo                               controllers.FabDemoController.index()
+GET     /fab-designer                           controllers.FabDemoController.designer()
+GET     /ws/fab-demo/events                     controllers.FabDemoController.socket
+POST    /api/fab-demo/start/:scenarioId          controllers.FabDemoController.startDemo(scenarioId: String)
+POST    /api/fab-demo/product/:productId/start   controllers.FabDemoController.startProductDemo(productId: String)
+GET     /api/fab-demo/scenarios                  controllers.FabDemoController.getScenarios
+GET     /api/fab-demo/scenario/:id/ledger        controllers.FabDemoController.getScenarioLedger(id: String)
+GET     /api/fab-demo/entity-state/:workOrderId  controllers.FabDemoController.getEntityState(workOrderId: String)
+GET     /api/fab-demo/scenario/:id/route-graph   controllers.FabDemoController.getRouteGraph(id: String)
+
+# M3.5 Self-Healing Demo
+GET     /fab-demo/m35                               controllers.FabDemoController.m35Demo()
+GET     /ws/fab-demo/m35/events                     controllers.FabDemoController.m35Socket
+POST    /api/fab-demo/m35/start                     controllers.FabDemoController.m35Start()
+POST    /api/fab-demo/m35/inject-crash/:workOrderId  controllers.FabDemoController.m35InjectCrash(workOrderId: String)
+GET     /api/fab-demo/m35/ocap-rules                controllers.FabDemoController.m35GetOcapRules()
+GET     /api/fab-demo/m35/recovery-status/:id        controllers.FabDemoController.m35RecoveryStatus(id: String)
+GET     /api/fab-demo/m35/fault-history/:id          controllers.FabDemoController.m35FaultHistory(id: String)
+
+# Timeline Query
+GET     /fab/timeline                               controllers.FabDemoController.timelinePage(workOrderId: Option[String])
+GET     /fab/timeline/:workOrderId                   controllers.FabDemoController.timelineQuery(workOrderId: String)
+POST    /api/fab-demo/m35/fault-probability          controllers.FabDemoController.m35UpdateFaultProbability()
+
+# Route CRUD (M3.5+)
+GET     /api/fab-demo/routes                     controllers.FabDemoController.listRoutes
+POST    /api/fab-demo/routes                     controllers.FabDemoController.publishRoute
+GET     /api/fab-demo/routes/:id                  controllers.FabDemoController.getRoute(id: String)
+GET     /api/fab-demo/routes/:id/versions         controllers.FabDemoController.listRouteVersions(id: String)
+GET     /api/fab-demo/routes/:id/versions/:v      controllers.FabDemoController.getRouteVersion(id: String, v: Int)
+GET     /api/fab-demo/routes/:id/compile          controllers.FabDemoController.compileRoute(id: String)
+POST    /api/fab-demo/routes/:id/start            controllers.FabDemoController.startRouteDemo(id: String)
+POST    /api/fab-demo/routes/seed                 controllers.FabDemoController.seedDefaultRoutes
+

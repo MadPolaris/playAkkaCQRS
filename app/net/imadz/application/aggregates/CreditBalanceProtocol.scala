@@ -26,7 +26,7 @@ object CreditBalanceProtocol {
   case class CancelIncomingCredit(transferId: Id, replyTo: ActorRef[CancelIncomingCreditConfirmation]) extends CreditBalanceCommand
 
   // --- Replies ---
-  case class CreditBalanceConfirmation(error: Option[iMadzError], balances: List[Money]) extends CborSerializable
+  case class CreditBalanceConfirmation(error: Option[iMadzError], balances: List[Money], reservedAmounts: List[Money] = Nil, incomingCredits: List[Money] = Nil) extends CborSerializable
   case class FundsReservationConfirmation(transferId: Id, error: Option[iMadzError]) extends CborSerializable
   case class FundsDeductionConfirmation(transferId: Id, error: Option[iMadzError]) extends CborSerializable
   case class FundsReleaseConfirmation(transferId: Id, error: Option[iMadzError]) extends CborSerializable

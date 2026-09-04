@@ -1,5 +1,5 @@
-CREATE DATABASE IF NOT EXISTS playakka_cqrs_v3;
-USE playakka_cqrs_v3;
+CREATE DATABASE IF NOT EXISTS cqrs_jdbc_demo;
+USE cqrs_jdbc_demo;
 
 -- Create syntax for TABLE 'akka_projection_management'
 CREATE TABLE `akka_projection_management` (

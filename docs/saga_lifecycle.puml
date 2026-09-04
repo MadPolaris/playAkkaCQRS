@@ -38,20 +38,33 @@ Failed --> [*]
 @enduml
 
 @startuml
-' Saga Transaction Coordinator lifecycle
+' Saga Transaction Coordinator lifecycle (Status transitions)
 [*] --> Created
-Created --> Preparing: PreparationStarted
-Preparing --> Prepared: PreparationSucceed
-Prepared --> Committing: CommissionStarted
-Committing --> Committed: CommissionSucceed
-Preparing --> PrepareFailed: PreparationFailure
-PrepareFailed --> Compensating: CompensationStarted
-Committing --> CommitFailed: CommissionFailure
-CommitFailed --> Compensating: CompensationStarted
-Compensating --> Compensated: CompensationSucceed
-Compensating --> CompensationFailed: CompensationFailure
 
-Committed --> [*]
-Compensated --> [*]
-CompensationFailed --> [*]
+state Created
+state InProgress {
+  [*] --> Preparing
+  Preparing --> Committing : PhaseSucceeded(Prepare)
+}
+
+state Compensating {
+  [*] --> CompensatingPhase
+}
+
+state Suspended
+state Completed
+state Failed
+
+Created --> InProgress : TransactionStarted
+InProgress --> Completed : TransactionCompleted (Commit Phase Succeeded)
+InProgress --> Compensating : PhaseFailed (Prepare/Commit Phase)
+Compensating --> Failed : TransactionFailed (Compensate Phase Succeeded)
+Compensating --> Suspended : TransactionSuspended (Compensate Phase Failed)
+InProgress --> Suspended : TransactionSuspended (Manual/Timeout)
+Suspended --> InProgress : TransactionResolved
+Suspended --> Compensating : TransactionResolved (if was compensating)
+
+Completed --> [*]
+Failed --> [*]
+Suspended --> [*] : Manual Intervention Required
 @enduml

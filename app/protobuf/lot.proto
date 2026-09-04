@@ -1,0 +1,236 @@
+syntax = "proto3";
+
+package net.imadz.infrastructure.proto;
+
+option java_multiple_files = true;
+
+// --- Helper messages for Map[Id, Set[Id]] and Map[String, Int] ---
+
+message WaferIdSet {
+  repeated string wafer_ids = 1;
+}
+
+message IntEntry {
+  string key = 1;
+  int32 value = 2;
+}
+
+// --- WaferClassResult sub-message ---
+
+message WaferClassResultPO {
+  string wafer_id = 1;
+  string classification = 2;
+  double cd_value_nm = 3;
+  int32 rework_count = 4;
+}
+
+// --- Events ---
+
+message WaferNameEntryPO {
+  string wafer_id = 1;  // UUID
+  string name = 2;      // "WAFER-1"
+}
+
+message LotCreatedPO {
+  string product_id = 1;
+  repeated string wafer_ids = 2;          // deprecated — kept for backward compat
+  repeated WaferNameEntryPO wafer_names = 3;
+  string parent_lot_id = 4;               // empty if this is a source lot
+  string split_reason = 5;                // "rework"|"scrap"|"pilot"|"sample"|"hold" — empty if source lot
+  string work_order_id = 6;               // owning WorkOrder ID (set for source lots)
+}
+
+message WaferRemovalReservedPO {
+  string transfer_id = 1;
+  repeated string wafer_ids = 2;
+  repeated string wafer_names = 3;
+}
+
+message WaferRemovalCommittedPO {
+  string transfer_id = 1;
+  repeated string wafer_names = 2;
+}
+
+message WaferRemovalReleasedPO {
+  string transfer_id = 1;
+}
+
+message WaferAdditionReservedPO {
+  string transfer_id = 1;
+  repeated string wafer_ids = 2;
+}
+
+message WaferAdditionCommittedPO {
+  string transfer_id = 1;
+}
+
+message WaferAdditionCanceledPO {
+  string transfer_id = 1;
+}
+
+message PhaseStartedPO {
+  string phase_id = 1;
+}
+
+message PhaseCompletedPO {
+  string phase_id = 1;
+}
+
+message LotSealedPO {
+}
+
+// --- Process execution events (equipment reports) ---
+
+message FoupLoadedPO {
+  string foup_id = 1;
+  string stocker_id = 2;
+}
+
+message TransportStartedPO {
+  string foup_id = 1;
+  string from_area = 2;
+  string to_area = 3;
+  int64 estimated_ms = 4;
+}
+
+message TransportCompletedPO {
+  string foup_id = 1;
+  string equipment_id = 2;
+}
+
+message EquipmentJobStartedPO {
+  string equipment_id = 1;
+  string recipe_id = 2;
+}
+
+message EquipmentJobCompletedPO {
+  string equipment_id = 1;
+  string job_id = 2;
+  bool success = 3;
+}
+
+message WaferMeasuredPO {
+  string wafer_id = 1;
+  double cd_nm = 2;
+}
+
+message WaferClassifiedPO {
+  string wafer_id = 1;
+  string classification = 2;
+  int32 rework_count = 3;
+  double cd_value = 4;
+}
+
+message WafersSplitForReworkPO {
+  repeated string rework_wafer_ids = 1;
+  repeated string scrap_wafer_ids = 2;
+  int32 iteration = 3;
+}
+
+message WafersReworkedPO {
+  repeated string wafer_ids = 1;
+}
+
+message WafersSentAsPilotPO {
+  repeated string wafer_ids = 1;
+}
+
+message WafersSampledPO {
+  repeated string sample_ids = 1;
+  repeated string skip_ids = 2;
+}
+
+message WafersHeldPO {
+  repeated string wafer_ids = 1;
+  string reason = 2;
+}
+
+message WafersReleasedPO {
+  repeated string wafer_ids = 1;
+}
+
+message SubLotCreatedPO {
+  string child_lot_id = 1;
+  string split_reason = 2;   // "rework"|"scrap"|"pilot"|"sample"|"hold"
+  repeated string wafer_ids = 3;
+}
+
+message SubLotMergedPO {
+  string child_lot_id = 1;
+  repeated string wafer_ids = 2;
+}
+
+message SubLotScrappedPO {
+  string child_lot_id = 1;
+  string reason = 2;
+  repeated string wafer_ids = 3;
+}
+
+message ProcessCompletedPO {
+  string lot_id = 1;
+  int32 pass_count = 2;
+  int32 scrap_count = 3;
+  int32 rework_count = 4;
+}
+
+message LotFailedPO {
+  string reason = 1;
+  string failed_at = 2;
+}
+
+// --- Event Union ---
+
+message LotEventPO {
+  oneof event {
+    LotCreatedPO lotCreated = 1;
+    WaferRemovalReservedPO waferRemovalReserved = 2;
+    WaferRemovalCommittedPO waferRemovalCommitted = 3;
+    WaferRemovalReleasedPO waferRemovalReleased = 4;
+    WaferAdditionReservedPO waferAdditionReserved = 5;
+    WaferAdditionCommittedPO waferAdditionCommitted = 6;
+    WaferAdditionCanceledPO waferAdditionCanceled = 7;
+    PhaseStartedPO phaseStarted = 8;
+    PhaseCompletedPO phaseCompleted = 9;
+    LotSealedPO lotSealed = 10;
+    FoupLoadedPO foupLoaded = 11;
+    TransportStartedPO transportStarted = 12;
+    TransportCompletedPO transportCompleted = 13;
+    EquipmentJobStartedPO equipmentJobStarted = 14;
+    EquipmentJobCompletedPO equipmentJobCompleted = 15;
+    WaferMeasuredPO waferMeasured = 16;
+    WaferClassifiedPO waferClassified = 17;
+    WafersSplitForReworkPO wafersSplitForRework = 18;
+    WafersReworkedPO wafersReworked = 19;
+    WafersSentAsPilotPO wafersSentAsPilot = 20;
+    WafersSampledPO wafersSampled = 21;
+    WafersHeldPO wafersHeld = 22;
+    WafersReleasedPO wafersReleased = 23;
+    ProcessCompletedPO processCompleted = 24;
+    LotFailedPO lotFailed = 25;
+    SubLotCreatedPO subLotCreated = 26;
+    SubLotMergedPO subLotMerged = 27;
+    SubLotScrappedPO subLotScrapped = 28;
+  }
+}
+
+// --- State Snapshot ---
+
+message LotStatePO {
+  string lot_id = 1;
+  string product_id = 2;
+  repeated string wafer_ids = 3;
+  map<string, WaferIdSet> reserved_wafers = 4;
+  map<string, WaferIdSet> incoming_wafers = 5;
+  string phase = 6;
+  repeated string completed_transfer_ids = 7;
+  int32 current_step_index = 8;
+  repeated string area_visit_history = 9;
+  repeated IntEntry routing_step_reentry = 10;
+  string loaded_foup_id = 11;
+  repeated string completed_jobs = 12;
+  repeated string measured_wafers = 13;
+  repeated WaferClassResultPO wafer_classifications = 14;
+  string parent_lot_id = 15;
+  string split_reason = 16;
+  string work_order_id = 17;
+}

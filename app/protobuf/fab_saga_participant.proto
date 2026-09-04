@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package net.imadz.infrastructure.proto;
+
+option java_multiple_files = true;
+
+// Saga participant: reserves/commits/releases wafers from the source lot
+message SourceLotParticipantPO {
+  string source_lot_id = 1;
+  repeated string wafer_ids = 2;
+  repeated string wafer_names = 3;
+}
+
+// Saga participant: reserves/commits/cancels wafers into the target lot
+message TargetLotParticipantPO {
+  string target_lot_id = 1;
+  repeated string wafer_ids = 2;
+}
+

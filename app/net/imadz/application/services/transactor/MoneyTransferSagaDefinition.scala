@@ -40,8 +40,8 @@ object MoneyTransferSagaDefinition {
     implicit val writes: play.api.libs.json.Writes[MoneyTransferCompleted] = Json.writes[MoneyTransferCompleted]
   }
 
-  def definition(implicit ec: ExecutionContext, scheduler: Scheduler): SagaDefinition[iMadzError, MoneyTransferContext, TransferArgs] =
-    SagaDefinition[iMadzError, MoneyTransferContext, TransferArgs](
+  def definition(implicit ec: ExecutionContext, scheduler: Scheduler): SagaDefinition[iMadzError, AppSagaContext, TransferArgs] =
+    SagaDefinition[iMadzError, AppSagaContext, TransferArgs](
       name = Name,
       version = Version,
       argsCodec = ArgsCodec.playJson[TransferArgs],
@@ -63,7 +63,7 @@ object MoneyTransferSagaDefinition {
     )
 
   /** Registers the definition on this node — must run before sharding recovers any entity. */
-  def register(implicit ec: ExecutionContext, scheduler: Scheduler): SagaDefinition[iMadzError, MoneyTransferContext, TransferArgs] = {
+  def register(implicit ec: ExecutionContext, scheduler: Scheduler): SagaDefinition[iMadzError, AppSagaContext, TransferArgs] = {
     val defn = definition
     SagaRegistry.register(defn)
     defn

@@ -1,0 +1,973 @@
+@()(implicit messages: Messages)
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M3 · 基于事实驱动与 MU 生命周期的反应式内核</title>
+    <meta name="description" content="M3 是面向半导体制造的反应式内核。以制造单元(MU)账户化、动态工艺路线织造、Saga 事实守恒协议为核心，将生产逻辑从轨道交通转变为自动驾驶。M2.5+ 作为运行时执行引擎提供肌肉支撑。">
+    <meta name="keywords" content="M3, Fab, 半导体, 制造执行系统, 反应式内核, MU生命周期, 动态工艺路线, Saga, Akka Persistence, 事件溯源, CIMs">
+    <style>
+        :root {
+            --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+            --fg: #e6edf3; --fg-muted: #8b949e; --fg-subtle: #6e7681;
+            --accent: #58a6ff; --purple: #a855f7; --amber: #f59e0b;
+            --green: #3fb950; --red: #f85149; --teal: #14b8a6;
+            --code-bg: #0f172a;
+            --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+            --mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--fg); line-height: 1.7; }
+        .container { max-width: 1100px; margin: 0 auto; padding: 20px; }
+
+        header {
+            text-align: center; padding: 80px 0 50px;
+            border-bottom: 1px solid var(--border); margin-bottom: 50px;
+        }
+        header .kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 3px; color: var(--fg-muted); margin-bottom: 12px; }
+        header h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+        header h1 .m3 { color: var(--amber); }
+        header .tagline { font-size: 1rem; color: var(--fg-muted); margin-top: 16px; max-width: 720px; margin-left: auto; margin-right: auto; }
+        header .badge-row { display: flex; gap: 8px; justify-content: center; margin-top: 20px; flex-wrap: wrap; }
+        .badge { font-size: 0.68rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .badge-arch { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-engine { background: rgba(168,85,247,0.15); color: var(--purple); }
+        .badge-open { background: rgba(63,185,80,0.15); color: var(--green); }
+
+        .nav-links { display: flex; gap: 16px; justify-content: center; margin-top: 24px; font-size: 0.82rem; align-items: center; flex-wrap: wrap; }
+        .nav-links > a { color: var(--accent); text-decoration: none; font-weight: 500; }
+        .nav-links > a:hover { text-decoration: underline; }
+        .nav-links > a.primary { background: var(--amber); color: #000; padding: 6px 16px; border-radius: 6px; font-weight: 700; }
+        .nav-links > a.primary:hover { background: #d97706; text-decoration: none; }
+
+        .nav-dropdown { position: relative; display: inline-flex; }
+        .nav-dropdown-btn { color: var(--accent); font-size: 0.82rem; font-weight: 500; cursor: pointer; background: transparent; border: none; font-family: var(--font); display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .nav-dropdown-btn:hover { text-decoration: underline; }
+        .nav-dropdown-btn .arrow { font-size: 0.6rem; transition: transform 0.2s; }
+        .nav-dropdown:hover .nav-dropdown-btn .arrow { transform: rotate(180deg); }
+        .nav-dropdown-menu { position: absolute; top: 100%; left: 0; margin-top: 4px; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 8px; min-width: 220px; padding: 4px; display: none; z-index: 100; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+        .nav-dropdown:hover .nav-dropdown-menu { display: block; }
+        .nav-dropdown-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; text-decoration: none; color: var(--fg); font-size: 0.8rem; font-weight: 500; transition: all 0.1s; }
+        .nav-dropdown-item:hover { background: rgba(255,255,255,0.05); }
+        .milestone-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; min-width: 36px; text-align: center; }
+        .badge-m1 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m2 { background: rgba(63,185,80,0.15); color: #3fb950; }
+        .badge-m25 { background: rgba(168,85,247,0.15); color: #a855f7; }
+        .badge-m3 { background: rgba(245,158,11,0.15); color: var(--amber); }
+        .badge-ddd { background: rgba(88,166,255,0.12); color: var(--accent); }
+        .mm-active { background: rgba(255,255,255,0.05); }
+
+        section { margin-bottom: 60px; }
+        h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 20px; letter-spacing: -0.01em; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+        h3 { font-size: 1.05rem; font-weight: 700; margin: 28px 0 12px; color: var(--fg); }
+        h4 { font-size: 0.92rem; font-weight: 700; margin: 20px 0 8px; color: var(--fg); }
+
+        .ps-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .ps-table th { background: var(--bg-alt); padding: 14px 18px; text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.8px; color: var(--fg-muted); }
+        .ps-table td { padding: 14px 18px; border-top: 1px solid var(--border); }
+        .ps-table tr:hover { background: rgba(255,255,255,0.02); }
+
+        .comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 20px 0; }
+        .comp-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; transition: border-color 0.2s; }
+        .comp-card:hover { border-color: var(--fg-muted); }
+        .comp-card .comp-icon { font-size: 1.5rem; margin-bottom: 10px; }
+        .comp-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+        .comp-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.6; }
+
+        .arch-callout { background: rgba(245,158,11,0.04); border-left: 3px solid var(--amber); padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; font-size: 0.82rem; color: var(--fg-muted); line-height: 1.7; }
+        .arch-callout strong { color: var(--fg); }
+        .arch-callout.blue { border-left-color: var(--accent); background: rgba(88,166,255,0.04); }
+        .arch-callout.red { border-left-color: var(--red); background: rgba(248,81,73,0.04); }
+        .arch-callout.purple { border-left-color: var(--purple); background: rgba(168,85,247,0.04); }
+        .file-ref { font-family: var(--mono); font-size: 0.72rem; color: var(--fg-muted); }
+
+        .arch-svg-wrap { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 20px 12px 10px; margin: 20px 0; text-align: center; overflow-x: auto; }
+        .arch-svg { width: 100%; max-width: 1060px; }
+
+        .capability-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin: 20px 0; }
+        .cap-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 22px; }
+        .cap-card:hover { border-color: var(--amber); }
+        .cap-card .cap-icon { font-size: 1.6rem; margin-bottom: 10px; }
+        .cap-card h4 { font-size: 0.92rem; font-weight: 700; margin-bottom: 8px; }
+        .cap-card p { font-size: 0.78rem; color: var(--fg-muted); line-height: 1.65; }
+        .cap-card .code-ref { font-family: var(--mono); font-size: 0.67rem; color: var(--fg-subtle); margin-top: 8px; display: block; }
+
+        .code-block { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; margin: 12px 0; font-family: var(--mono); font-size: 0.7rem; line-height: 1.7; color: var(--fg); overflow-x: auto; white-space: pre; }
+        .code-block .co { color: var(--fg-muted); }
+        .code-block .kw { color: #ff7b72; }
+        .code-block .ty { color: #79c0ff; }
+        .code-block .str { color: #a5d6ff; }
+
+        blockquote { border-left: 3px solid var(--amber); padding: 12px 18px; margin: 16px 0; background: rgba(245,158,11,0.04); font-size: 0.82rem; color: var(--fg-muted); border-radius: 0 6px 6px 0; }
+        blockquote strong { color: var(--fg); }
+        blockquote.motto { border-left-color: var(--teal); background: rgba(20,184,166,0.04); text-align: center; font-size: 0.9rem; padding: 20px 24px; }
+
+        .footer { border-top: 1px solid var(--border); margin-top: 60px; padding: 30px 0; text-align: center; font-size: 0.78rem; color: var(--fg-muted); }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+
+        .stat-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 20px 0; }
+        .stat-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 18px; text-align: center; }
+        .stat-card .num { font-size: 1.6rem; font-weight: 800; letter-spacing: -0.02em; }
+        .stat-card .lbl { font-size: 0.7rem; color: var(--fg-muted); margin-top: 4px; line-height: 1.5; }
+        .num-amber { color: var(--amber); }
+        .num-purple { color: var(--purple); }
+        .num-green { color: var(--green); }
+        .num-teal { color: var(--teal); }
+
+        .mu-matrix { display: grid; grid-template-columns: 120px 1fr; gap: 0; margin: 20px 0; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+        .mu-matrix .axis-label { background: var(--bg-alt); padding: 12px 16px; font-size: 0.72rem; font-weight: 700; color: var(--fg-muted); display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--border); }
+        .mu-matrix .axis-cell { padding: 12px 16px; font-size: 0.78rem; border-bottom: 1px solid var(--border); }
+        .mu-matrix .axis-cell.horiz { background: rgba(88,166,255,0.03); }
+        .mu-matrix .axis-cell.vert { background: rgba(245,158,11,0.03); }
+
+        .lifecycle-flow { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: 24px 0; font-size: 0.78rem; }
+        .lifecycle-node { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; text-align: center; min-width: 120px; }
+        .lifecycle-node .lc-icon { font-size: 1.3rem; margin-bottom: 4px; }
+        .lifecycle-node .lc-title { font-weight: 700; font-size: 0.82rem; }
+        .lifecycle-node .lc-sub { font-size: 0.65rem; color: var(--fg-muted); margin-top: 2px; }
+        .lifecycle-arrow { color: var(--fg-subtle); font-size: 1.2rem; font-weight: 700; }
+        .lifecycle-node.lc-perception { border-color: rgba(88,166,255,0.4); }
+        .lifecycle-node.lc-logging { border-color: rgba(63,185,80,0.4); }
+        .lifecycle-node.lc-inference { border-color: rgba(245,158,11,0.4); }
+        .lifecycle-node.lc-action { border-color: rgba(168,85,247,0.4); }
+
+        @@media (max-width: 768px) {
+            .phase-grid, .stat-row, .comp-grid, .capability-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.5rem; }
+            .mu-matrix { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+
+    <!-- ==================== HERO ==================== -->
+    <header>
+        <div class="kicker">M3 · 反应式半导体制造内核</div>
+        <h1>
+            基于<span class="m3">事实驱动</span>与<span class="m3">MU 生命周期</span>的反应式内核
+        </h1>
+        <p class="tagline">
+            让物理世界决定事实，让逻辑世界管理一致，让动态路由驱动未来。
+            M3 以<strong>信息论</strong>的视角重新定义下一代 MES——每一片晶圆是被 Saga 守护的账户，
+            每一步工艺路线是根据实时事实动态织造的 DSL，每一次 FOUP 的停靠与开门都是一笔神圣的物理资产交易。
+        </p>
+        <div class="badge-row">
+            <span class="badge badge-arch">架构设计</span>
+            <span class="badge badge-engine">M2.5+ 执行引擎支撑</span>
+            <span class="badge badge-open">开放协作</span>
+        </div>
+        <nav class="nav-links">
+            <a href="/">首页</a>
+            <a href="/fab-demo/m35" style="color:#a855f7; font-weight:700;">M3.5 自愈演示</a>
+            <a href="/m3-roadmap" style="color:#f59e0b; font-weight:700;">M3.5 路线图</a>
+            <a href="/en/m3" style="color:#f59e0b; font-weight:700;">EN</a>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务协调器</a>
+                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>流批一体 DAG 引擎</a>
+                    <a href="/m3" class="nav-dropdown-item mm-active"><span class="milestone-badge badge-m3">M3</span>自愈动态工序编排</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">在线演示 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 引擎</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈内核</a>
+                </div>
+            </div>
+            <div class="nav-dropdown">
+                <span class="nav-dropdown-btn">DDD 架构实践 <span class="arrow">▾</span></span>
+                <div class="nav-dropdown-menu">
+                    <a href="/projection" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">CQRS</span>Projection 管道</a>
+                    <a href="/architecture" class="nav-dropdown-item"><span class="milestone-badge badge-ddd">DDD</span>架构雷达</a>
+                </div>
+            </div>
+        </nav>
+    </header>
+
+    <!-- ==================== SECTION 1: 从轨道交通到自动驾驶 ==================== -->
+    <section>
+        <h2>一、从"轨道交通"到"自动驾驶"</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            传统 MES（M2 时代）类似于<strong>轨道交通</strong>：工艺路线是预先铺设好的死铁轨。
+            一旦物理世界发生异常（如晶圆 5 颗粒度超标），系统往往陷入停滞，依赖人工拨动道岔。
+            <strong>M3 架构</strong>则将生产逻辑转变为<strong>自动驾驶</strong>——以制造单元（Manufacture Unit, MU）为核心，
+            将每一次加工看作是一笔"交易"，利用动态路由和分布式事务协议，实现物理事实在数字世界的完美映射。
+        </p>
+
+        <table class="ps-table" style="margin-top:20px;">
+            <thead><tr><th style="width:18%">维度</th><th style="width:41%">M2 时代（轨道交通）</th><th style="width:41%">M3 时代（自动驾驶）</th></tr></thead>
+            <tbody>
+                <tr><td><strong>工艺路线</strong></td><td>静态 List[Step]，编译时确定</td><td>Step Generator——每道工序完成后<strong>根据 LotContext 事实动态计算</strong>下一段 DSL</td></tr>
+                <tr><td><strong>实体模型</strong></td><td>Lot 是文件批次，Wafer 是行记录</td><td>MU 账户矩阵——Lot/Wafer/Die 三级颗粒度，<strong>水平时间线 + 垂直穿透</strong></td></tr>
+                <tr><td><strong>异常处理</strong></td><td>停线等待人工介入</td><td>Result Classifier 四路分流 → <strong>物理补偿（返修 DSL）</strong>或逻辑撤销（Saga）</td></tr>
+                <tr><td><strong>拆批/合批</strong></td><td>手动拆分、手动合并</td><td><strong>跨账户转账</strong>——Saga 保证父批次扣减与子批次创建原子发生</td></tr>
+                <tr><td><strong>状态一致性</strong></td><td>数据库事务 + 外键约束</td><td><strong>信息论范畴</strong>——状态单调递增事实库，回放 Event Log 即可恢复与物理世界对齐的状态</td></tr>
+                <tr><td><strong>路径来源</strong></td><td>流程工程师预先绘制</td><td><strong>Dynamic Flow Assembler</strong>——根据 Result Classifier 反馈"见招拆招"实时织造</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>核心范式转换：</strong>M3 的本质是维护"物理事实在信息系统中的投影不发生畸变"。
+            无论发生多少次拆批、合批，系统中 MU 的资产总量必须守恒。这种一致性不是简单的数据库约束，而是基于<strong>信息论的状态单调递增事实库</strong>。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 2: MU 账户矩阵 ==================== -->
+    <section>
+        <h2>二、账户化的制造单元 (MU) 矩阵</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            在 M3 架构中，晶圆不再是冰冷的被动对象，而是被抽象为"账户侧的角色（Participant）"。
+            M3 将制造对象进行颗粒度解耦，形成嵌套的生命周期管理。
+            MU 矩阵从两个维度看：<strong>水平轴记录时间线上的所有事件</strong>，<strong>垂直轴穿透三级颗粒度</strong>。
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(88,166,255,0.3);">
+                <div class="comp-icon">📦</div>
+                <h4>Lot（容器层 / FOUP）</h4>
+                <p>逻辑编排单元。负责载具位置、物理搬运及 WIP 核算。
+                每次成批、拆批、合批均作为<strong>事件</strong>记录在水平时间线上。
+                物理上与 FOUP（25 片载具）对应，是所有 Wafer 的"逻辑容器"。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
+                <div class="comp-icon">💎</div>
+                <h4>Wafer（原子层 / 晶圆）</h4>
+                <p>核心事实载体。负责质量参数、量测事实及良率追踪。
+                记录每一片晶圆的量测数值、是否被划伤、在哪个腔体（Chamber）加工。
+                <strong>拆批的起因是"事实异常"</strong>——Wafer 5 颗粒度超标，系统生成两条并行时间线。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
+                <div class="comp-icon">🎯</div>
+                <h4>Die（衍底层 / 晶粒）</h4>
+                <p>最终产出价值点。作为 Wafer 的属性存在，记录最终的 Map 事实。
+                数据集中在 <strong>CP 测试（晶圆针测）</strong>和 <strong>FT 最终测试</strong>阶段集中爆发——
+                此时每个 Die 的电性参数、Bin 分类、良率判定作为关键事实入账。</p>
+            </div>
+        </div>
+
+        <h3>MU 矩阵的双轴结构</h3>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0;">
+            <div style="background:var(--bg-alt); border:1px solid rgba(88,166,255,0.3); border-radius:10px; padding:20px;">
+                <h4 style="color:var(--accent); margin-bottom:10px;">→ 水平轴：时间线</h4>
+                <p style="font-size:0.8rem; color:var(--fg-muted); line-height:1.7;">
+                    记录从投料到产出的所有 <strong>PhaseDone 事件</strong>。
+                    每一道工序完成、每一次量测结果、每一次拆批/合批，均在时间线上追加不可篡改的事实记录。
+                    时间线不是一条——拆批后，MU 矩阵中<strong>多条并行时间线同时生长</strong>。
+                    合批时，BMM 作为 Barrier 对齐各时间线，归一为一条。
+                </p>
+            </div>
+            <div style="background:var(--bg-alt); border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:20px;">
+                <h4 style="color:var(--amber); margin-bottom:10px;">↓ 垂直轴：颗粒度穿透</h4>
+                <p style="font-size:0.8rem; color:var(--fg-muted); line-height:1.7;">
+                    <strong>Lot 级别</strong>——记录 FOUP 搬运、进炉管（Batching）记录。<br/>
+                    <strong>Wafer 级别</strong>——记录每一片晶圆的量测数值、划伤、腔体加工记录。<br/>
+                    <strong>Die 级别</strong>——CP/FT 测试阶段的电性 Map 事实。<br/>
+                    三个级别间的关系不是外键，而是<strong>事件溯源投影</strong>——任何级别的查询都是对 Event Log 的时空切片。
+                </p>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>信息论一致性：</strong>Saga 在 M3 中演变为"事实守恒的守护者"。它不再管理固定的步骤，而是管理操作的原子性。
+            拆批是"跨账户转账"——确保父批次扣减与子批次创建<strong>原子发生</strong>。合批是"Barrier 屏障"——只有当各 MU 的进度在逻辑上对齐，
+            或通过补偿协议强制平账后，才签署合批事实。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 3: 三层架构全景 ==================== -->
+    <section>
+        <h2>三、三层架构全景：决策 × 执行 × 物理</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M3 架构通过<strong>三层分离</strong>将业务逻辑与物理设备彻底解耦。
+            决策层（M3 大脑）负责"想清楚下一步该干什么"，运行时层（M2.5+ 肌肉）负责"高性能地分发指令"，
+            物理执行层（Fab 现实世界）负责"真正的物理位移"。
+            核心目标是处理晶圆生产中极高的<strong>动态性</strong>和<strong>不确定性</strong>。
+        </p>
+
+        <div class="arch-svg-wrap">
+            <div style="font-size:0.75rem; color:var(--fg-subtle); margin-bottom:10px;">
+                POR → Dynamic Flow Assembler (Step Generator) → Saga/LotContext → ChainExecutionActor → StepExecutors → Equipment → ResultClassifier → 事实入账反馈闭环
+            </div>
+            <svg class="arch-svg" viewBox="0 0 1110 1220" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <marker id="ahBlue" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#58a6ff"/>
+                    </marker>
+                    <marker id="ahMuted" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#8b949e"/>
+                    </marker>
+                    <marker id="ahGreen" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#4ade80"/>
+                    </marker>
+                    <marker id="ahAmber" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f59e0b"/>
+                    </marker>
+                    <marker id="ahRed" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f87171"/>
+                    </marker>
+                    <marker id="ahPurple" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#a855f7"/>
+                    </marker>
+                    <marker id="ahOrange" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#f08c3e"/>
+                    </marker>
+                    <marker id="ahTeal" markerWidth="8" markerHeight="6" refX="10" refY="4" orient="auto">
+                        <path d="M0,0 L10,4 L0,8 L2,4 Z" fill="#2dd4bf"/>
+                    </marker>
+                    <filter id="nodeShadow" x="-10%" y="-20%" width="130%" height="150%">
+                        <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000" flood-opacity="0.35"/>
+                    </filter>
+                    <linearGradient id="gTeal" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(45,212,191,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(45,212,191,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gBlue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(96,165,250,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(96,165,250,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gAmber" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(251,191,36,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(251,191,36,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gPurple" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(192,132,252,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(192,132,252,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(248,113,113,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(248,113,113,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gGreen" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(74,222,128,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(74,222,128,0.05)"/>
+                    </linearGradient>
+                    <linearGradient id="gOrange" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stop-color="rgba(240,140,62,0.18)"/>
+                        <stop offset="100%" stop-color="rgba(240,140,62,0.05)"/>
+                    </linearGradient>
+                </defs>
+
+                <g font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',system-ui,sans-serif">
+
+                <!-- ============================================================ -->
+                <!-- LAYER 1: 决策层 / Decision Layer                              -->
+                <!-- ============================================================ -->
+                <rect x="30" y="10" width="1000" height="445" rx="12" fill="rgba(59,130,246,0.025)" stroke="rgba(59,130,246,0.2)" stroke-width="1.5"/>
+                <rect x="30" y="10" width="5" height="445" rx="2" fill="#60a5fa" fill-opacity="0.5"/>
+                <text x="50" y="35" fill="#60a5fa" font-size="13" font-weight="700" letter-spacing="1.3">决策层 · Decision Layer (M3 Heart — 大脑)</text>
+                <text x="50" y="52" fill="#8b949e" font-size="8" font-weight="500">POR 工艺路线库 · Dynamic Flow Assembler (Step Generator) · Saga 事实守恒 · Lot Context (MU 矩阵) · Akka Persistence</text>
+
+                <!-- Row 1: POR → Dynamic Flow Assembler -->
+                <!-- POR Repository -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="70" width="180" height="62" rx="8" fill="url(#gBlue)" stroke="#60a5fa" stroke-opacity="0.35" stroke-width="1.5"/>
+                    <rect x="55" y="70" width="4" height="62" rx="2" fill="#60a5fa"/>
+                </g>
+                <text x="145" y="94" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">POR Repository</text>
+                <text x="145" y="110" fill="#8b949e" font-size="8" font-weight="500" text-anchor="middle">工艺路线库 · Main Route</text>
+                <text x="145" y="124" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Rework Templates · Exp.Branches</text>
+
+                <!-- Arrow: POR → Assembler -->
+                <path d="M 235 101 L 389 101" fill="none" stroke="#58a6ff" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ahBlue)"/>
+                <text x="312" y="95" fill="#58a6ff" font-size="7" font-weight="600" text-anchor="middle">索取片段</text>
+
+                <!-- Dynamic Flow Assembler (KEY M3 component - amber) -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="395" y="70" width="230" height="62" rx="8" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.45" stroke-width="1.8"/>
+                    <rect x="395" y="70" width="5" height="62" rx="2" fill="#f59e0b"/>
+                </g>
+                <text x="510" y="94" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Dynamic Flow Assembler</text>
+                <text x="510" y="110" fill="#f59e0b" font-size="8.5" font-weight="600" text-anchor="middle">Step Generator (非静态 List[Step])</text>
+                <text x="510" y="124" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">事实驱动 · 动态织造 ChainDSL</text>
+
+                <!-- Arrow: Assembler → Saga (ChainDSL injection) -->
+                <path d="M 510 132 L 510 170" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" marker-end="url(#ahAmber)"/>
+                <text x="523" y="154" fill="#f59e0b" font-size="8" font-weight="700" text-anchor="start">注入 ChainDSL</text>
+
+                <!-- ====== Saga Coordinator + Lot Context (side by side) ====== -->
+                <!-- Saga Coordinator -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="178" width="280" height="130" rx="10" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.45" stroke-width="1.5"/>
+                    <rect x="55" y="178" width="5" height="130" rx="2" fill="#2dd4bf"/>
+                </g>
+                <text x="195" y="200" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Saga Transaction Coordinator</text>
+                <text x="195" y="216" fill="#8b949e" font-size="8" font-weight="500" text-anchor="middle">事实守恒的守护者</text>
+
+                <!-- BMM inside Saga -->
+                <rect x="65" y="226" width="260" height="50" rx="6" fill="rgba(45,212,191,0.08)" stroke="rgba(45,212,191,0.25)" stroke-width="1"/>
+                <text x="195" y="244" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Batch &amp; Merge Manager (BMM)</text>
+                <text x="195" y="258" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Split: 跨账户转账 · Merge: Barrier 屏障对齐</text>
+                <text x="195" y="272" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Compensate 失败 → SUSPENDED → ManualFix</text>
+
+                <!-- Double arrow: Saga ↔ Lot Context -->
+                <path d="M 335 243 L 479 243" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" marker-end="url(#ahTeal)"/>
+                <path d="M 479 253 L 335 253" fill="none" stroke="#2dd4bf" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahTeal)"/>
+                <text x="407" y="237" fill="#2dd4bf" font-size="7" font-weight="600" text-anchor="middle">事件</text>
+                <text x="407" y="270" fill="#2dd4bf" font-size="7" font-weight="600" text-anchor="middle">指令</text>
+
+                <!-- Lot Context (Aggregate Root) -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="485" y="178" width="280" height="130" rx="10" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.45" stroke-width="1.5"/>
+                    <rect x="485" y="178" width="5" height="130" rx="2" fill="#2dd4bf"/>
+                </g>
+                <text x="625" y="200" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Lot Context (Aggregate Root)</text>
+                <text x="625" y="216" fill="#8b949e" font-size="8" font-weight="500" text-anchor="middle">MU 矩阵 · 批次聚合根</text>
+
+                <!-- MU Tree inside Lot Context -->
+                <rect x="495" y="226" width="260" height="50" rx="6" fill="rgba(45,212,191,0.1)" stroke="rgba(45,212,191,0.3)" stroke-width="1"/>
+                <!-- Lot node -->
+                <rect x="505" y="234" width="70" height="32" rx="4" fill="rgba(88,166,255,0.12)" stroke="rgba(88,166,255,0.3)" stroke-width="1"/>
+                <text x="540" y="254" fill="#e6edf3" font-size="8.5" font-weight="700" text-anchor="middle">Lot</text>
+                <!-- Tree branch to Wafer level -->
+                <line x1="575" y1="250" x2="593" y2="250" stroke="#8b949e" stroke-width="1" stroke-opacity="0.5"/>
+                <line x1="593" y1="250" x2="593" y2="238" stroke="#8b949e" stroke-width="1" stroke-opacity="0.5"/>
+                <line x1="593" y1="250" x2="593" y2="262" stroke="#8b949e" stroke-width="1" stroke-opacity="0.5"/>
+                <rect x="597" y="230" width="72" height="16" rx="3" fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.25)" stroke-width="1"/>
+                <text x="633" y="242" fill="#f59e0b" font-size="7" font-weight="700" text-anchor="middle">Wafer 1</text>
+                <rect x="597" y="254" width="72" height="16" rx="3" fill="rgba(245,158,11,0.12)" stroke="rgba(245,158,11,0.25)" stroke-width="1"/>
+                <text x="633" y="266" fill="#f59e0b" font-size="7" font-weight="700" text-anchor="middle">Wafer 2..25</text>
+                <!-- Die under each Wafer -->
+                <rect x="675" y="238" width="68" height="12" rx="3" fill="rgba(168,85,247,0.1)" stroke="rgba(168,85,247,0.2)" stroke-width="0.8" stroke-dasharray="2 2"/>
+                <text x="709" y="247" fill="#a855f7" font-size="6" font-weight="600" text-anchor="middle">Die 1..N</text>
+                <line x1="669" y1="242" x2="675" y2="244" stroke="#a855f7" stroke-width="0.8" stroke-opacity="0.4"/>
+
+                <!-- MU Timeline indicator -->
+                <rect x="805" y="185" width="160" height="22" rx="6" fill="rgba(88,166,255,0.06)" stroke="rgba(88,166,255,0.15)" stroke-width="1"/>
+                <text x="885" y="199" fill="#8b949e" font-size="7.5" font-weight="600" text-anchor="middle">水平时间线: PhaseDone 事件链</text>
+
+                <!-- Arrow: Saga → Akka Persistence -->
+                <path d="M 195 308 L 195 335" fill="none" stroke="#8b949e" stroke-width="2" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+                <!-- Arrow: Lot Context → Akka Persistence -->
+                <path d="M 625 308 L 625 335" fill="none" stroke="#8b949e" stroke-width="2" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <!-- Akka Persistence (spans full width) -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="342" width="940" height="48" rx="8" fill="url(#gGreen)" stroke="#3fb950" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="55" y="342" width="5" height="48" rx="2" fill="#3fb950"/>
+                </g>
+                <text x="525" y="364" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Akka Persistence · Event Log (事件溯源底座)</text>
+                <text x="525" y="380" fill="#6e7681" font-size="8" font-weight="500" text-anchor="middle">所有物理事实以不可篡改的 DomainEvent 写入 Journal → 宕机后回放 Event Log 即可恢复与物理世界的对齐状态</text>
+
+                <!-- Arrow: Decision Layer → Runtime Layer (ChainDSL) -->
+                <path d="M 510 395 L 510 428" fill="none" stroke="#f59e0b" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="6 3" marker-end="url(#ahAmber)"/>
+                <text x="523" y="415" fill="#f59e0b" font-size="8" font-weight="700" text-anchor="start">ChainDSL 注入</text>
+
+                <!-- ============================================================ -->
+                <!-- LAYER 2: 运行时执行层 / Runtime Execution                       -->
+                <!-- ============================================================ -->
+                <rect x="30" y="462" width="1000" height="195" rx="12" fill="rgba(168,85,247,0.025)" stroke="rgba(168,85,247,0.2)" stroke-width="1.5"/>
+                <rect x="30" y="462" width="5" height="195" rx="2" fill="#a855f7" fill-opacity="0.5"/>
+                <text x="50" y="487" fill="#a855f7" font-size="13" font-weight="700" letter-spacing="1.3">运行时执行层 · Runtime Execution (M2.5+ Core — 肌肉)</text>
+                <text x="50" y="504" fill="#8b949e" font-size="8" font-weight="500">继承自 M2.5+ · 接收上层注入的 ChainDSL · EventSourcedBehavior 包装 · 自愈恢复 · ClusterSharding 水平扩展</text>
+
+                <!-- ChainExecutionActor -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="518" width="230" height="62" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="55" y="518" width="4" height="62" rx="2" fill="#a855f7"/>
+                </g>
+                <text x="170" y="542" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">Chain Execution Actor</text>
+                <text x="170" y="557" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">EventSourcedBehavior</text>
+                <text x="170" y="572" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">解析 ChainDSL → 并行 Step</text>
+
+                <!-- Arrow: ChainExec → StepExecutors -->
+                <path d="M 285 549 L 325 549" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" marker-end="url(#ahPurple)"/>
+
+                <!-- Step Executor Actors (3 stacked) -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="330" y="518" width="250" height="62" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.35" stroke-width="1.2"/>
+                </g>
+                <text x="455" y="542" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">Step Executor Actors × N</text>
+                <text x="455" y="557" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">SubBatchPipeline (6 阶段 Future 链)</text>
+                <text x="455" y="572" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">断路器 · 重试 · 编解码 · 协议栈</text>
+
+                <!-- Arrow: StepExec → ReBatch Router -->
+                <path d="M 580 549 L 620 549" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" marker-end="url(#ahPurple)"/>
+
+                <!-- ReBatch Router / Exception Handler -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="625" y="518" width="250" height="62" rx="8" fill="url(#gRed)" stroke="#f87171" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="625" y="518" width="4" height="62" rx="2" fill="#f87171"/>
+                </g>
+                <text x="750" y="542" fill="#e6edf3" font-size="10.5" font-weight="700" text-anchor="middle">ReBatch Router</text>
+                <text x="750" y="557" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Exception Handler</text>
+                <text x="750" y="572" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">RetrySameArea / RouteToArea / Scrap</text>
+
+                <!-- M2.5+ reference label -->
+                <text x="525" y="610" fill="#a855f7" font-size="8" font-weight="600" text-anchor="middle">M2.5+ 三层分离架构 (业务/技术/调度) — 详见 M2.5+ 页面</text>
+                <text x="525" y="624" fill="#a855f7" font-size="8" font-weight="600" text-anchor="middle">ChainExecutionActor 用 4 个通用事件(Started/PhaseDone/AllCompleted/ExecutionFailed) 统一覆盖所有业务链路</text>
+                <text x="525" y="638" fill="#6e7681" font-size="7.5" font-weight="500" text-anchor="middle">← 成功 → 推至下一段 DSL | ← 失败 → ReBatch 路由 | ← 异常 → 向上反馈至 Saga</text>
+
+                <!-- Arrow: Runtime → Physical Layer -->
+                <path d="M 525 650 L 525 685" fill="none" stroke="#a855f7" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="6 3" marker-end="url(#ahPurple)"/>
+                <text x="538" y="672" fill="#a855f7" font-size="8" font-weight="700" text-anchor="start">设备指令</text>
+
+                <!-- ============================================================ -->
+                <!-- LAYER 3: 物理执行层 / Physical Execution                       -->
+                <!-- ============================================================ -->
+                <rect x="30" y="692" width="1000" height="485" rx="12" fill="rgba(20,184,166,0.025)" stroke="rgba(20,184,166,0.22)" stroke-width="1.5"/>
+                <rect x="30" y="692" width="5" height="485" rx="2" fill="#2dd4bf" fill-opacity="0.5"/>
+                <text x="50" y="717" fill="#2dd4bf" font-size="13" font-weight="700" letter-spacing="1.3">物理执行层 · Physical Execution (Fab Level — 现实世界)</text>
+                <text x="50" y="734" fill="#8b949e" font-size="8" font-weight="500">Processing Funnel (Lot → Wafer → Die) · Sub-Batch Processor (Equipment Actor) · Result Classifier · Equipment EAP</text>
+
+                <!-- Processing Funnel -->
+                <rect x="55" y="748" width="940" height="65" rx="8" fill="rgba(240,140,62,0.03)" stroke="rgba(240,140,62,0.2)" stroke-width="1" stroke-dasharray="4 2"/>
+                <text x="70" y="766" fill="#f08c3e" font-size="9" font-weight="700">Processing Funnel (Lot → Wafer → Die)</text>
+
+                <!-- Funnel stages -->
+                <rect x="80" y="778" width="140" height="28" rx="5" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="150" y="796" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">Lot 25 片 · FOUP</text>
+                <path d="M 220 792 L 245 792" fill="none" stroke="#f08c3e" stroke-width="1.3" stroke-opacity="0.6" marker-end="url(#ahOrange)"/>
+                <rect x="250" y="778" width="170" height="28" rx="5" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="335" y="796" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">Batch Tool · 拼炉 100 片</text>
+                <path d="M 420 792 L 445 792" fill="none" stroke="#f08c3e" stroke-width="1.3" stroke-opacity="0.6" marker-end="url(#ahOrange)"/>
+                <rect x="450" y="778" width="140" height="28" rx="5" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="520" y="796" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">拆解回独立 Lot</text>
+                <path d="M 590 792 L 615 792" fill="none" stroke="#f08c3e" stroke-width="1.3" stroke-opacity="0.6" marker-end="url(#ahOrange)"/>
+                <rect x="620" y="778" width="200" height="28" rx="5" fill="rgba(240,140,62,0.06)" stroke="#f08c3e" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="720" y="796" fill="#e6edf3" font-size="9" font-weight="700" text-anchor="middle">Single-Wafer · 光刻 1 片加工</text>
+
+                <!-- Arrow: Funnel → Equipment -->
+                <path d="M 525 813 L 525 835" fill="none" stroke="#2dd4bf" stroke-width="2" stroke-linecap="round" marker-end="url(#ahTeal)"/>
+
+                <!-- Equipment Actor Row -->
+                <text x="50" y="852" fill="#2dd4bf" font-size="9" font-weight="700">Sub-Batch Processor (Equipment Actor)</text>
+
+                <!-- Equipment 1: Diffusion Furnace -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="55" y="862" width="270" height="62" rx="8" fill="url(#gTeal)" stroke="#2dd4bf" stroke-opacity="0.35" stroke-width="1.2"/>
+                    <rect x="55" y="862" width="4" height="62" rx="2" fill="#2dd4bf"/>
+                </g>
+                <text x="190" y="886" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Diffusion Furnace 扩散炉</text>
+                <text x="190" y="902" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">批处理工具 · 4Lot/100 片拼炉</text>
+                <text x="190" y="916" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Recipe Match Batching</text>
+
+                <!-- Equipment 2: Lithography Track -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="365" y="862" width="270" height="62" rx="8" fill="url(#gAmber)" stroke="#f59e0b" stroke-opacity="0.4" stroke-width="1.5"/>
+                    <rect x="365" y="862" width="4" height="62" rx="2" fill="#f59e0b"/>
+                </g>
+                <text x="500" y="886" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Lithography Track 光刻机</text>
+                <text x="500" y="902" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">单片处理工具 · 多重曝光 ♻</text>
+                <text x="500" y="916" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">Single-Wafer Handling</text>
+                <text x="627" y="882" fill="#f59e0b" font-size="10" font-weight="700">♻</text>
+
+                <!-- Equipment 3: Metrology Station -->
+                <g filter="url(#nodeShadow)">
+                    <rect x="675" y="862" width="270" height="62" rx="8" fill="url(#gPurple)" stroke="#a855f7" stroke-opacity="0.4" stroke-width="1.2"/>
+                    <rect x="675" y="862" width="4" height="62" rx="2" fill="#a855f7"/>
+                </g>
+                <text x="810" y="886" fill="#e6edf3" font-size="10" font-weight="700" text-anchor="middle">Metrology Station 量测站</text>
+                <text x="810" y="902" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">扫描/检测工具 · CD/膜厚/缺陷</text>
+                <text x="810" y="916" fill="#8b949e" font-size="7.5" font-weight="500" text-anchor="middle">可疑值复核触发源 △</text>
+                <text x="937" y="882" fill="#a855f7" font-size="9" font-weight="700">△</text>
+
+                <!-- Arrow: Equipment → Result Classifier (fact feedback) -->
+                <path d="M 325 893 L 375 893" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+                <path d="M 635 893 L 665 893" fill="none" stroke="#8b949e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+                <path d="M 500 924 L 500 995" fill="none" stroke="#8b949e" stroke-width="2" stroke-linecap="round" marker-end="url(#ahMuted)"/>
+
+                <!-- Result Classifier (4-way) — shifted down +55 -->
+                <rect x="180" y="1001" width="660" height="55" rx="8" fill="rgba(255,255,255,0.02)" stroke="rgba(255,255,255,0.1)" stroke-width="1.2"/>
+                <text x="510" y="1020" fill="#e6edf3" font-size="11" font-weight="700" text-anchor="middle">Result Classifier · 四路结果分类</text>
+
+                <!-- 4 classification outputs -->
+                <rect x="195" y="1030" width="115" height="20" rx="4" fill="rgba(74,222,128,0.08)" stroke="#4ade80" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="252" y="1044" fill="#4ade80" font-size="9" font-weight="700" text-anchor="middle">PASS → 继续主流程</text>
+
+                <rect x="325" y="1030" width="140" height="20" rx="4" fill="rgba(245,158,11,0.08)" stroke="#f59e0b" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="395" y="1044" fill="#f59e0b" font-size="9" font-weight="700" text-anchor="middle">BORDERLINE → 挂起重测</text>
+
+                <rect x="480" y="1030" width="140" height="20" rx="4" fill="rgba(248,113,113,0.08)" stroke="#f87171" stroke-opacity="0.4" stroke-width="1"/>
+                <text x="550" y="1044" fill="#f87171" font-size="9" font-weight="700" text-anchor="middle">FAIL → 触发重工循环</text>
+
+                <rect x="635" y="1030" width="130" height="20" rx="4" fill="rgba(248,113,113,0.12)" stroke="#f87171" stroke-opacity="0.6" stroke-width="1.3"/>
+                <text x="700" y="1044" fill="#f87171" font-size="9" font-weight="700" text-anchor="middle">SCRAP → 强制报废</text>
+
+                <!-- Equipment EAP Layer -->
+                <rect x="55" y="1087" width="940" height="36" rx="6" fill="rgba(168,85,247,0.04)" stroke="rgba(168,85,247,0.2)" stroke-width="1"/>
+                <text x="525" y="1109" fill="#a855f7" font-size="9" font-weight="700" text-anchor="middle">Equipment EAP 层 · SECS/GEM · HTTP/TCP · 断路器保护 · 物理信号 ⇄ 数字事件</text>
+
+                <!-- ========== KEY DATA FLOWS (cross-layer feedback loops) ========== -->
+
+                <!-- Standard Flow (BLUE): Assembler → Saga → ChainExec → StepExec → Equipment -->
+                <!-- Already drawn above with layer arrows -->
+
+                <!-- Fact Logging Flow (BLACK solid): Result Classifier PASS → left outside → Saga left side -->
+                <path d="M 195 1040 L 40 1040 L 40 243 L 55 243" fill="none" stroke="#8b949e" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ahMuted)"/>
+                <text x="28" y="640" fill="#8b949e" font-size="8" font-weight="600" text-anchor="middle" transform="rotate(-90, 28, 640)">事实入账 (PASS)</text>
+
+                <!-- FAIL → Saga intercept → Assembler recalculation (RED DASHED) — exit below, down first, route right past SCRAP, enter Assembler right -->
+                <path d="M 550 1050 L 550 1075 L 1070 1075 L 1070 101 L 625 101" fill="none" stroke="#f87171" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="8 4" marker-end="url(#ahRed)"/>
+                <text x="1058" y="590" fill="#f87171" font-size="8.5" font-weight="700" text-anchor="start" transform="rotate(-90, 1058, 590)">FAIL → Saga 拦截 → Assembler 重新织造 Rework DSL</text>
+
+                <!-- SCRAP → Lot Context (RED BOLD) — exit right, route outside right, enter Lot Context right side -->
+                <path d="M 765 1040 L 1040 1040 L 1040 243 L 765 243" fill="none" stroke="#f87171" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#ahRed)"/>
+                <text x="1028" y="640" fill="#f87171" font-size="8.5" font-weight="700" text-anchor="start" transform="rotate(-90, 1028, 640)">SCRAP → Lot Context 报废入账</text>
+
+                <!-- BORDERLINE → Hold → Diffusion Furnace (AMBER) — exit top, route above Result Classifier, enter Diffusion from below -->
+                <path d="M 395 1030 L 395 990 L 190 990 L 190 924" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 3" marker-end="url(#ahAmber)"/>
+                <text x="180" y="980" fill="#f59e0b" font-size="7.5" font-weight="600" text-anchor="end">Borderline Hold → 回炉</text>
+
+                <!-- PASS advance → back to Assembler for next DSL (GREEN) — exit below, left turn, route outside left, enter Assembler left -->
+                <path d="M 252 1050 L 252 1070 L 15 1070 L 15 101 L 389 101" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="5 3" marker-end="url(#ahGreen)"/>
+                <text x="5" y="585" fill="#4ade80" font-size="8" font-weight="600" text-anchor="middle" transform="rotate(-90, 5, 585)">PASS → Assembler 计算下一段 DSL</text>
+
+                <!-- ReBatch Router → back to ChainExec (purple local loop) -->
+                <path d="M 625 564 L 300 564" fill="none" stroke="#a855f7" stroke-width="1.5" stroke-linecap="round" stroke-dasharray="4 3" marker-end="url(#ahPurple)"/>
+                <text x="462" y="556" fill="#a855f7" font-size="7" font-weight="600" text-anchor="middle">重试/换区</text>
+
+                <!-- FOOTER -->
+                <text x="530" y="1165" fill="#8b949e" font-size="8.5" font-weight="600" text-anchor="middle">M3 三层架构: 决策层(M3 Heart) + 运行时执行层(M2.5+ Core) + 物理执行层(Fab Level) — 感知→入账→决策→位移 闭环</text>
+
+                </g>
+            </svg>
+        </div>
+
+        <h3>层级职责速览</h3>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:16%">层级</th><th style="width:20%">核心角色</th><th style="width:34%">包含组件</th><th style="width:30%">信息来源/去向</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><strong style="color:#60a5fa">决策层</strong></td>
+                    <td>M3 大脑——"想清楚下一步"</td>
+                    <td>POR Repository · Dynamic Flow Assembler · Saga Coordinator · Lot Context (MU 矩阵) · BMM · Akka Persistence</td>
+                    <td>POR 静态路线 → Assembler 动态织造 → Saga 执行ChainDSL → 事实写入 Persistence</td>
+                </tr>
+                <tr>
+                    <td><strong style="color:#a855f7">运行时层</strong></td>
+                    <td>M2.5+ 肌肉——"高性能分发"</td>
+                    <td>ChainExecutionActor · StepExecutor Actors · SubBatchPipeline (6 阶段) · ReBatch Router · Exception Handler</td>
+                    <td>接收上层 ChainDSL → 解析为并行 Step → 执行 → 异常路由<br/>全部继承自 M2.5+，无需修改</td>
+                </tr>
+                <tr>
+                    <td><strong style="color:#2dd4bf">物理执行层</strong></td>
+                    <td>Fab 现实——"物理位移"</td>
+                    <td>Processing Funnel · Sub-Batch Processor (Equipment Actors) · Result Classifier · Equipment EAP</td>
+                    <td>设备通讯 (SECS/GEM) → 物理反馈 → Result Classifier → 事实入账回决策层</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout blue">
+            <strong>三层分离的核心价值：</strong>决策层只关心"事实"和"协议"——物理世界发生了什么、接下来该做什么。
+            运行时层只关心"执行"——如何高效可靠地把指令送达设备、把结果收集回来。
+            物理执行层只关心"通讯和精度"——如何把 SECS/GEM 消息翻译为领域事件。
+            任何一层的变更不穿透到另一层——设备升级不影响业务逻辑，工艺变更不触及执行引擎。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 4: 事实驱动生命周期 ==================== -->
+    <section>
+        <h2>四、事实驱动生命周期：感知 → 入账 → 决策 → 位移</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M3 的生命周期不是被"写死"的，而是通过以下四步循环动态"生长"出来的。
+            这不是流水线，而是一个<strong>持续运行的反馈闭环</strong>——物理世界的每一个事实都驱动数字世界的一次决策。
+        </p>
+
+        <div class="lifecycle-flow">
+            <div class="lifecycle-node lc-perception">
+                <div class="lc-icon">📡</div>
+                <div class="lc-title">1. 感知 Perception</div>
+                <div class="lc-sub">EAP 上报物理事件</div>
+                <div class="lc-sub">晶圆 5 膜厚异常 / 进炉完成</div>
+            </div>
+            <span class="lifecycle-arrow">→</span>
+            <div class="lifecycle-node lc-logging">
+                <div class="lc-icon">📝</div>
+                <div class="lc-title">2. 入账 Logging</div>
+                <div class="lc-sub">事实挂载到 WaferContext</div>
+                <div class="lc-sub">Akka Persistence 永久化</div>
+            </div>
+            <span class="lifecycle-arrow">→</span>
+            <div class="lifecycle-node lc-inference">
+                <div class="lc-icon">🧠</div>
+                <div class="lc-title">3. 决策 Inference</div>
+                <div class="lc-sub">Assembler 发现偏离预设</div>
+                <div class="lc-sub">实时织造新 ChainDSL</div>
+            </div>
+            <span class="lifecycle-arrow">→</span>
+            <div class="lifecycle-node lc-action">
+                <div class="lc-icon">⚡</div>
+                <div class="lc-title">4. 位移 Action</div>
+                <div class="lc-sub">新 DSL 注入执行引擎</div>
+                <div class="lc-sub">MU 进入下一段生命周期</div>
+            </div>
+        </div>
+
+        <table class="ps-table" style="margin-top:20px;">
+            <thead><tr><th style="width:12%">阶段</th><th style="width:20%">触发来源</th><th style="width:34%">M3 处理逻辑</th><th style="width:34%">关键技术</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><strong>感知</strong></td><td>机台 EAP (SECS/GEM) 上报物理事件</td>
+                    <td>EAP 层将设备信号转化为领域事件，通过 Result Classifier 四路分流</td>
+                    <td><span class="file-ref">Equipment EAP · SECS-II Parser</span></td>
+                </tr>
+                <tr>
+                    <td><strong>入账</strong></td>
+                    <td>Result Classifier 输出分类结果</td>
+                    <td>事实精准挂载到对应 WaferContext 账户下，Saga 保证原子写入</td>
+                    <td><span class="file-ref">Akka Persistence · EventSourcedBehavior</span></td>
+                </tr>
+                <tr>
+                    <td><strong>决策</strong></td>
+                    <td>LotContext 发现事实偏离预设（如 Wafer 5 颗粒度超标）</td>
+                    <td>Dynamic Flow Assembler 从 POR 索取片段，实时织造新路径 DSL——<strong>拆批</strong>（Split）的起因是"事实异常"，结果是"生成两条并行时间线"</td>
+                    <td><span class="file-ref">Dynamic Flow Assembler · ProductRouting</span></td>
+                </tr>
+                <tr>
+                    <td><strong>位移</strong></td>
+                    <td>Assembler 输出新 ChainDSL</td>
+                    <td>DSL 注入 M2.5+ ChainExecutionActor，驱动 MU 进入下一段生命周期。设备通过 EAP 接收指令</td>
+                    <td><span class="file-ref">ChainExecutionActor · SubBatchPipeline</span></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>闭环的核心：</strong>这不是一个单向流水线。每次"位移"完成后，新的物理事实通过 EAP 再次进入"感知"，形成持续运行的反馈闭环。
+            系统不预设所有步骤——它根据 Result Classifier 的反馈"见招拆招"。这就是 M3 区别于传统 MES 的根本特征。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 5: Saga 事实守恒 ==================== -->
+    <section>
+        <h2>五、Saga：事实守恒的守护者</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            Saga 在 M3 中经历了概念跃迁——从 M1 的"分布式事务协调器"演变为<strong>"事实守恒的守护者"</strong>。
+            它不再管理固定的步骤序列，而是管理操作的<strong>原子性</strong>和信息的<strong>守恒性</strong>。
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(245,158,11,0.3);">
+                <div class="comp-icon">✂️</div>
+                <h4>Split 拆批：跨账户转账</h4>
+                <p>拆批的本质是<strong>一次跨账户转账</strong>：父批次（Lot A）扣减 Wafer 5–8，子批次（Lot A'）创建并接收这 4 片 Wafer。
+                Saga 保证两步<strong>原子发生</strong>——要么同时成功，要么同时回滚。
+                系统中 MU 的<strong>资产总量始终守恒</strong>：Lot A.count + Lot A'.count = 原始 25 片。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(63,185,80,0.3);">
+                <div class="comp-icon">🔗</div>
+                <h4>Merge 合批：Barrier 屏障</h4>
+                <p>合批是<strong>多时间线归一</strong>。BMM 盯着并行时间线——只有当各 MU 的进度在逻辑上<strong>对齐</strong>（所有 Wafer 完成当前工序段），
+                或通过<strong>补偿协议</strong>强制平账（Scrap 报废 / Skip 跳步），合批事实才被签署。
+                <strong>合批不是物理操作，是逻辑屏障。</strong></p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(248,81,73,0.3);">
+                <div class="comp-icon">🛡️</div>
+                <h4>故障恢复：SUSPENDED + ManualFix</h4>
+                <p>当 Compensate（补偿）失败时，Saga 进入 <strong>SUSPENDED</strong> 状态而非死锁。
+                操作员通过 <strong>ManualFixStep + RetryCurrentPhase</strong> 恢复。
+                所有中间状态写入 Akka Persistence——恢复时无需猜测"当时卡在哪里"。</p>
+            </div>
+        </div>
+
+        <div class="arch-callout">
+            <strong>与 M1 Saga 的关键差异：</strong>M1 的 Saga 管理"固定的 Prepare/Commit/Compensate 三阶段"。
+            M3 的 Saga 管理"<strong>动态织造的 ChainDSL</strong>"——每个 DSL 片段自包含 Prepare/Commit/Compensate 语义，
+            Saga 不关心片段内部是什么，只关心片段的<strong>原子边界</strong>是否得到保证。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 6: 异常处理 ==================== -->
+    <section>
+        <h2>六、异常处理与非线性回滚</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            在晶圆加工<strong>物理不可逆</strong>的前提下（刻蚀掉的材料不会长回来），M3 重新定义了"回滚"。
+            它不是数据库的 ROLLBACK——物理世界没有 CTRL+Z。
+        </p>
+
+        <div class="comp-grid">
+            <div class="comp-card" style="border-color: rgba(88,166,255,0.3);">
+                <div class="comp-icon">🔧</div>
+                <h4>物理补偿：注入返修 DSL</h4>
+                <p>不合格的晶圆不是"回退"，而是<strong>向前回滚</strong>——Dynamic Flow Assembler 织造一段返修（Rework）DSL，
+                注入执行引擎。例如：光刻图形偏移 → 去胶 → 重新光刻。每一步都是新的物理操作，消耗新的资源。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(168,85,247,0.3);">
+                <div class="comp-icon">📋</div>
+                <h4>逻辑撤销：Saga 账面回滚</h4>
+                <p>在账户操作层面（如拆批中途宕机——父批次已扣减但子批次未创建），Saga 负责执行<strong>逻辑回滚</strong>。
+                通过 Compensate 反向操作恢复 MU 账户余额，确保<strong>账面数据不发生漂移</strong>。</p>
+            </div>
+            <div class="comp-card" style="border-color: rgba(248,81,73,0.3);">
+                <div class="comp-icon">⚠️</div>
+                <h4>容错合批：强制收敛</h4>
+                <p>在"对不齐"的常态下（部分 Wafer 报废、部分仍在重工），BMM 通过<strong>强制报废</strong>（Scrap）、
+                <strong>跳步对齐</strong>（Skip to merge point）等策略，实现高熵状态向低熵一致性的强制收敛。</p>
+            </div>
+        </div>
+
+        <div class="arch-callout red">
+            <strong>关键洞察：</strong>M3 的异常处理不是 try-catch，而是<strong>协议</strong>。物理补偿是向前看的——"既然做坏了，我做点什么来补救"。
+            逻辑撤销是向后看的——"账面数据必须和物理事实对齐"。这两者协同，构成了 M3 的<strong>自愈能力</strong>。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 7: M2.5+ 执行引擎 ==================== -->
+    <section>
+        <h2>七、M2.5+ 执行引擎：M3 的肌肉层</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M3 的决策层（大脑）依赖 M2.5+ 的运行时组件（肌肉）来执行物理指令。
+            M2.5+ 的三层分离架构——业务维度（步骤链）、技术维度（通信/容错/编解码）、调度维度（分流/补偿）——全部<strong>无需修改</strong>，
+            直接作为 M3 运行时执行层的标准组件库使用。
+        </p>
+
+        <table class="ps-table">
+            <thead><tr><th style="width:24%">M2.5+ 组件</th><th style="width:12%">维度</th><th style="width:32%">在 M3 中的角色</th><th style="width:32%">M3 特有的参数化</th></tr></thead>
+            <tbody>
+                <tr><td><strong>ChainExecutionActor</strong></td><td><span style="color:#a855f7">运行时</span></td><td>接收 Dynamic Flow Assembler 注入的 ChainDSL，解析为并行 Step</td><td>4 个通用事件类型覆盖所有 Fab 业务链路</td></tr>
+                <tr><td><strong>SubBatchPipeline (6 阶段)</strong></td><td><span style="color:#f59e0b">技术</span></td><td>文件生成·上传·轮询·解析·分类——替换为 Fab 设备通讯</td><td>Connector: SFTP → SECS/GEM · Codec: XML → JSON/SECS-II</td></tr>
+                <tr><td><strong>ResultClassifier</strong></td><td><span style="color:#a855f7">调度</span></td><td>银行错误码三路 → <strong>量测值四路</strong>（Pass/Borderline/Fail/Scrap）</td><td>ErrorCodeMapping → MeasurementThresholdMapping</td></tr>
+                <tr><td><strong>ReBatchRouter</strong></td><td><span style="color:#a855f7">调度</span></td><td>RetrySameArea / Scrap / ManualIntervention → 增加 RouteToArea / Split &amp; Rework</td><td>ReBatchPolicy.actionMap 增加 Fab 特有路由</td></tr>
+                <tr><td><strong>AreaScheduler</strong></td><td><span style="color:#f59e0b">技术</span></td><td>时间窗口成批 → <strong>物理约束成批</strong>（FOUP 25 片 / recipe 兼容 / 洁净室）</td><td>PhysicalConstraints: carrierCapacity + recipeMatchRules</td></tr>
+                <tr><td><strong>CircuitBreaker</strong></td><td><span style="color:#f59e0b">技术</span></td><td>外部系统熔断保护——原封不动用于机台通讯</td><td>无修改——断路器是通用技术组件</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout purple">
+            <strong>渐进演进的核心证明：</strong>M2.5+ 没有一行代码被修改。M3 的增量全部在决策层——Dynamic Flow Assembler、
+            Lot Context (MU 矩阵)、BMM、四路 Result Classifier。运行时层只是以<strong>新的顺序和条件</strong>被调用。
+            详见 <a href="/m2" style="color:var(--purple);">M2 流批一体 DAG 引擎</a>。
+        </div>
+    </section>
+
+    <!-- ==================== SECTION 8: 格言 + 代码参考 ==================== -->
+    <section>
+        <h2>八、架构格言与代码参考</h2>
+
+        <blockquote class="motto">
+            <strong>架构格言：</strong>"让物理世界决定事实，让逻辑世界管理一致，让动态路由驱动未来。"
+        </blockquote>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin: 20px 0 16px;">
+            M3 架构通过将 <strong>Manufacture Unit</strong> 账户化、将 <strong>Saga</strong> 协议化、将 <strong>工艺路线</strong> 动态化，
+            构建了一个具备自愈能力的反应式内核。它不仅解决了"我在哪"和"我做了什么"的问题，更从底层协议层面解决了"由于物理意外导致的逻辑崩塌"。
+            在 M3 架构下，每一个 FOUP 的停靠与开门，都是一笔神圣的物理资产交易，由分布式的数字账本永久见证。
+        </p>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:16px;">
+            M3 代码分布在两个层面：<strong>决策层原型</strong>位于 <span class="file-ref">app/net/imadz/fab/</span> 包；
+            <strong>生产级 Lot Context Saga</strong> 遵循标准 DDD 包结构
+            （<span class="file-ref">domain/entities/</span>、<span class="file-ref">application/aggregates/</span>、<span class="file-ref">infrastructure/</span>），
+            使用 Akka Persistence 事件溯源——与 M1 CreditBalance/MoneyTransfer 采用完全相同的
+            <code>InvariantRule + CommandHelper + SagaParticipant</code> 模式。
+        </p>
+
+        <h4>决策层原型 (fab/)</h4>
+        <table class="ps-table">
+            <thead><tr><th style="width:28%">文件</th><th style="width:10%">层</th><th style="width:62%">职责</th></tr></thead>
+            <tbody>
+                <tr><td class="file-ref">fab/model/EquipmentArea.scala</td><td>模型</td><td>10 个设备区 sealed trait + reentryIndex 计算</td></tr>
+                <tr><td class="file-ref">fab/model/ProductRouting.scala</td><td>决策</td><td>RoutingStep + ProductRouting——工艺路线<strong>数据化</strong>，含 LOGIC-28NM-A 示例路由（11 步）</td></tr>
+                <tr><td class="file-ref">fab/model/LotContext.scala</td><td>决策</td><td>Lot + Wafer 追踪——MU 矩阵核心，含步骤索引、报废计数、合批标记</td></tr>
+                <tr><td class="file-ref">fab/orchestration/FabFlowEngine.scala</td><td>决策</td><td>动态组装执行引擎：成批 → 处理 → 分类 → 复核 → 路由 → 推进</td></tr>
+                <tr><td class="file-ref">fab/orchestration/BatchMergeManager.scala</td><td>决策</td><td>Wafer 来源追踪 + 合批触发（WaitForOthers / ReadyToMerge / PartialMerge）</td></tr>
+                <tr><td class="file-ref">fab/repository/RoutingRepository.scala</td><td>数据</td><td>工艺路线存储 trait + InMemory 实现 + Demo 数据</td></tr>
+                <tr><td class="file-ref">fab/demo/FabDemo.scala</td><td>演示</td><td>完整 Demo：创建区域 pipeline → 执行 LOGIC + NAND 路由 → 展示重入 + 合批</td></tr>
+            </tbody>
+        </table>
+
+        <h4 style="margin-top:24px;">Lot Context Saga — 生产级（事件溯源）</h4>
+        <table class="ps-table">
+            <thead><tr><th style="width:30%">文件</th><th style="width:10%">层</th><th style="width:60%">职责</th></tr></thead>
+            <tbody>
+                <tr><td class="file-ref">domain/entities/LotEntity.scala</td><td>Domain</td><td>LotState（waferIds + reservedWafers + incomingWafers）、LotEvent ADT、LotPhase 状态机（Empty→Active→Sealed→Completed）</td></tr>
+                <tr><td class="file-ref">domain/entities/WaferEntity.scala</td><td>Domain</td><td>WaferState（lotId + status + reservedTransfer）、WaferEvent ADT、WaferStatus（Created/Active/OnHold/Scrapped/Skipped）</td></tr>
+                <tr><td class="file-ref">domain/invariants/LotInvariants.scala</td><td>Domain</td><td>9 个 InvariantRule：创建批次、预留/提交/释放转出、预留/提交/取消转入、封批。含 FOUP 25 片容量守卫 · 幂等检查 · 阶段门控</td></tr>
+                <tr><td class="file-ref">domain/invariants/WaferInvariants.scala</td><td>Domain</td><td>6 个 InvariantRule：创建晶圆、预留/提交/释放转移、报废晶圆、状态变更</td></tr>
+                <tr><td class="file-ref">application/aggregates/LotProtocol.scala</td><td>App</td><td>LotCommand/LotReply ADT — TCC 三阶段命令：ReserveWaferRemoval、CommitWaferRemoval、ReleaseReservedWafer ↔ ReserveAddWafer、CommitAddWafer、CancelAddWafer</td></tr>
+                <tr><td class="file-ref">application/aggregates/WaferProtocol.scala</td><td>App</td><td>WaferCommand/WaferReply ADT — 所有权转移 TCC：ReserveTransfer、CommitTransfer、ReleaseTransfer</td></tr>
+                <tr><td class="file-ref">application/services/transactor/SourceLotParticipant.scala</td><td>Saga</td><td>SagaParticipant 封装源批次 Reserve/Commit/Release 命令</td></tr>
+                <tr><td class="file-ref">application/services/transactor/TargetLotParticipant.scala</td><td>Saga</td><td>SagaParticipant 封装目标批次 ReserveAdd/CommitAdd/CancelAdd 命令</td></tr>
+                <tr><td class="file-ref">application/services/transactor/WaferTransferParticipant.scala</td><td>Saga</td><td>SagaParticipant 封装晶圆 Reserve/Commit/Release 所有权转移命令</td></tr>
+                <tr><td class="file-ref">application/services/transactor/behaviors/FabSagaTransactorBehaviors.scala</td><td>Saga</td><td>EventSourcedBehavior 编排拆批/合批/转移 Saga——生成 TCC 步骤组，晶圆级步骤并行执行</td></tr>
+                <tr><td class="file-ref">infrastructure/persistence/converters/LotProtoConverters.scala</td><td>Infra</td><td>Proto↔Domain 转换器，覆盖所有 Lot 事件和状态（Map[Id, Set[Id]] ↔ WaferIdSet）</td></tr>
+                <tr><td class="file-ref">application/services/FabSagaService.scala</td><td>API</td><td>公开 API：splitLot(源批, 目标批, 晶圆) · mergeLots(源批列表, 目标批, 晶圆) · transferWafers(源批, 目标批, 晶圆)</td></tr>
+            </tbody>
+        </table>
+
+        <blockquote>
+            <strong>架构师视角——M3 为什么不是一个新引擎。</strong>
+            M3 不是在 M2.5+ 之外另起炉灶。它是在 M2.5+ <strong>之上</strong>增加了一层决策能力。
+            Dynamic Flow Assembler 不替代 ChainExecutionActor——它向 ChainExecutionActor <strong>注入指令</strong>。
+            Lot Context 不替代 Saga——它让 Saga <strong>管理更复杂的实体关系</strong>。
+            这就像自动驾驶系统不替代发动机——它只是让发动机知道<strong>该往哪开</strong>。
+            代码压缩比：M2 的 23 个 FSM（~6000 行 Java）→ M2.5+ 的 16 个运行时组件（~2000 行 Scala）→ M3 决策层
+            （~500 行原型 + ~2500 行生产级 Lot Context Saga，含事件溯源和 TCC 分布式事务），
+            同时获得了动态工序编排能力。
+        </blockquote>
+    </section>
+
+    <!-- ==================== SECTION 9: M3.5 自愈决策内核 ==================== -->
+    <section>
+        <h2>九、M3.5 · 自愈决策内核 — 从静态脚本到反应式内核</h2>
+
+        <p style="font-size:0.9rem; color:var(--fg-muted); margin-bottom:20px;">
+            M3.5 在 M3 决策层之上增加了<strong>崩溃自愈</strong>和<strong>OCAP 拦截</strong>能力——并已<strong>全面落地</strong>。
+            单 WorkOrder 断点续传、OCAP→Rework DSL 动态织造、设备自发故障注入、Pipeline 全局异常捕获、
+            WorkOrder 失败传播均已实现。多 WorkOrder 并发混沌测试通过（202 测试）。
+        </p>
+
+        <div class="stat-row" style="margin-bottom: 24px;">
+            <div class="stat-card"><div class="num num-green">202</div><div class="lbl">单元 + 集成测试</div></div>
+            <div class="stat-card"><div class="num num-purple">6</div><div class="lbl">M3.5 核心能力全部交付</div></div>
+            <div class="stat-card"><div class="num num-teal">3</div><div class="lbl">自愈演示场景</div></div>
+        </div>
+
+        <h3>已交付的 6 项核心能力</h3>
+
+        <table class="ps-table" style="margin-bottom: 24px;">
+            <thead><tr><th style="width:5%">#</th><th style="width:28%">能力</th><th style="width:37%">实现</th><th style="width:30%">验证</th></tr></thead>
+            <tbody>
+                <tr><td>1</td><td><strong>EventSourced 断点续传</strong></td><td>崩溃后 Journal 重放恢复 completedPhases，resumeFromIndex 跳已完成阶段</td><td>PipelineRecoveryChaosSpec（3 场景）</td></tr>
+                <tr><td>2</td><td><strong>OCAP 异常拦截器</strong></td><td>invokeOcapInterceptor 在 Stage 失败时触发，6 种动作</td><td>5 个 OCAP 场景集成测试</td></tr>
+                <tr><td>3</td><td><strong>OCAP→Rework DSL 织造</strong></td><td>OCAP 拦截 → DynamicFlowAssembler 实时织造 Rework DSL → 注入引擎</td><td>ReworkLoop 端到端闭环验证</td></tr>
+                <tr><td>4</td><td><strong>Pipeline 全局异常捕获</strong></td><td>3 个管线引擎全局 recover/fallbackTo，异常上报 WorkOrder</td><td>PipelineFailureSpec（6 场景）</td></tr>
+                <tr><td>5</td><td><strong>设备自发故障注入</strong></td><td>Litho/CDSEM 模拟器运行时随机产生 JobFailed</td><td>ConcurrentWorkOrderChaosSpec（50 WO 并发）</td></tr>
+                <tr><td>6</td><td><strong>WorkOrder 失败传播</strong></td><td>RecordLotFailed 命令 + Projection + UI 面板实时更新</td><td>WorkOrderE2EIntegrationSpec（7 用例）</td></tr>
+            </tbody>
+        </table>
+
+        <div class="arch-callout">
+            <strong>已实现：</strong>单 WorkOrder EventSourced 状态恢复 → 断点续传 → OCAP 故障拦截 → Rework DSL 动态织造。
+            多 WorkOrder 并发通过 ConcurrentWorkOrderChaosSpec。设备自发故障注入已激活。
+        </div>
+
+        <blockquote>
+            <strong>在线演示：</strong>
+            <a href="/fab-demo/m35" style="color:var(--purple); font-weight:700;">M3.5 自愈演示 →</a>
+            — 五幕叙事：OCAP 返修、崩溃注入恢复、Send-Ahead + OCAP、多 WorkOrder 并发混沌、事件契约验证。
+            <a href="/m3-roadmap" style="color:var(--amber); font-weight:700;">M3.5 路线图 →</a>
+        </blockquote>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <div class="footer">
+        <p>技术栈：Scala 2.13 · Akka 2.6 · Play Framework 2.8</p>
+        <p style="margin-top:4px;">
+            <a href="/fab-demo/m35">M3.5 自愈演示</a> ·
+            <a href="/m3-roadmap">M3.5 路线图</a> ·
+            <a href="/architecture">架构雷达</a> ·
+            架构：洋葱 + DDD + CQRS/ES + Saga · 反应式宣言
+        </p>
+    </div>
+
+</div>
+</body>
+</html>

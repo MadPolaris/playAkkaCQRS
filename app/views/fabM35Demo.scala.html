@@ -1,0 +1,723 @@
+@()(implicit messages: Messages)
+@import helper._
+<!DOCTYPE html>
+<html lang="@messages.lang.code">
+<head>
+  <meta charset="UTF-8">
+  <title>M3.5 Self-Healing Demo — Reactive MES Kernel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #0d1117; --bg-alt: #161b22; --border: #30363d;
+      --fg: #e6edf3; --fg-muted: #8b949e;
+      --accent: #58a6ff; --amber: #f59e0b; --green: #3fb950;
+      --red: #f85149; --purple: #a855f7;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg); color: var(--fg); line-height: 1.5;
+      height: 100vh; overflow: hidden;
+    }
+    /* Header */
+    .header {
+      background: rgba(13,17,23,0.92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border); padding: 0 20px;
+      display: flex; align-items: center; height: 44px; gap: 16px;
+    }
+    .header .logo { font-weight: 700; font-size: 0.9rem; color: var(--fg); text-decoration: none; }
+    .header nav { display: flex; gap: 8px; margin-left: auto; }
+    .header nav a { color: var(--fg-muted); text-decoration: none; font-size: 0.78rem; padding: 4px 10px; border-radius: 4px; }
+    .header nav a:hover { color: var(--fg); background: var(--bg-alt); }
+    .header nav a.active { color: var(--amber); font-weight: 600; }
+
+    /* Control Bar */
+    .controls {
+      display: flex; align-items: center; gap: 12px; padding: 8px 20px;
+      background: var(--bg-alt); border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .controls button {
+      background: var(--bg-alt); border: 1px solid var(--border); color: var(--fg);
+      padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 0.78rem;
+      transition: all 0.15s;
+    }
+    .controls button:hover { border-color: var(--fg-muted); }
+    .controls button.primary { background: var(--amber); color: #000; border-color: var(--amber); font-weight: 600; }
+    .controls button.danger { border-color: var(--red); color: var(--red); }
+    .controls button.danger:hover { background: rgba(248,81,73,0.15); }
+    .controls select {
+      background: var(--bg-alt); border: 1px solid var(--border); color: var(--fg);
+      padding: 6px 10px; border-radius: 6px; font-size: 0.78rem;
+    }
+    .controls label { font-size: 0.75rem; color: var(--fg-muted); display: flex; align-items: center; gap: 4px; }
+    .controls input[type=range] { width: 80px; }
+    .controls .recovery-status {
+      margin-left: auto; display: flex; align-items: center; gap: 6px;
+      font-size: 0.72rem; font-weight: 600; font-family: 'SF Mono','Fira Code',monospace;
+    }
+    .controls .recovery-badge {
+      display: inline-block; padding: 2px 10px; border-radius: 12px;
+      font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+      transition: all 0.4s ease;
+    }
+    .recovery-badge.idle { background: rgba(139,148,158,0.2); color: var(--fg-muted); border: 1px solid var(--border); }
+    .recovery-badge.crashed { background: rgba(248,81,73,0.2); color: var(--red); border: 1px solid var(--red); animation: pulse-red 1s ease-in-out 3; }
+    .recovery-badge.recovering { background: rgba(245,158,11,0.2); color: var(--amber); border: 1px solid var(--amber); animation: pulse-amber 0.8s ease-in-out infinite; }
+    .recovery-badge.recovered { background: rgba(63,185,80,0.2); color: var(--green); border: 1px solid var(--green); }
+    .recovery-badge.completed { background: rgba(63,185,80,0.3); color: var(--green); border: 1px solid var(--green); }
+    @@keyframes pulse-red { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+    @@keyframes pulse-amber { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+
+    /* Main Layout */
+    .main { display: flex; flex-direction: column; height: calc(100vh - 86px); }
+
+    /* Factory Floor */
+    .factory-floor {
+      flex: 1; min-height: 340px; background: #0a0e14;
+      border-bottom: 1px solid var(--border); position: relative; overflow: hidden;
+    }
+    .factory-floor svg { width: 100%; height: 100%; }
+
+    /* Aggregate State Panel */
+    .aggregate-panel {
+      background: var(--bg-alt); border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono','Fira Code',monospace; font-size: 0.68rem;
+    }
+    .aggregate-panel .panel-content {
+      padding: 6px 16px; max-height: 160px; overflow-y: auto;
+      transition: max-height 0.35s ease, padding 0.3s;
+    }
+    .aggregate-panel.collapsed .panel-content {
+      max-height: 0; padding: 0 16px; overflow: hidden;
+    }
+    .aggregate-panel .panel-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 0;
+      padding: 4px 16px; background: var(--bg-alt); z-index: 1;
+      border-bottom: 1px solid var(--border);
+    }
+    .aggregate-panel.collapsed .panel-header { border-bottom: none; }
+    .aggregate-panel .panel-header h3 { font-size: 0.72rem; font-weight: 700; color: var(--fg-muted); }
+    .aggregate-panel .panel-header button {
+      background: none; border: 1px solid var(--border); color: var(--fg-muted);
+      font-size: 0.6rem; padding: 1px 8px; border-radius: 3px; cursor: pointer;
+    }
+    .aggregate-panel .panel-header button:hover { color: var(--fg); border-color: var(--fg-muted); }
+    .agg-tree-table { width: 100%; border-collapse: collapse; }
+    .agg-tree-table th { text-align: left; padding: 2px 6px; color: var(--fg-muted); font-weight: 500; border-bottom: 1px solid var(--border); font-size: 0.65rem; }
+    .agg-tree-table td { padding: 2px 6px; border-bottom: 1px solid rgba(48,54,61,0.3); white-space: nowrap; font-size: 0.65rem; }
+    .agg-tree-table .lot-row td { font-weight: 700; color: var(--amber); border-bottom: 1px solid rgba(245,158,11,0.25); }
+    .agg-tree-table .lot-row.rwk td { color: var(--purple); background: rgba(168,85,247,0.06); border-bottom-color: rgba(168,85,247,0.25); }
+    .agg-tree-table .wafer-row td:first-child { padding-left: 22px; }
+    .agg-tree-table .status-Active { color: var(--accent); }
+    .agg-tree-table .status-Scrapped { color: var(--red); }
+
+    /* Bottom Panel */
+    .bottom-panel {
+      height: 380px; display: flex; border-top: 1px solid var(--border);
+    }
+
+    /* OCAP Rule Fire Log */
+    .ocap-panel {
+      flex: 1.5; min-width: 280px; overflow-y: auto; padding: 6px 10px;
+      background: var(--bg); border-right: 1px solid var(--border);
+      font-family: 'SF Mono','Fira Code',monospace; font-size: 0.62rem;
+    }
+    .ocap-panel h3 {
+      font-size: 0.72rem; font-weight: 700; color: var(--purple);
+      margin-bottom: 4px; display: flex; align-items: center; gap: 6px;
+    }
+    .ocap-panel h3 .ocap-count {
+      font-size: 0.55rem; color: var(--fg-muted); font-weight: 400;
+    }
+    .ocap-entry {
+      padding: 3px 6px; margin-bottom: 2px; border-radius: 3px;
+      border-left: 3px solid var(--fg-muted); background: var(--bg-alt);
+    }
+    .ocap-entry .ocap-ts { color: var(--fg-muted); font-size: 0.5rem; }
+    .ocap-entry .ocap-rule-id { font-weight: 700; }
+    .ocap-entry .ocap-action-badge {
+      display: inline-block; padding: 0 5px; border-radius: 3px;
+      font-size: 0.55rem; font-weight: 700; text-transform: uppercase;
+      margin-left: 4px;
+    }
+    .ocap-entry.action-HOLD .ocap-action-badge { background: rgba(245,158,11,0.2); color: var(--amber); }
+    .ocap-entry.action-REWORK { border-left-color: var(--purple); }
+    .ocap-entry.action-REWORK .ocap-action-badge { background: rgba(168,85,247,0.2); color: var(--purple); }
+    .ocap-entry.action-SCRAP { border-left-color: var(--red); }
+    .ocap-entry.action-SCRAP .ocap-action-badge { background: rgba(248,81,73,0.2); color: var(--red); }
+    .ocap-entry.action-NOTIFY { border-left-color: var(--accent); }
+    .ocap-entry.action-NOTIFY .ocap-action-badge { background: rgba(88,166,255,0.2); color: var(--accent); }
+    .ocap-entry.action-ADJUST_RECIPE { border-left-color: var(--green); }
+    .ocap-entry.action-ADJUST_RECIPE .ocap-action-badge { background: rgba(63,185,80,0.2); color: var(--green); }
+    .ocap-entry .ocap-detail { color: var(--fg); margin-top: 1px; font-size: 0.58rem; }
+    .ocap-entry .ocap-wafers { color: var(--fg-muted); font-size: 0.5rem; }
+
+    /* Pipeline Timeline */
+    .m35-center-panel {
+      flex: 2.5; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .pipeline-timeline-bar {
+      height: 52px; padding: 4px 12px; background: var(--bg-alt);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 2px; overflow-x: auto;
+    }
+    .pt-phase {
+      flex: 1; min-width: 20px; height: 28px; border-radius: 3px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.45rem; font-weight: 600; color: var(--fg-muted);
+      transition: all 0.3s; position: relative;
+    }
+    .pt-phase.completed { background: var(--green); color: #000; }
+    .pt-phase.current { background: var(--amber); color: #000; animation: pulse-amber 1s ease-in-out infinite; border: 2px solid rgba(245,158,11,0.6); }
+    .pt-phase.pending { background: var(--bg); border: 1px solid var(--border); }
+    .pt-phase.failed { background: var(--red); color: #fff; animation: pulse-failed 1.5s ease-in-out 2; }
+    .pt-phase.ocap-injected { background: var(--purple); color: #fff; }
+    .pt-phase.recovered { background: #2ea043; color: #000; border: 1px solid var(--green); }
+    .pt-phase .pt-recovered-badge {
+      position: absolute; top: -6px; right: -4px; font-size: 0.4rem;
+      background: var(--green); color: #000; border-radius: 50%;
+      width: 12px; height: 12px; display: flex; align-items: center; justify-content: center;
+      font-weight: 700; box-shadow: 0 0 4px rgba(63,185,80,0.6);
+    }
+    .pt-phase .pt-phase-label {
+      font-size: 0.45rem; font-weight: 600; pointer-events: none; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 90%;
+    }
+    .pt-phase .pt-phase-duration {
+      font-size: 0.35rem; opacity: 0.7; position: absolute; bottom: 1px; right: 2px; pointer-events: none;
+    }
+    .pt-phase:hover { transform: scaleY(1.18); cursor: pointer; z-index: 10; }
+    .pt-phase .pt-tooltip {
+      visibility: hidden; opacity: 0;
+      position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: #1c2333; color: var(--fg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 6px 10px; font-size: 0.6rem; font-weight: 400;
+      white-space: nowrap; z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      transition: opacity 0.2s ease, visibility 0.2s ease;
+      pointer-events: none;
+    }
+    .pt-phase:hover .pt-tooltip {
+      visibility: visible; opacity: 1;
+    }
+    .pt-phase .pt-tooltip .tt-phase-name { font-weight: 700; color: var(--fg); }
+    .pt-phase .pt-tooltip .tt-status { display: inline-block; padding: 0 4px; border-radius: 2px; font-size: 0.5rem; font-weight: 700; text-transform: uppercase; }
+    .pt-phase .pt-tooltip .tt-status.completed { background: var(--green); color: #000; }
+    .pt-phase .pt-tooltip .tt-status.current { background: var(--amber); color: #000; }
+    .pt-phase .pt-tooltip .tt-status.failed { background: var(--red); color: #fff; }
+    .pt-phase .pt-tooltip .tt-status.pending { background: var(--border); color: var(--fg-muted); }
+    .pt-phase .pt-tooltip .tt-status.recovered { background: #2ea043; color: #000; }
+    .pt-phase .pt-tooltip .tt-status.ocap { background: var(--purple); color: #fff; }
+    .pt-phase .pt-tooltip .tt-detail { color: var(--fg-muted); font-size: 0.55rem; margin-top: 1px; }
+
+    @@keyframes pulse-failed { 0%,100% { opacity:1; } 50% { opacity:0.7; } }
+
+    /* Text Timeline */
+    .timeline {
+      flex: 1; overflow-y: auto; padding: 4px 10px;
+      font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.62rem;
+      background: var(--bg);
+    }
+    .timeline .entry { padding: 1px 0; border-bottom: 1px solid rgba(48,54,61,0.3); }
+    .timeline .entry .ts { color: var(--fg-muted); margin-right: 6px; }
+    .timeline .entry.pass { color: var(--green); }
+    .timeline .entry.fail { color: var(--red); }
+    .timeline .entry.rework { color: var(--amber); }
+    .timeline .entry.transport { color: var(--accent); }
+    .timeline .entry.recovery { color: var(--purple); }
+    .timeline .entry.fault { color: var(--red); }
+
+    /* M3.5 Right Panel (Summary + Recovery Log) */
+    .m35-right-panel {
+      flex: 0.7; min-width: 180px; display: flex; flex-direction: column;
+      background: var(--bg-alt); border-left: 1px solid var(--border);
+    }
+    .m35-summary {
+      padding: 8px 10px; border-bottom: 1px solid var(--border);
+    }
+    .m35-summary h3 {
+      font-size: 0.7rem; font-weight: 700; color: var(--fg-muted); margin-bottom: 4px;
+    }
+    .m35-stat-row {
+      display: flex; justify-content: space-between; font-size: 0.68rem;
+      padding: 1px 0;
+    }
+    .m35-stat-row .label { color: var(--fg-muted); }
+    .m35-stat-row .value { font-weight: 600; }
+    .m35-stat-row .value.pass { color: var(--green); }
+    .m35-stat-row .value.fail { color: var(--red); }
+    .m35-stat-row .value.purple { color: var(--purple); }
+
+    /* Recovery Log */
+    .recovery-log {
+      flex: 1; overflow-y: auto; padding: 4px 8px;
+      font-family: 'SF Mono','Fira Code',monospace; font-size: 0.58rem;
+    }
+    .recovery-log h4 {
+      font-size: 0.62rem; font-weight: 700; color: var(--fg-muted);
+      margin-bottom: 2px; cursor: pointer; user-select: none;
+    }
+    .recovery-log h4:hover { color: var(--fg); }
+    .recovery-entry {
+      padding: 2px 4px; border-bottom: 1px solid rgba(48,54,61,0.2);
+      color: var(--fg-muted);
+    }
+    .recovery-entry .r-ts { font-size: 0.48rem; }
+    .recovery-entry.crash { color: var(--red); border-left: 2px solid var(--red); }
+    .recovery-entry.recovering { color: var(--amber); border-left: 2px solid var(--amber); }
+    .recovery-entry.recovered { color: var(--green); border-left: 2px solid var(--green); }
+
+    /* Toast Notification */
+    .toast-container {
+      position: fixed; top: 56px; right: 20px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 6px;
+      pointer-events: none;
+    }
+    .toast {
+      padding: 8px 16px; border-radius: 6px; font-size: 0.75rem;
+      background: var(--bg-alt); border: 1px solid var(--border);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      animation: slideIn 0.3s ease-out;
+      pointer-events: auto;
+      max-width: 360px;
+    }
+    .toast.success { border-color: var(--green); }
+    .toast.error { border-color: var(--red); }
+    .toast.info { border-color: var(--accent); }
+    .toast.ocap { border-color: var(--purple); }
+    @@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* SVG elements */
+    .eq-node { cursor: pointer; transition: opacity 0.3s; }
+    .eq-node:hover { opacity: 0.85; }
+    .eq-label { fill: var(--fg); font-size: 10px; font-weight: 600; text-anchor: middle; }
+    .eq-status { font-size: 8px; text-anchor: middle; }
+    .foup-icon { transition: transform 0.5s ease-in-out; }
+    .wafer-dot { transition: fill 0.3s; }
+
+    /* Completion Overlay (P7) */
+    .completion-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 9998; pointer-events: none;
+    }
+    .completion-overlay.active { pointer-events: auto; }
+    .completion-overlay .overlay-bg {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6); opacity: 0; transition: opacity 0.5s ease;
+    }
+    .completion-overlay.active .overlay-bg { opacity: 1; }
+    .completion-card {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%) scale(0.8);
+      background: var(--bg); border: 1px solid var(--green); border-radius: 12px;
+      padding: 32px 40px; max-width: 520px; width: 90%;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(63,185,80,0.2);
+      opacity: 0; transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .completion-overlay.active .completion-card {
+      transform: translate(-50%,-50%) scale(1.0);
+      opacity: 1;
+    }
+    .completion-card .cc-title {
+      font-size: 1.4rem; font-weight: 800; color: var(--green); margin-bottom: 4px;
+      text-align: center;
+    }
+    .completion-card .cc-subtitle {
+      font-size: 0.72rem; color: var(--fg-muted); margin-bottom: 16px;
+      text-align: center; line-height: 1.3;
+    }
+    .demo-guide { background: rgba(168,85,247,0.03); border: 1px solid rgba(168,85,247,0.15); border-radius: 6px; overflow: hidden; }
+    .demo-guide .panel-header { padding: 4px 8px; background: rgba(168,85,247,0.04); }
+    .completion-card .cc-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; margin-bottom: 20px; }
+    .completion-card .cc-stat {
+      display: flex; justify-content: space-between; font-size: 0.82rem;
+      padding: 4px 0; border-bottom: 1px solid rgba(48,54,61,0.3);
+    }
+    .completion-card .cc-stat .cc-label { color: var(--fg-muted); }
+    .completion-card .cc-stat .cc-value { font-weight: 700; }
+    .completion-card .cc-stat .cc-value.green { color: var(--green); }
+    .completion-card .cc-stat .cc-value.red { color: var(--red); }
+    .completion-card .cc-stat .cc-value.purple { color: var(--purple); }
+    .completion-card .cc-actions { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+    .completion-card .cc-actions button {
+      background: var(--bg-alt); border: 1px solid var(--border); color: var(--fg);
+      padding: 8px 20px; border-radius: 6px; cursor: pointer; font-size: 0.78rem;
+      transition: all 0.15s;
+    }
+    .completion-card .cc-actions button:hover { border-color: var(--fg-muted); }
+    .completion-card .cc-actions button.primary {
+      background: var(--green); color: #000; border-color: var(--green); font-weight: 600;
+    }
+    .completion-card .cc-actions button.primary:hover { opacity: 0.9; }
+
+    /* OCAP Shield SVG icon (P8) */
+    .ocap-shield-icon {
+      width: 14px; height: 14px; cursor: pointer;
+      filter: drop-shadow(0 0 2px rgba(168,85,247,0.6));
+    }
+    .ocap-shield-icon:hover { filter: drop-shadow(0 0 4px rgba(168,85,247,0.9)); }
+
+    /* OCAP path glow animation (P8) */
+    @@keyframes ocap-glow { 0%,100% { stroke-opacity:0.4; } 50% { stroke-opacity:1; } }
+    @@keyframes ocap-pulse { 0% { stroke-dashoffset:20; } 100% { stroke-dashoffset:0; } }
+    .ocap-path-glow {
+      animation: ocap-glow 1.2s ease-in-out infinite;
+    }
+    .ocap-path-pulse {
+      stroke-dasharray: 4 8;
+      animation: ocap-pulse 1.5s linear infinite;
+    }
+
+    .m35-stat-row .value.count-up { transition: all 0.3s ease; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <a href="/" class="logo">Reactive MES Kernel</a>
+  <nav>
+    <a href="/">Home</a>
+    <div class="nav-dropdown">
+      <span class="nav-dropdown-btn">Milestones <span class="arrow">&#9662;</span></span>
+      <div class="nav-dropdown-menu">
+        <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务协调器</a>
+        <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>流批一体 DAG 引擎</a>
+        <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈动态工序编排</a>
+      </div>
+    </div>
+    <div class="nav-dropdown">
+      <span class="nav-dropdown-btn">Live Demo <span class="arrow">&#9662;</span></span>
+      <div class="nav-dropdown-menu">
+        <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
+        <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 引擎</a>
+        <a href="/fab-demo/m35" class="nav-dropdown-item active"><span class="milestone-badge badge-m3">M3</span>自愈内核</a>
+      </div>
+    </div>
+    <a href="/fab-designer">Route Designer</a>
+  </nav>
+</div>
+
+<div class="controls" id="controls">
+  <button class="primary" onclick="startM35Demo()">▶ 启动自愈演示</button>
+  <select id="m35ScenarioSelect">
+    <option value="ocap-rework-crash">OCAP 返修 + 崩溃注入</option>
+    <option value="send-ahead-ocap">Send-Ahead with OCAP</option>
+    <option value="multi-workorder-chaos">多 WorkOrder 并发混沌</option>
+  </select>
+  <label>故障率: <input type="range" id="faultProbabilitySlider" min="0" max="50" value="20" oninput="updateFaultProbability(this.value)"></label>
+  <span id="faultProbLabel" style="font-size:0.75rem;color:var(--fg-muted);min-width:30px">20%</span>
+  <button class="danger" onclick="triggerCrash()">⚡ 手动注入崩溃</button>
+  <span class="recovery-status">
+    状态:
+    <span class="recovery-badge idle" id="recoveryStatusBadge" title="等待演示启动。点击 '启动自愈演示' 开始.">Idle</span>
+    <span id="recoveryDetail" style="font-size:0.6rem;color:var(--fg-muted);font-family:monospace"></span>
+  </span>
+</div>
+
+<div class="main">
+  <!-- Factory Floor SVG (same as fabSimulation.scala.html) -->
+  <div class="factory-floor" id="factoryFloor">
+    <svg id="factorySvg" viewBox="0 0 1000 440" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowBlue" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#58a6ff"/>
+        </marker>
+        <marker id="arrowAmber" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#f59e0b"/>
+        </marker>
+        <marker id="arrowGreen" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#3fb950"/>
+        </marker>
+        <marker id="arrowPurple" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#a855f7"/>
+        </marker>
+        <marker id="arrowRed" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto">
+          <path d="M0,0 L6,2 L0,4 Z" fill="#f85149"/>
+        </marker>
+      </defs>
+
+      <!-- Decision Engine -->
+      <g class="eq-node" id="eq-decision">
+        <rect x="294" y="4" width="260" height="36" rx="8" fill="#161b22" stroke="#f59e0b" stroke-width="2"/>
+        <text x="424" y="16" text-anchor="middle" font-size="9" fill="#e6edf3" font-weight="600">决策引擎</text>
+        <text x="424" y="27" text-anchor="middle" font-size="6" fill="#8b949e">OCAP + 自愈</text>
+        <text x="424" y="38" text-anchor="middle" font-size="6" fill="#6e7681" id="status-decision">等待中</text>
+      </g>
+
+      <!-- Command Bus -->
+      <polyline points="304,40 304,60 63,60 63,85" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+      <polyline points="424,40 424,60 384,60 384,85" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+      <polyline points="544,40 544,60 264,60 264,210" stroke="#a855f7" stroke-width="1.5"
+                stroke-opacity="0.4" stroke-dasharray="3 3" fill="none" marker-end="url(#arrowPurple)"/>
+
+      <!-- Row 1 -->
+      <g class="eq-node" id="eq-stocker">
+        <rect x="22" y="85" width="82" height="18" rx="3" fill="#161b22" stroke="#30363d" stroke-width="1.5"/>
+        <text x="30" y="97" font-size="6.5" fill="#e6edf3" font-weight="600">Stocker</text>
+        <text x="96" y="97" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-stocker">Idle</text>
+        <rect x="22" y="103" width="82" height="100" rx="3" fill="#0d1117" stroke="#30363d" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="63" y="155" text-anchor="middle" font-size="5" fill="#8b949e" opacity="0.5">存储区</text>
+      </g>
+
+      <g class="eq-node" id="eq-clean">
+        <rect x="144" y="85" width="80" height="18" rx="3" fill="#161b22" stroke="#06b6d4" stroke-width="1.5"/>
+        <text x="148" y="97" font-size="6.5" fill="#e6edf3" font-weight="600">Wet Clean</text>
+        <text x="216" y="97" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-clean">Idle</text>
+        <rect x="144" y="103" width="80" height="42" rx="3" fill="#0d1117" stroke="#06b6d4" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <g class="eq-node" id="eq-diff">
+        <rect x="264" y="85" width="80" height="18" rx="3" fill="#161b22" stroke="#f97316" stroke-width="1.5"/>
+        <text x="268" y="97" font-size="6.5" fill="#e6edf3" font-weight="600">Diffusion</text>
+        <text x="336" y="97" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-diff">Idle</text>
+        <rect x="264" y="103" width="80" height="42" rx="3" fill="#0d1117" stroke="#f97316" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <g class="eq-node" id="eq-litho">
+        <rect x="384" y="85" width="80" height="18" rx="3" fill="#161b22" stroke="#3b82f6" stroke-width="1.5"/>
+        <text x="388" y="97" font-size="6.5" fill="#e6edf3" font-weight="600">Litho</text>
+        <text x="456" y="97" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-litho">Idle</text>
+        <rect x="384" y="103" width="80" height="42" rx="3" fill="#0d1117" stroke="#3b82f6" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <g class="eq-node" id="eq-etch">
+        <rect x="504" y="85" width="80" height="18" rx="3" fill="#161b22" stroke="#8b5cf6" stroke-width="1.5"/>
+        <text x="508" y="97" font-size="6.5" fill="#e6edf3" font-weight="600">Etch</text>
+        <text x="576" y="97" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-etch">Idle</text>
+        <rect x="504" y="103" width="80" height="42" rx="3" fill="#0d1117" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <g class="eq-node" id="eq-implant">
+        <rect x="624" y="85" width="80" height="18" rx="3" fill="#161b22" stroke="#ec4899" stroke-width="1.5"/>
+        <text x="628" y="97" font-size="6.5" fill="#e6edf3" font-weight="600">Implant</text>
+        <text x="696" y="97" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-implant">Idle</text>
+        <rect x="624" y="103" width="80" height="42" rx="3" fill="#0d1117" stroke="#ec4899" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <!-- Row 1 transport -->
+      <line x1="104" y1="130" x2="144" y2="130" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="224" y1="130" x2="264" y2="130" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="344" y1="130" x2="384" y2="130" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="464" y1="130" x2="504" y2="130" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="584" y1="130" x2="624" y2="130" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <polyline points="664,145 664,190 544,190 544,210" stroke="#58a6ff" stroke-width="1.5"
+                stroke-opacity="0.35" fill="none" marker-end="url(#arrowBlue)"/>
+
+      <!-- Row 2 -->
+      <g class="eq-node" id="eq-dep">
+        <rect x="504" y="210" width="80" height="18" rx="3" fill="#161b22" stroke="#14b8a6" stroke-width="1.5"/>
+        <text x="508" y="222" font-size="6.5" fill="#e6edf3" font-weight="600">Deposition</text>
+        <text x="576" y="222" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dep">Idle</text>
+        <rect x="504" y="228" width="80" height="42" rx="3" fill="#0d1117" stroke="#14b8a6" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <g class="eq-node" id="eq-cmp">
+        <rect x="384" y="210" width="80" height="18" rx="3" fill="#161b22" stroke="#eab308" stroke-width="1.5"/>
+        <text x="388" y="222" font-size="6.5" fill="#e6edf3" font-weight="600">CMP</text>
+        <text x="456" y="222" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cmp">Idle</text>
+        <rect x="384" y="228" width="80" height="42" rx="3" fill="#0d1117" stroke="#eab308" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <g class="eq-node" id="eq-met">
+        <rect x="264" y="210" width="80" height="18" rx="3" fill="#161b22" stroke="#a855f7" stroke-width="1.5"/>
+        <text x="268" y="222" font-size="6.5" fill="#e6edf3" font-weight="600">Metrology</text>
+        <text x="336" y="222" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-cdsem">Idle</text>
+        <rect x="264" y="228" width="80" height="42" rx="3" fill="#0d1117" stroke="#a855f7" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <g class="eq-node" id="eq-dry">
+        <rect x="144" y="210" width="80" height="18" rx="3" fill="#161b22" stroke="#64748b" stroke-width="1.5"/>
+        <text x="148" y="222" font-size="6.5" fill="#e6edf3" font-weight="600">Drying</text>
+        <text x="216" y="222" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-dry">Idle</text>
+        <rect x="144" y="228" width="80" height="42" rx="3" fill="#0d1117" stroke="#64748b" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <g class="eq-node" id="eq-log">
+        <rect x="624" y="210" width="80" height="18" rx="3" fill="#161b22" stroke="#22c55e" stroke-width="1.5"/>
+        <text x="628" y="222" font-size="6.5" fill="#e6edf3" font-weight="600">Logistics</text>
+        <text x="696" y="222" text-anchor="end" font-size="5.5" fill="#6e7681" id="status-log">Idle</text>
+        <rect x="624" y="228" width="80" height="42" rx="3" fill="#0d1117" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="3 2"/>
+      </g>
+
+      <!-- Row 2 transport -->
+      <line x1="504" y1="250" x2="464" y2="250" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="384" y1="250" x2="344" y2="250" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+      <line x1="264" y1="250" x2="224" y2="250" stroke="#58a6ff" stroke-width="1.8" stroke-opacity="0.5" marker-end="url(#arrowBlue)"/>
+
+      <!-- Return to Stocker -->
+      <polyline points="144,250 110,250 110,170 104,170" stroke="#3fb950" stroke-width="1.8"
+                stroke-opacity="0.4" stroke-dasharray="5 4" fill="none" marker-end="url(#arrowGreen)"/>
+
+      <!-- Rework -->
+      <line x1="304" y1="228" x2="424" y2="145" stroke="#f59e0b" stroke-width="1.5"
+            stroke-opacity="0.45" stroke-dasharray="5 3" marker-end="url(#arrowAmber)"/>
+
+      <!-- Scrap Path -->
+      <line id="scrapPathLine" x1="304" y1="270" x2="304" y2="290" stroke="#f85149" stroke-width="1.8" stroke-opacity="0.45"
+            stroke-dasharray="4 3" marker-end="url(#arrowRed)"/>
+
+      <!-- Scrap Bin -->
+      <g id="scrapBin" opacity="0.75" transform="translate(234, 296)">
+        <rect x="0" y="0" width="140" height="18" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5"/>
+        <text x="70" y="12" text-anchor="middle" font-size="7" fill="#f85149" font-weight="600">报废区</text>
+        <rect x="0" y="18" width="140" height="50" rx="4" fill="#1a1118" stroke="#f85149" stroke-width="1.5" stroke-dasharray="3 2"/>
+        <text x="70" y="46" text-anchor="middle" font-size="8" fill="#f85149" font-weight="700" id="scrapCount">0 片</text>
+        <g id="scrapWaferDots" transform="translate(0, 18)"></g>
+      </g>
+
+      <!-- FOUP Icons -->
+      <rect id="foupIcon" x="55" y="155" width="16" height="10" rx="2" fill="#f59e0b" opacity="0"/>
+      <text id="foupLotLabel" x="55" y="150" text-anchor="start" font-size="5.5" fill="#f59e0b" font-family="monospace" opacity="0">--</text>
+      <rect id="reworkFoupIcon" x="304" y="245" width="16" height="10" rx="2" fill="#a855f7" opacity="0"/>
+      <text id="reworkFoupLabel" x="304" y="240" text-anchor="start" font-size="5.5" fill="#a855f7" font-family="monospace" opacity="0">--</text>
+      <text id="splitMergeLabel" x="424" y="306" text-anchor="middle" font-size="8" fill="#a855f7" font-family="monospace" opacity="0">--</text>
+
+      <!-- Classification Wheel -->
+      <g transform="translate(870, 4)">
+        <circle cx="32" cy="28" r="24" fill="none" stroke="#30363d" stroke-width="1.5"/>
+        <text x="32" y="32" text-anchor="middle" font-size="7" fill="var(--fg-muted)">晶圆分类</text>
+        <circle id="wd-0" cx="32" cy="12" r="3.5" fill="#30363d"/>
+        <circle id="wd-1" cx="44" cy="19" r="3.5" fill="#30363d"/>
+        <circle id="wd-2" cx="44" cy="37" r="3.5" fill="#30363d"/>
+        <circle id="wd-3" cx="32" cy="44" r="3.5" fill="#30363d"/>
+        <circle id="wd-4" cx="20" cy="37" r="3.5" fill="#30363d"/>
+        <text x="32" y="65" text-anchor="middle" font-size="5.5" fill="#3fb950">PASS</text>
+        <text x="32" y="74" text-anchor="middle" font-size="5.5" fill="#f59e0b">BORDERLINE</text>
+        <text x="32" y="83" text-anchor="middle" font-size="5.5" fill="#f85149">FAIL/SCRAP</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- Aggregate State Panel -->
+  <div class="aggregate-panel" id="aggregatePanel">
+    <div class="panel-header" style="justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h3>聚合状态 (Lot + Wafer)</h3>
+        <button onclick="toggleAggregatePanel()">折叠</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <input id="entityWorkOrderInput" type="text" placeholder="工单 ID" style="background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:2px 6px;font-size:11px;border-radius:3px;width:200px" />
+        <button onclick="fetchEntityState()" title="查询 ClusterSharding 中的实体状态" style="font-size:11px;padding:2px 8px">查询实体</button>
+      </div>
+    </div>
+    <div class="panel-content" id="aggregateContent">
+      <table class="agg-tree-table" id="aggTreeTable">
+        <thead><tr><th>Lot / Wafer</th><th>状态</th><th>位置</th><th>分类</th><th>Rwk</th></tr></thead>
+        <tbody id="aggTreeBody">
+          <tr><td colspan="5" style="color:var(--fg-muted)">选择场景并启动演示...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Bottom Panel (M3.5: OCAP Log + Pipeline Timeline + Summary/Recovery) -->
+  <div class="bottom-panel">
+    <!-- OCAP Rule Fire Log -->
+    <div class="ocap-panel" id="ocapLogPanel">
+      <h3>OCAP 规则触发日志 <span class="ocap-count" id="ocapCount">(0)</span></h3>
+      <div id="ocapLogBody">
+        <div style="color:var(--fg-muted);font-size:0.58rem;padding:8px">等待 OCAP 规则触发...</div>
+      </div>
+    </div>
+
+    <!-- Center: Pipeline Timeline + Text Timeline -->
+    <div class="m35-center-panel">
+      <!-- Pipeline Timeline Bar -->
+      <div class="pipeline-timeline-bar" id="pipelineTimelineBar">
+        <div style="color:var(--fg-muted);font-size:0.6rem;width:100%;text-align:center">Pipeline 时间线 — 等待演示启动</div>
+      </div>
+      <!-- Text Timeline -->
+      <div class="timeline" id="timeline">
+        <div class="entry"><span class="ts">--:--:--</span> Ready — click "启动自愈演示" to begin</div>
+      </div>
+    </div>
+
+    <!-- Right: Summary + Recovery Log -->
+    <div class="m35-right-panel">
+      <div class="demo-guide collapsible" id="demoGuide" style="margin-bottom:6px">
+        <div class="panel-header" style="cursor:pointer" onclick="var b=document.getElementById('demoGuideBody');b.style.display=b.style.display==='none'?'block':'none'">
+          <h4 style="margin:0">📖 演示指南 — 五幕叙事</h4>
+          <span style="font-size:0.5rem;color:var(--fg-muted)">点击展开</span>
+        </div>
+        <div id="demoGuideBody" style="display:none;padding:6px 8px;font-size:0.55rem;color:var(--fg-muted);line-height:1.4">
+          <p style="margin:0 0 4px"><b>第一幕 · Setup</b> — 5 片晶圆 Lot 进入 Fab。设备空闲，等待 Pipeline 启动。</p>
+          <p style="margin:0 0 4px"><b>第二幕 · Normal</b> — FOUP 沿 STOCKER → LITHO → CDSEM 流转。晶圆加工、CD 值量测。时间线绿色推进。</p>
+          <p style="margin:0 0 4px"><b>第三幕 · Chaos</b> — 设备随机故障（~20% 概率）。故障事件出现在日志中。<span style="color:var(--red)">Recovery Status 徽章</span>变红。</p>
+          <p style="margin:0 0 4px"><b>第四幕 · Self-Healing</b> — <span style="color:var(--purple)">OCAP 规则引擎</span>评估故障条件并执行动作（Rework / Scrap / Notify / AdjustRecipe）。崩溃的 Actor 通过 <b>Event Sourcing Journal 重放</b>恢复——已完成阶段<b>自动跳过</b>（断点续传），从中断处继续执行。</p>
+          <p style="margin:0 0 4px"><b>第五幕 · Resolution</b> — 所有晶圆完成加工。统计面板显示 Pass/Scrap 计数、故障处理次数、恢复成功次数。</p>
+          <p style="margin:0;color:var(--amber)"><b>⚡ 单 WorkOrder 自愈机制：</b>FabPipelineExecutionActor 是 EventSourcedBehavior——崩溃后 Akka Persistence 重放事件恢复状态，RecoveryCompleted 信号中调用 resumeFromIndex 从断点继续。已完成阶段（completedPhases cursor）持久化在事件日志中，恢复时直接跳过，避免重复执行。</p>
+          <p style="margin:0;color:var(--fg-subtle)"><b>⚠ 已知边界：</b>多 WorkOrder 并发场景下，若崩溃注入命中 Idle 状态的 Actor（StartExecution 尚未处理），消息丢失后缺乏上层编排聚合重试——需要后续引入 WorkOrderBatch 聚合或 Watchdog 机制。</p>
+        </div>
+      </div>
+      <div class="m35-summary" id="m35Summary">
+        <h3>自愈统计</h3>
+        <div class="m35-stat-row"><span class="label">处理中</span><span class="value" id="m35-active">0</span></div>
+        <div class="m35-stat-row"><span class="label">PASS 通过</span><span class="value pass" id="m35-pass">0</span></div>
+        <div class="m35-stat-row"><span class="label">Rework 返修</span><span class="value" id="m35-rework" style="color:var(--amber)">0</span></div>
+        <div class="m35-stat-row"><span class="label">Scrap 报废</span><span class="value fail" id="m35-scrap">0</span></div>
+        <div class="m35-stat-row"><span class="label">故障次数</span><span class="value" id="m35-faults" style="color:var(--red)">0</span></div>
+        <div class="m35-stat-row"><span class="label">恢复次数</span><span class="value purple" id="m35-recoveries">0</span></div>
+        <div class="m35-stat-row"><span class="label">OCAP 触发</span><span class="value purple" id="m35-ocap-triggers">0</span></div>
+      </div>
+      <div class="recovery-log" id="recoveryLog">
+        <h4 onclick="toggleRecoveryLog()">恢复日志 <span id="recoveryLogCount" style="font-weight:400;font-size:0.5rem;color:var(--fg-muted)">(0)</span></h4>
+        <div id="recoveryLogBody">
+          <div style="color:var(--fg-muted);font-size:0.55rem;padding:2px">暂无恢复事件。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- Completion Overlay (P7) -->
+<div class="completion-overlay" id="completionOverlay">
+  <div class="overlay-bg"></div>
+  <div class="completion-card">
+    <div class="cc-title">🎉 自愈成功</div>
+    <div class="cc-subtitle">经历设备故障和 Actor 崩溃，系统自动恢复，工单全部完成。</div>
+    <div class="cc-stats">
+      <div class="cc-stat"><span class="cc-label">总晶圆数</span><span class="cc-value" id="cc-total">0</span></div>
+      <div class="cc-stat"><span class="cc-label">PASS 通过</span><span class="cc-value green" id="cc-passed">0</span></div>
+      <div class="cc-stat"><span class="cc-label">Rework 返修（自动重路由）</span><span class="cc-value purple" id="cc-reworked">0</span></div>
+      <div class="cc-stat"><span class="cc-label">Scrap 报废（OCAP 判废）</span><span class="cc-value red" id="cc-scrapped">0</span></div>
+      <div class="cc-stat"><span class="cc-label">设备故障次数</span><span class="cc-value" id="cc-faults">0</span></div>
+      <div class="cc-stat"><span class="cc-label">崩溃恢复次数</span><span class="cc-value green" id="cc-recoveries">0</span></div>
+      <div class="cc-stat"><span class="cc-label">OCAP 规则触发</span><span class="cc-value purple" id="cc-ocap-triggers">0</span></div>
+      <div class="cc-stat"><span class="cc-label">总耗时</span><span class="cc-value" id="cc-time">0s</span></div>
+    </div>
+    <div class="cc-actions">
+      <button onclick="document.getElementById('completionOverlay').classList.remove('active')">关闭</button>
+      <button class="primary" onclick="location.reload()">重新运行</button>
+    </div>
+  </div>
+</div>
+
+<!-- i18n messages -->
+<script>
+window.__i18n = {
+  lang: "@messages.lang.code",
+  status_idle: "Idle",
+  status_processing: "Processing",
+  status_pass: "PASS",
+  status_fail: "FAIL",
+  status_scrap: "SCRAP",
+  status_borderline: "BORDERLINE",
+  t: function(key) { return this[key] || key; },
+  statusMap: {
+    "Idle": "Idle", "Processing": "Processing", "PASS": "PASS",
+    "FAIL": "FAIL", "SCRAP": "SCRAP", "BORDERLINE": "BORDERLINE",
+    "Active": "Processing", "Scrapped": "SCRAP"
+  }
+};
+</script>
+<script src="https://unpkg.com/rxjs@@7/dist/bundles/rxjs.umd.min.js"></script>
+<script src="@routes.Assets.versioned("javascripts/fab_observable.js")" type="text/javascript"></script>
+<script src="@routes.Assets.versioned("javascripts/route_graph.js")" type="text/javascript"></script>
+<script src="@routes.Assets.versioned("javascripts/fab_m35_observable.js")" type="text/javascript"></script>
+<script src="@routes.Assets.versioned("javascripts/fab_m35_demo.js")" type="text/javascript"></script>
+</body>
+</html>

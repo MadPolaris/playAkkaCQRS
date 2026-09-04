@@ -1,0 +1,12 @@
+target/
+.git/
+.idea/
+*.iml
+.vscode/
+.bloop/
+.metals/
+node_modules/
+logs/
+*.log
+.DS_Store
+.sbt/

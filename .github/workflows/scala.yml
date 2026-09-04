@@ -22,9 +22,9 @@ jobs:
           java-version: '11'
           distribution: 'temurin'
           cache: 'sbt'
-      - name: Clear SBT caches
-        run: sbt clean
-      - name: Run tests with detailed logging
+      - name: Set up sbt
+        uses: sbt/setup-sbt@v1
+      - name: Run tests
         run: sbt -v test
       - name: Upload dependency graph
         uses: scalacenter/sbt-dependency-submission@v1
