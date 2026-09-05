@@ -94,8 +94,18 @@ object FabExecutionModel {
     childLotRefs: Map[String, akka.cluster.sharding.typed.scaladsl.EntityRef[LotCommand]] = Map.empty,
     childLotIds: Map[String, Id] = Map.empty,
     ocapRules: List[OcapRuleDefinition] = Nil,
-    faultProbability: Double = 0.0
+    faultProbability: Double = 0.0,
+    /** P0 staleness guard: returns false once this pipeline run's generation is superseded
+      * (crash recovery started a new run). Stale runs must not publish UI events or drive
+      * further side effects — see [[net.imadz.application.chain.PipelineRunRegistry]]. */
+    runToken: () => Boolean = () => true
   )(implicit val ec: ExecutionContext) extends net.imadz.application.chain.ExecutionContext {
+
+    /** Guarded publish: drops events from superseded pipeline runs. */
+    def publish(event: FabSimulationEvent): Unit = if (runToken()) publisher(event)
+
+    /** True when this run has been superseded by a newer generation. */
+    def stale: Boolean = !runToken()
 
     /** Convenience accessor for the demo profile (for gradual migration). */
     def profile: DemoExecutionProfile = DemoExecutionProfile(scenario, speedMultiplier, faultProbability)
@@ -112,7 +122,7 @@ object FabExecutionModel {
      *        compat with non-Actor callers (tests, direct invocation). In the unified Actor
      *        path this is overridden to go through the journal. */
     var stageProgressFn: (String, String, String) => Unit =
-      (status, detail, phase) => publisher(net.imadz.domain.events.GlobalStatusChanged(status, detail, phase))
+      (status, detail, phase) => publish(net.imadz.domain.events.GlobalStatusChanged(status, detail, phase))
 
     override def stageProgress(status: String, detail: String, phase: String): Unit =
       stageProgressFn(status, detail, phase)

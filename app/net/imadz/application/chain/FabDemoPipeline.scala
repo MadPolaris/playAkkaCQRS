@@ -86,63 +86,63 @@ object FabDemoPipeline {
         // Re-evaluate: reworked wafer must pass CD inspection again
         val cls = PipelineStages.classifyCd(cdValue, decisionConfig)
         ctx.lotRef ! RecordWaferMeasured(ctx.waferUUIDs(wid), cdValue, ctx.ignoreLotReply)
-        ctx.publisher(MeasurementResultEvent(wid, cdValue, cls, decisionConfig.upperSpecNm))
+        ctx.publish(MeasurementResultEvent(wid, cdValue, cls, decisionConfig.upperSpecNm))
         cls match {
           case "PASS" | "BORDERLINE" =>
             updatedWafers += wid -> info.copy(classification = Some("PASS"))
             passWafers :+= wid
             ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid), "PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
-            ctx.publisher(DecisionMade(wid, "Rework → PASS", None))
+            ctx.publish(DecisionMade(wid, "Rework → PASS", None))
           case "FAIL" =>
             val nc = info.reworkCount + 1
             if (nc >= maxRework) {
               updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("SCRAP"))
               scrapWafers :+= wid
               ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid), "SCRAP", nc, cdValue, ctx.ignoreLotReply)
-              ctx.publisher(DecisionMade(wid, s"Rework → FAIL (attempt $nc/$maxRework) → SCRAP", None))
-              ctx.publisher(ScrapEvent(wid, s"Max rework($maxRework) exceeded"))
+              ctx.publish(DecisionMade(wid, s"Rework → FAIL (attempt $nc/$maxRework) → SCRAP", None))
+              ctx.publish(ScrapEvent(wid, s"Max rework($maxRework) exceeded"))
             } else {
               updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("FAIL"))
               reworkWafers :+= wid
               ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid), "FAIL", nc, cdValue, ctx.ignoreLotReply)
-              ctx.publisher(DecisionMade(wid, s"Rework → FAIL (attempt $nc/$maxRework)", None))
+              ctx.publish(DecisionMade(wid, s"Rework → FAIL (attempt $nc/$maxRework)", None))
             }
           case "SCRAP" =>
             updatedWafers += wid -> info.copy(reworkCount = info.reworkCount + 1, classification = Some("SCRAP"))
             scrapWafers :+= wid
             ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid), "SCRAP", info.reworkCount + 1, cdValue, ctx.ignoreLotReply)
-            ctx.publisher(DecisionMade(wid, "Rework → SCRAP", None))
-            ctx.publisher(ScrapEvent(wid, s"CD=$cdValue nm → SCRAP after rework"))
+            ctx.publish(DecisionMade(wid, "Rework → SCRAP", None))
+            ctx.publish(ScrapEvent(wid, s"CD=$cdValue nm → SCRAP after rework"))
         }
       } else {
         val cls = PipelineStages.classifyCd(cdValue, decisionConfig)
         ctx.lotRef ! RecordWaferMeasured(ctx.waferUUIDs(wid), cdValue, ctx.ignoreLotReply)
-        ctx.publisher(MeasurementResultEvent(wid, cdValue, cls, decisionConfig.upperSpecNm))
+        ctx.publish(MeasurementResultEvent(wid, cdValue, cls, decisionConfig.upperSpecNm))
         cls match {
           case "PASS" =>
             updatedWafers += wid -> info.copy(classification = Some("PASS"))
             passWafers :+= wid
             ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", 0, cdValue, ctx.ignoreLotReply)
-            ctx.publisher(DecisionMade(wid, "PASS → Continue", None))
+            ctx.publish(DecisionMade(wid, "PASS → Continue", None))
           case "BORDERLINE" =>
             if (info.reworkCount == 0) {
               updatedWafers += wid -> info.copy(classification = Some("PASS"))
               passWafers :+= wid
               ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"PASS", 0, cdValue, ctx.ignoreLotReply)
-              ctx.publisher(DecisionMade(wid, "BORDERLINE → Conditional Pass", None))
+              ctx.publish(DecisionMade(wid, "BORDERLINE → Conditional Pass", None))
             } else {
               val nc = info.reworkCount + 1
               if (nc >= maxRework) {
                 updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("SCRAP"))
                 scrapWafers :+= wid
                 ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"SCRAP", nc, cdValue, ctx.ignoreLotReply)
-                ctx.publisher(DecisionMade(wid, s"BORDERLINE → Max Rework($nc) → SCRAP", None))
-                ctx.publisher(ScrapEvent(wid, s"Max rework($nc) exceeded"))
+                ctx.publish(DecisionMade(wid, s"BORDERLINE → Max Rework($nc) → SCRAP", None))
+                ctx.publish(ScrapEvent(wid, s"Max rework($nc) exceeded"))
               } else {
                 updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("FAIL"))
                 reworkWafers :+= wid
                 ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"FAIL", nc, cdValue, ctx.ignoreLotReply)
-                ctx.publisher(DecisionMade(wid, s"BORDERLINE → Rework (attempt $nc/$maxRework)", None))
+                ctx.publish(DecisionMade(wid, s"BORDERLINE → Rework (attempt $nc/$maxRework)", None))
               }
             }
           case "FAIL" =>
@@ -151,20 +151,20 @@ object FabDemoPipeline {
               updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("SCRAP"))
               scrapWafers :+= wid
               ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"SCRAP", nc, cdValue, ctx.ignoreLotReply)
-              ctx.publisher(DecisionMade(wid, s"FAIL → Max Rework($nc) → SCRAP", None))
-              ctx.publisher(ScrapEvent(wid, s"Max rework($nc) exceeded"))
+              ctx.publish(DecisionMade(wid, s"FAIL → Max Rework($nc) → SCRAP", None))
+              ctx.publish(ScrapEvent(wid, s"Max rework($nc) exceeded"))
             } else {
               updatedWafers += wid -> info.copy(reworkCount = nc, classification = Some("FAIL"))
               reworkWafers :+= wid
               ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"FAIL", nc, cdValue, ctx.ignoreLotReply)
-              ctx.publisher(DecisionMade(wid, s"FAIL → Rework (attempt $nc/$maxRework)", None))
+              ctx.publish(DecisionMade(wid, s"FAIL → Rework (attempt $nc/$maxRework)", None))
             }
           case "SCRAP" =>
             updatedWafers += wid -> info.copy(classification = Some("SCRAP"))
             scrapWafers :+= wid
             ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(wid),"SCRAP", 0, cdValue, ctx.ignoreLotReply)
-            ctx.publisher(DecisionMade(wid, "SCRAP → Terminate", None))
-            ctx.publisher(ScrapEvent(wid, s"CD=$cdValue nm → SCRAP"))
+            ctx.publish(DecisionMade(wid, "SCRAP → Terminate", None))
+            ctx.publish(ScrapEvent(wid, s"CD=$cdValue nm → SCRAP"))
         }
       }
     }
@@ -174,12 +174,12 @@ object FabDemoPipeline {
     val totalScrap = updatedWafers.values.count(_.classification.contains("SCRAP"))
     val totalRework = updatedWafers.values.count(w => w.classification.contains("FAIL") && w.reworkCount > 0)
 
-    ctx.publisher(LotUpdated(ctx.scenario.scenarioId, ctx.scenario.lotSize, totalScrap,
+    ctx.publish(LotUpdated(ctx.scenario.scenarioId, ctx.scenario.lotSize, totalScrap,
       (1 to state.iteration + 1).map(i => s"Pass-$i").toList, totalPass, totalRework))
 
     if (reworkWafers.nonEmpty) {
       ctx.lotRef ! RecordWafersSplitForRework(reworkWafers.toSet, scrapWafers.toSet, state.iteration, ctx.ignoreLotReply)
-      ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "SplitLot",
+      ctx.publish(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "SplitLot",
         s"Split ${reworkWafers.size} wafers for rework: ${reworkWafers.mkString(",")}", reworkWafers))
     }
 
@@ -196,7 +196,7 @@ object FabDemoPipeline {
   private def maybeRework(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val hasRework = state.wafers.values.exists(w => w.classification.contains("FAIL") && w.reworkCount > 0)
     if (!hasRework) {
-      ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "CompleteLot",
+      ctx.publish(OrchestratorCommand(PipelineStages.cmdId(), "DECISION-ENGINE", "CompleteLot",
         s"All wafers resolved: ${state.passCount} PASS, ${state.scrapCount} SCRAP", Seq.empty))
       Future.successful(state)
     } else {
@@ -249,18 +249,18 @@ object FabDemoPipeline {
     val reworkWaferUUIDs: Set[Id] = reworkWaferIds.flatMap(ctx.waferUUIDs.get).toSet
 
     val sagaId = s"SAGA-SPLIT-${state.iteration}"
-    ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "PREPARE",
+    ctx.publish(SagaOperationEvent(sagaId, "SplitLot", "PREPARE",
       ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
-    ctx.publisher(FoupStateChanged(ctx.foupId, "SPLITTING", PipelineStages.activeCount(state), reworkWaferIds.size, "CDSEM",
+    ctx.publish(FoupStateChanged(ctx.foupId, "SPLITTING", PipelineStages.activeCount(state), reworkWaferIds.size, "CDSEM",
       lotId = ctx.scenario.scenarioId, reworkLotId = s"${ctx.scenario.scenarioId}-RWK"))
 
     createRework.flatMap(_ =>
       ctx.sagaTx(ctx.sourceLotId, ctx.reworkLotId, reworkWaferUUIDs, reworkWaferIds.toSet, None)
     )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
-        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
+        ctx.publish(SagaOperationEvent(sagaId, "SplitLot", "COMMITTED",
           ctx.scenario.scenarioId, s"${ctx.scenario.scenarioId}-RWK", reworkWaferIds))
-        ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "SplitCompleted",
+        ctx.publish(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "SplitCompleted",
           s"TCC Split committed: ${reworkWaferIds.mkString(",")} → Rework Lot", reworkWaferIds))
         ctx.lotRef ! RecordSubLotCreated(ctx.reworkLotId, ReworkSplit, reworkWaferUUIDs, ctx.ignoreLotReply)
         val rwkWaferIds = reworkWaferIds.toSet
@@ -272,7 +272,7 @@ object FabDemoPipeline {
         Future.successful(finalState)
       } else {
         val errMsg = confirmation.error.getOrElse("unknown")
-        ctx.publisher(SagaOperationEvent(sagaId, "SplitLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
+        ctx.publish(SagaOperationEvent(sagaId, "SplitLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
         Future.failed(new IllegalStateException(s"Saga $sagaId SplitLot failed: $errMsg"))
       }
     }(ctx.ec)
@@ -290,20 +290,20 @@ object FabDemoPipeline {
       }.toSeq
 
       if (passWaferUUIDs.isEmpty) {
-        ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeSkipped",
+        ctx.publish(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeSkipped",
           "No PASS wafers in rework lot to merge", Seq.empty))
         Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
       } else {
         val passWaferNames = passWaferUUIDs.flatMap(uuidToName.get)
         val sagaId = s"SAGA-MERGE-${state.iteration}"
-        ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "PREPARE",
+        ctx.publish(SagaOperationEvent(sagaId, "MergeLot", "PREPARE",
           s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
 
         ctx.sagaTx(ctx.reworkLotId, ctx.sourceLotId, passWaferUUIDs.toSet, passWaferNames.toSet, None).flatMap { confirmation =>
           if (confirmation.error.isEmpty) {
-            ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED",
+            ctx.publish(SagaOperationEvent(sagaId, "MergeLot", "COMMITTED",
               s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
-            ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeCompleted",
+            ctx.publish(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeCompleted",
               s"TCC Merge: ${passWaferNames.mkString(",")} → Source Lot", passWaferNames.toSeq))
             ctx.lotRef ! RecordSubLotMerged(ctx.reworkLotId, passWaferUUIDs.toSet, ctx.ignoreLotReply)
             passWaferNames.foreach { name =>
@@ -321,7 +321,7 @@ object FabDemoPipeline {
             Future.successful(finalState)
           } else {
             val errMsg = confirmation.error.getOrElse("unknown")
-            ctx.publisher(SagaOperationEvent(sagaId, "MergeLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
+            ctx.publish(SagaOperationEvent(sagaId, "MergeLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
             Future.failed(new IllegalStateException(s"Saga $sagaId MergeLot failed: $errMsg"))
           }
         }(ctx.ec)
@@ -353,16 +353,16 @@ object FabDemoPipeline {
         parentLotId = Some(ctx.sourceLotId), splitReason = Some(ScrapSplit)))
 
     val scrapLotIdStr = scrapLotId.toString
-    ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "PREPARE",
+    ctx.publish(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "PREPARE",
       ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
 
     createScrap.flatMap(_ =>
       ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet, None)
     )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
-        ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "COMMITTED",
+        ctx.publish(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "COMMITTED",
           ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
-        ctx.publisher(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "ScrapCompleted",
+        ctx.publish(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "ScrapCompleted",
           s"TCC Scrap: ${scrapWaferIds.mkString(",")} → Scrap Lot", scrapWaferIds))
         val scrapSet = scrapWaferIds.toSet
         val updatedWafers = state.wafers.map { case (wid, info) =>
@@ -374,7 +374,7 @@ object FabDemoPipeline {
         Future.successful(finalState)
       } else {
         val errMsg = confirmation.error.getOrElse("unknown")
-        ctx.publisher(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
+        ctx.publish(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", s"FAILED: $errMsg", ctx.scenario.scenarioId, "", Seq.empty))
         Future.failed(new IllegalStateException(s"Saga SAGA-SCRAP ScrapLot failed: $errMsg"))
       }
     }(ctx.ec)

@@ -97,7 +97,11 @@ object FabPipelineExecutionActor {
   /** Internal: stage failed callback from the processor. */
   final case class PhaseFailed(phase: String, error: FabExecutionModel.StageError) extends Command
 
-  /** Internal: intra-stage progress notification (replaces ctx.publisher(GlobalStatusChanged)). */
+  /** Internal: OCAP resolved a failed stage — journaled separately from StageCompleted
+    * (P2: the journal no longer records a fake completion for a stage that failed). */
+  final case class OcapResolved(phase: String, error: FabExecutionModel.StageError, fabState: FabDemoState) extends Command
+
+  /** Internal: intra-stage progress notification (replaces ctx.publish(GlobalStatusChanged)). */
   final case class StageProgressEvent(status: String, detail: String, phase: String) extends Command
 
   // ---- Events ----
@@ -131,6 +135,14 @@ object FabPipelineExecutionActor {
       phase: String,
       error: FabExecutionModel.StageError,
       timestamp: Long
+  ) extends Event
+
+  /** P2: OCAP handling of a failed stage — advances the cursor without claiming success. */
+  final case class OcapHandled(
+      phase: String,
+      error: FabExecutionModel.StageError,
+      timestamp: Long,
+      fabState: FabDemoState
   ) extends Event
 
   final case class AllCompleted(
@@ -230,7 +242,9 @@ object FabPipelineExecutionActor {
               recoveryTimeMs = recStart - startTime,
               detail = s"Recovering: ${execState.completedCount} phases completed, resuming from phase ${execState.completedCount}"))
             try {
+              val generation = PipelineRunRegistry.register(execState.workOrderId)
               val recoveryCtx = contextFactory(execState.scenarioId, execState.workOrderId)
+                .copy(runToken = () => PipelineRunRegistry.isFresh(execState.workOrderId, generation))
               recoveryCtx.stageProgressFn = (status, detail, phase) =>
                 ctx.self ! StageProgressEvent(status, detail, phase)
               val initState = execState.fabDemoState.getOrElse(stateFactory(execState.workOrderId))
@@ -239,6 +253,7 @@ object FabPipelineExecutionActor {
               val processor = FabPipelineProcessor(recoveryStages, recoveryCtx,
                 phase => ctx.self ! PhaseStarting(phase),
                 (phase, metadata, fabState) => ctx.self ! PhaseCompleted(phase, metadata, fabState),
+                (phase, error, ocapState) => ctx.self ! OcapResolved(phase, error, ocapState),
                 (phase, error) => ctx.self ! PhaseFailed(phase, error))
 
               processor.resumeFromIndex(initState, execState.completedCount).onComplete {
@@ -288,14 +303,17 @@ object FabPipelineExecutionActor {
     (state, cmd) match {
 
       // ---- Start execution ----
-      case (Idle, StartExecution(scenarioId, workOrderId, initialState, stages, fctx, replyTo)) =>
+      case (Idle, StartExecution(scenarioId, workOrderId, initialState, stages, fctx0, replyTo)) =>
         val event = Started(scenarioId, workOrderId, stages.size)
         Effect.persist(event).thenRun { _ =>
+          val generation = PipelineRunRegistry.register(workOrderId)
+          val fctx = fctx0.copy(runToken = () => PipelineRunRegistry.isFresh(workOrderId, generation))
           fctx.stageProgressFn = (status, detail, phase) =>
             ctx.self ! StageProgressEvent(status, detail, phase)
           val processor = FabPipelineProcessor(stages, fctx,
             phase => ctx.self ! PhaseStarting(phase),
             (phase, metadata, fabState) => ctx.self ! PhaseCompleted(phase, metadata, fabState),
+            (phase, error, ocapState) => ctx.self ! OcapResolved(phase, error, ocapState),
             (phase, error) => ctx.self ! PhaseFailed(phase, error))
 
           processor.process(initialState).onComplete {
@@ -319,7 +337,11 @@ object FabPipelineExecutionActor {
       case (_: Executing, PhaseFailed(phase, error)) =>
         Effect.persist(StageFailed(phase, error, System.currentTimeMillis()))
 
-      // ---- Intra-stage progress (replaces ctx.publisher(GlobalStatusChanged)) ----
+      // ---- P2: OCAP resolved a failed stage — cursor advances without claiming success ----
+      case (es: Executing, OcapResolved(phase, error, fabState)) =>
+        Effect.persist(OcapHandled(phase, error, System.currentTimeMillis(), fabState))
+
+      // ---- Intra-stage progress (replaces ctx.publish(GlobalStatusChanged)) ----
       case (_: Executing, StageProgressEvent(status, detail, phase)) =>
         Effect.persist(StageProgress(status, detail, phase, System.currentTimeMillis()))
 
@@ -415,6 +437,9 @@ object FabPipelineExecutionActor {
 
       case (e: Executing, StageFailed(_, _, _)) =>
         e
+
+      case (e: Executing, OcapHandled(phase, _, _, fabState)) =>
+        e.copy(completedPhases = e.completedPhases :+ phase, fabDemoState = Some(fabState))
 
       case (e: Executing, StageProgress(_, _, _, _)) =>
         e

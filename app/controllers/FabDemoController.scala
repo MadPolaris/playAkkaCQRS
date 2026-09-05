@@ -52,6 +52,14 @@ class FabDemoController @Inject()(
     akka.stream.scaladsl.Source.single(event).runWith(hubSink)
   }
 
+  /** P4: process-wide monotonic frame counter — lets the client detect and drop
+    * semantically-stale snapshots (projection lag) instead of animating them. */
+  private val frameSeq = new java.util.concurrent.atomic.AtomicLong(0)
+  private def frameJson(event: FabSimulationEvent): String = {
+    val typeName = event.getClass.getSimpleName.replace("$", "")
+    Json.obj("seq" -> frameSeq.incrementAndGet(), "type" -> typeName, "data" -> writeEventData(event)).toString()
+  }
+
   // Register system-wide publisher so recovery replays have a WebSocket publisher
   fabDemoService.setSystemWidePublisher(publishEvent)
 
@@ -95,11 +103,7 @@ class FabDemoController @Inject()(
   /** WebSocket endpoint for real-time simulation events.
    * Frontend applies its own bufferTime(100ms) batching via RxJS. */
   def socket: WebSocket = WebSocket.accept[String, String] { _ =>
-    Flow.fromSinkAndSource(Sink.ignore, hubSource.map { event =>
-      val typeName = event.getClass.getSimpleName.replace("$", "")
-      val data = writeEventData(event)
-      Json.obj("type" -> typeName, "data" -> data).toString()
-    })
+    Flow.fromSinkAndSource(Sink.ignore, hubSource.map(frameJson))
   }
 
   private def writeEventData(event: FabSimulationEvent): play.api.libs.json.JsValue = {
@@ -308,11 +312,7 @@ class FabDemoController @Inject()(
 
   /** WebSocket endpoint for M3.5 real-time events (reuses existing hubSource). */
   def m35Socket: WebSocket = WebSocket.accept[String, String] { _ =>
-    Flow.fromSinkAndSource(Sink.ignore, hubSource.map { event =>
-      val typeName = event.getClass.getSimpleName.replace("$", "")
-      val data = writeEventData(event)
-      Json.obj("type" -> typeName, "data" -> data).toString()
-    })
+    Flow.fromSinkAndSource(Sink.ignore, hubSource.map(frameJson))
   }
 
   /** Start the M3.5 self-healing demo. */

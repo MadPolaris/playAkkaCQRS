@@ -94,9 +94,20 @@
       op.map(function(e) { return e.data; })
     );
 
+    // P4: projection snapshots lag live events — drop per-workOrder regressions so the
+    // progress bar never animates backwards, and skip frame replays of old runs.
+    var lastTimeline = {};
     _m35Streams.timelineSnapshot$ = rawEvent$.pipe(
       op.filter(function(e) { return e.type === 'PipelineTimelineSnapshot'; }),
-      op.map(function(e) { return e.data; })
+      op.map(function(e) { return e.data; }),
+      op.filter(function(d) {
+        var key = d.workOrderId || 'default';
+        var done = d.completedPhases || 0;
+        if (lastTimeline[key] !== undefined && done <= lastTimeline[key] && d.currentPhaseIndex === undefined) return false;
+        if (lastTimeline[key] !== undefined && done < lastTimeline[key]) return false;
+        lastTimeline[key] = done;
+        return true;
+      })
     );
 
     // Also forward standard event types needed by the M3.5 UI
@@ -130,9 +141,17 @@
       op.map(function(e) { return e.data; })
     );
 
+    // P4: skip consecutive identical aggregate states (projection replays) per lot set.
+    var lastAggFingerprint = null;
     _m35Streams.aggregateState$ = rawEvent$.pipe(
       op.filter(function(e) { return e.type === 'AggregateStateUpdated'; }),
-      op.map(function(e) { return e.data; })
+      op.map(function(e) { return e.data; }),
+      op.filter(function(d) {
+        var fp = JSON.stringify(d);
+        if (fp === lastAggFingerprint) return false;
+        lastAggFingerprint = fp;
+        return true;
+      })
     );
 
     _m35Streams.globalStatus$ = rawEvent$.pipe(

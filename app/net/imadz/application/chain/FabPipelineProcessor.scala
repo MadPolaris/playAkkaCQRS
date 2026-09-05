@@ -16,34 +16,46 @@ import scala.util.control.NonFatal
  * the actor to persist the corresponding domain event.
  *
  * Stage name derivation converts each [[PipelineStage]] variant to a stable string
- * cursor suitable for use as an event-sourcing phase cursor.
+ * cursor suitable for use as an event-sourcing phase cursor. Repeated variants
+ * (e.g. multiple `Branch` stages) are disambiguated with their queue position so that
+ * journal cursors stay unique.
+ *
+ * P0: every stage boundary checks [[FabDemoContext]].runToken — a superseded run
+ * (crash recovery started a newer generation) terminates silently instead of racing
+ * the recovered run.
  */
 class FabPipelineProcessor(
   ctx: FabDemoContext,
   onPhaseStart: String => Unit,
   onPhaseComplete: (String, Map[String, String], Option[FabDemoState]) => Unit,
+  onOcapResolved: (String, StageError, FabDemoState) => Unit,
   onPhaseFailed: (String, StageError) => Unit
 ) {
 
-  private var queue: Vector[PipelineStage] = Vector.empty
+  /** Queue entries carry a stable position so repeated stage variants get unique cursors. */
+  private var entries: Vector[(PipelineStage, Int)] = Vector.empty
+  private var nextPos: Int = 0
 
   /** Initialise the processor with the full stage list. */
   def initialize(stages: Seq[PipelineStage]): Unit = {
-    queue = stages.toVector
+    entries = stages.map(s => (s, nextPos)).toVector
+    nextPos += stages.size
   }
 
   /** Prepend stages to the head of the queue (Branch / OCAP runtime weaving). */
   def injectHead(stages: Seq[PipelineStage]): Unit = {
-    queue = stages.toVector ++ queue
+    entries = stages.map(s => (s, nextPos)).toVector ++ entries
+    nextPos += stages.size
   }
 
   /** Append stages to the tail of the queue. */
   def appendTail(stages: Seq[PipelineStage]): Unit = {
-    queue = queue ++ stages.toVector
+    entries = entries ++ stages.map(s => (s, nextPos)).toVector
+    nextPos += stages.size
   }
 
   /** Current queue size. */
-  def pendingCount: Int = queue.size
+  def pendingCount: Int = entries.size
 
   // ====================================================================
   // Stage name derivation
@@ -78,72 +90,76 @@ class FabPipelineProcessor(
     case _                                  => stage.getClass.getSimpleName
   }
 
+  /** Unique cursor: repeated variants (Branch, Transport…) get their queue position. */
+  private def cursorName(stage: PipelineStage, pos: Int): String =
+    s"${stageName(stage)}#$pos"
+
   // ====================================================================
   // Execution
   // ====================================================================
 
-  /**
-   * Execute the full queue starting from the given state.
-   * After each successful stage, `onPhaseComplete` is invoked.
-   */
-  def process(initialState: FabDemoState)(implicit ec: ExecutionContext): Future[FabDemoState] = {
-    executeQueue(queue, initialState, ec)
-  }
+  /** Execute the full queue starting from the given state. */
+  def process(initialState: FabDemoState)(implicit ec: ExecutionContext): Future[FabDemoState] =
+    executeQueue(entries, initialState)
 
   /**
-   * Resume execution after recovery, skipping stages whose phase names
-   * appear in `completedPhases`. This enables crash recovery where only
-   * uncompleted stages are re-executed.
+   * Resume after recovery, skipping stages whose phase names appear in `completedPhases`.
    */
   def resume(state: FabDemoState, completedPhases: Set[String])(implicit ec: ExecutionContext): Future[FabDemoState] = {
-    val remaining = queue.dropWhile(stage => completedPhases.contains(stageName(stage)))
-    if (remaining.size == queue.size) {
-      executeQueue(queue, state, ec)
-    } else {
-      executeQueue(remaining, state, ec)
-    }
+    val remaining = entries.dropWhile { case (stage, pos) => completedPhases.contains(cursorName(stage, pos)) }
+    executeQueue(remaining, state)
   }
 
   /** Resume using indexed skip where we know the exact count of completed phases. */
-  def resumeFromIndex(state: FabDemoState, completedCount: Int)(implicit ec: ExecutionContext): Future[FabDemoState] = {
-    val remaining = queue.drop(completedCount)
-    executeQueue(remaining, state, ec)
-  }
+  def resumeFromIndex(state: FabDemoState, completedCount: Int)(implicit ec: ExecutionContext): Future[FabDemoState] =
+    executeQueue(entries.drop(completedCount), state)
 
   // ====================================================================
   // Internal
   // ====================================================================
 
   private def executeQueue(
-    remaining: Vector[PipelineStage],
-    state: FabDemoState,
-    ec: ExecutionContext
-  ): Future[FabDemoState] = {
-    implicit val exec: ExecutionContext = ec
+    remaining: Vector[(PipelineStage, Int)],
+    state: FabDemoState
+  )(implicit ec: ExecutionContext): Future[FabDemoState] = {
     remaining match {
       case v if v.isEmpty =>
         Future.successful(state)
-      case stage +: tail =>
-        val sn = stageName(stage)
-        onPhaseStart(sn)
-        runStage(stage, state, ctx).flatMap { nextState =>
-          val isHighValue = sn.startsWith("Measure") || sn == "Classify" || sn == "M35ClassifyWithOcap"
-          val fabState = if (isHighValue) Some(nextState) else None
-          onPhaseComplete(sn, Map.empty, fabState)
-          executeQueue(tail, nextState, ec)
-        }(ec).recoverWith {
-          case StageFailedException(err) =>
-            onPhaseFailed(sn, err)
-            FabScenarioPipeline.invokeOcapInterceptor(state, ctx, err).flatMap { ocapState =>
-              onPhaseComplete(sn, Map("ocap" -> err.stageName), None)
-              executeQueue(tail, ocapState, ec)
-            }(ec)
-          case NonFatal(ex) =>
-            onPhaseFailed(sn, StageError(sn, None, "UNEXPECTED", ex.getMessage))
-            Future.successful(state)
-        }(ec)
+      case (stage, pos) +: tail =>
+        // P0: a superseded run terminates silently — no OCAP, no events, no side effects.
+        if (!ctx.runToken()) Future.failed(StaleRun)
+        else {
+          val sn = cursorName(stage, pos)
+          onPhaseStart(sn)
+          runStage(stage, state, ctx).flatMap { nextState =>
+            // P1: every stage carries its post-state so recovery state matches the cursor.
+            onPhaseComplete(sn, Map.empty, Some(nextState))
+            executeQueue(tail, nextState)
+          }.recoverWith {
+            case e if !ctx.runToken() => Future.failed(e)
+            case StageFailedException(err) =>
+              onPhaseFailed(sn, err)
+              // P2: OCAP resolution is journaled as its own event, not a fake StageCompleted.
+              FabScenarioPipeline.invokeOcapInterceptor(state, ctx, err).flatMap { ocapState =>
+                onOcapResolved(sn, err, ocapState)
+                executeQueue(tail, ocapState)
+              }
+            case NonFatal(ex) =>
+              // P3: unexpected failures are journaled and routed through OCAP/manual handling —
+              // never silently swallowed with a stale state.
+              val err = StageError(sn, None, "UNEXPECTED", ex.getMessage)
+              onPhaseFailed(sn, err)
+              FabScenarioPipeline.invokeOcapInterceptor(state, ctx, err).flatMap { ocapState =>
+                onOcapResolved(sn, err, ocapState)
+                executeQueue(tail, ocapState)
+              }
+          }
+        }
     }
   }
+
+  private def runStage(stage: PipelineStage, state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] =
+    FabScenarioPipeline.runStage(stage, state, ctx)
 }
 
 object FabPipelineProcessor {
@@ -153,9 +169,10 @@ object FabPipelineProcessor {
     ctx: FabDemoContext,
     onPhaseStart: String => Unit,
     onPhaseComplete: (String, Map[String, String], Option[FabDemoState]) => Unit,
+    onOcapResolved: (String, StageError, FabDemoState) => Unit,
     onPhaseFailed: (String, StageError) => Unit
   ): FabPipelineProcessor = {
-    val p = new FabPipelineProcessor(ctx, onPhaseStart, onPhaseComplete, onPhaseFailed)
+    val p = new FabPipelineProcessor(ctx, onPhaseStart, onPhaseComplete, onOcapResolved, onPhaseFailed)
     p.initialize(stages)
     p
   }
