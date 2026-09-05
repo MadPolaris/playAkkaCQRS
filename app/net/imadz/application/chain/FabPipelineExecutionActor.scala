@@ -266,18 +266,20 @@ object FabPipelineExecutionActor {
                     detail = s"Recovery succeeded: ${execState.completedCount} phases skipped, resuming pipeline"))
                   ctx.self ! PipelineSucceeded(finalState, recoveryCtx.foupId)
                 case Failure(e) =>
+                  ctx.log.error(s"[M3.5] Recovery FAILED for workOrder ${execState.workOrderId}: ${e.toString}", e)
                   publisher(RecoveryEvent(
                     execState.workOrderId, "RECOVERY_FAILED",
                     eventsReplayed = execState.completedPhases.size,
                     phasesSkipped = execState.completedCount,
                     recoveryTimeMs = System.currentTimeMillis() - recStart,
-                    detail = s"Recovery failed: ${e.getMessage}"))
-                  ctx.self ! PipelineFailed("recovery", e.getMessage)
+                    detail = s"Recovery failed: ${Option(e.getMessage).getOrElse(e.getClass.getName)}"))
+                  ctx.self ! PipelineFailed("recovery", Option(e.getMessage).getOrElse(e.toString))
               }(ec)
 
             } catch {
-              case e: Exception =>
-                ctx.self ! PipelineFailed("recovery", s"Recovery failed: ${e.getMessage}")
+              case e: Throwable =>
+                ctx.log.error(s"[M3.5] Recovery setup FAILED for ${execState.workOrderId}: ${e.toString}", e)
+                ctx.self ! PipelineFailed("recovery", Option(e.getMessage).getOrElse(e.toString))
             }
 
           case _ => ()
@@ -327,14 +329,17 @@ object FabPipelineExecutionActor {
 
       // ---- Phase starting callback from processor ----
       case (_: Executing, PhaseStarting(phase)) =>
+        ctx.log.info(s"[M3.5] >>> STAGE START: $phase")
         Effect.persist(StageStarted(phase, System.currentTimeMillis()))
 
       // ---- Phase completed callback from processor ----
       case (es: Executing, PhaseCompleted(phase, metadata, fabState)) =>
+        ctx.log.info(s"[M3.5] <<< STAGE DONE: $phase")
         Effect.persist(StageCompleted(phase, System.currentTimeMillis(), metadata, fabState))
 
       // ---- Phase failed callback from processor ----
       case (_: Executing, PhaseFailed(phase, error)) =>
+        ctx.log.warn(s"[M3.5] Stage FAILED: $phase — ${error.errorCode}: ${error.detail}")
         Effect.persist(StageFailed(phase, error, System.currentTimeMillis()))
 
       // ---- P2: OCAP resolved a failed stage — cursor advances without claiming success ----
@@ -358,6 +363,7 @@ object FabPipelineExecutionActor {
 
       // ---- Pipeline failed ----
       case (_: Executing, PipelineFailed(phase, reason)) =>
+        ctx.log.error(s"[M3.5] PIPELINE FAILED at $phase: $reason")
         Effect.persist(ExecutionFailed(phase, reason))
 
       // ---- M3.5: Stop/crash the pipeline ----

@@ -126,7 +126,11 @@ trait FabBootstrap {
     stateFactory: String => FabDemoState,
     stageResolver: String => Seq[FabScenarioPipeline.PipelineStage]
   )(implicit ec: ExecutionContext): Unit = {
-    FabPipelineExecutionActor.init(sharding, contextFactory, stateFactory, stageResolver)
+    // Recovery UX events (RECOVERING/RECOVERED) must reach the WebSocket — the default
+    // no-op publisher made recovery failures invisible.
+    val recoveryPublisher: net.imadz.domain.events.FabSimulationEvent => Unit =
+      ev => net.imadz.application.services.FabDemoPublisher.systemPublisher(ev)
+    FabPipelineExecutionActor.init(sharding, contextFactory, stateFactory, stageResolver, recoveryPublisher)
   }
 
 }
