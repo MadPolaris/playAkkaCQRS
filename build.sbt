@@ -5,6 +5,8 @@ inThisBuild(List(
   organizationName := "MadPolaris",
   organizationHomepage := Some(url("https://github.com/MadPolaris")),
   homepage := Some(url("https://github.com/MadPolaris/playAkkaCQRS")),
+  scmInfo := Some(
+    ScmInfo(url("https://github.com/MadPolaris/playAkkaCQRS"), "git@github.com:MadPolaris/playAkkaCQRS.git")),
   licenses := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
   developers := List(
     Developer(
@@ -131,10 +133,23 @@ lazy val fabSimulation = (project in file("fab-simulation"))
     )
   )
 
+lazy val monarchCore = (project in file("monarch-core"))
+  .settings(
+    commonSettings,
+    name := "monarch-core",
+    // Deliberately framework-free: scala.concurrent.Future + callbacks only, so the
+    // engine is embeddable in any host (Akka ES wrapper, Play controller, plain test)
+    // and publishable to Maven Central as a standalone artifact.
+    versionScheme := Some("early-semver"),
+    libraryDependencies ++= Seq(
+      "org.scalatest" %% "scalatest" % "3.2.15" % Test
+    )
+  )
+
 lazy val root = (project in file("."))
   .enablePlugins(PlayScala, JavaAppPackaging, DockerPlugin)
-  .dependsOn(commonCore, sagaCore, dagEngineCore, fabSimulation)
-  .aggregate(commonCore, sagaCore, dagEngineCore, fabSimulation)
+  .dependsOn(commonCore, sagaCore, dagEngineCore, fabSimulation, monarchCore)
+  .aggregate(commonCore, sagaCore, dagEngineCore, fabSimulation, monarchCore)
   .settings(
     commonSettings,
     publish / skip := true,
