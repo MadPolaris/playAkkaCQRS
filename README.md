@@ -118,7 +118,7 @@ Read the details: [Saga Engine Guide](docs/SAGA_GUIDE.md) / [中文](docs/SAGA_G
 
 One Akka-free component library (`dag-engine-core`) drives a batch of business items through an external-system interaction cycle — fileGen → upload → waitAck → poll → parse → classify — then sorts every item three ways (success / failure / suspicious): suspicious items are reconfirmed against an authoritative source, failures flow through a policy-driven router (`RetrySameArea` / `RouteToArea` / `Scrap` / `ManualIntervention`), and windowed batching respects physical constraints (FOUP carrier capacity).
 
-`ChainDsl.define` declares a chain as ~20 lines of business parameters; `ChainTemplates` ships recharge / purchase / equipment-area presets. The Fab port (`FabPipelineExecutionActor` + `FabPipelineProcessor`) hardens the pattern with generation-token crash recovery and callback guards.
+`ChainDsl.define` declares a chain as ~20 lines of business parameters; `ChainTemplates` ships recharge / purchase / equipment-area presets. The six mechanical stages run on **monarch-core** (`net.imadz.monarch`, a standalone Maven-Central-bound resumable stage-queue engine), and both hosts — the Fab port (`FabPipelineExecutionActor` + `FabPipelineProcessor`) and dag-engine-core's `ChainExecutionActor` (via `BankChain`) — get generation-token crash recovery and callback guards from the engine itself.
 
 Read the details: [ChainDsl Guide](docs/CHAINDSL_GUIDE.md) / [中文](docs/CHAINDSL_GUIDE-zh.md)
 

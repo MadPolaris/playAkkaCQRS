@@ -118,7 +118,7 @@ infrastructure/  ← 适配层：框架集成（Akka、Play、Guice、MongoDB、
 
 一套无 Akka 依赖的组件库（`dag-engine-core`）驱动一批业务物品走完外部系统交互周期——fileGen → upload → waitAck → poll → parse → classify——然后对每个 item 做三分类（成功 / 失败 / 可疑）：可疑项向权威数据源查证落定，失败项流经策略化路由器（`RetrySameArea` / `RouteToArea` / `Scrap` / `ManualIntervention`），窗口式成批尊重物理约束（FOUP 载体容量）。
 
-`ChainDsl.define` 用约 20 行业务参数声明一条链；`ChainTemplates` 内置充值 / 申购 / 设备区预设。Fab 移植版（`FabPipelineExecutionActor` + `FabPipelineProcessor`）用世代号崩溃恢复 + 回调守卫强化了这一模式。
+`ChainDsl.define` 用约 20 行业务参数声明一条链；`ChainTemplates` 内置充值 / 申购 / 设备区预设。六个机械阶段由 **monarch-core**（`net.imadz.monarch`，独立、面向 Maven Central 的可断点续跑阶段队列引擎）驱动；两个宿主——Fab 移植版（`FabPipelineExecutionActor` + `FabPipelineProcessor`）与 dag-engine-core 的 `ChainExecutionActor`（经 `BankChain`）——都直接从引擎获得世代号崩溃恢复与回调守卫。
 
 详见：[ChainDsl 指南](docs/CHAINDSL_GUIDE-zh.md) / [English](docs/CHAINDSL_GUIDE.md)
 

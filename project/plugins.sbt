@@ -2,7 +2,8 @@ addSbtPlugin("com.typesafe.play" % "sbt-plugin" % "2.8.18")
 addSbtPlugin("org.foundweekends.giter8" % "sbt-giter8-scaffold" % "0.13.1")
 addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.4.2")
 addSbtPlugin("com.typesafe.sbt" % "sbt-native-packager" % "1.8.1")
-addSbtPlugin("com.dwijnand" % "sbt-dynver" % "4.1.1")
+// sbt-dynver comes bundled with sbt-ci-release (line below) — a standalone
+// declaration put a second dynver build on the classpath and conflicts with it.
 addSbtPlugin("com.thesamet" % "sbt-protoc" % "1.0.6")
 
 addSbtPlugin("ch.epfl.scala"             % "sbt-version-policy"        % "1.0.0-RC5")

@@ -31,7 +31,11 @@ m.resumeFromIndex(replayedState, completed = 9)
 
 Failure policy: a stage body throws `StageFailedException(StageError(...))` for a *classified* business failure; any other `NonFatal` is wrapped as `UNEXPECTED`. Both go to the `failureInterceptor` (the Fab demo's OCAP evaluate/resolve is one instance); without one, they fail the run. Staleness always wins — checked first at every boundary.
 
-This module is the generalization of the Fab demo's `FabPipelineProcessor`; see [docs/CHAINDSL_GUIDE.md](../docs/CHAINDSL_GUIDE.md) for the three-generation story. Maven Central publishing is planned (`net.imadz:monarch-core`).
+This module is the generalization of the Fab demo's `FabPipelineProcessor`; see [docs/CHAINDSL_GUIDE.md](../docs/CHAINDSL_GUIDE.md) for the three-generation story. The Fab port and dag-engine-core's `ChainExecutionActor` (via `BankChain`) are both hosted on this engine.
+
+## Publishing (Maven Central)
+
+Only `monarch-core` is published (`net.imadz:monarch-core`); all other modules set `publish/skip`. Releases are tag-driven via the existing `publish.yml` workflow: push a tag `v*` and `sbt ci-release` signs and uploads to the Central Portal (`central.sonatype.com`). Version comes from the tag via sbt-dynver (e.g. tag `v0.1.0` → `0.1.0`). Required GitHub repo secrets: `OSSRH_USERNAME` / `OSSRH_PASSWORD` (Central Portal token), `PGP_SECRET`, `PGP_PASSPHRASE`.
 
 ---
 
@@ -49,4 +53,8 @@ This module is the generalization of the Fab demo's `FabPipelineProcessor`; see 
 
 失败策略：阶段体内抛 `StageFailedException(StageError(...))` 表示**已分类**的业务失败；其他 `NonFatal` 一律包装为 `UNEXPECTED`。两者都交给 `failureInterceptor`（Fab 演示的 OCAP 评估/处置是一个实例）；未配置拦截器时直接判运行失败。过期判定永远优先——每个阶段边界最先检查。
 
-本模块是 Fab 演示 `FabPipelineProcessor` 的泛化；三代演进的故事见 [docs/CHAINDSL_GUIDE.md](../docs/CHAINDSL_GUIDE.md)。计划发布到 Maven Central（`net.imadz:monarch-core`）。
+本模块是 Fab 演示 `FabPipelineProcessor` 的泛化；三代演进的故事见 [docs/CHAINDSL_GUIDE.md](../docs/CHAINDSL_GUIDE.md)。Fab 移植版与 dag-engine-core 的 `ChainExecutionActor`（经 `BankChain`）现均寄宿于本引擎。
+
+## 发布（Maven Central）
+
+仅 `monarch-core` 发布（`net.imadz:monarch-core`），其余模块均设 `publish/skip`。发布由标签驱动：推送 `v*` 标签后，既有的 `publish.yml` workflow 会执行 `sbt ci-release` 签名并上传到 Central Portal（`central.sonatype.com`）。版本号由标签经 sbt-dynver 推导（如 tag `v0.1.0` → `0.1.0`）。需配置的 GitHub secrets：`OSSRH_USERNAME` / `OSSRH_PASSWORD`（Central Portal token）、`PGP_SECRET`、`PGP_PASSPHRASE`。

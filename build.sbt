@@ -72,6 +72,9 @@ lazy val commonSettings = Seq(
 lazy val commonCore = (project in file("common-core"))
   .settings(
     commonSettings,
+    // Release scope: only monarch-core is published to Maven Central. Keep the
+    // application modules local until they have stable, standalone APIs.
+    publish / skip := true,
     name := "common-core",
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
@@ -92,6 +95,7 @@ lazy val sagaCore = (project in file("saga-core"))
   .dependsOn(commonCore)
   .settings(
     commonSettings,
+    publish / skip := true,
     name := "saga-core",
     PB.targets in Compile := Seq(
       scalapb.gen() -> (sourceManaged in Compile).value / "protobuf"
@@ -116,6 +120,7 @@ lazy val dagEngineCore = (project in file("dag-engine-core"))
   .dependsOn(commonCore, monarchCore)
   .settings(
     commonSettings,
+    publish / skip := true,
     name := "dag-engine-core",
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
@@ -128,6 +133,7 @@ lazy val dagEngineCore = (project in file("dag-engine-core"))
 lazy val fabSimulation = (project in file("fab-simulation"))
   .settings(
     commonSettings,
+    publish / skip := true,
     name := "fab-simulation",
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion

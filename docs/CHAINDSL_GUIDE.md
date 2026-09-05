@@ -2,7 +2,7 @@
 
 English | [中文](CHAINDSL_GUIDE-zh.md)
 
-ChainDsl is the **M2.5+ batch-chain engine**: a small library of composable, framework-agnostic components for driving a *batch of business items* through an *external-system interaction cycle* — generate file → upload → wait for ack → poll response → parse → classify → reconfirm suspicious → route failures. On top of the components sits a declarative DSL (`ChainDsl.define`) so a chain reads like business configuration, plus event-sourced persistence wrappers for crash recovery.
+ChainDsl is the **M2.5+ batch-chain engine**: a small library of composable, framework-agnostic components for driving a *batch of business items* through an *external-system interaction cycle* — generate file → upload → wait for ack → poll response → parse → classify → reconfirm suspicious → route failures. The six mechanical stages run on **monarch-core** (`net.imadz.monarch.Monarch`), a standalone resumable stage-queue engine named for the monarch butterfly: an open stage queue (metamorphosis), cursor-based resume (diapause — suspend at a checkpoint, continue exactly there), and generation tokens (migration across generations — the route outlives any individual runner). On top sits a declarative DSL (`ChainDsl.define`) so a chain reads like business configuration, plus event-sourced persistence wrappers for crash recovery.
 
 Other guides: [README](../README.md) · [Saga Guide](SAGA_GUIDE.md) (EN) / [Saga 指南](SAGA_GUIDE-zh.md) (中文) · Legacy banking-domain guide: [DDD_GUIDE.md](legacy/DDD_GUIDE.md)
 
@@ -157,7 +157,9 @@ val area     = ChainTemplates.equipmentArea("LITHO-01",   // Fab area with carri
 | `ChainDsl` / `ChainDefinition` | `app/.../business/ChainDsl.scala` | declarative builder; `processBatch` wires classify → reconfirm → route |
 | `ChainTemplates` | `app/.../business/ChainTemplates.scala` | recharge / purchase / equipmentArea presets |
 | Concrete stage impls | `app/.../m25/pipeline/*.scala` | SFTP-backed fileGen/upload/poll/parse |
+| `BankStage` / `BankChainState` / `BankChain` | `dag-engine-core/.../BankChain.scala` | the six stages as a Monarch queue + single threaded state + metadata derivation |
 | `ChainExecutionActor` | `dag-engine-core/.../ChainExecutionActor.scala` | event-sourced wrapper (see §10) |
+| `Monarch` / `RunRegistry` | `monarch-core` (standalone module) | the resumable stage-queue engine itself — no Akka, publishable to Maven Central |
 
 ## 6. The Three-Way Classification Loop
 
@@ -207,25 +209,24 @@ Adding a new business chain historically meant generating a new FSM family (M2) 
 
 ## 10. Persistence Wrapper: ChainExecutionActor
 
-`dag-engine-core/.../ChainExecutionActor.scala` wraps the Future pipeline in an `EventSourcedBehavior` so a chain survives crashes:
+`dag-engine-core/.../ChainExecutionActor.scala` wraps the six-stage chain — now driven by the **Monarch engine** (monarch-core) via `BankChain` — in an `EventSourcedBehavior` so a chain survives crashes:
 
-- **Protocol**: `StartExecution(batchId, items, replyTo)`; internal `PhaseCompleted(phase, metadata)`, `PipelineSucceeded`, `PipelineFailed(phase, reason)`.
-- **Events**: `Started`, `PhaseDone(phase, ts, metadata)` (one per stage, in completion order — the cursor), `AllCompleted`, `ExecutionFailed`.
-- **States**: `Idle → Executing(completedPhases) → Completed | Failed`.
-- **Recovery**: on `RecoveryCompleted` while `Executing`, the actor reloads items via an injected `itemLoader(batchId)` and re-runs the pipeline. Stages are idempotent by contract — file-gen overwrites, upload overwrites with the same checksum, notification phases dedupe through the read-side.
+- **Protocol**: `StartExecution(batchId, items, replyTo)`; internal `PhaseCompleted(phase, metadata, snapshot)`, `PipelineSucceeded`, `PipelineFailed(phase, reason)`.
+- **Events**: `Started`, `PhaseDone(phase, ts, metadata, snapshot)` (one per stage, in completion order — the cursor; the snapshot carries the stage's post-state so recovery can resume mid-chain), `AllCompleted`, `ExecutionFailed`.
+- **States**: `Idle → Executing(completedPhases, lastState) → Completed | Failed`.
+- **Recovery**: on `RecoveryCompleted` while `Executing`, the actor registers a fresh `RunRegistry` generation (the pre-crash Future chain dies silently at its next stage boundary), reloads items via the injected `itemLoader(batchId)`, and calls `monarch.resumeFromIndex(state, completedPhases.size)` — only the stages after the breakpoint re-run.
 - **Sharding**: registered under `EntityTypeKey("m25-chain-executor")` keyed by `chainId`, so each business chain is one sharded entity.
 
-The intent of the design (documented in the actor's scaladoc) is that the actor is the durability boundary and `SubBatchProcessor` stays a pure Future chain.
+The actor is the durability boundary; the Monarch engine stays a pure Future queue. This is the same pattern the Fab port (`FabPipelineExecutionActor` + `FabPipelineProcessor`) runs in production in the `/fab-demo/m35` self-healing demo.
 
 ## 11. Known Limitations
 
 Honest list, so you know what you are adopting:
 
-1. **ChainExecutionActor re-runs the whole pipeline on recovery** without a generation guard. If the pre-crash Future chain is still in flight when the entity restarts, two chains can briefly overlap (the same weakness that was fixed for the Fab port, `FabPipelineExecutionActor`, via `PipelineRunRegistry` generation tokens + callback guards — see commit `53e23b1`). The Fab port is the reference implementation; sinking the pattern back into `ChainExecutionActor` is planned.
-2. **Ack/poll failures abort the batch**, not the item: `AckTimeout`/`AckRejected`/`PollTimeout`/`PollError` fail the whole pipeline Future (by design — the file exchange either happened or it didn't). Item-level three-way classification only begins after a response file is parsed.
-3. **`NoopReconfirmHandler` is lossy**: without a real verifier, suspicious items become failures. Configure a `VerifyingReconfirmHandler` for production.
-4. **`WindowedAreaScheduler` has no persistence**: its waiting queue lives in memory, and time is host-driven. For multi-node batching you need your own coordination.
-5. **In-flight side effects are at-least-once**: a stage that completed just before a crash will re-execute after recovery; downstream handling must be idempotent (this is the contract the recovery design relies on).
+1. **Ack/poll failures abort the batch**, not the item: `AckTimeout`/`AckRejected`/`PollTimeout`/`PollError` throw a classified `StageFailedException` (ACK_TIMEOUT / ACK_REJECTED / POLL_TIMEOUT / POLL_ERROR) and fail the run unless the host configures a `FailureInterceptor` (by design — the file exchange either happened or it didn't). Item-level three-way classification only begins after a response file is parsed.
+2. **`NoopReconfirmHandler` is lossy**: without a real verifier, suspicious items become failures. Configure a `VerifyingReconfirmHandler` for production.
+3. **`WindowedAreaScheduler` has no persistence**: its waiting queue lives in memory, and time is host-driven. For multi-node batching you need your own coordination.
+4. **In-flight side effects are at-least-once**: a stage that completed just before a crash will re-execute after recovery; downstream handling must be idempotent (this is the contract the recovery design relies on).
 
 ---
 

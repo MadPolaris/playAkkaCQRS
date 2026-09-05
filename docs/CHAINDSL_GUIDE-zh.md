@@ -2,7 +2,7 @@
 
 [English](CHAINDSL_GUIDE.md) | 中文
 
-ChainDsl 是本仓库的 **M2.5+ 批处理链引擎**：一组可组合、与框架无关的标准组件，驱动"一批业务物品"走完一个**外部系统交互周期**——生成文件 → 上传 → 等确认 → 轮询结果 → 解析 → 分类 → 可疑复核 → 失败路由。组件之上是声明式 DSL（`ChainDsl.define`），让链路配置读起来像业务参数表；再配一个事件溯源的持久化包装（`ChainExecutionActor`）提供崩溃恢复。
+ChainDsl 是本仓库的 **M2.5+ 批处理链引擎**：一组可组合、与框架无关的标准组件，驱动"一批业务物品"走完一个**外部系统交互周期**——生成文件 → 上传 → 等确认 → 轮询结果 → 解析 → 分类 → 可疑复核 → 失败路由。六个机械阶段由 **monarch-core**（`net.imadz.monarch.Monarch`）驱动——一个独立的可断点续跑阶段队列引擎，以帝王斑蝶命名：开放阶段队列（完全变态）、游标恢复（滞育——在检查点暂停、从暂停处精确续跑）、世代号（跨代迁徙——路线比任何个体长寿）。组件之上是声明式 DSL（`ChainDsl.define`），让链路配置读起来像业务参数表；再配一个事件溯源的持久化包装（`ChainExecutionActor`）提供崩溃恢复。
 
 其他指南：[README](../README.md) · [Saga 指南](SAGA_GUIDE-zh.md) · 旧银行领域指南：[DDD_GUIDE-zh.md](legacy/DDD_GUIDE-zh.md)
 
@@ -157,7 +157,9 @@ val area     = ChainTemplates.equipmentArea("LITHO-01",   // Fab 设备区（带
 | `ChainDsl` / `ChainDefinition` | `app/.../business/ChainDsl.scala` | 声明式构建器；`processBatch` 已接好分类→复核→路由 |
 | `ChainTemplates` | `app/.../business/ChainTemplates.scala` | 充值 / 申购 / 设备区预设 |
 | 具体阶段实现 | `app/.../m25/pipeline/*.scala` | 基于 SFTP 的 fileGen/upload/poll/parse |
+| `BankStage` / `BankChainState` / `BankChain` | `dag-engine-core/.../BankChain.scala` | 六阶段的 Monarch 队列 + 单一穿透状态 + metadata 推导 |
 | `ChainExecutionActor` | `dag-engine-core/.../ChainExecutionActor.scala` | 事件溯源包装（见 §10） |
+| `Monarch` / `RunRegistry` | `monarch-core`（独立模块） | 可断点续跑的阶段队列引擎本体——零 Akka，可发布 Maven Central |
 
 ## 6. 三分类闭环
 
@@ -207,25 +209,24 @@ val area     = ChainTemplates.equipmentArea("LITHO-01",   // Fab 设备区（带
 
 ## 10. 持久化包装：ChainExecutionActor
 
-`dag-engine-core/.../ChainExecutionActor.scala` 用 `EventSourcedBehavior` 包住 Future 流水线，让链路具备崩溃恢复能力：
+`dag-engine-core/.../ChainExecutionActor.scala` 把六阶段链路（现由 **Monarch 引擎**（monarch-core）经 `BankChain` 驱动）包进 `EventSourcedBehavior`，让链路具备崩溃恢复能力：
 
-- **协议**：`StartExecution(batchId, items, replyTo)`；内部命令 `PhaseCompleted(phase, metadata)`、`PipelineSucceeded`、`PipelineFailed(phase, reason)`。
-- **事件**：`Started`、`PhaseDone(phase, ts, metadata)`（每阶段一条、按完成顺序排列——即游标）、`AllCompleted`、`ExecutionFailed`。
-- **状态**：`Idle → Executing(completedPhases) → Completed | Failed`。
-- **恢复**：`Executing` 状态下收到 `RecoveryCompleted` 时，通过注入的 `itemLoader(batchId)` 重新加载 items 并重跑流水线。各阶段按契约幂等——文件生成覆盖写、上传覆盖写（相同校验和）、通知类阶段通过读侧去重。
+- **协议**：`StartExecution(batchId, items, replyTo)`；内部命令 `PhaseCompleted(phase, metadata, snapshot)`、`PipelineSucceeded`、`PipelineFailed(phase, reason)`。
+- **事件**：`Started`、`PhaseDone(phase, ts, metadata, snapshot)`（每阶段一条、按完成顺序排列——即游标；snapshot 携带阶段后置状态，恢复时可从链中段断点续跑）、`AllCompleted`、`ExecutionFailed`。
+- **状态**：`Idle → Executing(completedPhases, lastState) → Completed | Failed`。
+- **恢复**：`Executing` 状态下收到 `RecoveryCompleted` 时，先注册新的 `RunRegistry` 世代（崩溃前的旧 Future 链在下一个阶段边界静默终止），再经 `itemLoader(batchId)` 重载 items，最后 `monarch.resumeFromIndex(state, completedPhases.size)`——只重跑断点之后的阶段。
 - **分片**：注册在 `EntityTypeKey("m25-chain-executor")` 下、以 `chainId` 为实体键——每条业务链一个分片实体。
 
-设计意图（见该 Actor 的 scaladoc）：Actor 是**持久性边界**，`SubBatchProcessor` 保持纯 Future 链。
+Actor 是**持久性边界**；Monarch 引擎保持纯 Future 队列。这与 Fab 移植版（`FabPipelineExecutionActor` + `FabPipelineProcessor`）在生产化 `/fab-demo/m35` 自愈演示中跑的是同一模式。
 
 ## 11. 已知限制
 
 如实列出，方便你评估采用：
 
-1. **ChainExecutionActor 恢复时全量重跑流水线**，且没有世代号守卫。若实体重启时崩溃前的 Future 链仍在飞行，两条链会短暂并发——这正是 Fab 移植版 `FabPipelineExecutionActor` 用 `PipelineRunRegistry` 世代号 + 回调守卫修掉的那个缺陷（见 commit `53e23b1`）。Fab 移植版是参考实现，把该模式下沉回 `ChainExecutionActor` 已列入计划。
-2. **Ack/poll 失败终止的是整批**而非单个 item：`AckTimeout`/`AckRejected`/`PollTimeout`/`PollError` 会让整条流水线 Future 失败（有意为之——文件交换要么成功要么没成功）。item 级的三分类从响应文件解析成功后才开始。
+1. **Ack/poll 失败终止的是整批**而非单个 item：`AckTimeout`/`AckRejected`/`PollTimeout`/`PollError` 会抛出已分类的 `StageFailedException`（ACK_TIMEOUT / ACK_REJECTED / POLL_TIMEOUT / POLL_ERROR）；宿主未配置 `FailureInterceptor` 时整个运行失败（有意为之——文件交换要么成功要么没成功）。item 级的三分类从响应文件解析成功后才开始。
 3. **`NoopReconfirmHandler` 有损**：没有真实查证器时，可疑项一律变失败。生产环境务必配置 `VerifyingReconfirmHandler`。
 4. **`WindowedAreaScheduler` 无持久化**：等待队列在内存里，时间由宿主驱动。多节点成批需要自行协调。
-5. **飞行中的副作用是至少一次**：崩溃前刚完成的阶段，恢复后会重执行；下游必须幂等（恢复设计正是建立在这个契约上）。
+4. **飞行中的副作用是至少一次**：崩溃前刚完成的阶段，恢复后会重执行；下游必须幂等（恢复设计正是建立在这个契约上）。
 
 ---
 
