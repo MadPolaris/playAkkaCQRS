@@ -107,6 +107,10 @@
       }
     });
 
+    // --- Equipment Processing Lifecycle (realistic chamber visualization) ---
+    sub(S.processingStart$, function(data) { animateEquipmentProcessing(data); });
+    sub(S.processingDone$, function(data) { finishEquipmentProcessing(data); });
+
     // --- Pipeline Timeline Snapshot ---
     sub(S.timelineSnapshot$, function(data) {
       updatePipelineTimeline(data);
@@ -926,32 +930,164 @@
 
   var _foupRafId = null;
 
+  // AMHS overhead-loop track — mirrors the drawn transport lines in the SVG
+  // (row 1 left→right, drop at the right junction, row 2 right→left, return
+  // to Stocker). Real 300mm fabs run exactly this kind of unidirectional OHT loop.
+  var AMHS_LOOP = [
+    [55, 155], [55, 130],
+    [104, 130], [144, 130], [184, 130], [224, 130], [264, 130],
+    [304, 130], [344, 130], [384, 130], [424, 130], [464, 130],
+    [504, 130], [544, 130], [584, 130], [624, 130], [664, 130],
+    [664, 145], [664, 190], [624, 190], [544, 190], [544, 210],
+    [544, 250], [504, 250], [464, 250], [424, 250], [384, 250],
+    [344, 250], [304, 250], [264, 250], [224, 250], [184, 250],
+    [144, 250], [110, 250], [110, 170]
+  ];
+  // Bay stops on the loop (index into AMHS_LOOP)
+  var AREA_STOP = {
+    STOCKER: 0, CLEAN: 4, DIFF: 6, LITHO: 9, ETCH: 12, IMPL: 15,
+    DEP: 22, CMP: 25, MET: 28, CDSEM: 28, DRY: 31, LOG: 22
+  };
+
   function animateFoupMovement(data) {
     var foup = document.getElementById('foupIcon');
     if (!foup) return;
     foup.setAttribute('opacity', '1');
 
-    var fromPos = getAreaPosition(data.fromArea);
-    var toPos = getAreaPosition(data.toArea);
     var duration = Math.max(500, (data.etaMs || 1000) / (state.speed || 1));
+    var fromIdx = AREA_STOP[data.fromArea];
+    var toIdx = AREA_STOP[data.toArea];
+
+    var waypoints;
+    if (fromIdx === undefined || toIdx === undefined) {
+      // unknown stop — fall back to straight-line hop
+      var fp = getAreaPosition(data.fromArea);
+      var tp = getAreaPosition(data.toArea);
+      waypoints = [[fp.x, fp.y], [tp.x, tp.y]];
+    } else {
+      // Travel forward along the AMHS ring (real fabs run unidirectional OHT
+      // loops — the FOUP rides the loop around, never teleports across the map).
+      var span = (toIdx - fromIdx + AMHS_LOOP.length) % AMHS_LOOP.length;
+      if (span === 0) span = AMHS_LOOP.length;
+      waypoints = [];
+      for (var k = 1; k <= span; k++) waypoints.push(ringPoint(fromIdx + k));
+    }
+
+    // cumulative segment lengths for constant-speed travel
+    var segLens = [0], total = 0;
+    for (var i = 1; i < waypoints.length; i++) {
+      var dx = waypoints[i][0] - waypoints[i - 1][0];
+      var dy = waypoints[i][1] - waypoints[i - 1][1];
+      total += Math.sqrt(dx * dx + dy * dy);
+      segLens.push(total);
+    }
 
     if (_foupRafId) { cancelAnimationFrame(_foupRafId); _foupRafId = null; }
-    foup.setAttribute('x', fromPos.x);
-    foup.setAttribute('y', fromPos.y);
+    foup.setAttribute('x', waypoints[0][0]);
+    foup.setAttribute('y', waypoints[0][1]);
+    foup.setAttribute('fill', '#fbd38d');
+    foup.setAttribute('stroke', '#f59e0b');
 
     var startTime = performance.now();
+    function pointAt(progress) {
+      var target = total * progress;
+      var i = 1;
+      while (i < segLens.length && segLens[i] < target) i++;
+      var segStart = segLens[i - 1];
+      var segLen = (segLens[i] - segLens[i - 1]) || 1;
+      var t = (target - segStart) / segLen;
+      var a = waypoints[i - 1], b = waypoints[i];
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+    }
     function step(now) {
       var progress = Math.min((now - startTime) / duration, 1.0);
       var eased = progress < 0.5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-      foup.setAttribute('x', fromPos.x + (toPos.x - fromPos.x) * eased);
-      foup.setAttribute('y', fromPos.y + (toPos.y - fromPos.y) * eased);
+      var pt = pointAt(eased);
+      foup.setAttribute('x', pt[0]);
+      foup.setAttribute('y', pt[1]);
       if (progress < 1.0) {
         _foupRafId = requestAnimationFrame(step);
       } else {
+        foup.setAttribute('fill', '#f59e0b');
+        foup.setAttribute('stroke', 'none');
         _foupRafId = null;
       }
     }
     _foupRafId = requestAnimationFrame(step);
+  }
+
+  // ===================================================================
+  // Equipment Processing Lifecycle: chamber progress bar + recipe label
+  // ===================================================================
+  var _procTimers = {};
+
+  function equipNodeId(equipmentId) {
+    return (equipmentId || '').replace('-01', '').toLowerCase();
+  }
+
+  function animateEquipmentProcessing(data) {
+    var nodeId = equipNodeId(data.equipmentId);
+    var node = document.getElementById('eq-' + nodeId);
+    if (!node) return;
+    finishEquipmentProcessing({ equipmentId: data.equipmentId });
+
+    var rects = node.querySelectorAll('rect');
+    var chamber = rects[1];
+    if (!chamber) return;
+
+    var svgNS = 'http://www.w3.org/2000/svg';
+    var cx = parseFloat(chamber.getAttribute('x'));
+    var cy = parseFloat(chamber.getAttribute('y'));
+    var cw = parseFloat(chamber.getAttribute('width'));
+    var ch = parseFloat(chamber.getAttribute('height'));
+
+    var bg = document.createElementNS(svgNS, 'rect');
+    bg.setAttribute('id', 'eqproc-bg-' + nodeId);
+    bg.setAttribute('x', cx + 4); bg.setAttribute('y', cy + ch - 9);
+    bg.setAttribute('width', cw - 8); bg.setAttribute('height', 3);
+    bg.setAttribute('rx', 1.5); bg.setAttribute('fill', '#30363d');
+
+    var bar = document.createElementNS(svgNS, 'rect');
+    bar.setAttribute('id', 'eqproc-' + nodeId);
+    bar.setAttribute('x', cx + 4); bar.setAttribute('y', cy + ch - 9);
+    bar.setAttribute('width', 0); bar.setAttribute('height', 3);
+    bar.setAttribute('rx', 1.5); bar.setAttribute('fill', '#f59e0b');
+
+    var label = document.createElementNS(svgNS, 'text');
+    label.setAttribute('id', 'eqproclabel-' + nodeId);
+    label.setAttribute('x', cx + 4); label.setAttribute('y', cy + 12);
+    label.setAttribute('font-size', 5.5);
+    label.setAttribute('fill', '#f59e0b');
+    label.setAttribute('font-family', 'monospace');
+    label.textContent = (data.recipeId || 'recipe').slice(0, 14);
+
+    node.appendChild(bg); node.appendChild(bar); node.appendChild(label);
+    chamber.setAttribute('stroke-width', '2.5');
+
+    var duration = Math.max(300, (data.estimatedMs || 2000) / (state.speed || 1));
+    var start = performance.now();
+    function step(now) {
+      var el = document.getElementById('eqproc-' + nodeId);
+      if (!el) return;
+      var progress = Math.min((now - start) / duration, 1.0);
+      el.setAttribute('width', (cw - 8) * progress);
+      if (progress < 1.0) _procTimers[nodeId] = requestAnimationFrame(step);
+    }
+    _procTimers[nodeId] = requestAnimationFrame(step);
+  }
+
+  function finishEquipmentProcessing(data) {
+    var nodeId = equipNodeId(data.equipmentId);
+    ['eqproc-bg-' + nodeId, 'eqproc-' + nodeId, 'eqproclabel-' + nodeId].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+    if (_procTimers[nodeId]) { cancelAnimationFrame(_procTimers[nodeId]); delete _procTimers[nodeId]; }
+    var node = document.getElementById('eq-' + nodeId);
+    if (node) {
+      var chamber = node.querySelectorAll('rect')[1];
+      if (chamber) chamber.setAttribute('stroke-width', '1.5');
+    }
   }
 
   function getAreaPosition(areaId) {

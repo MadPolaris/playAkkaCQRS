@@ -121,6 +121,16 @@
       op.map(function(e) { return e.data; })
     );
 
+    _m35Streams.processingStart$ = rawEvent$.pipe(
+      op.filter(function(e) { return e.type === 'ProcessingStarted'; }),
+      op.map(function(e) { return e.data; })
+    );
+
+    _m35Streams.processingDone$ = rawEvent$.pipe(
+      op.filter(function(e) { return e.type === 'ProcessingCompleted'; }),
+      op.map(function(e) { return e.data; })
+    );
+
     _m35Streams.measurement$ = rawEvent$.pipe(
       op.filter(function(e) { return e.type === 'MeasurementResultEvent'; }),
       op.map(function(e) { return e.data; })
