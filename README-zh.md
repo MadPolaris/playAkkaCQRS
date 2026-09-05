@@ -110,6 +110,8 @@ infrastructure/  ← 适配层：框架集成（Akka、Play、Guice、MongoDB、
 
 ## 延伸阅读
 
+- [Saga 引擎指南（v3 DSL）](docs/SAGA_GUIDE-zh.md) / [English](docs/SAGA_GUIDE.md) — TCC saga 引擎：DSL、韧性、运维、验收标准
+- [ChainDsl 指南（M2.5+）](docs/CHAINDSL_GUIDE-zh.md) / [English](docs/CHAINDSL_GUIDE.md) — 批处理链组件引擎 + 声明式 DSL：流水线、三分类闭环、失败路由、成批调度、崩溃恢复
 - [架构最佳实践](knowledge_base/methodology/architecture-best-practices-zh.md)
 - [AI Agent 并行开发](knowledge_base/methodology/agent-parallel-dev-zh.md)
 - [Harness 工程](knowledge_base/methodology/harness-engineering-zh.md)

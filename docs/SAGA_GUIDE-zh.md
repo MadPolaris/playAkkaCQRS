@@ -4,7 +4,7 @@
 
 `net.imadz.infra.saga` 是构建在 Akka Typed 集群分片与事件溯源之上的 **TCC（Try-Confirm/Cancel）分布式事务引擎**。Saga 的每一份状态——整个事务、以及每个阶段的每个步骤——都是事件溯源 actor，因此进行中的 Saga 在节点崩溃后无需任何外部事务日志即可恢复。
 
-其他文档：[README](../README-zh.md) · 遗留银行域指南：[DDD_GUIDE-zh.md](legacy/DDD_GUIDE-zh.md)（中文）/ [DDD_GUIDE.md](legacy/DDD_GUIDE.md)（EN）
+其他文档：[README](../README-zh.md) · [ChainDsl 指南](CHAINDSL_GUIDE-zh.md)（中文）/ [ChainDsl Guide](CHAINDSL_GUIDE.md)（EN）· 遗留银行域指南：[DDD_GUIDE-zh.md](legacy/DDD_GUIDE-zh.md)（中文）/ [DDD_GUIDE.md](legacy/DDD_GUIDE.md)（EN）
 
 ---
 
