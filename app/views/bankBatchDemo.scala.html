@@ -58,35 +58,35 @@
   <div class="card chain">
     <h2>第一链 · 批量充值（合作银行 · 文件交换六工序）</h2>
     <div class="stats">
-      <div class="stat"><div class="num" id="rc_total">0</div><div class="lbl">总笔数</div></div>
-      <div class="stat ok"><div class="num" id="rc_ok">0</div><div class="lbl">成功</div></div>
-      <div class="stat bad"><div class="num" id="rc_rejected">0</div><div class="lbl">余额不足·放弃</div></div>
-      <div class="stat warn"><div class="num" id="rc_suspicious">0</div><div class="lbl">超时·可疑</div></div>
-      <div class="stat ok"><div class="num" id="rc_reconfirmOk">0</div><div class="lbl">查证转成功</div></div>
-      <div class="stat warn"><div class="num" id="rc_networkRetry">0</div><div class="lbl">网络失败·重批</div></div>
-      <div class="stat warn"><div class="num" id="rc_rebatched">0</div><div class="lbl">已重批</div></div>
-      <div class="stat bad"><div class="num" id="rc_manual">0</div><div class="lbl">转人工</div></div>
-      <div class="stat ok"><div class="num" id="rc_accountOk">0</div><div class="lbl">已入账</div></div>
-      <div class="stat warn"><div class="num" id="rc_accountRetry">0</div><div class="lbl">入账重试中</div></div>
-      <div class="stat bad"><div class="num" id="rc_accountManual">0</div><div class="lbl">入账异常池</div></div>
+      <div class="stat"><div class="num" id="rc_entered">0</div><div class="lbl">处理客户</div></div>
+      <div class="stat warn"><div class="num" id="rc_inFlight">0</div><div class="lbl">在途</div></div>
+      <div class="stat ok"><div class="num" id="rc_credited">0</div><div class="lbl">已入账(终态)</div></div>
+      <div class="stat bad"><div class="num" id="rc_rejected">0</div><div class="lbl">放弃(终态)</div></div>
+      <div class="stat bad"><div class="num" id="rc_manual">0</div><div class="lbl">转人工(终态)</div></div>
+      <div class="stat bad"><div class="num" id="rc_exceptPool">0</div><div class="lbl">异常池(终态)</div></div>
+      <div class="stat warn"><div class="num" id="rc_suspicious">0</div><div class="lbl">超时·可疑(流量)</div></div>
+      <div class="stat ok"><div class="num" id="rc_reconfirmOk">0</div><div class="lbl">查证转成功(流量)</div></div>
+      <div class="stat warn"><div class="num" id="rc_rebatched">0</div><div class="lbl">已重批(流量)</div></div>
+      <div class="stat warn"><div class="num" id="rc_accountRetry">0</div><div class="lbl">入账重试(流量)</div></div>
     </div>
+    <div class="hint" id="rc_reconcile">核对：待数据</div>
   </div>
 
   <div class="card chain">
     <h2>第二链 · 基金申购（基金公司 · 自动衔接，充值到账即申购）</h2>
     <div class="stats">
-      <div class="stat"><div class="num" id="pu_total">0</div><div class="lbl">总笔数</div></div>
-      <div class="stat ok"><div class="num" id="pu_ok">0</div><div class="lbl">成功</div></div>
-      <div class="stat bad"><div class="num" id="pu_rejected">0</div><div class="lbl">额度超限·放弃</div></div>
-      <div class="stat warn"><div class="num" id="pu_suspicious">0</div><div class="lbl">超时·可疑</div></div>
-      <div class="stat ok"><div class="num" id="pu_reconfirmOk">0</div><div class="lbl">查证转成功</div></div>
-      <div class="stat warn"><div class="num" id="pu_networkRetry">0</div><div class="lbl">网络失败·重批</div></div>
-      <div class="stat warn"><div class="num" id="pu_rebatched">0</div><div class="lbl">已重批</div></div>
-      <div class="stat bad"><div class="num" id="pu_manual">0</div><div class="lbl">转人工</div></div>
-      <div class="stat ok"><div class="num" id="pu_accountOk">0</div><div class="lbl">已扣款</div></div>
-      <div class="stat warn"><div class="num" id="pu_accountRetry">0</div><div class="lbl">扣款重试中</div></div>
-      <div class="stat bad"><div class="num" id="pu_accountManual">0</div><div class="lbl">扣款异常池</div></div>
+      <div class="stat"><div class="num" id="pu_entered">0</div><div class="lbl">处理客户</div></div>
+      <div class="stat warn"><div class="num" id="pu_inFlight">0</div><div class="lbl">在途</div></div>
+      <div class="stat ok"><div class="num" id="pu_paid">0</div><div class="lbl">已扣款(终态)</div></div>
+      <div class="stat bad"><div class="num" id="pu_rejected">0</div><div class="lbl">放弃(终态)</div></div>
+      <div class="stat bad"><div class="num" id="pu_manual">0</div><div class="lbl">转人工(终态)</div></div>
+      <div class="stat bad"><div class="num" id="pu_exceptPool">0</div><div class="lbl">异常池(终态)</div></div>
+      <div class="stat warn"><div class="num" id="pu_suspicious">0</div><div class="lbl">超时·可疑(流量)</div></div>
+      <div class="stat ok"><div class="num" id="pu_reconfirmOk">0</div><div class="lbl">查证转成功(流量)</div></div>
+      <div class="stat warn"><div class="num" id="pu_rebatched">0</div><div class="lbl">已重批(流量)</div></div>
+      <div class="stat warn"><div class="num" id="pu_accountRetry">0</div><div class="lbl">扣款重试(流量)</div></div>
     </div>
+    <div class="hint" id="pu_reconcile">核对：待数据</div>
   </div>
 
   <div class="card">
@@ -107,10 +107,11 @@
 
 <script>
 const wsUrl = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/bank-batch/events";
-const counterIds = ["rc_total","rc_ok","rc_rejected","rc_suspicious","rc_reconfirmOk","rc_networkRetry",
-  "rc_rebatched","rc_manual","rc_accountOk","rc_accountRetry","rc_accountManual",
-  "pu_total","pu_ok","pu_rejected","pu_suspicious","pu_reconfirmOk","pu_networkRetry",
-  "pu_rebatched","pu_manual","pu_accountOk","pu_accountRetry","pu_accountManual"];
+const counterIds = ["rc_entered","rc_inFlight","rc_credited","rc_rejected","rc_manual","rc_exceptPool",
+  "rc_suspicious","rc_reconfirmOk","rc_rebatched","rc_accountRetry",
+  "pu_entered","pu_inFlight","pu_paid","pu_rejected","pu_manual","pu_exceptPool",
+  "pu_suspicious","pu_reconfirmOk","pu_rebatched","pu_accountRetry"];
+const terminalSum = c => (c.credited||0)+(c.paid||0)+(c.rejected||0)+(c.manual||0)+(c.exceptPool||0);
 
 function set(id, v) { document.getElementById(id).textContent = v; }
 function render(st) {
@@ -122,6 +123,12 @@ function render(st) {
   counterIds.forEach(id => {
     const chain = id.startsWith("rc_") ? st.recharge : st.purchase;
     if (chain) set(id, chain[id.slice(3)] || 0);
+    [["rc", "rc_reconcile"], ["pu", "pu_reconcile"]].forEach(([p, elId]) => {
+      const c = st[p];
+      if (c) document.getElementById(elId).textContent =
+        "核对：已入账/已扣款 " + (c.paid || 0) + " + 放弃 " + (c.rejected || 0) + " + 人工 " + (c.manual || 0)
+        + " + 异常池 " + (c.exceptPool || 0) + " = 处理客户 " + c.entered + (c.balanced ? "  ✓ 平" : " （在途 " + c.inFlight + "）");
+    });
   });
   const a = st.amounts || {};
   set("amtRecharge", (a.rechargeCredited || 0).toLocaleString());

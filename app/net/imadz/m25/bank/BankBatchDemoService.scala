@@ -101,6 +101,33 @@ class BankBatchDemoService @Inject()(
   def counterValue(name: String): Long = Option(counters.get(name)).map(_.get).getOrElse(0L)
 
   // ====================================================================
+  // 终态账本：每笔单子（链 × 客户）有且只有一个终态
+  //   recharge: credited / rejected / manual / except_pool
+  //   purchase: paid     / rejected / manual / except_pool
+  // 幂等键 = customerId：重复的账务更新/重复的分类一律跳过（putIfAbsent 只落一次）。
+  // ====================================================================
+  private val seenCustomers = new ConcurrentHashMap[String, ConcurrentHashMap[String, java.lang.Boolean]]()
+  private val terminalStates = new ConcurrentHashMap[String, ConcurrentHashMap[String, String]]()
+
+  private def markSeen(chain: String, c: DemoCustomer): Unit =
+    seenCustomers.computeIfAbsent(chain, _ => new ConcurrentHashMap[String, java.lang.Boolean]())
+      .putIfAbsent(c.customerId, java.lang.Boolean.TRUE)
+  private def enteredOf(chain: String): Int =
+    Option(seenCustomers.get(chain)).map(_.size()).getOrElse(0)
+  private def terminalCount(chain: String): Int =
+    Option(terminalStates.get(chain)).map(_.size()).getOrElse(0)
+  private def inFlightOf(chain: String): Int = math.max(0, enteredOf(chain) - terminalCount(chain))
+  private def isTerminal(chain: String, c: DemoCustomer): Boolean =
+    Option(terminalStates.get(chain)).exists(_.containsKey(c.customerId))
+  /** 终态只落一次；返回是否为新落终态（首次才累加终态计数）。 */
+  private def setTerminal(chain: String, c: DemoCustomer, state: String): Boolean = {
+    val fresh = terminalStates.computeIfAbsent(chain, _ => new ConcurrentHashMap[String, String]())
+      .putIfAbsent(c.customerId, state) == null
+    if (fresh) inc(s"${chain}_t_$state")
+    fresh
+  }
+
+  // ====================================================================
   // 模拟核心账务系统（1% 瞬时故障 → 自动重试一次 → 人工异常池）
   // ====================================================================
   private val accountBalances = new ConcurrentHashMap[String, java.lang.Double]()
@@ -154,12 +181,13 @@ class BankBatchDemoService @Inject()(
   // ====================================================================
   // 批次队列与调度（限流并发；充值链收尾自动衔接申购链）
   // ====================================================================
-  case class BatchJob(chain: String, round: Int, index: Int)
+  case class BatchJob(chain: String, round: Int, index: Int, items: Vector[ChainItem])
 
   private val queue = new ConcurrentLinkedQueue[BatchJob]()
   private val runningCount = new AtomicInteger(0)
   private val runningBatches = new ConcurrentHashMap[String, BatchJob]()
   private val purchaseSeq = new AtomicInteger(0)
+  private val purchaseItems = new ConcurrentHashMap[String, Vector[ChainItem]]()
 
   /** 每次全量运行的唯一 id：实体名带 runId，journal 永不跨运行串台。 */
   private var runId: String = "boot"
@@ -178,7 +206,8 @@ class BankBatchDemoService @Inject()(
   private def jobKey(job: BatchJob): String = s"bank-$runId-${job.chain}-r${job.round}-b${job.index}"
 
   private def startJob(job: BatchJob): Unit = {
-    val items = itemsFor(job.chain, job.round, job.index)
+    val items = job.items
+    jobItems.put(jobKey(job), items)
     publish("job-start", Map("chain" -> job.chain, "round" -> job.round.toString,
       "index" -> job.index.toString, "items" -> items.size.toString))
     val entityRef = sharding.entityRefFor(ChainExecutionActor.EntityKey, jobKey(job))
@@ -254,9 +283,16 @@ class BankBatchDemoService @Inject()(
     )
   }
 
+  /** 批次 items 登记：StartExecution 时写入，崩溃恢复时 loader 从这里取回同一批单子。 */
+  private val jobItems = new ConcurrentHashMap[String, Vector[ChainItem]]()
+
   private val unifiedItemLoader: String => Future[Seq[Any]] = batchId => {
-    val (chain, round, index) = parseBatchKey(batchId)
-    Future.successful(itemsFor(chain, round, index).toList)
+    Option(jobItems.get(batchId)) match {
+      case Some(items) => Future.successful(items.toList)
+      case None =>
+        val (chain, round, index) = parseBatchKey(batchId)
+        Future.successful(itemsFor(chain, round, index).toList)
+    }
   }
 
   private val unifiedObserver = new ChainExecutionActor.ChainExecutionObserver with Logging {
@@ -279,7 +315,7 @@ class BankBatchDemoService @Inject()(
     override def onCompleted(batchId: String, snapshot: Option[BankChainState[Any, Any]]): Unit = {
       // 立即移出运行表：AllCompleted 已持久化，宕机按钮不应再瞄准本批
       val (chain, round, index) = parseBatchKey(batchId)
-      runningBatches.remove(jobKey(BatchJob(chain, round, index)))
+      runningBatches.remove(jobKey(BatchJob(chain, round, index, Vector.empty)))
       inc("batches_done")
       publish("batch-completed", Map("batchId" -> batchId))
       snapshot.foreach { st => businessClosure(chain, round, index, st) } // closure 结束时再 pump
@@ -300,7 +336,7 @@ class BankBatchDemoService @Inject()(
 
   private def jobDoneByBatchId(batchId: String): Unit = {
     val (chain, round, index) = parseBatchKey(batchId)
-    jobDone(BatchJob(chain, round, index))
+    jobDone(BatchJob(chain, round, index, Vector.empty))
   }
 
   // ====================================================================
@@ -321,88 +357,118 @@ class BankBatchDemoService @Inject()(
 
   private val routers: Map[String, PolicyBasedReBatchRouter[Any]] = policies.map { case (k, p) => k -> new PolicyBasedReBatchRouter[Any](p) }
 
-  private def businessClosure(chain: String, round: Int, index: Int, state: BankChainState[Any, Any]): Unit = {
+  private def businessClosure(chain: String, round: Int, index: Int, state: BankChainState[Any, Any]): Future[Unit] = {
     val cs = state.classifications.getOrElse(Seq.empty)
-    inc(s"${chain}_total", cs.size.toLong)
 
     val successes = cs.collect { case s: net.imadz.m25.component.Success[Any] => s }
     val suspicious = cs.collect { case s: net.imadz.m25.component.Suspicious[Any] => s }
-    val failures = cs.collect { case f: net.imadz.m25.component.Failure[Any] => f }
+    val directFailures = cs.collect { case f: net.imadz.m25.component.Failure[Any] => f }
+    cs.collect {
+      case s: net.imadz.m25.component.Success[Any]     => s.item
+      case s: net.imadz.m25.component.Suspicious[Any]  => s.item
+      case f: net.imadz.m25.component.Failure[Any]     => f.item
+    }.foreach(id => markSeen(chain, customerById(id.toString)))
 
+    // 过程流量指标（total/ok/suspicious 含重批轮的重跑，仅供观察；对账以下方终态为准）
+    inc(s"${chain}_total", cs.size.toLong)
     inc(s"${chain}_ok", successes.size.toLong)
     inc(s"${chain}_suspicious", suspicious.size.toLong)
 
     // 1) 可疑 → 查证落定（60% 确认成功；40% 网络类失败 → 建议自动重批）
-    val confirmedFailures = suspicious.collect {
-      case s if reconfirmOf(chain, customerById(s.item.toString)) == "VERIFIED_SUCCESS" =>
-        inc(s"${chain}_reconfirm_ok")
-        feedAdd(s"[${chainOfWord(chain)}·查证] ${customerById(s.item.toString).name} 确认成功 → 转入成功")
-        // 查证成功视为成功项：直接走账务更新
-        updateAccountGlitchy(ChainItem(customerById(s.item.toString), chain, round)).foreach { ok =>
-          if (ok) inc(s"${chain}_account_ok") else inc(s"${chain}_account_manual")
+    val (verifiedCustomers, confirmedFailures) = suspicious.map { s =>
+      val c = customerById(s.item.toString)
+      (c, reconfirmOf(chain, c))
+    }.partition(_._2 == "VERIFIED_SUCCESS") match {
+      case (verified, failed) =>
+        verified.foreach { case (c, _) =>
+          feedAdd(s"[${chainOfWord(chain)}·查证] ${c.name} 确认成功 → 转入成功")
         }
-        None
-      case s =>
-        val c = customerById(s.item.toString)
-        inc(s"${chain}_reconfirm_network")
-        feedAdd(s"[${chainOfWord(chain)}·查证] ${c.name} 外部系统拥堵 → 网络类失败，自动重批")
-        Some(net.imadz.m25.component.Failure[Any](c.customerId, net.imadz.m25.component.FailureReason(
-          "NETWORK_ERROR", "外部系统拥堵", Some(NextStep.RetrySameArea(3.seconds)))))
-    }.flatten
+        (verified.map(_._1), failed.map { case (c, _) =>
+          feedAdd(s"[${chainOfWord(chain)}·查证] ${c.name} 外部系统拥堵 → 网络类失败，自动重批")
+          net.imadz.m25.component.Failure[Any](c.customerId, net.imadz.m25.component.FailureReason(
+            "NETWORK_ERROR", "外部系统拥堵", Some(NextStep.RetrySameArea(3.seconds))))
+        })
+    }
+    inc(s"${chain}_reconfirm_ok", verifiedCustomers.size.toLong)
+    inc(s"${chain}_reconfirm_network", confirmedFailures.size.toLong)
 
-    // 2) 失败 → 路由决策（重批 / 放弃 / 人工）
-    val allFailures = failures ++ confirmedFailures
-    if (allFailures.nonEmpty) {
-      val policy = policies(chain)
-      val ctx = ProcessContext(currentAreaId = chain, retryCount = round - 1, originalBatchId = Some(s"b$index"))
-      routers(chain).route(allFailures, ctx).foreach { decisions =>
-        var needRebatch = false
-        var minDelay = policy.defaultCooldown
-        decisions.foreach { d =>
-          val c = customerById(d.item.toString)
-          d.nextStep match {
-            case NextStep.Scrap =>
-              inc(s"${chain}_rejected")
-              feedAdd(s"[${chainOfWord(chain)}·放弃] ${c.name}：${d.reason}")
-            case NextStep.RetrySameArea(delay) =>
-              inc(s"${chain}_rebatched")
-              needRebatch = true
-              if (delay < minDelay) minDelay = delay
-              feedAdd(s"[${chainOfWord(chain)}·重批] ${c.name} ${delay} 后进入第 ${round + 1} 轮")
-            case NextStep.ManualIntervention(ticket) =>
-              inc(s"${chain}_manual")
-              feedAdd(s"[${chainOfWord(chain)}·人工] ${c.name} 工单 $ticket（重试上限）")
-            case NextStep.RouteToArea(area, _) =>
-              feedAdd(s"[${chain}] ${c.name} → 路由 $area")
+    // 2) 失败 → 路由决策（终态 rejected / manual；RetrySameArea → 保持在途，稍后重批）
+    val allFailures = directFailures ++ confirmedFailures
+    val routeFuture: Future[Unit] =
+      if (allFailures.isEmpty) Future.successful(())
+      else {
+        val policy = policies(chain)
+        val ctx = ProcessContext(currentAreaId = chain, retryCount = round - 1, originalBatchId = Some(s"b$index"))
+        routers(chain).route(allFailures, ctx).map { decisions =>
+          var needRebatch = false
+          var minDelay = policy.defaultCooldown
+          var retryItems = Vector.empty[ChainItem]
+          decisions.foreach { d =>
+            val c = customerById(d.item.toString)
+            d.nextStep match {
+              case NextStep.Scrap =>
+                if (setTerminal(chain, c, "rejected")) {
+                  inc(s"${chain}_rejected")
+                  feedAdd(s"[${chainOfWord(chain)}·放弃] ${c.name}：${d.reason}")
+                }
+              case NextStep.RetrySameArea(delay) =>
+                needRebatch = true
+                if (delay < minDelay) minDelay = delay
+              case NextStep.ManualIntervention(ticket) =>
+                if (setTerminal(chain, c, "manual")) {
+                  inc(s"${chain}_manual")
+                  feedAdd(s"[${chainOfWord(chain)}·人工] ${c.name} 工单 $ticket（重试上限）")
+                }
+              case NextStep.RouteToArea(area, _) =>
+                feedAdd(s"[${chain}] ${c.name} → 路由 $area")
+            }
+          }
+          // 整批只入队一次下一轮；重试名单 = 本轮 RetrySameArea 的单子
+          // （逐笔入队会产生成百上千个重复批 → 调度死锁）
+          if (needRebatch) {
+            val retryItems = decisions.collect {
+              case d if d.nextStep.isInstanceOf[NextStep.RetrySameArea] =>
+                ChainItem(customerById(d.item.toString), chain, round + 1)
+            }.toVector
+            classicSystem.scheduler.scheduleOnce(minDelay)(enqueue(BatchJob(chain, round + 1, index, retryItems)))
           }
         }
-        // 整批只入队一次下一轮（逐笔入队会产生成百上千个重复批 → 调度死锁）
-        if (needRebatch) {
-          classicSystem.scheduler.scheduleOnce(minDelay)(enqueue(BatchJob(chain, round + 1, index)))
+      }
+
+    // 3) 成功项 + 查证成功项 → 账务更新（终态：credited/paid 或 except_pool）
+    //    幂等键 = customerId：已是终态的单子跳过账务（重批重跑不会重复入账）
+    val accountTargets = (successes.map(s => customerById(s.item.toString)) ++
+      verifiedCustomers).filterNot(c => isTerminal(chain, c))
+    val accountOps = accountTargets.map { c =>
+      updateAccountGlitchy(ChainItem(c, chain, round)).map { ok =>
+        if (ok) {
+          if (setTerminal(chain, c, if (chain == "recharge") "credited" else "paid")) {
+            inc(s"${chain}_account_ok")
+            if (chain == "recharge") feedAdd(s"[充值] ${c.name} +${c.amount} 元 已入账")
+            else feedAdd(s"[申购] ${c.name} ${c.amount} 元 已扣款，基金持仓 +${c.fund}")
+          }
+        } else if (setTerminal(chain, c, "except_pool")) {
+          inc(s"${chain}_account_manual")
+          feedAdd(s"[${chainOfWord(chain)}] ${c.name} 账务更新失败 → 人工异常池")
         }
       }
     }
 
-    // 3) 成功项 → 账务更新（1% 瞬时故障 → 自动重试 → 人工异常池）
-    successes.foreach { s =>
-      val c = customerById(s.item.toString)
-      updateAccountGlitchy(ChainItem(c, chain, round)).foreach { ok =>
-        if (ok) inc(s"${chain}_account_ok")
-        else inc(s"${chain}_account_manual")
+    // 4) 账务全部落定后：充值链把已入账(credited)客户衔接进申购链，本批才算跑完
+    Future.sequence(accountOps :+ routeFuture).map { _ =>
+      if (chain == "recharge") {
+        val credited = accountTargets.filter(c => "credited" == Option(terminalStates.get(chain))
+          .map(_.get(c.customerId)).map(_.toString).getOrElse(""))
+        credited.grouped(BATCH_SIZE).toVector.foreach { group =>
+          val idx = purchaseSeq.getAndIncrement()
+          val items = group.toVector.map(c => ChainItem(c, "purchase", 1))
+          purchaseItems.put(s"purchase-b$idx", items)
+          enqueue(BatchJob("purchase", 1, idx, items))
+          feedAdd(s"[衔接] 充值到账 ${group.size} 笔 → 自动发起基金申购（purchase-b$idx）")
+        }
       }
+      jobDone(BatchJob(chain, round, index, Vector.empty))
     }
-
-    // 4) 充值链收尾 → 已入账客户自动衔接申购链（两条链由此串联）
-    if (chain == "recharge") {
-      val credited = successes.map(s => customerById(s.item.toString)).toVector
-      credited.grouped(BATCH_SIZE).foreach { group =>
-        val idx = purchaseSeq.getAndIncrement()
-        enqueue(BatchJob("purchase", 1, idx))
-        feedAdd(s"[衔接] 充值到账 ${group.size} 笔 → 自动发起基金申购（purchase-b$idx）")
-      }
-    }
-
-    jobDone(BatchJob(chain, round, index))
   }
 
   private def chainOfWord(chain: String): String = if (chain == "recharge") "充值" else "申购"
@@ -425,9 +491,12 @@ class BankBatchDemoService @Inject()(
     fundPositions.clear()
     purchaseSeq.set(0)
     feed.clear()
+    seenCustomers.clear()
+    terminalStates.clear()
+    jobItems.clear()
     runId = java.util.UUID.randomUUID().toString.take(8)
     customers // 触发初始化
-    (0 until TOTAL_BATCHES).foreach(i => enqueue(BatchJob("recharge", 1, i)))
+    (0 until TOTAL_BATCHES).foreach(i => enqueue(BatchJob("recharge", 1, i, itemsFor("recharge", 1, i))))
     publish("run-started", Map("customers" -> TOTAL_CUSTOMERS.toString,
       "batchSize" -> BATCH_SIZE.toString, "batches" -> TOTAL_BATCHES.toString))
     feedAdd(s"全量启动：$TOTAL_CUSTOMERS 客户 · 每批 $BATCH_SIZE · 共 $TOTAL_BATCHES 批 · 并发 $MAX_CONCURRENT_BATCHES")
@@ -452,19 +521,30 @@ class BankBatchDemoService @Inject()(
 
   def chainStatsJson(chain: String, label: String): play.api.libs.json.JsValue = {
     import play.api.libs.json._
+    val entered = enteredOf(chain)
+    val inFlight = inFlightOf(chain)
+    val terminals = Option(terminalStates.get(chain))
+      .map(_.values().asScala.groupBy(identity).map { case (k, vs) => k -> vs.size }).getOrElse(Map.empty)
+    def t(state: String): Long = terminals.getOrElse(state, 0).toLong
     Json.obj(
       "label" -> label,
+      "entered" -> entered,
+      "inFlight" -> inFlight,
+      "credited" -> t("credited"),
+      "paid" -> t("paid"),
+      "rejected" -> t("rejected"),
+      "manual" -> t("manual"),
+      "exceptPool" -> t("except_pool"),
+      "successTerminal" -> t(if (chain == "recharge") "credited" else "paid"),
+      "balanced" -> (entered == inFlight + t(if (chain == "recharge") "credited" else "paid") + t("rejected") + t("manual") + t("except_pool")),
+      // ---- 过程流量指标（观察用，不参与对账）----
       "total" -> counterValue(s"${chain}_total"),
       "ok" -> counterValue(s"${chain}_ok"),
-      "rejected" -> counterValue(s"${chain}_rejected"),
       "suspicious" -> counterValue(s"${chain}_suspicious"),
       "reconfirmOk" -> counterValue(s"${chain}_reconfirm_ok"),
       "networkRetry" -> counterValue(s"${chain}_reconfirm_network"),
       "rebatched" -> counterValue(s"${chain}_rebatched"),
-      "manual" -> counterValue(s"${chain}_manual"),
-      "accountOk" -> counterValue(s"${chain}_account_ok"),
       "accountRetry" -> counterValue(s"${chain}_account_retry"),
-      "accountManual" -> counterValue(s"${chain}_account_manual"),
       "amount" -> counterValue(s"${chain}_amount"))
   }
 
