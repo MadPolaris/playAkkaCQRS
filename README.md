@@ -50,6 +50,7 @@ sbt -Ddocker.username=<user> -Ddocker.registry=<registry> docker:publish
 |---|---|
 | `/` · `/zh` | Homepage — CQRS/ES banking demo (deposit / withdraw / transfer through a TCC saga) |
 | `/saga` | Saga showcase — trigger scenarios, inject faults mid-flight, manual-fix + resume suspended transactions, live WebSocket event stream |
+| `/bank-batch` | **Bank batch demo** — a 5-order recharge batch through the six-stage Monarch chain: per-item three-way outcomes, reconfirm, automatic re-batch, ⚡ crash injection with resume-from-breakpoint, and real M1 account credits |
 | `/fab-demo/m35` | **M3.5 Self-Healing Fab demo** — photolithography → CD-SEM metrology → OCAP rework on event-sourced work orders; scripted faults *and* actor crashes mid-pipeline; watch RECOVERING → resumed stages → AllCompleted |
 | `/architecture` `/projection` `/dag` `/m1` `/m2` `/m3` | Milestone deep-dive pages (English at `/en/m1`, `/en/m2`, `/en/m3`) |
 

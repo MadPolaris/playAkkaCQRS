@@ -1,0 +1,194 @@
+@()
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>银行批量充值 · Monarch 六阶段链</title>
+<style>
+  :root { --ok:#1a7f37; --bad:#c62828; --warn:#b26a00; --run:#1565c0; --bg:#f5f7fa; --card:#fff; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:"Microsoft YaHei",system-ui,sans-serif; background:var(--bg); color:#222; }
+  header { background:#0d2b52; color:#fff; padding:14px 24px; }
+  header h1 { margin:0; font-size:20px; }
+  header p { margin:4px 0 0; font-size:13px; opacity:.85; }
+  main { max-width:1100px; margin:18px auto; padding:0 16px; display:grid; gap:16px; }
+  .card { background:var(--card); border-radius:10px; padding:16px 18px; box-shadow:0 1px 4px rgba(0,0,0,.08); }
+  .card h2 { margin:0 0 12px; font-size:15px; color:#0d2b52; border-left:4px solid #1565c0; padding-left:8px; }
+  .toolbar button { font-size:15px; padding:10px 22px; margin-right:10px; border:none; border-radius:8px; cursor:pointer; color:#fff; }
+  #btnStart { background:var(--ok); } #btnCrash { background:var(--bad); }
+  #btnStart:disabled, #btnCrash:disabled { background:#999; cursor:not-allowed; }
+  /* 六道工序 */
+  .stages { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .stage { flex:1; min-width:120px; text-align:center; padding:10px 6px; border-radius:8px; background:#eceff3; border:2px solid transparent; font-size:13px; }
+  .stage .num { font-size:11px; color:#777; display:block; }
+  .stage.current { border-color:var(--run); background:#e3f0fd; animation:pulse 1.2s infinite; }
+  .stage.done { background:#e6f4ea; border-color:var(--ok); }
+  .stage.done::after { content:" ✓"; color:var(--ok); font-weight:bold; }
+  .meta { min-height:18px; font-size:12px; color:#555; margin-top:8px; font-family:Consolas,monospace; }
+  @@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.6} }
+  /* 表格 */
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid #eee; }
+  th { background:#f0f3f7; color:#333; }
+  /* 账本 */
+  .ledger { background:#0f1720; color:#9fe19f; font-family:Consolas,monospace; font-size:12px;
+            height:230px; overflow-y:auto; padding:10px 12px; border-radius:8px; white-space:pre-wrap; line-height:1.7; }
+  .balances span { display:inline-block; background:#e8f0fe; color:#0d47a1; border-radius:6px;
+                   padding:4px 10px; margin:2px 6px 2px 0; font-size:13px; }
+  .hint { font-size:12px; color:#888; margin-top:6px; }
+  .banner { padding:10px 14px; border-radius:8px; font-size:14px; display:none; margin-bottom:12px; }
+  .banner.recovering { display:block; background:#fff3e0; color:#b26a00; border:1px solid #ffcc80; }
+  .banner.failed { display:block; background:#fdecea; color:#c62828; border:1px solid #f5b4ae; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏦 银行批量充值 · Monarch 六阶段链</h1>
+  <p>5 笔充值请求打包送合作银行处理：①生成文件 ②上传 ③等回执 ④轮询结果 ⑤解析 ⑥逐笔分类 —— 支持宕机断点续跑与失败自动重批</p>
+</header>
+<main>
+  <div class="card toolbar">
+    <button id="btnStart" onclick="startBatch()">🚀 开始本批处理</button>
+    <button id="btnCrash" onclick="crash()" disabled>⚡ 模拟宕机（看断点续跑）</button>
+    <span id="rebatchHint" class="hint"></span>
+    <div class="banner" id="banner"></div>
+    <div class="stages" id="stages"></div>
+    <div class="meta" id="stageMeta">（待开始）</div>
+  </div>
+
+  <div class="card">
+    <h2>本批充值单（逐笔状态）</h2>
+    <table>
+      <thead><tr><th>单号</th><th>客户</th><th>金额（元）</th><th>状态</th></tr></thead>
+      <tbody id="orderRows"></tbody>
+    </table>
+    <p class="hint">剧本预设：充值单 4 银行卡余额不足（按策略放弃，演示"不该重试的别重试"）；充值单 5 银行处理超时 → 查证 → 自动重批（演示"该重试的自动重试"）。换一个业务（申购/代付）只换错误码映射和策略，骨架复用。</p>
+  </div>
+
+  <div class="card">
+    <h2>📜 账本（每道工序一条记录，宕机后靠它续跑）</h2>
+    <div class="ledger" id="ledger">（待开始）</div>
+  </div>
+
+  <div class="card">
+    <h2>💰 到账情况（充值成功项自动入账 M1 理财账户，业务闭环）</h2>
+    <div class="balances" id="balances">（待开始）</div>
+  </div>
+</main>
+
+<script>
+const STAGES = ["file-gen 生成文件","upload 上传","wait-ack 等回执","poll 轮询结果","parse 解析","classify 逐笔分类"];
+const wsUrl = (location.protocol === "https:" ? "wss://" : "ws://") + location.host + "/ws/bank-batch/events";
+let ws, crashArmed = false;
+
+function renderStages(done, current) {
+  const el = document.getElementById("stages");
+  el.innerHTML = STAGES.map((name, i) => {
+    const cursor = name.split(" ")[0] + "#" + i;
+    let cls = "stage";
+    if (done.indexOf(cursor) >= 0 || done.some(d => d.startsWith(name.split(" ")[0] + "#"))) cls += " done";
+    if (current && current.startsWith(name.split(" ")[0] + "#")) cls += " current";
+    return `<div class="${cls}"><span class="num">第 ${i+1} 道</span>${name.split(" ").slice(1).join(" ")}</div>`;
+  }).join('<span style="color:#bbb">→</span>');
+}
+function banner(text, cls) { const b = document.getElementById("banner"); b.textContent = text || ""; b.className = "banner " + (cls || ""); }
+function setButtons(running) { document.getElementById("btnStart").disabled = running; document.getElementById("btnCrash").disabled = !running; }
+function addLedger(line) { const el = document.getElementById("ledger"); if (el.textContent === "（待开始）") el.textContent = ""; el.textContent += line + "\n"; el.scrollTop = el.scrollHeight; }
+function updateOrder(orderNo, status) {
+  const rows = document.querySelectorAll("#orderRows tr");
+  rows.forEach(r => { if (r.dataset.order === orderNo) r.children[3].textContent = status; });
+}
+function refreshState() {
+  fetch("/api/bank-batch/state").then(r => r.json()).then(st => {
+    const tbody = document.getElementById("orderRows");
+    if (tbody.children.length === 0 && st.orders) {
+      st.orders.forEach(o => {
+        const tr = document.createElement("tr"); tr.dataset.order = o.orderNo;
+        tr.innerHTML = `<td>${o.orderNo}</td><td>${o.customer}</td><td>${o.amount}</td><td>${o.status}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    st.orders.forEach(o => { const r = [...tbody.children].find(x => x.dataset.order === o.orderNo); if (r) r.children[3].textContent = o.status; });
+    (st.doneStages || []).forEach(c => { if ((st.currentStage || "") === "") renderStages(st.doneStages || [], null); });
+    renderStages(st.doneStages || [], st.currentStage);
+    (st.ledger || []).forEach(l => addLedger(l));
+    const bal = document.getElementById("balances");
+    Object.entries(st.balances || {}).forEach(([k, v]) => {
+      if (!bal.innerHTML.includes(k)) bal.innerHTML += `<span>${k}：余额 ${v} 元</span>`;
+    });
+    const running = (st.doneStages || []).length > 0 && (st.doneStages || []).length < 6;
+    if (running && !crashArmed) { crashArmed = true; setButtons(true); }
+  }).catch(() => {});
+}
+
+function startBatch() {
+  crashArmed = false; setButtons(true);
+  document.getElementById("ledger").textContent = "";
+  document.getElementById("balances").innerHTML = "";
+  banner("批次处理中……（可随时点 ⚡ 模拟宕机）", "recovering");
+  fetch("/api/bank-batch/start", {method: "POST"}).then(r => r.json()).then(j => {
+    banner("批次处理中……（" + j.message + "）", "recovering");
+  });
+}
+function crash() {
+  fetch("/api/bank-batch/crash", {method: "POST"}).then(r => r.json());
+  banner("⚡ 已注入宕机！实体将被 sharding 重启，从账本断点自动续跑……", "recovering");
+}
+
+function connect() {
+  ws = new WebSocket(wsUrl);
+  ws.onmessage = ev => {
+    const frame = JSON.parse(ev.data);
+    const d = frame.data || {};
+    switch (frame.type) {
+      case "batch-started":
+        banner("批次处理中……（" + d.items + " 笔）", "recovering");
+        document.getElementById("orderRows").innerHTML = "";
+        refreshState(); break;
+      case "stage-start": renderStages(collectDone(), d.cursor); document.getElementById("stageMeta").textContent = "▶ " + d.cursor; break;
+      case "stage-done":
+        collectDone().push(d.cursor); renderStages(collectDone(), null);
+        const meta = Object.entries(d.metadata || {}).map(([k,v]) => k+"="+v).join(", ");
+        document.getElementById("stageMeta").textContent = meta || "✓ " + d.cursor; break;
+      case "stage-failed": document.getElementById("stageMeta").textContent = "✗ " + d.cursor + "：" + d.detail; break;
+      case "classified": break;
+      case "reconfirm":
+        if (d.orderNo) updateOrder(d.orderNo, "查证中：" + (d.verdict || "")); break;
+      case "credited":
+        updateOrder(d.orderNo, "✅ 成功，已到账");
+        const bal = document.getElementById("balances");
+        if (!bal.innerHTML.includes(d.customer)) bal.innerHTML += `<span>${d.customer}：余额 ${d.balance} 元</span>`;
+        break;
+      case "rebatch-scheduled":
+        updateOrder(d.orderNo, `🔁 第 ${d.round} 轮重批（${d.delaySeconds}s 后）`);
+        document.getElementById("rebatchHint").textContent = `重批守护已挂起：${d.delaySeconds}s 后自动提交第 ${d.round} 轮`;
+        break;
+      case "rebatch-started":
+        document.getElementById("rebatchHint").textContent = "第 " + d.round + " 轮重批进行中：" + (d.orders || []).join("、");
+        break;
+      case "crash":
+        banner("⚡ 宕机！" + (d.reason || "") + " —— sharding 正在重启实体，账本已保存……", "recovering");
+        document.getElementById("stageMeta").textContent = "（宕机中）"; break;
+      case "recovering":
+        banner("🔄 恢复中：已完成 " + d.completed + " 道，从第 " + (d.completed + 1) + " 道断点续跑……", "recovering"); break;
+      case "batch-completed":
+        banner("✅ 批次完成！成功项已自动入账，失败项已按策略处置（放弃/重批/转人工）。", "");
+        setButtons(false); setTimeout(refreshState, 1500); break;
+      case "batch-failed":
+        banner("❌ 批次在 " + d.phase + " 失败：" + d.reason, "failed");
+        setButtons(false); break;
+    }
+  };
+  ws.onclose = () => setTimeout(connect, 2000);
+  ws.onerror = () => ws.close();
+}
+let _done = [];
+function collectDone() { return _done; }
+const _origRender = renderStages;
+renderStages = function(done, current) { _done = done && done.length ? done.slice() : _done; _origRender(_done, current); };
+
+connect(); refreshState();
+</script>
+</body>
+</html>

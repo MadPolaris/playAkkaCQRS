@@ -50,6 +50,7 @@ sbt -Ddocker.username=<用户名> -Ddocker.registry=<仓库地址> docker:publis
 |---|---|
 | `/` · `/zh` | 首页——CQRS/ES 银行示例（存款 / 取款 / 转账，转账走 TCC Saga） |
 | `/saga` | Saga 演示场——触发场景、飞行中注入故障、人工修复并恢复挂起事务、WebSocket 实时事件流 |
+| `/bank-batch` | **银行批量充值演示**——5 笔充值请求走六阶段 Monarch 链：逐笔三分类、可疑查证、失败自动重批、⚡宕机注入断点续跑、成功项真实入账 M1 账户 |
 | `/fab-demo/m35` | **M3.5 FAB 自愈演示**——光刻 → CD-SEM 量测 → OCAP 返工，跑在事件溯源工单上；预排故障 *和* Actor 崩溃；亲眼看到 RECOVERING → 恢复阶段继续 → AllCompleted |
 | `/architecture` `/projection` `/dag` `/m1` `/m2` `/m3` | 里程碑深入页面（英文在 `/en/m1`、`/en/m2`、`/en/m3`） |
 

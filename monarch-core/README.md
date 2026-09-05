@@ -12,7 +12,7 @@ Zero framework dependencies: everything is `scala.concurrent.Future` plus host c
 
 English | [中文](README-zh.md)
 
-> **New here?** Chinese readers can start with the story-first tutorial [一次基金申购批的奇幻漂流](TUTORIAL-zh.md) — one concrete fund-subscription batch walked through crashes, failures and re-batching, before any jargon.
+> **New here?** Chinese readers can start with the story-first tutorial [一次批量充值批的奇幻漂流](TUTORIAL-zh.md) — one concrete recharge batch walked through crashes, failures and re-batching, before any jargon.
 
 Other guides: [ChainDsl Guide](../docs/CHAINDSL_GUIDE.md) — the two hosts below documented at the library level.
 
