@@ -7,6 +7,7 @@ Reactive MES kernel for semiconductor wafer fabs. Event Sourcing replaces giant 
 | Milestone | Status |
 |---|---|
 | M1 — Saga Distributed Transaction Coordinator (v3 engine) | Production quality |
+| Monarch — Resumable Stage-Queue Engine (monarch-core) | Production quality — hosts: Fab M3.5 demo + recharge chain |
 | M2 — Stream-Batch Multi-Level DAG Execution Engine | Production quality |
 | M2.5+ — ChainDsl Batch-Chain Component Engine | Production quality |
 | M3 — Manufacturing Cybernetics CIMs iPaaS | Building: Lot Context Saga + M3.5 Self-Healing Demo ← Production quality |
@@ -112,6 +113,14 @@ Design invariants that make recovery safe:
 The same engine instance drives both the banking demo (`MoneyTransferSagaDefinition`) and the Fab lot split/merge/wafer-transfer sagas — wired once via `initSagaEngine[AppSagaContext]`.
 
 Read the details: [Saga Engine Guide](docs/SAGA_GUIDE.md) / [中文](docs/SAGA_GUIDE-zh.md) · [`knowledge_base/architecture/saga.md`](knowledge_base/architecture/saga.md)
+
+## Monarch — Resumable Stage-Queue Engine (monarch-core)
+
+The repo's second standalone engine, on equal footing with the saga engine: an Akka-free, Maven-Central-bound executor for arbitrary stage queues. Three mechanisms, named for the monarch butterfly — metamorphosis (an open stage queue), diapause (cursor-based checkpoint resume), cross-generation migration (generation tokens that outlive any individual run).
+
+Both production pipelines run on it: the Fab M3.5 self-healing demo (17 stages — crash at `Measure#9`, resume from the same cursor, complete through `SealComplete#16`) and dag-engine-core's recharge chain (`BankChain`, 6 stages, snapshot-carrying `PhaseDone` + `resumeFromIndex` recovery).
+
+Read the guide: [monarch-core/README.md](monarch-core/README.md) / [中文](monarch-core/README-zh.md) — engine contract, the five-step modeling method, and both host case studies.
 
 ## M2 — Multi-Level DAG Execution Engine
 

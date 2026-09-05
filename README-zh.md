@@ -7,6 +7,7 @@
 | 里程碑 | 状态 |
 |---|---|
 | M1 — Saga 分布式事务协调器（v3 引擎） | 线上质量 |
+| Monarch —— 可断点续跑阶段队列引擎（monarch-core） | 线上质量——宿主：Fab M3.5 演示 + 充值链路 |
 | M2 — 流批一体多层级 DAG 执行引擎 | 线上质量 |
 | M2.5+ — ChainDsl 批处理链组件引擎 | 线上质量 |
 | M3 — 面向制造业控制论的 CIMs iPaaS | 建设中：Lot Context Saga + M3.5 自愈演示 ← 线上质量 |
@@ -112,6 +113,14 @@ infrastructure/  ← 适配层：框架集成（Akka、Play、Guice、MongoDB、
 同一个引擎实例既驱动银行示例（`MoneyTransferSagaDefinition`），也驱动 Fab 的 lot 拆分/合并/晶圆转移 Saga——通过 `initSagaEngine[AppSagaContext]` 一次性接线。
 
 详见：[Saga 引擎指南](docs/SAGA_GUIDE-zh.md) / [English](docs/SAGA_GUIDE.md) · [`knowledge_base/architecture/saga.md`](knowledge_base/architecture/saga.md)
+
+## Monarch —— 可断点续跑阶段队列引擎（monarch-core）
+
+本仓库第二个独立引擎，与 Saga 引擎同级：零 Akka、面向 Maven Central 发布的任意阶段队列执行器。三大机制以帝王斑蝶命名——完全变态（开放阶段队列）、滞育（游标断点续跑）、跨代迁徙（世代号，比任何单次运行都长寿）。
+
+两条生产流水线都跑在它上面：Fab M3.5 自愈演示（17 个阶段——`Measure#9` 处崩溃、从同一游标恢复、一路走完 `SealComplete#16`）与 dag-engine-core 的充值链路（`BankChain`，6 个阶段，`PhaseDone` 携带快照 + `resumeFromIndex` 恢复）。
+
+详见：[monarch-core/README.md](monarch-core/README.md) / [中文](monarch-core/README-zh.md) —— 引擎契约、五步建模法、两个宿主的完整案例。
 
 ## M2 — 多层级 DAG 执行引擎
 
