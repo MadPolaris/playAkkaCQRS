@@ -59,8 +59,11 @@ sbt -Ddocker.username=<user> -Ddocker.registry=<registry> docker:publish
 ├── saga-core/         M1: saga_v3 engine — SagaDefinition/SagaRunner/SagaRegistry DSL,
 │                      sharded coordinator + per-step×phase StepExecutors, journal-first
 │                      manual fix, generation guards, backward recovery
-├── dag-engine-core/   M2.5+: Akka-free batch-chain components — SubBatchPipeline,
-│                      SubBatchProcessor, classifier / reconfirm / router / scheduler
+├── monarch-core/      Standalone resumable stage-queue engine (Monarch) — pure
+│                      scala.concurrent, no Akka; published to Maven Central
+├── dag-engine-core/   M2.5+: batch-chain components — SubBatchPipeline, BankChain
+│                      (six-stage Monarch queue), classifier / reconfirm / router /
+│                      scheduler, ChainExecutionActor (event-sourced wrapper)
 ├── fab-simulation/    M3: equipment adapter & simulator protocol (ActorEquipmentAdapter)
 ├── app/
 │   ├── net/imadz/
@@ -77,7 +80,7 @@ sbt -Ddocker.username=<user> -Ddocker.registry=<registry> docker:publish
 └── test/               Unit + integration tests
 ```
 
-**Dependency rule**: inner layers NEVER import outer layers. `dag-engine-core` depends only on `scala.concurrent` — no Akka.
+**Dependency rule**: inner layers NEVER import outer layers. `monarch-core` is pure `scala.concurrent` (no Akka) and is the only module published to Maven Central (tag `v*` → `sbt ci-release`).
 
 ## Architecture
 

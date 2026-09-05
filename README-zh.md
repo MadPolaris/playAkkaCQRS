@@ -59,8 +59,11 @@ sbt -Ddocker.username=<用户名> -Ddocker.registry=<仓库地址> docker:publis
 ├── saga-core/         M1：saga_v3 引擎——SagaDefinition/SagaRunner/SagaRegistry DSL、
 │                      分片协调器 + 每步骤×阶段 StepExecutor、日志优先人工修复、
 │                      世代号守卫、向后恢复
-├── dag-engine-core/   M2.5+：无 Akka 依赖的批处理链组件——SubBatchPipeline、
-│                      SubBatchProcessor、分类 / 复核 / 路由 / 调度
+├── monarch-core/      独立的可断点续跑阶段队列引擎（Monarch）——纯
+│                      scala.concurrent、零 Akka；发布到 Maven Central
+├── dag-engine-core/   M2.5+：批处理链组件——SubBatchPipeline、BankChain
+│                      （六阶段 Monarch 队列）、分类 / 复核 / 路由 / 调度、
+│                      ChainExecutionActor（事件溯源包装）
 ├── fab-simulation/    M3：设备适配器与模拟器协议（ActorEquipmentAdapter）
 ├── app/
 │   ├── net/imadz/
@@ -77,7 +80,7 @@ sbt -Ddocker.username=<用户名> -Ddocker.registry=<仓库地址> docker:publis
 └── test/                单元 + 集成测试
 ```
 
-**依赖规则（铁律）**：内层绝不 import 外层包。`dag-engine-core` 只依赖 `scala.concurrent`——没有 Akka。
+**依赖规则（铁律）**：内层绝不 import 外层包。`monarch-core` 为纯 `scala.concurrent`（零 Akka），且是唯一发布到 Maven Central 的模块（打 `v*` 标签 → `sbt ci-release`）。
 
 ## 架构
 
