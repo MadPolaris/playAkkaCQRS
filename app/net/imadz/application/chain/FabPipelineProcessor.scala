@@ -1,179 +1,99 @@
 package net.imadz.application.chain
 
-import net.imadz.domain.events._
-import net.imadz.application.chain.FabScenarioPipeline.{PipelineStage, _}
-import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState, StageError, StageFailedException}
+import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoState}
+import net.imadz.application.chain.FabExecutionModel.{StageError => FabStageError, StageFailedException => FabStageFailedException}
+import net.imadz.application.chain.FabScenarioPipeline.PipelineStage
+import net.imadz.monarch.{Monarch, StageError => MonarchStageError, StageFailedException => MonarchStageFailedException}
+import net.imadz.monarch.{FailureInterceptor, LifecycleHooks, StageInterpreter}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.control.NonFatal
 
 /**
- * Queue-based pipeline processor that supports stage-level completion tracking,
- * runtime dynamic injection (injectHead/appendTail), and crash recovery.
+ * Thin adapter between the Fab domain and [[net.imadz.monarch.Monarch]], the resumable
+ * stage-queue engine (monarch-core). All mechanics — open stage queue, cursor naming,
+ * resume-from-index, generation-token staleness, failure interception — live in the
+ * engine now; this object supplies only Fab-specific knowledge:
  *
- * Designed to be wrapped by [[FabPipelineExecutionActor]] for EventSourced persistence.
- * Each stage lifecycle event (start/complete/fail) triggers a callback which signals
- * the actor to persist the corresponding domain event.
- *
- * Stage name derivation converts each [[PipelineStage]] variant to a stable string
- * cursor suitable for use as an event-sourcing phase cursor. Repeated variants
- * (e.g. multiple `Branch` stages) are disambiguated with their queue position so that
- * journal cursors stay unique.
- *
- * P0: every stage boundary checks [[FabDemoContext]].runToken — a superseded run
- * (crash recovery started a newer generation) terminates silently instead of racing
- * the recovered run.
+ *   - cursor naming from a [[PipelineStage]] variant (stable phase names, position-
+ *     suffixed per queue entry)
+ *   - the stage interpreter ([[FabScenarioPipeline.runStage]])
+ *   - the failure interceptor ([[FabScenarioPipeline.invokeOcapInterceptor]])
+ *   - the actor-journaled lifecycle callbacks (PhaseStarting/PhaseCompleted/
+ *     PhaseFailed/OcapResolved protocols unchanged — journal and UI untouched)
  */
-class FabPipelineProcessor(
-  ctx: FabDemoContext,
-  onPhaseStart: String => Unit,
-  onPhaseComplete: (String, Map[String, String], Option[FabDemoState]) => Unit,
-  onOcapResolved: (String, StageError, FabDemoState) => Unit,
-  onPhaseFailed: (String, StageError) => Unit
-) {
-
-  /** Queue entries carry a stable position so repeated stage variants get unique cursors. */
-  private var entries: Vector[(PipelineStage, Int)] = Vector.empty
-  private var nextPos: Int = 0
-
-  /** Initialise the processor with the full stage list. */
-  def initialize(stages: Seq[PipelineStage]): Unit = {
-    entries = stages.map(s => (s, nextPos)).toVector
-    nextPos += stages.size
-  }
-
-  /** Prepend stages to the head of the queue (Branch / OCAP runtime weaving). */
-  def injectHead(stages: Seq[PipelineStage]): Unit = {
-    entries = stages.map(s => (s, nextPos)).toVector ++ entries
-    nextPos += stages.size
-  }
-
-  /** Append stages to the tail of the queue. */
-  def appendTail(stages: Seq[PipelineStage]): Unit = {
-    entries = entries ++ stages.map(s => (s, nextPos)).toVector
-    nextPos += stages.size
-  }
-
-  /** Current queue size. */
-  def pendingCount: Int = entries.size
-
-  // ====================================================================
-  // Stage name derivation
-  // ====================================================================
-
-  /** Derive a stable, human-readable phase name from a PipelineStage. */
-  def stageName(stage: PipelineStage): String = stage match {
-    case LoadFoup                           => "LoadFoup"
-    case Transport(from, to)                => s"Transport_${from}_${to}"
-    case AtEquipment(area, equipId)         => s"AtEquipment_${area}_${equipId}"
-    case TrackIn(equipId, _)                => s"TrackIn_${equipId}"
-    case RunRecipe(equipId, recipeId)       => s"RunRecipe_${equipId}_${recipeId}"
-    case TrackOut(equipId, _)               => s"TrackOut_${equipId}"
-    case Measure(equipId)                   => s"Measure_${equipId}"
-    case Classify                           => "Classify"
-    case SagaSplit(lotKey)                  => s"SagaSplit_${lotKey}"
-    case SagaMerge(lotKey)                  => s"SagaMerge_${lotKey}"
-    case ScrapWafers                        => "ScrapWafers"
-    case HoldWafers                         => "HoldWafers"
-    case ReleaseWafers                      => "ReleaseWafers"
-    case PostReleaseClassify                => "PostReleaseClassify"
-    case WaitForReview(_)                   => "WaitForReview"
-    case SealComplete                       => "SealComplete"
-    case Branch(_, _, _)                    => "Branch"
-    case PilotSubFlow                       => "PilotSubFlow"
-    case OcapEvaluate(_)                    => "OcapEvaluate"
-    case OcapActionRouter                   => "OcapActionRouter"
-    case ExecuteSubProcess(ref)             => s"ExecuteSubProcess_${ref.subProcessType}"
-    case AwaitSubLotResult(lotKey)          => s"AwaitSubLotResult_${lotKey}"
-    case PhotoCellReworkPipeline            => "PhotoCellReworkPipeline"
-    case DynamicPorExecution(_, _)          => "DynamicPorExecution"
-    case _                                  => stage.getClass.getSimpleName
-  }
-
-  /** Unique cursor: repeated variants (Branch, Transport…) get their queue position. */
-  private def cursorName(stage: PipelineStage, pos: Int): String =
-    s"${stageName(stage)}#$pos"
-
-  // ====================================================================
-  // Execution
-  // ====================================================================
-
-  /** Execute the full queue starting from the given state. */
-  def process(initialState: FabDemoState)(implicit ec: ExecutionContext): Future[FabDemoState] =
-    executeQueue(entries, initialState)
-
-  /**
-   * Resume after recovery, skipping stages whose phase names appear in `completedPhases`.
-   */
-  def resume(state: FabDemoState, completedPhases: Set[String])(implicit ec: ExecutionContext): Future[FabDemoState] = {
-    val remaining = entries.dropWhile { case (stage, pos) => completedPhases.contains(cursorName(stage, pos)) }
-    executeQueue(remaining, state)
-  }
-
-  /** Resume using indexed skip where we know the exact count of completed phases. */
-  def resumeFromIndex(state: FabDemoState, completedCount: Int)(implicit ec: ExecutionContext): Future[FabDemoState] =
-    executeQueue(entries.drop(completedCount), state)
-
-  // ====================================================================
-  // Internal
-  // ====================================================================
-
-  private def executeQueue(
-    remaining: Vector[(PipelineStage, Int)],
-    state: FabDemoState
-  )(implicit ec: ExecutionContext): Future[FabDemoState] = {
-    remaining match {
-      case v if v.isEmpty =>
-        Future.successful(state)
-      case (stage, pos) +: tail =>
-        // P0: a superseded run terminates silently — no OCAP, no events, no side effects.
-        if (!ctx.runToken()) Future.failed(StaleRun)
-        else {
-          val sn = cursorName(stage, pos)
-          onPhaseStart(sn)
-          runStage(stage, state, ctx).flatMap { nextState =>
-            // P1: every stage carries its post-state so recovery state matches the cursor.
-            onPhaseComplete(sn, Map.empty, Some(nextState))
-            executeQueue(tail, nextState)
-          }.recoverWith {
-            case e if !ctx.runToken() => Future.failed(e)
-            case StageFailedException(err) =>
-              onPhaseFailed(sn, err)
-              // P2: OCAP resolution is journaled as its own event, not a fake StageCompleted.
-              FabScenarioPipeline.invokeOcapInterceptor(state, ctx, err).flatMap { ocapState =>
-                onOcapResolved(sn, err, ocapState)
-                executeQueue(tail, ocapState)
-              }
-            case NonFatal(ex) =>
-              // P3: unexpected failures are journaled and routed through OCAP/manual handling —
-              // never silently swallowed with a stale state.
-              val err = StageError(sn, None, "UNEXPECTED", ex.getMessage)
-              onPhaseFailed(sn, err)
-              FabScenarioPipeline.invokeOcapInterceptor(state, ctx, err).flatMap { ocapState =>
-                onOcapResolved(sn, err, ocapState)
-                executeQueue(tail, ocapState)
-              }
-          }
-        }
-    }
-  }
-
-  private def runStage(stage: PipelineStage, state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] =
-    FabScenarioPipeline.runStage(stage, state, ctx)
-}
-
 object FabPipelineProcessor {
-  /** Factory method to create a processor with a pre-initialized stage list. */
-  def apply(
-    stages: Seq[PipelineStage],
-    ctx: FabDemoContext,
-    onPhaseStart: String => Unit,
-    onPhaseComplete: (String, Map[String, String], Option[FabDemoState]) => Unit,
-    onOcapResolved: (String, StageError, FabDemoState) => Unit,
-    onPhaseFailed: (String, StageError) => Unit
-  ): FabPipelineProcessor = {
-    val p = new FabPipelineProcessor(ctx, onPhaseStart, onPhaseComplete, onOcapResolved, onPhaseFailed)
-    p.initialize(stages)
-    p
+
+  /** Derive a stable, human-readable phase name from a PipelineStage variant. */
+  def stageName(stage: PipelineStage): String = stage match {
+    case FabScenarioPipeline.LoadFoup                     => "LoadFoup"
+    case FabScenarioPipeline.Transport(from, to)          => s"Transport_${from}_${to}"
+    case FabScenarioPipeline.AtEquipment(area, equipId)   => s"AtEquipment_${area}_${equipId}"
+    case FabScenarioPipeline.TrackIn(equipId, _)          => s"TrackIn_${equipId}"
+    case FabScenarioPipeline.RunRecipe(equipId, recipeId) => s"RunRecipe_${equipId}_${recipeId}"
+    case FabScenarioPipeline.TrackOut(equipId, _)         => s"TrackOut_${equipId}"
+    case FabScenarioPipeline.Measure(equipId)             => s"Measure_${equipId}"
+    case FabScenarioPipeline.Classify                     => "Classify"
+    case FabScenarioPipeline.SagaSplit(lotKey)            => s"SagaSplit_${lotKey}"
+    case FabScenarioPipeline.SagaMerge(lotKey)            => s"SagaMerge_${lotKey}"
+    case FabScenarioPipeline.ScrapWafers                  => "ScrapWafers"
+    case FabScenarioPipeline.HoldWafers                   => "HoldWafers"
+    case FabScenarioPipeline.ReleaseWafers                => "ReleaseWafers"
+    case FabScenarioPipeline.PostReleaseClassify          => "PostReleaseClassify"
+    case FabScenarioPipeline.WaitForReview(_)             => "WaitForReview"
+    case FabScenarioPipeline.SealComplete                 => "SealComplete"
+    case FabScenarioPipeline.Branch(_, _, _)              => "Branch"
+    case FabScenarioPipeline.PilotSubFlow                 => "PilotSubFlow"
+    case FabScenarioPipeline.OcapEvaluate(_)              => "OcapEvaluate"
+    case FabScenarioPipeline.OcapActionRouter             => "OcapActionRouter"
+    case FabScenarioPipeline.ExecuteSubProcess(ref)       => s"ExecuteSubProcess_${ref.subProcessType}"
+    case FabScenarioPipeline.AwaitSubLotResult(lotKey)    => s"AwaitSubLotResult_${lotKey}"
+    case FabScenarioPipeline.PhotoCellReworkPipeline      => "PhotoCellReworkPipeline"
+    case FabScenarioPipeline.DynamicPorExecution(_, _)    => "DynamicPorExecution"
+    case _                                                => stage.getClass.getSimpleName
+  }
+
+  /** Build a Monarch engine wired to the Fab domain. The caller `initialize`s it with a
+    * stage list, then drives `process` (fresh run) or `resumeFromIndex` (crash recovery). */
+  def monarch(
+      ctx: FabDemoContext,
+      onPhaseStart: String => Unit,
+      onPhaseComplete: (String, FabDemoState) => Unit,
+      onOcapResolved: (String, FabStageError, FabDemoState) => Unit,
+      onPhaseFailed: (String, FabStageError) => Unit
+  )(implicit ec: ExecutionContext): Monarch[PipelineStage, FabDemoState] = {
+
+    def toFabError(error: MonarchStageError): FabStageError =
+      FabStageError(error.stage, error.code, error.errorCode, error.detail)
+
+    new Monarch[PipelineStage, FabDemoState](
+      interpreter = new StageInterpreter[PipelineStage, FabDemoState] {
+        override def run(stage: PipelineStage, state: FabDemoState)(implicit ec: ExecutionContext): Future[FabDemoState] =
+          FabScenarioPipeline.runStage(stage, state, ctx).recoverWith {
+            // Preserve business classification: stage bodies throw the FAB exception type;
+            // re-throw it as the engine's type so the failure is intercepted, not wrapped
+            // as UNEXPECTED.
+            case FabStageFailedException(err) =>
+              Future.failed(MonarchStageFailedException(
+                MonarchStageError(err.stageName, err.equipId, err.errorCode, err.detail)))
+          }
+      },
+      hooks = new LifecycleHooks[PipelineStage, FabDemoState] {
+        // NOTE: must qualify — an unqualified stageName(stage) here resolves to this
+        // anonymous override itself and tail-recurses into a silent infinite loop.
+        override def stageName(stage: PipelineStage): String = FabPipelineProcessor.stageName(stage)
+        override def onStageStart(cursor: String): Unit = onPhaseStart(cursor)
+        override def onStageComplete(cursor: String, state: FabDemoState, metadata: Map[String, String]): Unit =
+          onPhaseComplete(cursor, state)
+        override def onStageFailed(cursor: String, error: MonarchStageError): Unit =
+          onPhaseFailed(cursor, toFabError(error))
+        override def onStageResolved(cursor: String, error: MonarchStageError, state: FabDemoState): Unit =
+          onOcapResolved(cursor, toFabError(error), state)
+      },
+      failureInterceptor = Some(new FailureInterceptor[PipelineStage, FabDemoState] {
+        override def intercept(cursor: String, error: MonarchStageError, state: FabDemoState)(implicit ec: ExecutionContext): Future[FabDemoState] =
+          FabScenarioPipeline.invokeOcapInterceptor(state, ctx, toFabError(error))
+      }),
+      runToken = ctx.runToken
+    )
   }
 }

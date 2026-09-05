@@ -32,7 +32,7 @@ import scala.util.control.NonFatal
   */
 class Monarch[Stage, State](
     interpreter: StageInterpreter[Stage, State],
-    hooks: LifecycleHooks[Stage],
+    hooks: LifecycleHooks[Stage, State],
     failureInterceptor: Option[FailureInterceptor[Stage, State]] = None,
     runToken: () => Boolean = () => true
 ) {
@@ -95,7 +95,7 @@ class Monarch[Stage, State](
           // here — never re-handled by outer queue frames with the wrong cursor.
           interpreter.run(stage, state).transformWith {
             case Success(nextState) =>
-              hooks.onStageComplete(cursor)
+              hooks.onStageComplete(cursor, nextState)
               executeQueue(tail, nextState)
             case Failure(e) if !runToken() =>
               // Guard-first: staleness wins over any failure policy.
@@ -118,7 +118,7 @@ class Monarch[Stage, State](
     failureInterceptor match {
       case Some(interceptor) =>
         interceptor.intercept(cursor, error, state).flatMap { recoveredState =>
-          hooks.onStageResolved(cursor, error)
+          hooks.onStageResolved(cursor, error, recoveredState)
           // NOTE: no onStageComplete here — a resolved failure is not a clean completion.
           executeQueue(tail, recoveredState)
         }
@@ -136,9 +136,9 @@ object Monarch {
       interpreter: (Stage, State) => Future[State],
       nameOf: Stage => String,
       onStart: String => Unit = _ => (),
-      onComplete: String => Unit = _ => (),
+      onComplete: (String, State) => Unit = (_: String, _: State) => (),
       onFailed: (String, StageError) => Unit = (_, _) => (),
-      onResolved: (String, StageError) => Unit = (_, _) => (),
+      onResolved: (String, StageError, State) => Unit = (_: String, _: StageError, _: State) => (),
       failureInterceptor: Option[(String, StageError, State) => Future[State]] = None,
       runToken: () => Boolean = () => true
   ): Monarch[Stage, State] =
@@ -147,12 +147,12 @@ object Monarch {
         override def run(stage: Stage, state: State)(implicit ec: ExecutionContext): Future[State] =
           interpreter(stage, state)
       },
-      hooks = new LifecycleHooks[Stage] {
+      hooks = new LifecycleHooks[Stage, State] {
         override def stageName(stage: Stage): String = nameOf(stage)
         override def onStageStart(cursor: String): Unit = onStart(cursor)
-        override def onStageComplete(cursor: String, metadata: Map[String, String]): Unit = onComplete(cursor)
+        override def onStageComplete(cursor: String, state: State, metadata: Map[String, String]): Unit = onComplete(cursor, state)
         override def onStageFailed(cursor: String, error: StageError): Unit = onFailed(cursor, error)
-        override def onStageResolved(cursor: String, error: StageError): Unit = onResolved(cursor, error)
+        override def onStageResolved(cursor: String, error: StageError, state: State): Unit = onResolved(cursor, error, state)
       },
       failureInterceptor = failureInterceptor.map { fi =>
         new FailureInterceptor[Stage, State] {

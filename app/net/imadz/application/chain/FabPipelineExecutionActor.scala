@@ -254,13 +254,14 @@ object FabPipelineExecutionActor {
               // so a superseded run's callbacks sent during the backoff window land on the
               // restarted entity after replay. Every self-send therefore re-checks the
               // generation token at send time — stale chains stay observable-silent.
-              val processor = FabPipelineProcessor(recoveryStages, recoveryCtx,
+              val monarch = FabPipelineProcessor.monarch(recoveryCtx,
                 phase => if (recoveryCtx.runToken()) ctx.self ! PhaseStarting(phase),
-                (phase, metadata, fabState) => if (recoveryCtx.runToken()) ctx.self ! PhaseCompleted(phase, metadata, fabState),
+                (phase, fabState) => if (recoveryCtx.runToken()) ctx.self ! PhaseCompleted(phase, Map.empty, Some(fabState)),
                 (phase, error, ocapState) => if (recoveryCtx.runToken()) ctx.self ! OcapResolved(phase, error, ocapState),
                 (phase, error) => if (recoveryCtx.runToken()) ctx.self ! PhaseFailed(phase, error))
+              monarch.initialize(recoveryStages)
 
-              processor.resumeFromIndex(initState, execState.completedCount).onComplete {
+              monarch.resumeFromIndex(initState, execState.completedCount).onComplete {
                 case Success(finalState) =>
                   if (recoveryCtx.runToken()) {
                     publisher(RecoveryEvent(
@@ -323,13 +324,14 @@ object FabPipelineExecutionActor {
           // never reach the entity (sharding restarts reuse the same ActorRef).
           fctx.stageProgressFn = (status, detail, phase) =>
             if (fctx.runToken()) ctx.self ! StageProgressEvent(status, detail, phase)
-          val processor = FabPipelineProcessor(stages, fctx,
+          val monarch = FabPipelineProcessor.monarch(fctx,
             phase => if (fctx.runToken()) ctx.self ! PhaseStarting(phase),
-            (phase, metadata, fabState) => if (fctx.runToken()) ctx.self ! PhaseCompleted(phase, metadata, fabState),
+            (phase, fabState) => if (fctx.runToken()) ctx.self ! PhaseCompleted(phase, Map.empty, Some(fabState)),
             (phase, error, ocapState) => if (fctx.runToken()) ctx.self ! OcapResolved(phase, error, ocapState),
             (phase, error) => if (fctx.runToken()) ctx.self ! PhaseFailed(phase, error))
+          monarch.initialize(stages)
 
-          processor.process(initialState).onComplete {
+          monarch.process(initialState).onComplete {
             case Success(finalState) =>
               if (fctx.runToken()) ctx.self ! PipelineSucceeded(finalState, fctx.foupId)
             case Failure(e) =>

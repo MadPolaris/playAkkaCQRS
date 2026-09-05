@@ -31,12 +31,14 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
       runToken: () => Boolean = () => true
   ): (Monarch[Stage, S], mutable.ListBuffer[String]) = {
     val events = mutable.ListBuffer.empty[String]
-    val hooks = new LifecycleHooks[Stage] {
+    val hooks = new LifecycleHooks[Stage, S] {
       override def stageName(stage: Stage): String = nameOf(stage)
       override def onStageStart(cursor: String): Unit = events += s"start:$cursor"
-      override def onStageComplete(cursor: String, metadata: Map[String, String]): Unit = events += s"done:$cursor"
+      override def onStageComplete(cursor: String, state: S, metadata: Map[String, String]): Unit =
+        events += s"done:$cursor(state.n=${state.n})"
       override def onStageFailed(cursor: String, error: StageError): Unit = events += s"failed:$cursor"
-      override def onStageResolved(cursor: String, error: StageError): Unit = events += s"resolved:$cursor"
+      override def onStageResolved(cursor: String, error: StageError, state: S): Unit =
+        events += s"resolved:$cursor(state.n=${state.n})"
     }
     val interpreter = new StageInterpreter[Stage, S] {
       override def run(stage: Stage, state: S)(implicit ec: ExecutionContext): Future[S] = step(stage, state)
@@ -50,7 +52,7 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
     (new Monarch[Stage, S](interpreter, hooks, failureInterceptor, runToken), events)
   }
 
-  "Monarch" should {
+  "A Monarch engine" should {
 
     "run all stages in order, threading state through" in {
       val (m, events) = makeMonarch()
@@ -59,9 +61,9 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
         result.log should be(List("Alpha", "Beta", "Alpha"))
         result.n should be(3)
         events.toList should be(List(
-          "start:Alpha#0", "done:Alpha#0",
-          "start:Beta#1", "done:Beta#1",
-          "start:Alpha#2", "done:Alpha#2"))
+          "start:Alpha#0", "done:Alpha#0(state.n=1)",
+          "start:Beta#1", "done:Beta#1(state.n=2)",
+          "start:Alpha#2", "done:Alpha#2(state.n=3)"))
       }
     }
 
@@ -90,7 +92,7 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
       m.initialize(Seq(Alpha, Beta, Alpha))
       m.resumeFromIndex(S(log = List("pre")), completedCount = 2).map { result =>
         result.log should be(List("pre", "Alpha")) // only entry #2 ran
-        events.toList should be(List("start:Alpha#2", "done:Alpha#2"))
+        events.toList should be(List("start:Alpha#2", "done:Alpha#2(state.n=1)"))
       }
     }
 
@@ -99,12 +101,12 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
       m.initialize(Seq(Alpha, Beta, Alpha))
       m.resume(S(), Set("Alpha#0", "Beta#1")).map { result =>
         result.log should be(List("Alpha"))
-        events.toList should be(List("start:Alpha#2", "done:Alpha#2"))
+        events.toList should be(List("start:Alpha#2", "done:Alpha#2(state.n=1)"))
       }
     }
 
     "route a StageFailedException through the interceptor and continue from its state" in {
-      val boom = StageError("Boom#2", Some("SENSOR_ANOMALY"), "SENSOR_ANOMALY", "simulated")
+      val boom = StageError("Boom#1", Some("SENSOR_ANOMALY"), "SENSOR_ANOMALY", "simulated")
       val (m, events) = makeMonarch(
         step = (stage, st) =>
           if (stage == Boom) Future.failed(StageFailedException(boom))
@@ -115,9 +117,10 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
       m.process(S()).map { result =>
         result.log should be(List("Alpha", "OCAP(SENSOR_ANOMALY@Boom#1)", "Beta"))
         events.toList should be(List(
-          "start:Alpha#0", "done:Alpha#0",
-          "start:Boom#1", "failed:Boom#1", "resolved:Boom#1",
-          "start:Beta#2", "done:Beta#2"))
+          "start:Alpha#0", "done:Alpha#0(state.n=1)",
+          "start:Boom#1", "failed:Boom#1",
+          "resolved:Boom#1(state.n=2)",
+          "start:Beta#2", "done:Beta#2(state.n=3)"))
       }
     }
 
@@ -132,7 +135,7 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
           Future.successful(st)
         }))
       m.initialize(Seq(Boom))
-      m.process(S()).map { result =>
+      m.process(S()).map { _ =>
         received.get.errorCode should be("UNEXPECTED")
         received.get.detail should be("java.lang.NullPointerException") // non-null even for null-message NPEs
         received.get.stage should be("Boom#0")
@@ -146,7 +149,7 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
           else Future.successful(st))
       m.initialize(Seq(Alpha, Boom))
       recoverToSucceededIf[StageFailedException](m.process(S())).map { _ =>
-        events.toList should be(List("start:Alpha#0", "done:Alpha#0", "start:Boom#1", "failed:Boom#1"))
+        events.toList should be(List("start:Alpha#0", "done:Alpha#0(state.n=0)", "start:Boom#1", "failed:Boom#1"))
       }
     }
 
