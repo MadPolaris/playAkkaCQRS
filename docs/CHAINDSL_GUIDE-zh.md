@@ -6,6 +6,8 @@ ChainDsl 是本仓库的 **M2.5+ 批处理链引擎**：一组可组合、与框
 
 其他指南：[README](../README.md) · [Saga 指南](SAGA_GUIDE-zh.md) · 旧银行领域指南：[DDD_GUIDE-zh.md](legacy/DDD_GUIDE-zh.md)
 
+引擎自身的文档：[monarch-core/README.md](../monarch-core/README.md)。
+
 ---
 
 ## 目录

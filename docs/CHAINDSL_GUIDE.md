@@ -6,6 +6,8 @@ ChainDsl is the **M2.5+ batch-chain engine**: a small library of composable, fra
 
 Other guides: [README](../README.md) · [Saga Guide](SAGA_GUIDE.md) (EN) / [Saga 指南](SAGA_GUIDE-zh.md) (中文) · Legacy banking-domain guide: [DDD_GUIDE.md](legacy/DDD_GUIDE.md)
 
+The engine's own documentation: [monarch-core/README.md](../monarch-core/README.md).
+
 ---
 
 ## Table of Contents

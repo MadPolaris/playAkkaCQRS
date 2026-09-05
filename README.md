@@ -150,6 +150,7 @@ Decision layer on top of M2.5+: POR Repository → Dynamic Flow Assembler → Sa
 
 - [Saga Engine Guide (v3 DSL)](docs/SAGA_GUIDE.md) / [中文](docs/SAGA_GUIDE-zh.md) — TCC saga engine: DSL, resilience, ops, acceptance criteria
 - [ChainDsl Guide (M2.5+)](docs/CHAINDSL_GUIDE.md) / [中文](docs/CHAINDSL_GUIDE-zh.md) — batch-chain component engine + declarative DSL: pipelines, three-way classification, failure routing, batching, recovery
+- [Monarch Engine (monarch-core)](monarch-core/README.md) — the standalone resumable stage-queue engine both the Fab demo and the recharge chain run on: open stage queue, cursor resume, generation tokens
 - [Architecture Best Practices](knowledge_base/methodology/architecture-best-practices.md)
 - [Agent Parallel Development](knowledge_base/methodology/agent-parallel-dev.md)
 - [Harness Engineering](knowledge_base/methodology/harness-engineering.md)
