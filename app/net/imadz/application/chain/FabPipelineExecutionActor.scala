@@ -246,34 +246,43 @@ object FabPipelineExecutionActor {
               val recoveryCtx = contextFactory(execState.scenarioId, execState.workOrderId)
                 .copy(runToken = () => PipelineRunRegistry.isFresh(execState.workOrderId, generation))
               recoveryCtx.stageProgressFn = (status, detail, phase) =>
-                ctx.self ! StageProgressEvent(status, detail, phase)
+                if (recoveryCtx.runToken()) ctx.self ! StageProgressEvent(status, detail, phase)
               val initState = execState.fabDemoState.getOrElse(stateFactory(execState.workOrderId))
               val recoveryStages = stageResolver(execState.scenarioId)
 
+              // P0 (callback guards): sharding restarts the entity under the SAME ActorRef,
+              // so a superseded run's callbacks sent during the backoff window land on the
+              // restarted entity after replay. Every self-send therefore re-checks the
+              // generation token at send time — stale chains stay observable-silent.
               val processor = FabPipelineProcessor(recoveryStages, recoveryCtx,
-                phase => ctx.self ! PhaseStarting(phase),
-                (phase, metadata, fabState) => ctx.self ! PhaseCompleted(phase, metadata, fabState),
-                (phase, error, ocapState) => ctx.self ! OcapResolved(phase, error, ocapState),
-                (phase, error) => ctx.self ! PhaseFailed(phase, error))
+                phase => if (recoveryCtx.runToken()) ctx.self ! PhaseStarting(phase),
+                (phase, metadata, fabState) => if (recoveryCtx.runToken()) ctx.self ! PhaseCompleted(phase, metadata, fabState),
+                (phase, error, ocapState) => if (recoveryCtx.runToken()) ctx.self ! OcapResolved(phase, error, ocapState),
+                (phase, error) => if (recoveryCtx.runToken()) ctx.self ! PhaseFailed(phase, error))
 
               processor.resumeFromIndex(initState, execState.completedCount).onComplete {
                 case Success(finalState) =>
-                  publisher(RecoveryEvent(
-                    execState.workOrderId, "RECOVERED",
-                    eventsReplayed = execState.completedPhases.size,
-                    phasesSkipped = execState.completedCount,
-                    recoveryTimeMs = System.currentTimeMillis() - recStart,
-                    detail = s"Recovery succeeded: ${execState.completedCount} phases skipped, resuming pipeline"))
-                  ctx.self ! PipelineSucceeded(finalState, recoveryCtx.foupId)
+                  if (recoveryCtx.runToken()) {
+                    publisher(RecoveryEvent(
+                      execState.workOrderId, "RECOVERED",
+                      eventsReplayed = execState.completedPhases.size,
+                      phasesSkipped = execState.completedCount,
+                      recoveryTimeMs = System.currentTimeMillis() - recStart,
+                      detail = s"Recovery succeeded: ${execState.completedCount} phases skipped, resuming pipeline"))
+                    ctx.self ! PipelineSucceeded(finalState, recoveryCtx.foupId)
+                  }
                 case Failure(e) =>
-                  ctx.log.error(s"[M3.5] Recovery FAILED for workOrder ${execState.workOrderId}: ${e.toString}", e)
-                  publisher(RecoveryEvent(
-                    execState.workOrderId, "RECOVERY_FAILED",
-                    eventsReplayed = execState.completedPhases.size,
-                    phasesSkipped = execState.completedCount,
-                    recoveryTimeMs = System.currentTimeMillis() - recStart,
-                    detail = s"Recovery failed: ${Option(e.getMessage).getOrElse(e.getClass.getName)}"))
-                  ctx.self ! PipelineFailed("recovery", Option(e.getMessage).getOrElse(e.toString))
+                  // A stale chain must not report failure either — the newer generation owns the outcome.
+                  if (recoveryCtx.runToken()) {
+                    ctx.log.error(s"[M3.5] Recovery FAILED for workOrder ${execState.workOrderId}: ${e.toString}", e)
+                    publisher(RecoveryEvent(
+                      execState.workOrderId, "RECOVERY_FAILED",
+                      eventsReplayed = execState.completedPhases.size,
+                      phasesSkipped = execState.completedCount,
+                      recoveryTimeMs = System.currentTimeMillis() - recStart,
+                      detail = s"Recovery failed: ${Option(e.getMessage).getOrElse(e.getClass.getName)}"))
+                    ctx.self ! PipelineFailed("recovery", Option(e.getMessage).getOrElse(e.toString))
+                  }
               }(ec)
 
             } catch {
@@ -310,19 +319,21 @@ object FabPipelineExecutionActor {
         Effect.persist(event).thenRun { _ =>
           val generation = PipelineRunRegistry.register(workOrderId)
           val fctx = fctx0.copy(runToken = () => PipelineRunRegistry.isFresh(workOrderId, generation))
+          // P0 (callback guards): same as recovery — a superseded run's callbacks must
+          // never reach the entity (sharding restarts reuse the same ActorRef).
           fctx.stageProgressFn = (status, detail, phase) =>
-            ctx.self ! StageProgressEvent(status, detail, phase)
+            if (fctx.runToken()) ctx.self ! StageProgressEvent(status, detail, phase)
           val processor = FabPipelineProcessor(stages, fctx,
-            phase => ctx.self ! PhaseStarting(phase),
-            (phase, metadata, fabState) => ctx.self ! PhaseCompleted(phase, metadata, fabState),
-            (phase, error, ocapState) => ctx.self ! OcapResolved(phase, error, ocapState),
-            (phase, error) => ctx.self ! PhaseFailed(phase, error))
+            phase => if (fctx.runToken()) ctx.self ! PhaseStarting(phase),
+            (phase, metadata, fabState) => if (fctx.runToken()) ctx.self ! PhaseCompleted(phase, metadata, fabState),
+            (phase, error, ocapState) => if (fctx.runToken()) ctx.self ! OcapResolved(phase, error, ocapState),
+            (phase, error) => if (fctx.runToken()) ctx.self ! PhaseFailed(phase, error))
 
           processor.process(initialState).onComplete {
             case Success(finalState) =>
-              ctx.self ! PipelineSucceeded(finalState, fctx.foupId)
+              if (fctx.runToken()) ctx.self ! PipelineSucceeded(finalState, fctx.foupId)
             case Failure(e) =>
-              ctx.self ! PipelineFailed("pipeline", e.getMessage)
+              if (fctx.runToken()) ctx.self ! PipelineFailed("pipeline", Option(e.getMessage).getOrElse(e.toString))
           }
           replyTo ! Accepted
         }
@@ -369,6 +380,10 @@ object FabPipelineExecutionActor {
       // ---- M3.5: Stop/crash the pipeline ----
       case (es: Executing, StopPipeline(woId)) =>
         Effect.none.thenRun { _ =>
+          // Bump the generation NOW (not at recovery): the pre-crash Future chain dies at its
+          // next stage boundary instead of running free — with real side effects — for the
+          // whole sharding restart-backoff window (~10s).
+          PipelineRunRegistry.register(woId)
           publisher(RecoveryEvent(woId, "CRASH_DETECTED",
             eventsReplayed = es.completedPhases.size, phasesSkipped = es.completedCount,
             recoveryTimeMs = System.currentTimeMillis(),
@@ -379,6 +394,7 @@ object FabPipelineExecutionActor {
 
       case (Idle, StopPipeline(woId)) =>
         Effect.none.thenRun { _ =>
+          PipelineRunRegistry.register(woId)
           publisher(RecoveryEvent(woId, "CRASH_DETECTED", 0, 0, System.currentTimeMillis(),
             s"Actor crash injected (idle state)"))
           ctx.log.warn(s"[FabPipelineExecutionActor:$entityId] Crash injected in Idle state")

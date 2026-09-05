@@ -54,6 +54,10 @@ class FabDemoService @Inject()(
   /** Shared M3.5 equipment adapter — persists across pipeline actor crashes so recovery can reuse simulator refs. */
   @volatile private var m35Adapter: Option[ActorEquipmentAdapter] = None
 
+  /** Recovery (ApplicationBootstrap.pipelineContextFactory) must reuse THIS adapter —
+    * a fresh one has an empty simulator registry and every equipment stage fails UNEXPECTED. */
+  def sharedM35Adapter: Option[ActorEquipmentAdapter] = m35Adapter
+
   def setSystemWidePublisher(publisher: FabSimulationEvent => Unit): Unit = {
     systemWidePublisher = Some(publisher)
     FabDemoPublisher.systemPublisher = publisher
@@ -1360,10 +1364,14 @@ class FabDemoService @Inject()(
 
         // Send StartExecution via ask — wait for Accepted before scheduling crash
         // to guarantee the actor is in Executing state (not Idle) when StopPipeline arrives.
+        // NOTE: StartExecution.scenarioId is the CRASH-RECOVERY key — it must resolve, via
+        // ApplicationBootstrap.pipelineStageResolver, to the SAME stage list as `stages`.
+        // The legacy route id ("photo-cell-5wafer") resolves to a different (M3.0) list,
+        // which made post-crash recovery resume an empty queue and instantly report success.
         val pipelineRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
         pipelineRef.ask[FabPipelineExecutionActor.ExecutionReply](ref =>
           FabPipelineExecutionActor.StartExecution(
-            scenarioId = scenarioId,
+            scenarioId = scenarioType,
             workOrderId = workOrderId,
             initialState = initialState,
             stages = stages,
@@ -1435,7 +1443,7 @@ class FabDemoService @Inject()(
         val pipelineRef = sharding.entityRefFor(FabPipelineExecutionActor.EntityKey, workOrderId)
         pipelineRef.ask[FabPipelineExecutionActor.ExecutionReply](ref =>
           FabPipelineExecutionActor.StartExecution(
-            scenarioId = scenarioId,
+            scenarioId = "multi-workorder-chaos", // crash-recovery key — must match pipelineStageResolver
             workOrderId = workOrderId,
             initialState = initialState,
             stages = stages,

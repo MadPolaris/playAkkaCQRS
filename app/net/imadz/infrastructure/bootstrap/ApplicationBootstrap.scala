@@ -33,6 +33,7 @@ class ApplicationBootstrap @Inject()(
                                       monthlyRepository: MonthlyIncomeAndExpenseSummaryRepository,
                                       lotRepository: LotRepository,
                                       fabSagaService: FabSagaService,
+                                      fabDemoService: net.imadz.application.services.FabDemoService,
                                       ocapRuleStore: net.imadz.infrastructure.repositories.routing.OcapRuleStore
                                     ) extends CreditBalanceBootstrap
   with SagaEngineBootstrap
@@ -85,11 +86,11 @@ class ApplicationBootstrap @Inject()(
   /** Reconstructs FabDemoContext for crash recovery. Uses deterministic UUIDs. */
   private def pipelineContextFactory(scenarioId: String, workOrderId: String): FabDemoContext = {
     val scenario = scenarioId match {
-      case "send-ahead-pilot"  => StandardScenarios.sendAheadPilot
-      case "scrap-downgrade"   => StandardScenarios.scrapDowngrade
-      case "sampling-demo"     => StandardScenarios.samplingDemo
-      case "hold-release"      => StandardScenarios.holdRelease
-      case _                   => StandardScenarios.photoCell5Wafer
+      case "send-ahead-pilot" | "send-ahead-ocap" => StandardScenarios.sendAheadPilot
+      case "scrap-downgrade"                      => StandardScenarios.scrapDowngrade
+      case "sampling-demo"                        => StandardScenarios.samplingDemo
+      case "hold-release"                         => StandardScenarios.holdRelease
+      case _                                      => StandardScenarios.photoCell5Wafer
     }
     val waferIds = scenario.waferIds
     val waferUUIDs: Map[String, Id] = waferIds.map { wid =>
@@ -112,7 +113,9 @@ class ApplicationBootstrap @Inject()(
     val sagaTxFn: (Id, Id, Set[Id], Set[String], Option[Id]) => Future[FabSagaProtocol.FabSagaConfirmation] =
       (srcId, tgtId, wids, names, existingTxId) => fabSagaService.transferWafers(srcId, tgtId, wids, names, existingTxId)
 
-    val adapter = new ActorEquipmentAdapter()
+    // Reuse the demo's SHARED adapter (registered simulators survive the crash) —
+    // a fresh adapter has an empty registry and every equipment stage fails UNEXPECTED.
+    val adapter = fabDemoService.sharedM35Adapter.getOrElse(new ActorEquipmentAdapter())
 
     FabDemoContext(
       scenario = scenario,
@@ -139,17 +142,30 @@ class ApplicationBootstrap @Inject()(
         "hold" -> holdLotId, "scrap" -> scrapLotId,
         "rwk" -> reworkLotId
       ),
-      ocapRules = ocapRuleStore.getRules
+      // Mirror FabDemoService.forM35ContextOcapRules so a recovered run evaluates the
+      // same rule set the original run was started with.
+      ocapRules = ocapRuleStore.getRules.filter { r =>
+        val route = if (scenarioId == "send-ahead-pilot" || scenarioId == "send-ahead-ocap") "SEND-AHEAD-PILOT" else "PHOTOCELL-5WAFER"
+        r.routeId == route || r.routeId.isEmpty
+      }
     )
   }
 
   private def pipelineStateFactory(workOrderId: String): FabDemoState =
     FabDemoState(wafers = Map.empty)
 
-  private val pipelineStageResolver: String => Seq[FabScenarioPipeline.PipelineStage] = { scenarioId =>
+  // NOTE: must be a `def`, not a `val` — line 77 passes it into sharding registration
+  // during construction, before a body-order `val` is initialized (would capture null,
+  // and every crash recovery would NPE at stageResolver(scenarioId)).
+  private def pipelineStageResolver: String => Seq[FabScenarioPipeline.PipelineStage] = { scenarioId =>
     scenarioId match {
       case "photo-cell-5wafer" => Seq(FabScenarioPipeline.PhotoCellReworkPipeline)
-      case "ocap-rework-crash" | "send-ahead-ocap" | "multi-workorder-chaos" =>
+      case "send-ahead-ocap" =>
+        // Must mirror FabDemoService.buildSendAheadOcapScenario — recovery resumes the SAME
+        // stage list the run was started with (keyed by StartExecution.scenarioId).
+        val rules = ocapRuleStore.getRules.filter(r => r.routeId == "SEND-AHEAD-PILOT" || r.routeId.isEmpty)
+        FabScenarioPipeline.m35SendAheadStages(rules)
+      case "ocap-rework-crash" | "multi-workorder-chaos" =>
         val rules = ocapRuleStore.getRules.filter(r => r.routeId == "PHOTOCELL-5WAFER" || r.routeId.isEmpty)
         FabScenarioPipeline.m35BasicStages(rules)
       case _ => FabScenarioPipeline.resolveStages(scenarioId)
