@@ -2,15 +2,13 @@ package controllers
 
 import javax.inject.{Inject, Singleton}
 import play.api.mvc._
-import play.api.libs.streams.ActorFlow
+import play.api.libs.json.{JsObject, JsString, Json}
 import akka.actor.ActorSystem
 import akka.stream.Materializer
 import net.imadz.m25.bank.BankBatchDemoService
 import net.imadz.m25.bank.BankBatchJson
 
-import scala.concurrent.duration._
-
-/** 银行批量充值演示（Monarch 六阶段链）——页面 + WebSocket + API。 */
+/** 银行批量充值+申购演示（Monarch 六阶段链，规模版）——页面 + WebSocket + API。 */
 @Singleton
 class BankBatchController @Inject()(
     cc: ControllerComponents,
@@ -29,17 +27,17 @@ class BankBatchController @Inject()(
 
   def start: Action[AnyContent] = Action {
     ensureInit()
-    bankBatchDemoService.startBatch()
-    Ok(BankBatchJson.stateJson(bankBatchDemoService.stateJson))
+    bankBatchDemoService.startRun()
+    Ok(bankBatchDemoService.statsJson)
   }
 
   def crash: Action[AnyContent] = Action {
-    bankBatchDemoService.crash()
-    Ok(BankBatchJson.stateJson(bankBatchDemoService.stateJson))
+    val result = bankBatchDemoService.crashRandom()
+    Ok(Json.stringify(JsObject(result.map { case (k, v) => k -> JsString(v.toString) })))
   }
 
   def state: Action[AnyContent] = Action {
-    Ok(BankBatchJson.stateJson(bankBatchDemoService.stateJson))
+    Ok(bankBatchDemoService.statsJson)
   }
 
   def events: WebSocket = WebSocket.accept[String, String] { _ =>
