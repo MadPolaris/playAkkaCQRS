@@ -68,6 +68,12 @@ GET     /api/fab-demo/scenario/:id/route-graph   controllers.FabDemoController.g
 
 # M3.5 Self-Healing Demo
 GET     /fab-demo/m35                               controllers.FabDemoController.m35Demo()
+GET     /bank-batch                         controllers.BankBatchController.page
+GET     /api/bank-batch/state               controllers.BankBatchController.state
+POST    /api/bank-batch/start               controllers.BankBatchController.start
+POST    /api/bank-batch/crash               controllers.BankBatchController.crash
+GET     /ws/bank-batch/events               controllers.BankBatchController.events
+
 GET     /ws/fab-demo/m35/events                     controllers.FabDemoController.m35Socket
 POST    /api/fab-demo/m35/start                     controllers.FabDemoController.m35Start()
 POST    /api/fab-demo/m35/inject-crash/:workOrderId  controllers.FabDemoController.m35InjectCrash(workOrderId: String)

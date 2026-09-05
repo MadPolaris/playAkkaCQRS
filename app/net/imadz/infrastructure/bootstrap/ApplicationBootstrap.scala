@@ -34,6 +34,7 @@ class ApplicationBootstrap @Inject()(
                                       lotRepository: LotRepository,
                                       fabSagaService: FabSagaService,
                                       fabDemoService: net.imadz.application.services.FabDemoService,
+                                      bankBatchDemoService: net.imadz.m25.bank.BankBatchDemoService,
                                       ocapRuleStore: net.imadz.infrastructure.repositories.routing.OcapRuleStore
                                     ) extends CreditBalanceBootstrap
   with SagaEngineBootstrap
@@ -76,6 +77,9 @@ class ApplicationBootstrap @Inject()(
 
   // --- 7. 初始化 FabPipelineExecutionActor (用于所有 Demo/Route 执行路径) ---
   initFabPipelineExecutionActor(sharding, pipelineContextFactory, pipelineStateFactory, pipelineStageResolver)
+
+  // --- 8. 初始化银行批量充值演示（ChainExecutionActor 分片 + Monarch 六阶段链）---
+  bankBatchDemoService.initSharding()
 
   println("🚀 [ApplicationBootstrap] All CQRS components initialized successfully.")
 

@@ -92,6 +92,26 @@ object ChainExecutionActor {
       reason: String
   ) extends Command
 
+  /** 崩溃注入（自愈演示）：抛异常让 sharding 重启实体，触发断点续跑。 */
+  final case class StopPipeline(reason: String) extends Command
+
+  /** Host observer — demo/UI hook fired at run boundaries. Journaling stays internal;
+    * the observer never influences control flow. All methods no-op by default. */
+  trait ChainExecutionObserver {
+    def onStart(batchId: String, itemCount: Int): Unit = ()
+    def onStageStart(cursor: String): Unit = ()
+    def onStageComplete(cursor: String, metadata: Map[String, String],
+                        snapshot: Option[BankChainState[Any, Any]]): Unit = ()
+    def onStageFailed(cursor: String, detail: String): Unit = ()
+    def onRecovery(batchId: String, completedPhases: Int): Unit = ()
+    def onCompleted(batchId: String, snapshot: Option[BankChainState[Any, Any]]): Unit = ()
+    def onFailed(batchId: String, phase: String, reason: String): Unit = ()
+    def onCrash(batchId: String, reason: String): Unit = ()
+  }
+  object ChainExecutionObserver {
+    val nop: ChainExecutionObserver = new ChainExecutionObserver {}
+  }
+
   // ---- Events ----
 
   final case class Started(
@@ -178,7 +198,8 @@ object ChainExecutionActor {
   def apply(
       chainId: String,
       pipeline: SubBatchPipeline[Any, Any],
-      itemLoader: String => Future[Seq[Any]]
+      itemLoader: String => Future[Seq[Any]],
+      observer: ChainExecutionObserver = ChainExecutionObserver.nop
   )(implicit ec: ExecutionContext): Behavior[Command] = {
 
     Behaviors.setup { actorContext =>
@@ -190,17 +211,23 @@ object ChainExecutionActor {
       def monarchFor(runToken: () => Boolean): Monarch[BankStage, BankChainState[Any, Any]] =
         BankChain.monarch(pipeline, hooks = new LifecycleHooks[BankStage, BankChainState[Any, Any]] {
           override def stageName(stage: BankStage): String = BankStage.stageName(stage)
+          override def onStageStart(cursor: String): Unit =
+            if (runToken()) observer.onStageStart(cursor)
           override def onStageComplete(cursor: String, state: BankChainState[Any, Any], metadata: Map[String, String]): Unit =
             if (runToken()) {
+              observer.onStageComplete(cursor, metadata, Some(state))
               state.lastStage.foreach { stage =>
                 actorContext.self ! PhaseCompleted(
                   BankStage.stageName(stage), BankChain.metadataOf(state), Some(state))
               }
             }
           override def onStageFailed(cursor: String, error: net.imadz.monarch.StageError): Unit =
-            if (runToken()) actorContext.log.warn(
-              s"[ChainExecutionActor:$chainId] Stage failed at {}: {}",
-              cursor, error.detail)
+            if (runToken()) {
+              observer.onStageFailed(cursor, error.detail)
+              actorContext.log.warn(
+                s"[ChainExecutionActor:$chainId] Stage failed at {}: {}",
+                cursor, error.detail)
+            }
         }, runToken = runToken)
 
       def runBatch(batchId: String, items: Seq[Any], skip: Int, snapshot: Option[BankChainState[Any, Any]], runToken: () => Boolean): Unit = {
@@ -223,7 +250,7 @@ object ChainExecutionActor {
       EventSourcedBehavior[Command, Event, State](
         persistenceId = persistenceId,
         emptyState = Idle,
-        commandHandler = commandHandler(chainId, itemLoader, actorContext, runBatch _),
+        commandHandler = commandHandler(chainId, itemLoader, actorContext, observer, runBatch _),
         eventHandler = eventHandler
       ).withRecovery(Recovery.default)
         .receiveSignal {
@@ -233,6 +260,7 @@ object ChainExecutionActor {
             val key = s"$chainId-${state.batchId}"
             val generation = RunRegistry.register(key)
             val runToken: () => Boolean = () => RunRegistry.isFresh(key, generation)
+            observer.onRecovery(state.batchId, state.completedPhases.size)
             itemLoader(state.batchId).onComplete {
               case Success(items) =>
                 runBatch(state.batchId, items, state.completedPhases.size,
@@ -254,6 +282,7 @@ object ChainExecutionActor {
       chainId: String,
       itemLoader: String => Future[Seq[Any]],
       ctx: ActorContext[Command],
+      observer: ChainExecutionObserver,
       runBatch: (String, Seq[Any], Int, Option[BankChainState[Any, Any]], () => Boolean) => Unit
   )(state: State, cmd: Command)(implicit ec: ExecutionContext): Effect[Event, State] = {
 
@@ -266,6 +295,7 @@ object ChainExecutionActor {
           // 注册世代：任何此前的旧链（理论上 Idle 态没有，防御性兜底）即刻失效
           val generation = RunRegistry.register(s"$chainId-$batchId")
           val runToken: () => Boolean = () => RunRegistry.isFresh(s"$chainId-$batchId", generation)
+          observer.onStart(batchId, itemsRaw.size)
           runBatch(batchId, itemsRaw, 0, None, runToken)
           replyTo ! Accepted(s"$chainId-$batchId")
         }
@@ -276,24 +306,45 @@ object ChainExecutionActor {
 
       // ---- Pipeline fully done ----
       case (_: Executing, PipelineSucceeded) =>
+        val exec = state.asInstanceOf[Executing]
         // （实际统计数据从 read-side 查询，这里沿用占位值）
-        Effect.persist(AllCompleted(state.asInstanceOf[Executing].batchId, 0, 0, 0))
-          .thenRun { s =>
+        Effect.persist(AllCompleted(exec.batchId, 0, 0, 0))
+          .thenRun { _ =>
+            observer.onCompleted(exec.batchId, exec.lastState)
             ctx.log.info(
               s"[ChainExecutionActor:$chainId] Batch {} completed. Phases: {}",
-              s.asInstanceOf[Executing].batchId,
-              state.asInstanceOf[Executing].completedPhases.mkString(" → "))
+              exec.batchId,
+              exec.completedPhases.mkString(" → "))
           }
 
       // ---- Pipeline failed ----
       case (_: Executing, PipelineFailed(phase, reason)) =>
+        val exec = state.asInstanceOf[Executing]
         Effect.persist(ExecutionFailed(phase, reason))
           .thenRun { _ =>
+            observer.onFailed(exec.batchId, phase, reason)
             ctx.log.error(
               s"[ChainExecutionActor:$chainId] Batch {} failed at phase {}: {}",
-              state.asInstanceOf[Executing].batchId, phase, reason
+              exec.batchId, phase, reason
             )
           }
+
+      // ---- Crash injection (self-healing demo) ----
+      case (_: Executing, StopPipeline(reason)) =>
+        Effect.none.thenRun { _ =>
+          val exec = state.asInstanceOf[Executing]
+          RunRegistry.register(s"$chainId-${exec.batchId}") // 旧链即刻失效（对齐 Fab P0）
+          observer.onCrash(exec.batchId, reason)
+          ctx.log.warn(s"[ChainExecutionActor:$chainId] Crash injected: {}", reason)
+          throw new RuntimeException(s"Chain crash injected for batch ${exec.batchId}: $reason")
+        }
+
+      case (Idle, StopPipeline(reason)) =>
+        Effect.none.thenRun { _ =>
+          observer.onCrash("n/a", reason)
+          ctx.log.warn(s"[ChainExecutionActor:$chainId] Crash injected in Idle: {}", reason)
+          throw new RuntimeException(s"Chain crash injected (Idle): $reason")
+        }
 
       // ---- Ignore late phase callbacks after completion ----
       case (_: Completed, PhaseCompleted(_, _, _)) =>
@@ -348,15 +399,18 @@ object ChainExecutionActor {
 
   import akka.cluster.sharding.typed.scaladsl.Entity
 
+  /** Register the entity type. ONE ENTITY PER BATCH: pass the batch-unique entity id
+    * (entityRefFor(EntityKey, s"$prefix-$batchId")) — the entityId IS the chainId and
+    * the journal is per-entity, so batches never replay each other's events. */
   def init(
       sharding: akka.cluster.sharding.typed.scaladsl.ClusterSharding,
-      chainId: String,
       pipeline: SubBatchPipeline[Any, Any],
-      itemLoader: String => Future[Seq[Any]]
+      itemLoader: String => Future[Seq[Any]],
+      observer: ChainExecutionObserver = ChainExecutionObserver.nop
   )(implicit ec: ExecutionContext): Unit = {
     sharding.init(
-      Entity(EntityKey) { _ =>
-        apply(chainId, pipeline, itemLoader)
+      Entity(EntityKey) { entityContext =>
+        apply(entityContext.entityId, pipeline, itemLoader, observer)
       }
     )
   }
