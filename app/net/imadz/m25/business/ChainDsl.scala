@@ -2,6 +2,7 @@ package net.imadz.m25.business
 
 import net.imadz.m25.component._
 import net.imadz.m25.pipeline._
+import net.imadz.monarch.LifecycleHooks
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
@@ -187,9 +188,10 @@ object ChainDsl {
   // ---- Chain Definition (the assembled result) ----
 
   /**
-   * 一条完整的业务链路定义——可直接提交给 BatchMaster 执行。
+   * 一条完整的业务链路定义——可直接提交执行。
    *
-   * 与 M25PlusDemo.ChainAssembly 等价，但通过 DSL 声明。
+   * 六个机械阶段由 monarch-core 的 Monarch 引擎驱动（BankChain 六阶段队列），
+   * 可疑复核与失败路由保持在引擎之外（业务编排层）。
    */
   case class ChainDefinition[Item](
       chainId: String,
@@ -198,17 +200,24 @@ object ChainDsl {
       router: ReBatchRouter[Item],
       scheduler: AreaScheduler[Item]
   ) {
-    def processor(implicit ec: ExecutionContext): SubBatchProcessor[Item, Any] =
-      new SubBatchProcessor[Item, Any](pipeline)
-
-    /** 处理一个小批次，返回最终结果 */
+    /** 处理一个小批次：六阶段队列（Monarch）→ 可疑复核 → 失败路由。 */
     def processBatch(items: Seq[Item], source: ItemSource = ItemSource.NewArrival)
                     (implicit ec: ExecutionContext): Future[SubBatchResult[Classification[Item]]] = {
       val batchId = s"$chainId-${System.currentTimeMillis()}"
-      val batch = SubBatch[Item](batchId, items, source)
+      val monarch = BankChain.monarch[Item, Any](pipeline,
+        hooks = new LifecycleHooks[BankStage, BankChainState[Item, Any]] {
+          override def stageName(stage: BankStage): String = BankStage.stageName(stage)
+        })
+      monarch.initialize(BankStage.chain)
 
       for {
-        result <- processor.process(batch)
+        finalState <- monarch.process(BankChainState[Item, Any](
+          batchId = batchId, chainId = chainId, items = items))
+        classifications = finalState.classifications.getOrElse(Seq.empty)
+        result = SubBatchResult[Classification[Item]](batchId,
+          classifications.collect { case s: Success[Item] => s },
+          classifications.collect { case f: Failure[Item] => f },
+          classifications.collect { case s: Suspicious[Item] => s })
         // 可疑项复核
         resolved <- if (result.suspicious.nonEmpty) {
           val suspicious = result.suspicious.collect { case s: Suspicious[Item] => s }

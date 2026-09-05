@@ -113,14 +113,15 @@ lazy val sagaCore = (project in file("saga-core"))
   )
 
 lazy val dagEngineCore = (project in file("dag-engine-core"))
-  .dependsOn(commonCore)
+  .dependsOn(commonCore, monarchCore)
   .settings(
     commonSettings,
     name := "dag-engine-core",
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-persistence-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion
+      "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion,
+      "org.scalatest" %% "scalatest" % "3.2.15" % Test
     )
   )
 

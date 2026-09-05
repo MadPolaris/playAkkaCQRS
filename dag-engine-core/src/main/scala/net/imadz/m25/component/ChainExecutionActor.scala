@@ -1,5 +1,7 @@
 package net.imadz.m25.component
 
+import net.imadz.monarch.{LifecycleHooks, Monarch, RunRegistry}
+
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
 import akka.cluster.sharding.typed.scaladsl.EntityTypeKey
@@ -12,46 +14,44 @@ import scala.util.{Failure, Success}
 /**
  * ===== M2.5+ ChainExecutionActor =====
  *
- * 用 Akka Persistent EventSourcedBehavior 包装 SubBatchProcessor 的 Future 流水线。
+ * 用 Akka Persistent EventSourcedBehavior 包装 Monarch 引擎驱动的 BankChain 六阶段流水线。
  *
  * == 为什么需要这个 Actor ==
  *
- * M2.5+ 的 SubBatchProcessor 是纯 Future 流水线，本身不持久化、不自愈。
+ * BankChain 是纯 Future 队列（monarch-core Monarch 引擎驱动），本身不持久化、不自愈。
  * ChainExecutionActor 在流水线外层提供：
- *   - 事件溯源：每个阶段完成持久化为 PhaseCompleted 事件（完整审计追踪）
- *   - 自愈恢复：集群宕机重启后，从 journal 回放事件，重新执行流水线
+ *   - 事件溯源：每个阶段完成持久化为 PhaseDone 事件（携带状态快照，完整审计追踪）
+ *   - 自愈恢复：RecoveryCompleted 后 resumeFromIndex 跳过已完成阶段，只重跑断点之后
  *   - 水平扩展：通过 ClusterSharding EntityTypeKey 注册，分片自动分配
- *   - 幂等守卫：通知类阶段（SMS/P2B/额度释放）通过 read-side 去重
+ *   - 世代守卫：StartExecution / RecoveryCompleted 各注册一个 RunRegistry 世代，
+ *     崩溃前的旧 Future 链在下一个阶段边界静默终止，不再与新链并发
  *
  * == 恢复推演 ==
  *
  * 假设流水线执行到 poll 阶段时集群宕机：
  *
  * Journal 中已持久化:
- *   Started("recharge", "batch-001", items)
- *   PhaseCompleted("file-gen", ..., {localPath:"/tmp/x.txt"})
- *   PhaseCompleted("upload", ...,   {remotePath:"/remote/x.txt"})
- *   PhaseCompleted("wait-ack", ..., {ack:"received"})
+ *   Started("recharge", "batch-001", 1)
+ *   PhaseDone("file-gen", snapshot=Some(state1))
+ *   PhaseDone("upload",   snapshot=Some(state2))
+ *   PhaseDone("wait-ack", snapshot=Some(state3))
  *   ← 宕机，没有 Completed 或 Failed
  *
  * 恢复过程:
  * 1. Cluster 重启，Sharding 将 entity 分配到 node-3
- * 2. Akka Persistence 从 MongoDB 回放 4 个事件
- * 3. state = Executing("batch-001", lastPhase=Some("wait-ack"), ...)
- * 4. RecoveryCompleted 触发 → 重新执行整个流水线
- *    - file-gen: 覆盖写入临时文件（幂等）
- *    - upload: 覆盖上传远程文件，相同 MD5（幂等）
- *    - wait-ack: 重新通知 EAMS（EAMS 处理重复通知）
- *    - poll: 重新轮询响应文件（可能已就绪）
- *    - parse/classify: 重新解析分类（幂等）
- * 5. notify 阶段：检查 MySQL read-side 是否已通知 → 跳过已完成的通知
- * 6. persist Completed → stop
+ * 2. Akka Persistence 从 MongoDB 回放事件
+ * 3. state = Executing(batchId="batch-001", completedPhases=3, lastState=state3)
+ * 4. RecoveryCompleted 触发 → RunRegistry 注册新世代（旧链在下一阶段边界终止）
+ *    → itemLoader 重新加载 items（与 lastState 中的快照合并，items 以 loader 为准）
+ *    → monarch.resumeFromIndex(state, 3)：跳过 file-gen/upload/wait-ack，
+ *      从 poll 断点续跑（各阶段幂等契约不变）
+ * 5. persist Completed → stop
  *
  * == 与 M2 Persistent FSM 的对比 ==
  *
  * M2: 每业务有专用事件类型（RechargeRequestFileGenerated vs PurchaseFileGenerated）
  *      30+ Java 文件，充值/申购各 7 个 Actor
- * M2.5+: 通用事件类型（PhaseCompleted("file-gen", ...) 复用）
+ * M2.5+: 通用事件类型（PhaseDone("file-gen", ...) 复用）
  *        1 个 ChainExecutionActor 服务所有业务链路
  *        业务差异完全在 ErrorCodeMapping / ReBatchPolicy 等配置中
  */
@@ -76,10 +76,11 @@ object ChainExecutionActor {
       replyTo: ActorRef[ExecutionReply]
   ) extends Command
 
-  /** 流水线阶段完成（SubBatchProcessor 回调发送的内部命令） */
+  /** 流水线阶段完成（BankChain 钩子回调发送的内部命令），携带阶段后置状态快照。 */
   private[component] final case class PhaseCompleted(
       phase: String,
-      metadata: Map[String, String]
+      metadata: Map[String, String],
+      snapshot: Option[BankChainState[Any, Any]] = None
   ) extends Command
 
   /** 整个流水线执行成功（内部命令） */
@@ -99,10 +100,13 @@ object ChainExecutionActor {
       itemCount: Int
   ) extends Event
 
+  /** PhaseDone 携带阶段后置状态快照：恢复时 resumeFromIndex 需要断点处的中间值
+    * （例如 upload 已完成时 receipt 必须在，否则 wait-ack/poll 无从执行）。 */
   final case class PhaseDone(
       phase: String,
       timestamp: Long,
-      metadata: Map[String, String]
+      metadata: Map[String, String],
+      snapshot: Option[BankChainState[Any, Any]] = None
   ) extends Event
 
   final case class AllCompleted(
@@ -124,8 +128,8 @@ object ChainExecutionActor {
   final case class Executing(
       batchId: String,
       chainId: String,
-      // 已完成的阶段列表（按完成顺序）
-      completedPhases: List[String]
+      completedPhases: List[String],
+      lastState: Option[BankChainState[Any, Any]] = None
   ) extends State {
     def lastCompletedPhase: Option[String] = completedPhases.lastOption
   }
@@ -162,48 +166,77 @@ object ChainExecutionActor {
   /**
    * 创建 ChainExecutionActor 的 Behavior。
    *
+   * 流水线执行由 monarch-core 的 Monarch 引擎驱动（BankChain 六阶段队列）：
+   *   - StartExecution / RecoveryCompleted 各注册一个 RunRegistry 世代，崩溃前的旧
+   *     Future 链在下一个阶段边界静默终止，不再与新链并发（对齐 Fab 侧 P0 修复）
+   *   - RecoveryCompleted 通过 resumeFromIndex 跳过已完成阶段，从 PhaseDone 快照断点续跑
+   *
    * @param chainId     业务链路标识（"recharge" / "purchase" / "equipment-area-3"）
    * @param pipeline    编译好的 SubBatchPipeline
    * @param itemLoader  从 batchId 重新加载 items 的函数（恢复时使用）
    */
-  def apply[Item](
+  def apply(
       chainId: String,
-      pipeline: SubBatchPipeline[Item, Any],
-      itemLoader: String => Future[Seq[Item]]
+      pipeline: SubBatchPipeline[Any, Any],
+      itemLoader: String => Future[Seq[Any]]
   )(implicit ec: ExecutionContext): Behavior[Command] = {
 
     Behaviors.setup { actorContext =>
 
-      val processor = new SubBatchProcessor[Item, Any](
-        pipeline = pipeline,
-        onPhaseComplete = { (phase, metadata) =>
-          actorContext.self ! PhaseCompleted(phase, metadata)
-        }
-      )
-
       val persistenceId = PersistenceId(EntityKey.name, s"$chainId")
+
+      /** Build a generation-guarded engine for one run. Journaling hooks re-check the
+        * token at send time — a superseded chain must not journal anything. */
+      def monarchFor(runToken: () => Boolean): Monarch[BankStage, BankChainState[Any, Any]] =
+        BankChain.monarch(pipeline, hooks = new LifecycleHooks[BankStage, BankChainState[Any, Any]] {
+          override def stageName(stage: BankStage): String = BankStage.stageName(stage)
+          override def onStageComplete(cursor: String, state: BankChainState[Any, Any], metadata: Map[String, String]): Unit =
+            if (runToken()) {
+              state.lastStage.foreach { stage =>
+                actorContext.self ! PhaseCompleted(
+                  BankStage.stageName(stage), BankChain.metadataOf(state), Some(state))
+              }
+            }
+          override def onStageFailed(cursor: String, error: net.imadz.monarch.StageError): Unit =
+            if (runToken()) actorContext.log.warn(
+              s"[ChainExecutionActor:$chainId] Stage failed at {}: {}",
+              cursor, error.detail)
+        }, runToken = runToken)
+
+      def runBatch(batchId: String, items: Seq[Any], skip: Int, snapshot: Option[BankChainState[Any, Any]], runToken: () => Boolean): Unit = {
+        val monarch = monarchFor(runToken)
+        monarch.initialize(BankStage.chain)
+        // 恢复时快照优先（含已完成的中间值），items 以 loader 结果为准（最新事实）
+        val resumeState = snapshot.fold(BankChainState[Any, Any](
+          batchId = batchId, chainId = chainId, items = items,
+          context = Map("batchId" -> batchId, "chainId" -> chainId)))(s => s.copy(items = items))
+        monarch.resumeFromIndex(resumeState, skip).onComplete {
+          case Success(_) =>
+            if (runToken()) actorContext.self ! PipelineSucceeded
+          case Failure(e) =>
+            if (runToken()) actorContext.self ! PipelineFailed("pipeline",
+              Option(e.getMessage).getOrElse(e.toString))
+        }
+        ()
+      }
 
       EventSourcedBehavior[Command, Event, State](
         persistenceId = persistenceId,
         emptyState = Idle,
-        commandHandler = commandHandler(chainId, processor, itemLoader, actorContext),
+        commandHandler = commandHandler(chainId, itemLoader, actorContext, runBatch _),
         eventHandler = eventHandler
       ).withRecovery(Recovery.default)
         .receiveSignal {
           case (state: Executing, RecoveryCompleted) =>
-            // 宕机恢复：重新执行流水线（各阶段幂等）
+            // 宕机恢复：注册新世代（旧链下一边界终止）→ 快照 + 计数断点续跑
+            implicit val ec: ExecutionContext = actorContext.executionContext
+            val key = s"$chainId-${state.batchId}"
+            val generation = RunRegistry.register(key)
+            val runToken: () => Boolean = () => RunRegistry.isFresh(key, generation)
             itemLoader(state.batchId).onComplete {
               case Success(items) =>
-                val batch = SubBatch[Item](
-                  batchId = state.batchId,
-                  items = items,
-                  source = ItemSource.NewArrival,
-                  context = Map("batchId" -> state.batchId, "chainId" -> state.chainId)
-                )
-                processor.process(batch).onComplete {
-                  case Success(_)  => actorContext.self ! PipelineSucceeded
-                  case Failure(e) => actorContext.self ! PipelineFailed("recovery", e.getMessage)
-                }(actorContext.executionContext)
+                runBatch(state.batchId, items, state.completedPhases.size,
+                  state.lastState, runToken)
               case Failure(e) =>
                 actorContext.self ! PipelineFailed("recovery", s"Failed to reload items: ${e.getMessage}")
             }(actorContext.executionContext)
@@ -217,11 +250,11 @@ object ChainExecutionActor {
   // Command Handler
   // ============================================================
 
-  private def commandHandler[Item](
+  private def commandHandler(
       chainId: String,
-      processor: SubBatchProcessor[Item, Any],
-      itemLoader: String => Future[Seq[Item]],
-      ctx: ActorContext[Command]
+      itemLoader: String => Future[Seq[Any]],
+      ctx: ActorContext[Command],
+      runBatch: (String, Seq[Any], Int, Option[BankChainState[Any, Any]], () => Boolean) => Unit
   )(state: State, cmd: Command)(implicit ec: ExecutionContext): Effect[Event, State] = {
 
     (state, cmd) match {
@@ -230,58 +263,48 @@ object ChainExecutionActor {
       case (Idle, StartExecution(batchId, itemsRaw, replyTo)) =>
         val event = Started(batchId, chainId, itemsRaw.size)
         Effect.persist(event).thenRun { _ =>
-          val items = itemsRaw.asInstanceOf[List[Item]]
-          val batch = SubBatch[Item](
-            batchId = batchId,
-            items = items.toSeq,
-            source = ItemSource.NewArrival,
-            context = Map("batchId" -> batchId, "chainId" -> chainId)
-          )
-          // 启动流水线（异步执行，阶段完成时通过 onPhaseComplete 回调通知）
-          processor.process(batch).onComplete {
-            case Success(_)  => ctx.self ! PipelineSucceeded
-            case Failure(e) => ctx.self ! PipelineFailed("pipeline", e.getMessage)
-          }
+          // 注册世代：任何此前的旧链（理论上 Idle 态没有，防御性兜底）即刻失效
+          val generation = RunRegistry.register(s"$chainId-$batchId")
+          val runToken: () => Boolean = () => RunRegistry.isFresh(s"$chainId-$batchId", generation)
+          runBatch(batchId, itemsRaw, 0, None, runToken)
           replyTo ! Accepted(s"$chainId-$batchId")
         }
 
-      // ---- Phase completed callback from processor ----
-      case (_: Executing, PhaseCompleted(phase, metadata)) =>
-        Effect.persist(PhaseDone(phase, System.currentTimeMillis(), metadata))
+      // ---- Phase completed callback from the engine ----
+      case (_: Executing, PhaseCompleted(phase, metadata, snapshot)) =>
+        Effect.persist(PhaseDone(phase, System.currentTimeMillis(), metadata, snapshot))
 
       // ---- Pipeline fully done ----
       case (_: Executing, PipelineSucceeded) =>
-        // 读取最后一个 PhaseDone 来确定结果统计
-        // （实际统计数据从 read-side 查询，这里用占位值）
+        // （实际统计数据从 read-side 查询，这里沿用占位值）
         Effect.persist(AllCompleted(state.asInstanceOf[Executing].batchId, 0, 0, 0))
           .thenRun { s =>
-            ctx.system.log.info(
-              s"[ChainExecutionActor:$chainId] Batch {} completed successfully. Phases: {}",
-              s.asInstanceOf[Completed].batchId,
-              state.asInstanceOf[Executing].completedPhases.mkString(" → ")
-            )
+            ctx.log.info(
+              s"[ChainExecutionActor:$chainId] Batch {} completed. Phases: {}",
+              s.asInstanceOf[Executing].batchId,
+              state.asInstanceOf[Executing].completedPhases.mkString(" → "))
           }
 
       // ---- Pipeline failed ----
       case (_: Executing, PipelineFailed(phase, reason)) =>
         Effect.persist(ExecutionFailed(phase, reason))
           .thenRun { _ =>
-            ctx.system.log.error(
+            ctx.log.error(
               s"[ChainExecutionActor:$chainId] Batch {} failed at phase {}: {}",
               state.asInstanceOf[Executing].batchId, phase, reason
             )
           }
 
-      // ---- Ignore late PhaseCompleted after completion ----
-      case (_: Completed, PhaseCompleted(_, _)) =>
+      // ---- Ignore late phase callbacks after completion ----
+      case (_: Completed, PhaseCompleted(_, _, _)) =>
         Effect.none
 
-      case (_: Failed, PhaseCompleted(_, _)) =>
+      case (_: Failed, PhaseCompleted(_, _, _)) =>
         Effect.none
 
       // ---- Already idle/completed/failed, reject new Start ----
       case (s, StartExecution(batchId, _, _)) =>
-        ctx.system.log.warn(
+        ctx.log.warn(
           s"[ChainExecutionActor:$chainId] Rejecting StartExecution for batch {} in state {}",
           batchId, s.getClass.getSimpleName
         )
@@ -301,8 +324,8 @@ object ChainExecutionActor {
       case (Idle, Started(batchId, chainId, _)) =>
         Executing(batchId, chainId, completedPhases = Nil)
 
-      case (e: Executing, PhaseDone(phase, _, _)) =>
-        e.copy(completedPhases = e.completedPhases :+ phase)
+      case (e: Executing, PhaseDone(phase, _, _, snapshot)) =>
+        e.copy(completedPhases = e.completedPhases :+ phase, lastState = snapshot)
 
       case (e: Executing, AllCompleted(batchId, s, f, _)) =>
         Completed(batchId, s, f)
@@ -311,7 +334,7 @@ object ChainExecutionActor {
         Failed(phase, reason)
 
       // Idempotent replay: duplicate PhaseDone after AllCompleted
-      case (_: Completed, PhaseDone(_, _, _)) =>
+      case (_: Completed, PhaseDone(_, _, _, _)) =>
         state
 
       case _ =>
@@ -325,14 +348,14 @@ object ChainExecutionActor {
 
   import akka.cluster.sharding.typed.scaladsl.Entity
 
-  def init[Item](
+  def init(
       sharding: akka.cluster.sharding.typed.scaladsl.ClusterSharding,
       chainId: String,
-      pipeline: SubBatchPipeline[Item, Any],
-      itemLoader: String => Future[Seq[Item]]
+      pipeline: SubBatchPipeline[Any, Any],
+      itemLoader: String => Future[Seq[Any]]
   )(implicit ec: ExecutionContext): Unit = {
     sharding.init(
-      Entity(EntityKey) { entityContext =>
+      Entity(EntityKey) { _ =>
         apply(chainId, pipeline, itemLoader)
       }
     )
