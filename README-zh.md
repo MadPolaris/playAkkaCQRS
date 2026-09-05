@@ -6,12 +6,11 @@
 
 | 里程碑 | 状态 |
 |---|---|
-| M1 — Saga 分布式事务协调器 | 线上质量 |
+| M1 — Saga 分布式事务协调器（v3 引擎） | 线上质量 |
 | M2 — 流批一体多层级 DAG 执行引擎 | 线上质量 |
-| M3 — 面向制造业控制论的 CIMs iPaaS | 探索中 |
+| M2.5+ — ChainDsl 批处理链组件引擎 | 线上质量 |
+| M3 — 面向制造业控制论的 CIMs iPaaS | 建设中：Lot Context Saga + M3.5 自愈演示 ← 线上质量 |
 | M4 — 即时反馈闭环 + 自适应 DAG 引擎 | 探索中 |
-
-项目首页：`/` (英文) 和 `/zh` (中文)。
 
 ## 快速上手
 
@@ -44,24 +43,41 @@ docker run -p 9000:9000 minimal-cqrs:latest
 sbt -Ddocker.username=<用户名> -Ddocker.registry=<仓库地址> docker:publish
 ```
 
+## 在线演示
+
+| 页面 | 演示内容 |
+|---|---|
+| `/` · `/zh` | 首页——CQRS/ES 银行示例（存款 / 取款 / 转账，转账走 TCC Saga） |
+| `/saga` | Saga 演示场——触发场景、飞行中注入故障、人工修复并恢复挂起事务、WebSocket 实时事件流 |
+| `/fab-demo/m35` | **M3.5 FAB 自愈演示**——光刻 → CD-SEM 量测 → OCAP 返工，跑在事件溯源工单上；预排故障 *和* Actor 崩溃；亲眼看到 RECOVERING → 恢复阶段继续 → AllCompleted |
+| `/architecture` `/projection` `/dag` `/m1` `/m2` `/m3` | 里程碑深入页面（英文在 `/en/m1`、`/en/m2`、`/en/m3`） |
+
 ## 项目结构
 
 ```
 ├── common-core/       共享层：Akka 持久化、序列化、MongoDB/MySQL 适配器
-├── saga-core/         M1：事件溯源 Saga 协调器、步骤执行器、回退恢复
+├── saga-core/         M1：saga_v3 引擎——SagaDefinition/SagaRunner/SagaRegistry DSL、
+│                      分片协调器 + 每步骤×阶段 StepExecutor、日志优先人工修复、
+│                      世代号守卫、向后恢复
+├── dag-engine-core/   M2.5+：无 Akka 依赖的批处理链组件——SubBatchPipeline、
+│                      SubBatchProcessor、分类 / 复核 / 路由 / 调度
+├── fab-simulation/    M3：设备适配器与模拟器协议（ActorEquipmentAdapter）
 ├── app/
 │   ├── net/imadz/
 │   │   ├── domain/          纯领域层：Entity、ValueObject、DomainEvent、Invariant
-│   │   ├── application/     用例层：Aggregate、ApplicationService、Projection、Saga
+│   │   ├── application/     用例层：聚合根（CreditBalance、Lot、Wafer、WorkOrder）、
+│   │   │                    投影、FabSaga 参与者、M3.5 链路执行、
+│   │   │                    net.imadz.m25（ChainDsl、ChainTemplates、流水线阶段）
 │   │   └── infrastructure/  适配层：Persistence、Bootstrap、DI（Guice）
-│   ├── protobuf/            .proto 文件（ScalaPB）
+│   ├── protobuf/            .proto 文件（ScalaPB）—— saga_v3 日志模式
 │   └── views/               Play Twirl 模板（首页、Demo 页、文档页）
-├── conf/                配置文件：application.conf、persistence.conf、cluster.conf
+├── conf/                配置：application.conf、persistence.conf、cluster.conf、ocap-rules.conf
+├── docs/                深入指南（SAGA、ChainDsl）+ 旧版 DDD 指南
 ├── knowledge_base/      架构文档 & 方法论文档
 └── test/                单元 + 集成测试
 ```
 
-**依赖规则（铁律）**：内层绝不 import 外层包。
+**依赖规则（铁律）**：内层绝不 import 外层包。`dag-engine-core` 只依赖 `scala.concurrent`——没有 Akka。
 
 ## 架构
 
@@ -73,27 +89,46 @@ application/     ← 用例层：编排领域逻辑，Aggregate、Saga、Project
 infrastructure/  ← 适配层：框架集成（Akka、Play、Guice、MongoDB、MySQL）
 ```
 
-- **写端**：Akka EventSourcedBehavior → MongoDB 日志（Protobuf 序列化）
+- **写端**：Akka EventSourcedBehavior → MongoDB 日志（按绑定分别使用 Protobuf / Java 序列化）
 - **读端**：Akka Projection → MySQL（ScalikeJDBC），持续从事件更新
-- **Saga**：TCC 模式（Try-Confirm-Cancel）→ 向后恢复 + 选择性补偿
+- **Saga**：TCC 模式（Try-Confirm-Cancel）→ 向后恢复 + 选择性补偿 + 日志优先人工修复
 
 完整架构参考：[`knowledge_base/architecture/onion-cqrs-reference.md`](knowledge_base/architecture/onion-cqrs-reference.md)
 
-## M1 — Saga 分布式事务协调器
+## M1 — Saga 分布式事务协调器（v3 引擎）
 
-基于 Akka Persistence 的 TCC 模式实现。每个步骤运行在独立的 `StepExecutor` actor 中；`SagaTransactionCoordinator` 驱动状态机贯穿 Prepare → Commit → Compensate 阶段。补偿失败进入 `SUSPENDED` 状态，等待人工干预。
+基于 Akka Persistence 的 TCC 事务，由 **saga_v3 DSL** 驱动：链路声明为 `SagaDefinition`（步骤、步骤组、带 prepare/commit/compensate 的参与者），注册进 `SagaRegistry`，通过 `SagaRunner` 携带类型化参数编解码启动。一个分片的 `SagaTransactionCoordinator` 拥有事务状态机；每个步骤×阶段运行在独立的 `StepExecutor` 中，具备重试、超时、熔断和业务错误分类。
 
-详见：[`knowledge_base/architecture/saga.md`](knowledge_base/architecture/saga.md)
+让恢复安全的设计不变量：
+
+- **日志优先人工修复**——补偿失败进入挂起的步骤，用一条 `StepManuallyFixed` 事件完成修复；实体恢复时协调器从日志重新推导步骤结果，而不是去询问已死的执行器（不再出现幽灵 "Created" 占位状态）。
+- **确定性重挂**——事务 ID 由 UUIDv3 派生，重启后的事务能幂等地重新挂载到自己的步骤上。
+- **世代号守卫**——每个飞行中的操作携带尝试代号，被取代尝试的迟到响应直接丢弃。
+- **参与者不进日志**——日志只记定义名/版本/参数；参与者从注册表重建，结构漂移会让事务挂起而不是瞎猜。
+
+同一个引擎实例既驱动银行示例（`MoneyTransferSagaDefinition`），也驱动 Fab 的 lot 拆分/合并/晶圆转移 Saga——通过 `initSagaEngine[AppSagaContext]` 一次性接线。
+
+详见：[Saga 引擎指南](docs/SAGA_GUIDE-zh.md) / [English](docs/SAGA_GUIDE.md) · [`knowledge_base/architecture/saga.md`](knowledge_base/architecture/saga.md)
 
 ## M2 — 多层级 DAG 执行引擎
 
 6 种标准组件（Splitter、Merger、Classifier、Processor、Buffer、Router）组装成流水线。`ChainExecutionActor` 编排多层 DAG 执行。子批次流经定义的流水线；全局 `FailureItemRouter` 处理拒绝项。
 
-包含 M2.5+ 运行时组件引擎，配合业务 DSL 实现 Fab M3 集成。
+## M2.5+ — ChainDsl 批处理链组件引擎
 
-## M3 — 制造业控制论 CIMs iPaaS（探索中）
+一套无 Akka 依赖的组件库（`dag-engine-core`）驱动一批业务物品走完外部系统交互周期——fileGen → upload → waitAck → poll → parse → classify——然后对每个 item 做三分类（成功 / 失败 / 可疑）：可疑项向权威数据源查证落定，失败项流经策略化路由器（`RetrySameArea` / `RouteToArea` / `Scrap` / `ManualIntervention`），窗口式成批尊重物理约束（FOUP 载体容量）。
 
-叠加于 M2.5+ 之上的决策层：POR Repository → 动态流程组装器 → Saga/LotContext 分布式事务 → ChainDSL 注入。MU 账户矩阵实现多维度可追溯。事实驱动闭环 — 零修改 M2.5+ 引擎。
+`ChainDsl.define` 用约 20 行业务参数声明一条链；`ChainTemplates` 内置充值 / 申购 / 设备区预设。Fab 移植版（`FabPipelineExecutionActor` + `FabPipelineProcessor`）用世代号崩溃恢复 + 回调守卫强化了这一模式。
+
+详见：[ChainDsl 指南](docs/CHAINDSL_GUIDE-zh.md) / [English](docs/CHAINDSL_GUIDE.md)
+
+## M3 — 制造业控制论 CIMs iPaaS（建设中）
+
+叠加于 M2.5+ 之上的决策层：POR Repository → 动态流程组装器 → Saga/LotContext 分布式事务 → ChainDSL 注入。MU 账户矩阵实现多维度可追溯。事实驱动闭环——零修改 M2.5+ 引擎。
+
+**Lot Context Saga（线上质量）**：事件溯源的 `LotEntity` + `WaferEntity` 聚合根，配合 TCC Saga 参与者（`SourceLotParticipant`、`TargetLotParticipant`、`WaferTransferParticipant`）。Lot 拆分 / 合并 / 晶圆转移作为带 FOUP 容量不变量与向后恢复的分布式事务——与 M1 CreditBalance/MoneyTransfer 完全相同的 `InvariantRule` + `CommandHelper` + `SagaParticipant` 模式。
+
+**M3.5 自愈演示（在线：`/fab-demo/m35`）**：5 片晶圆的光刻 → CD-SEM 量测 → OCAP 流程跑在事件溯源工单上（`FabPipelineExecutionActor`）。故障注入预排在流水线中途——包括完整的 Actor 崩溃：分片实体停止、以新世代重启、从日志阶段游标恢复（跳过已完成阶段、重跑被中断的那个）、把失败交给配置驱动的 OCAP 规则处置（返工 / 报废 / 挂起子流程，各自拥有 saga 管理的子 lot），最终到达 `AllCompleted`。页面通过 WebSocket 事件流渲染带镜头调度的 FAB 现场。
 
 ## 技术栈
 
