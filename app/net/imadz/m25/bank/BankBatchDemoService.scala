@@ -295,6 +295,9 @@ class BankBatchDemoService @Inject()(
     }
   }
 
+  private def chainOfBatchId(batchId: String): String =
+    batchId.stripPrefix("bank-").takeWhile(_ != '-')
+
   private val unifiedObserver = new ChainExecutionActor.ChainExecutionObserver with Logging {
     override def onStart(batchId: String, itemCount: Int): Unit = {
       val (chain, _, _) = parseBatchKey(batchId)
@@ -308,8 +311,9 @@ class BankBatchDemoService @Inject()(
     override def onStageFailed(cursor: String, detail: String): Unit =
       publish("stage-failed", Map("cursor" -> cursor, "detail" -> detail))
     override def onRecovery(batchId: String, completedPhases: Int): Unit = {
+      val chain = chainOfBatchId(batchId)
       inc("recoveries")
-      publish("recovering", Map("batchId" -> batchId, "completed" -> completedPhases.toString))
+      publish("recovering", Map("chain" -> chain, "batchId" -> batchId, "completed" -> completedPhases.toString))
       feedAdd(s"[$batchId] 宕机恢复：前 $completedPhases 道不重做，从断点续跑")
     }
     override def onCompleted(batchId: String, snapshot: Option[BankChainState[Any, Any]]): Unit = {
@@ -317,16 +321,18 @@ class BankBatchDemoService @Inject()(
       val (chain, round, index) = parseBatchKey(batchId)
       runningBatches.remove(jobKey(BatchJob(chain, round, index, Vector.empty)))
       inc("batches_done")
-      publish("batch-completed", Map("batchId" -> batchId))
+      publish("batch-completed", Map("chain" -> chain, "batchId" -> batchId))
       snapshot.foreach { st => businessClosure(chain, round, index, st) } // closure 结束时再 pump
     }
     override def onFailed(batchId: String, phase: String, reason: String): Unit = {
-      publish("batch-failed", Map("batchId" -> batchId, "phase" -> phase, "reason" -> reason))
+      val chain = chainOfBatchId(batchId)
+      publish("batch-failed", Map("chain" -> chain, "batchId" -> batchId, "phase" -> phase, "reason" -> reason))
       feedAdd(s"[$batchId] 失败@$phase：$reason")
       jobDoneByBatchId(batchId)
     }
     override def onCrash(batchId: String, reason: String): Unit = {
-      publish("crash", Map("batchId" -> batchId, "reason" -> reason))
+      val chain = chainOfBatchId(batchId)
+      publish("crash", Map("chain" -> chain, "batchId" -> batchId, "reason" -> reason))
       feedAdd(s"[$batchId] ⚡ 宕机注入：$reason（账本已保存，断点续跑）")
     }
   }

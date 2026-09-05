@@ -177,9 +177,9 @@ function connect() {
     const f = JSON.parse(ev.data); const d = f.data || {};
     switch (f.type) {
       case "recovering":
-        banner("🔄 [" + d.chain + "] " + d.batchId + " 宕机恢复：前 " + d.completed + " 道不重做，断点续跑……", "recovering"); break;
+        banner("🔄 [" + (d.chain || "batch") + "] " + d.batchId + " 宕机恢复：前 " + d.completed + " 道不重做，断点续跑", "recovering"); break;
       case "crash":
-        banner("⚡ [" + d.chain + "] " + d.batchId + " 已注入宕机，账本已保存……", "recovering"); break;
+        banner("⚡ [" + (d.chain || "batch") + "] " + d.batchId + " 已注入宕机，账本已保存……", "recovering"); break;
       case "batch-completed":
         addFeed("[" + d.chain + "] " + d.batchId + " 完成 ✅"); break;
       case "rebatch-scheduled":
