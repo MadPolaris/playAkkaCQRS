@@ -83,6 +83,8 @@ GET     /ws/fab-demo/m35/events                     controllers.FabDemoControlle
 POST    /api/fab-demo/m35/start                     controllers.FabDemoController.m35Start()
 POST    /api/fab-demo/m35/inject-crash/:workOrderId  controllers.FabDemoController.m35InjectCrash(workOrderId: String)
 GET     /api/fab-demo/m35/ocap-rules                controllers.FabDemoController.m35GetOcapRules()
+POST    /api/fab-demo/area/:areaId/down             controllers.FabDemoController.areaDown(areaId: String)
+POST    /api/fab-demo/area/:areaId/reset            controllers.FabDemoController.areaReset(areaId: String)
 GET     /api/fab-demo/m35/recovery-status/:id        controllers.FabDemoController.m35RecoveryStatus(id: String)
 GET     /api/fab-demo/m35/fault-history/:id          controllers.FabDemoController.m35FaultHistory(id: String)
 

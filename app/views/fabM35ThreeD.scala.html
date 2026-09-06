@@ -37,6 +37,12 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 #btnCrash { background:#7a3c10; color:#ffd8b0; }
 #btnCam { background:#263442; color:#cfe0f0; }
 #runBadge { margin-left:auto; font-size:11px; color:#8fb8e8; letter-spacing:.5px; }
+#faultWrap { display:none; align-items:center; gap:6px; padding:2px 10px 2px 14px;
+  border-left:1px solid rgba(255,255,255,0.12); }
+#faultWrap.show { display:flex; }
+#faultWrap label { font-size:11px; color:#93a7bb; white-space:nowrap; }
+#faultSlider { width:110px; accent-color:#ff9800; }
+#faultVal { font-size:11px; color:#ffb74d; min-width:30px; }
 /* 底部动态工艺路线条 */
 #routeStrip { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:34;
   display:flex; align-items:center; gap:6px; padding:8px 14px;
@@ -85,12 +91,19 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   .hint { font-size:11px; color:#6b7f95; margin-top:8px; line-height:1.5;
     border-top:1px solid rgba(255,255,255,0.07); padding-top:7px; }
   #areaGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; }
-  .areaCell { display:flex; align-items:center; gap:5px; padding:5px 6px;
+  .areaCell { display:flex; align-items:center; gap:5px; padding:5px 6px; cursor:pointer;
     background:rgba(255,255,255,0.045); border:1px solid rgba(255,255,255,0.09);
     border-radius:7px; font-size:11px; color:#c8d6e5; white-space:nowrap;
     transition:border-color .3s; }
+  .areaCell:hover { border-color:rgba(255,255,255,0.25); }
+  .areaCell.sel { border-color:#42a5f5; }
   .areaCell .dot { width:8px; height:8px; border-radius:50%;
     background:#3d4d5f; flex:none; transition:background .3s, box-shadow .3s; }
+  .areaCell .iv { display:none; margin-left:auto; gap:3px; }
+  .areaCell.sel .iv { display:flex; }
+  .iv button { border:none; background:rgba(255,255,255,0.1); color:#e6edf3;
+    border-radius:4px; padding:1px 4px; font-size:10px; cursor:pointer; line-height:1.4; }
+  .iv button:hover { background:rgba(255,255,255,0.25); }
   @@keyframes cellPulse { 0%{ box-shadow:0 0 0 0 rgba(66,165,245,.55);} 70%{ box-shadow:0 0 0 7px rgba(66,165,245,0);} 100%{ box-shadow:0 0 0 0 rgba(66,165,245,0);} }
   .areaCell.pulse { animation:cellPulse 1s ease-out 2; border-color:#42a5f5; }
   @@keyframes kpiPop { 0%{display:inline-block; transform:scale(1.7); color:#ffd54f} 100%{display:inline-block; transform:scale(1)} }
@@ -162,6 +175,11 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <button id="btnStart">▶ 启动</button>
   <button id="btnCrash">⚡ 注入宕机</button>
   <button id="btnCam">🎥 剧情镜头</button>
+  <span id="faultWrap">
+    <label>故障率</label>
+    <input type="range" id="faultSlider" min="0" max="100" value="20">
+    <span id="faultVal">20%</span>
+  </span>
   <span id="runBadge">WS 连接中…</span>
 </div>
 
@@ -1053,13 +1071,30 @@ function handleEvent0(frame) {
     }
   }
 }
-/* 九大工作区网格：状态点由区域 Actor 状态驱动 */
+/* 九大工作区网格：状态点由区域 Actor 状态驱动；点击格子可干预（停机/复位） */
 var AREA_ORDER = ['CLEAN', 'DIFF', 'LITHO', 'ETCH', 'IMPL', 'DEP', 'CMP', 'MET', 'DRY'];
 var areaGridEl = document.getElementById('areaGrid');
 AREA_ORDER.forEach(function(k) {
   var cell = document.createElement('div');
   cell.className = 'areaCell'; cell.id = 'cell-' + k;
-  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span>';
+  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span>' +
+    '<span class="iv"><button title="模拟故障停机" data-act="down">⏻</button>' +
+    '<button title="修复复位" data-act="reset">🛠</button></span>';
+  cell.addEventListener('click', function(ev) {
+    var btn = ev.target.closest('button');
+    var wasSel = cell.classList.contains('sel');
+    document.querySelectorAll('.areaCell.sel').forEach(function(c) { c.classList.remove('sel'); });
+    if (btn) {
+      var act = btn.getAttribute('data-act');
+      fetch('/api/fab-demo/area/' + k + '/' + act, { method: 'POST' });
+      narrate(act === 'down' ? '⏻' : '🛠',
+        '驾驶舱干预：<b>' + (AREA_NAME[k] || k) + '</b> ' + (act === 'down' ? '人工停机' : '修复复位'), 3200, k,
+        act === 'down' ? '#ff5252' : '#00e676');
+      ev.stopPropagation();
+      return;
+    }
+    if (!wasSel) cell.classList.add('sel');
+  });
   areaGridEl.appendChild(cell);
 });
 var CELL_STATUS_COLOR = { IDLE: '#455a64', LOADED: '#ffb300', BUSY: '#42a5f5',
@@ -1128,10 +1163,21 @@ function ruleFired(ruleId) {
 var selEl = document.getElementById('scenarioSel');
 var btnCrashEl = document.getElementById('btnCrash');
 function syncCrashVisibility() {
-  btnCrashEl.classList.toggle('hidden', selEl.value !== 'm35');
+  var isM35 = selEl.value === 'm35';
+  btnCrashEl.classList.toggle('hidden', !isM35);
+  document.getElementById('faultWrap').classList.toggle('show', isM35);
 }
 selEl.addEventListener('change', function() { syncCrashVisibility(); });
 syncCrashVisibility();
+/* 故障率旋钮（chaos dial，仅 M3.5 用例） */
+var faultSlider = document.getElementById('faultSlider');
+var faultVal = document.getElementById('faultVal');
+faultSlider.addEventListener('input', function() { faultVal.textContent = faultSlider.value + '%'; });
+faultSlider.addEventListener('change', function() {
+  fetch('/api/fab-demo/m35/fault-probability', { method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ probability: faultSlider.value / 100 }) });
+});
 document.getElementById('btnStart').addEventListener('click', function() {
   var sc = selEl.value;
   resetDemoState();

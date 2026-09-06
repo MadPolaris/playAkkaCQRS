@@ -60,7 +60,9 @@ object EquipmentAreaActor {
   final case class TrackIn(equipmentId: String, job: String, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
   final case class StartProcess(equipmentId: String, recipe: String, durationMs: Long, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
   final case class TrackOut(equipmentId: String, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
-  final case class ReportFault(equipmentId: String, code: String, detail: String) extends Command
+  final case class ReportFault(equipmentId: String, code: String, detail: String,
+                               /** Some(ms)=自动修复；None=保持 DOWN 直到驾驶舱复位 */
+                               autoRepairMs: Option[Long] = Some(5000L)) extends Command
   /** 加工完成信号：由管线的设备模拟器 JobCompleted 驱动（时钟源唯一） */
   final case class FinishProcess(equipmentId: String, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
   case object Reset extends Command
@@ -238,9 +240,9 @@ object EquipmentAreaActor {
         case (_, UnloadDone) if state.status == Unloading =>
           accept(Idle, state.equipmentId, "", "unload complete — equipment idle")
 
-        case (_, ReportFault(equipId, code, detail)) =>
-          // 设备自愈：DOWN 5 秒后修复完成回 IDLE（演示流程不因随机故障长期卡死）
-          timers.startSingleTimer(RepairDone, 5.seconds)
+        case (_, ReportFault(equipId, code, detail, autoRepairMs)) =>
+          // 设备自愈：自动故障 5 秒后修复回 IDLE；人工停机（autoRepairMs=None）保持 DOWN 直到驾驶舱复位
+          autoRepairMs.foreach(ms => timers.startSingleTimer(RepairDone, math.max(100, ms).millis))
           accept(Down, equipId, state.job, s"$code: $detail")
 
         case (_, RepairDone) if state.status == Down =>

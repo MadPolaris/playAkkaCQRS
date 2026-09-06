@@ -11,6 +11,7 @@ import akka.stream.Materializer
 import akka.stream.scaladsl.{BroadcastHub, Flow, Keep, MergeHub, Sink, Source}
 import akka.contrib.persistence.mongodb.MongoReadJournal
 import net.imadz.domain.events.{DomainEventRecorded, FabSimulationEvent, RecoveryEvent, FaultInjected, DynamicStageInjected, PipelineTimelineSnapshot}
+import net.imadz.application.actor.EquipmentAreaActor
 import net.imadz.application.services.FabDemoService
 import net.imadz.application.chain.FabPipelineExecutionActor
 import akka.projection.ProjectionBehavior
@@ -359,6 +360,19 @@ class FabDemoController @Inject()(
     val clamped = math.max(0.0, math.min(1.0, probability))
     fabDemoService.updateFaultProbability(clamped)
     Ok(Json.obj("success" -> true, "faultProbability" -> clamped))
+  }
+
+  /** 驾驶舱干预：人工停机某设备区（保持 DOWN 直到复位）。 */
+  def areaDown(areaId: String) = Action {
+    EquipmentAreaActor.Registry.entityRef(areaId).foreach(_ !
+      EquipmentAreaActor.ReportFault(areaId, "MANUAL", "驾驶舱人工停机", None))
+    Ok(Json.obj("success" -> true, "areaId" -> areaId, "status" -> "DOWN"))
+  }
+
+  /** 驾驶舱干预：复位某设备区（DOWN/任意态 → IDLE）。 */
+  def areaReset(areaId: String) = Action {
+    EquipmentAreaActor.Registry.entityRef(areaId).foreach(_ ! EquipmentAreaActor.Reset)
+    Ok(Json.obj("success" -> true, "areaId" -> areaId, "status" -> "IDLE"))
   }
 
   /** Get current OCAP rules for the M3.5 demo page. */
