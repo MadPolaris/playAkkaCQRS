@@ -166,11 +166,13 @@ object EquipmentAreaActor {
           ctx.log.warn(s"[Area $areaId] process watchdog fired — FinishProcess signal lost, auto-finishing")
           accept(Finished, state.equipmentId, state.job, "process done (watchdog)")
 
-        case (_, TrackOut(equipId, replyTo)) if state.status == Loaded || state.status == Finished =>
-          // 出站是有物理过程的：FOUP 从腔体搬回装载端口（UNLOADING），完成后设备才回到 IDLE 待机
+        case (_, TrackOut(equipId, replyTo)) if state.status == Loaded || state.status == Finished || state.status == Busy =>
+          // 出站是有物理过程的：FOUP 从腔体搬回装载端口（UNLOADING），完成后设备才回到 IDLE 待机。
+          // BUSY 下的 TrackOut 视为隐式完结加工（模拟器回调与管线线程跨发送者，FinishProcess 可能晚到）
           replyTo.foreach(_ ! AreaReply(accepted = true, Unloading, ""))
           timers.startSingleTimer(UnloadDone, 900.millis)
-          accept(Unloading, equipId, "", "trackOut unloading")
+          accept(Unloading, equipId, "",
+            if (state.status == Busy) "trackOut (auto-finish busy job)" else "trackOut unloading")
 
         case (_, TrackOut(equipId, replyTo)) =>
           reject(replyTo, s"TrackOut requires LOADED/FINISHED (now ${state.status})")
