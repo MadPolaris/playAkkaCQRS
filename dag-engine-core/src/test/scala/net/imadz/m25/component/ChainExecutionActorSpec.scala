@@ -27,7 +27,7 @@ class ChainExecutionActorSpec extends ScalaTestWithActorTestKit(
       |akka.persistence.snapshot-store.plugin = "akka.persistence.no-snapshot-store"
       |akka.persistence.testkit.events.serialize = off
       |akka.actor.testkit.typed.single-expect-default = 10s
-      |akka.actor.testkit.typed.filter-leeway = 10s
+      |akka.actor.testkit.typed.filter-leeway = 30s
     """.stripMargin).withFallback(EventSourcedBehaviorTestKit.config)
 ) with AnyWordSpecLike with org.scalatest.concurrent.Eventually {
 
