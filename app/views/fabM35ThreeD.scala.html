@@ -68,6 +68,11 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   </nav>
 </div>
 
+<div id="dbg" style="position:fixed;bottom:10px;right:10px;z-index:99;
+  background:#1a1a2e;color:#0f0;font-family:monospace;font-size:12px;
+  padding:8px 12px;border-radius:4px;max-width:500px;">
+  <div id="dbgMsg">⏳ Loading Three.js…</div>
+</div>
 <div id="stage3d"></div>
 <div id="banner"></div>
 
@@ -90,6 +95,26 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <p class="hint">3D 场景由 /ws/fab-demo/m35/events 的真实引擎事件驱动。工位：STOCKER → LITHO-01 → CDSEM-01 → 返工岛。</p>
 </div>
 
+<div id="errPanel" style="position:fixed;bottom:14px;left:14px;right:14px;z-index:100;
+  background:#1a0000;color:#ff6b6b;font-family:Consolas,monospace;font-size:11px;
+  padding:10px;border-radius:8px;display:none;max-height:250px;overflow-y:auto;
+  border:1px solid #ff6b6b;white-space:pre-wrap;">
+  <b>=== JS 错误面板 ===</b>
+</div>
+<script>
+// 全局错误捕获——任何 JS 错误直接显示在页面上
+window.onerror = function(msg, src, line, col) {
+  var el = document.getElementById("errPanel");
+  el.style.display = "block";
+  el.textContent += "\n[ERROR] " + msg + "\n  at " + (src||"?").split("/").pop() + ":" + line + ":" + col + "\n";
+};
+window.addEventListener("unhandledrejection", function(e) {
+  var el = document.getElementById("errPanel");
+  el.style.display = "block";
+  el.textContent += "\n[REJECTION] " + (e.reason && e.reason.message ? e.reason.message : String(e.reason)) + "\n";
+});
+</script>
+
 <div class="hud" id="hudRight">
   <h3>事件流</h3>
   <div id="feed" style="max-height:50vh;overflow-y:auto;font-family:Consolas,monospace;font-size:11px;line-height:1.8;color:#9fe19f;"></div>
@@ -105,6 +130,8 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+var dbg = function(msg) { var e = document.getElementById('dbgMsg'); if (e) e.textContent = msg; };
+dbg('Three.js module loaded');
 
 /* ===== 渲染器 / 场景 / 相机 ===== */
 var container = document.getElementById('stage3d');
@@ -113,6 +140,7 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 container.appendChild(renderer.domElement);
+dbg('renderer created');
 
 var scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b1220);
@@ -136,6 +164,7 @@ var floor = new THREE.Mesh(new THREE.PlaneGeometry(48, 32),
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
 var gridH = new THREE.GridHelper(48, 48, 0x2a3b52, 0x1c2a3c);
 gridH.position.y = 0.01; scene.add(gridH);
+var wallMat = new THREE.MeshStandardMaterial({ color: 0x14202e, transparent: true, opacity: 0.35, roughness: 0.4 });
 [[-24, 0], [24, 0]].forEach(function(pz) {
   var wall = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 32), wallMat);
   wall.position.set(pz[0], 3, 0); scene.add(wall);
@@ -148,10 +177,12 @@ gridH.position.y = 0.01; scene.add(gridH);
 
 /* ===== 设备模型 ===== */
 var AREA_POS = {
-  STOCKER: new THREE.Vector3(-15, 0, 0),
-  LITHO:   new THREE.Vector3(-3.5, 0, 0),
-  CDSEM:   new THREE.Vector3(9, 0, 0)
+  STOCKER:  new THREE.Vector3(-15, 0, 0),
+  LITHO:    new THREE.Vector3(-3.5, 0, 0),
+  CDSEM:    new THREE.Vector3(9, 0, 0),
+  STOCKER2: new THREE.Vector3(-6, 0, 7)
 };
+var EQUIP_BY_AREA = {};
 
 function equipmentBase(w, h, d, color) {
   var g = new THREE.Group();
@@ -170,6 +201,7 @@ var lithoWin = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1),
   new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x40c4ff, emissiveIntensity: 0.9 }));
 lithoWin.position.set(0, 2.2, 1.52); litho.add(lithoWin);
 litho.position.copy(AREA_POS.LITHO); scene.add(litho);
+EQUIP_BY_AREA.LITHO = litho;
 
 var cdsem = new THREE.Group();
 var col = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, 2.6, 16),
@@ -179,12 +211,14 @@ var chamber = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 2.2),
   new THREE.MeshStandardMaterial({ color: 0x263238, metalness: 0.5, roughness: 0.4 }));
 chamber.position.y = 0.55; cdsem.add(chamber);
 cdsem.position.copy(AREA_POS.CDSEM); scene.add(cdsem);
+EQUIP_BY_AREA.CDSEM = cdsem;
 
 var stocker = new THREE.Group();
 var shelfFrame = new THREE.Mesh(new THREE.BoxGeometry(4.6, 3.2, 1.4),
   new THREE.MeshStandardMaterial({ color: 0x1c2a3a, metalness: 0.4, roughness: 0.5 }));
 shelfFrame.position.y = 1.6; stocker.add(shelfFrame);
 stocker.position.copy(AREA_POS.STOCKER); scene.add(stocker);
+EQUIP_BY_AREA.STOCKER = stocker;
 
 /* ===== OHT 天车 + FOUP ===== */
 var trackMat = new THREE.MeshStandardMaterial({ color: 0x546e7a, metalness: 0.8, roughness: 0.3 });
@@ -251,16 +285,37 @@ function moveOHT(fromArea, toArea, etaMs) {
     eta: Math.max(500, Math.min(etaMs || 1200, 6000))
   };
 }
+function beaconColor(hex) {
+  beacon.material.color.setHex(hex);
+  beacon.material.emissive.setHex(hex);
+}
+var panelTimers = {};
+function panelColor(areaKey, hex) {
+  var eq = EQUIP_BY_AREA[areaKey];
+  var panel = eq && eq.userData && eq.userData.panel;
+  if (!panel) return;
+  panel.material.color.setHex(hex);
+  panel.material.emissive.setHex(hex);
+  clearTimeout(panelTimers[areaKey]);
+  panelTimers[areaKey] = setTimeout(function() {
+    panel.material.color.setHex(0x0aa8a0);
+    panel.material.emissive.setHex(0x0aa8a0);
+  }, 4000);
+}
 
 var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/fab-demo/m35/events';
 var ws;
 function connect() {
   ws = new WebSocket(wsUrl);
   ws.onmessage = function(ev) { handleEvent(JSON.parse(ev.data)); };
+  dbg('WS connected');
   ws.onclose = function() { setTimeout(connect, 2000); };
   ws.onerror = function() { ws.close(); };
 }
 function handleEvent(frame) {
+  try { handleEvent0(frame); } catch (e) { dbg('event error: ' + e.message); }
+}
+function handleEvent0(frame) {
   var t = frame.type, d = frame.data || {};
   if (t === 'DemoStarted') {
     window.__activeWo = d.workOrderId || null;
