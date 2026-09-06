@@ -98,7 +98,11 @@ object FabExecutionModel {
     /** P0 staleness guard: returns false once this pipeline run's generation is superseded
       * (crash recovery started a new run). Stale runs must not publish UI events or drive
       * further side effects — see [[net.imadz.application.chain.PipelineRunRegistry]]. */
-    runToken: () => Boolean = () => true
+    runToken: () => Boolean = () => true,
+    /** 设备区状态机 Actor（每区一个，EquipmentAreaActor）：trackIn/process/trackOut 通过它做
+      * 合法迁移校验，并由 Actor 自己推送权威 AreaStateChanged 到前端。
+      * 分片未初始化（纯 JVM 单测）时为 None，调用方静默跳过。 */
+    areaActorOf: String => Option[akka.cluster.sharding.typed.scaladsl.EntityRef[net.imadz.application.actor.EquipmentAreaActor.Command]] = _ => None
   )(implicit val ec: ExecutionContext) extends net.imadz.application.chain.ExecutionContext {
 
     /** Guarded publish: drops events from superseded pipeline runs. */

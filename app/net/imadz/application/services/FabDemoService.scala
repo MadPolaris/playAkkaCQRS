@@ -338,7 +338,8 @@ class FabDemoService @Inject()(
         "hold" -> holdLotId,
         "scrap" -> scrapLotId,
         "rwk" -> reworkLotId
-      )
+      ),
+      areaActorOf = net.imadz.application.actor.EquipmentAreaActor.Registry.entityRef
     )
 
     val initialState = FabDemoState(
@@ -372,6 +373,7 @@ class FabDemoService @Inject()(
   def startDemo(scenarioId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
     net.imadz.application.projection.FabDemoViewHandler.resetAll()
     net.imadz.application.projection.FabDemoViewProjection.resetChildLotRegistry()
+    net.imadz.application.actor.EquipmentAreaActor.Registry.resetAll()
     val workOrderId = UUID.randomUUID().toString
     val scenario = scenarioId match {
       case "photo-cell-5wafer" => StandardScenarios.photoCell5Wafer
@@ -438,6 +440,7 @@ class FabDemoService @Inject()(
   def startDemoWithProduct(productId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
     net.imadz.application.projection.FabDemoViewHandler.resetAll()
     net.imadz.application.projection.FabDemoViewProjection.resetChildLotRegistry()
+    net.imadz.application.actor.EquipmentAreaActor.Registry.resetAll()
     val routing = PorRepository.findByProductId(productId)
       .getOrElse(throw new IllegalArgumentException(s"Unknown product: $productId"))
     val waferIds = (1 to 5).map(i => s"WAFER-$i")
@@ -456,6 +459,7 @@ class FabDemoService @Inject()(
   def startDemoFromRoute(routeId: String, publisher: FabSimulationEvent => Unit): Future[WorkOrderConfirmation] = {
     net.imadz.application.projection.FabDemoViewHandler.resetAll()
     net.imadz.application.projection.FabDemoViewProjection.resetChildLotRegistry()
+    net.imadz.application.actor.EquipmentAreaActor.Registry.resetAll()
     val routeDef = RouteDefinitionStore.getLatest(routeId)
       .getOrElse(throw new IllegalArgumentException(s"Unknown route: $routeId"))
     // Register in PorRepository so it also appears in the Start dropdown
@@ -1303,6 +1307,7 @@ class FabDemoService @Inject()(
   ): Future[WorkOrderConfirmation] = {
     net.imadz.application.projection.FabDemoViewHandler.resetAll()
     net.imadz.application.projection.FabDemoViewProjection.resetChildLotRegistry()
+    net.imadz.application.actor.EquipmentAreaActor.Registry.resetAll()
     currentFaultProbability = faultProbability
 
     scenarioType match {

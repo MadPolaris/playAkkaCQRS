@@ -39,6 +39,10 @@ case class FoupStateChanged(foupId: String, status: String, activeWaferCount: In
 // --- Global Status (需求3: 工作状态指示) ---
 case class GlobalStatusChanged(status: String, detail: String, phase: String) extends FabSimulationEvent
 
+/** 设备区状态机 Actor（每区一个分片实例）推送的权威区域状态 —— 状态同步的所有权在区域 Actor 自己 */
+case class AreaStateChanged(areaId: String, displayName: String, status: String,
+                            equipmentId: String = "", job: String = "", detail: String = "") extends FabSimulationEvent
+
 // --- Aggregate State (需求5: 业务聚合状态面板) ---
 case class AggregateStateUpdated(
   sourceLot: LotStateSnapshot,

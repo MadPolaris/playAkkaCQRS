@@ -625,6 +625,7 @@ var childFoups = {};   // suffix -> THREE.Group（挂在 OHT 下的彩色子批 
 var seenSagaKeys = {}; // saga 事务幂等去重（同一 txId 的重复 COMMITTED 不重复计数）
 var scrappedWafers = {};
 var waferLoc = {};     // waferId -> 'main' | suffix | 'SCRAP'（片级精确追踪）
+var lastAreaStatus = {}; // areaId -> 设备区 Actor 最近一次推送的状态
 function lotMeta(suffix) { return CHILD_LOT_META[suffix] || { name: suffix || '子批', color: 0xff9800 }; }
 function isWaferName(v) { return typeof v === 'string' && v.length > 0 && v.length < 15 && v.indexOf('-') < 0; }
 function renderLotTree() {
@@ -680,7 +681,7 @@ function removeChildFoup(suffix) {
 function resetDemoState() {
   Object.keys(childFoups).forEach(removeChildFoup);
   childLots = {};
-  seenSagaKeys = {}; scrappedWafers = {}; waferLoc = {};
+  seenSagaKeys = {}; scrappedWafers = {}; waferLoc = {}; lastAreaStatus = {};
   lotMainCount = 0; scrappedCount = 0; splitCount = 0; mergeCount = 0;
   setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
   recCount = 0; ocapCount = 0; setKpi('kpiRec', 0); setKpi('kpiOcap', 0);
@@ -872,7 +873,9 @@ function handleEvent0(frame) {
     } else if (d.status === 'DOWN' && eqArea && BOARDS[eqArea]) {
       boardSet(eqArea, '⚠ 宕机', '#ff5252');
       narrate('⚠️', '<b>' + (AREA_NAME[eqArea] || eqArea) + '</b> 设备宕机！', 3200, eqArea, '#ff5252');
-    } else if (d.status === 'Idle' && eqArea && BOARDS[eqArea]) {
+    } else if (d.status === 'Idle' && eqArea && BOARDS[eqArea] &&
+               lastAreaStatus[eqArea] !== 'FINISHED' && lastAreaStatus[eqArea] !== 'UNLOADING') {
+      // 出站流程的状态屏由区域 Actor 驱动（UNLOADING→IDLE），此处仅兜底非 Actor 路径
       boardFlash(eqArea, '待机', '#0aa8a0', 4000);
     }
   } else if (t === 'FoupStateChanged') {
@@ -880,6 +883,21 @@ function handleEvent0(frame) {
       exitFoup();
       if (BOARDS[lastPadKey]) boardFlash(lastPadKey, '出站', '#ffd54f', 3000);
       narrate('📤', 'trackOut：FOUP 离开 <b>' + (AREA_NAME[lastPadKey] || '') + '</b>', 3000, lastPadKey, '#ffd54f');
+    }
+  } else if (t === 'AreaStateChanged') {
+    // 设备区 Actor 的权威状态：状态屏以此为准（覆盖旁白事件的推断值）
+    var aK = d.areaId;
+    lastAreaStatus[aK] = d.status;
+    if (BOARDS[aK]) {
+      var stMap = { IDLE: ['待机', '#0aa8a0'], LOADED: ['已装载 · 待加工', '#ffb300'],
+                    BUSY: ['⚙ 加工中', '#42a5f5'], FINISHED: ['完成 ✓ 待出站', '#00e676'],
+                    UNLOADING: ['📤 出站中', '#ffd54f'], DOWN: ['⚠ 宕机', '#ff5252'] };
+      var st = stMap[d.status];
+      if (st) boardSet(aK, st[0], st[1]);
+    }
+    if (d.status === 'DOWN') {
+      panelColor(aK, 0xff5252);
+      narrate('⚠️', '<b>' + (d.displayName || aK) + '</b> 设备宕机！' + (d.detail || ''), 3600, aK, '#ff5252');
     }
   } else if (t === 'SagaOperationEvent') {
     handleSaga(d);

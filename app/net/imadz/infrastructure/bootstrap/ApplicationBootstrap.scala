@@ -61,6 +61,9 @@ class ApplicationBootstrap @Inject()(
   initLotAggregate(sharding)
   initWorkOrderAggregate(sharding)
 
+  // --- 4b. 初始化设备区状态机 Actor（每区一个：合法迁移校验 + 权威状态自推送）---
+  initEquipmentAreaActors(sharding)
+
   // --- 5. 初始化 Fab Saga 状态聚合（步骤由 v3 共享协调器驱动）---
   initFabSagaTransactor(
     coordinatorEntityKey = FabSagaService.fabSagaCoordinatorKey,
@@ -146,6 +149,7 @@ class ApplicationBootstrap @Inject()(
         "hold" -> holdLotId, "scrap" -> scrapLotId,
         "rwk" -> reworkLotId
       ),
+      areaActorOf = net.imadz.application.actor.EquipmentAreaActor.Registry.entityRef,
       // Mirror FabDemoService.forM35ContextOcapRules so a recovered run evaluates the
       // same rule set the original run was started with.
       ocapRules = ocapRuleStore.getRules.filter { r =>

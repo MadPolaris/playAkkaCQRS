@@ -133,4 +133,11 @@ trait FabBootstrap {
     FabPipelineExecutionActor.init(sharding, contextFactory, stateFactory, stageResolver, recoveryPublisher)
   }
 
+  // --- 设备区状态机 Actor（每区一个分片实例：区域状态的唯一所有者，自行推送 AreaStateChanged）---
+  def initEquipmentAreaActors(sharding: ClusterSharding): Unit = {
+    val pub: net.imadz.domain.events.FabSimulationEvent => Unit =
+      ev => net.imadz.application.services.FabDemoPublisher.systemPublisher(ev)
+    net.imadz.application.actor.EquipmentAreaActor.Registry.init(sharding, pub)
+  }
+
 }

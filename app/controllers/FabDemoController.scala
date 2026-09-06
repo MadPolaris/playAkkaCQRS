@@ -132,6 +132,8 @@ class FabDemoController @Inject()(
         "eventType" -> evtType, "aggregateType" -> aggType, "aggregateId" -> aggId,
         "data" -> data, "timestamp" -> ts, "layer" -> layer)
       case GlobalStatusChanged(st, detail, phase) => Json.obj("status" -> st, "detail" -> detail, "phase" -> phase)
+      case AreaStateChanged(aid, name, st, eid, job, detail) =>
+        Json.obj("areaId" -> aid, "displayName" -> name, "status" -> st, "equipmentId" -> eid, "job" -> job, "detail" -> detail)
       case ScrapEvent(wid, reason) => Json.obj("waferId" -> wid, "reason" -> reason)
       case OcapActionTriggered(rid, rname, atype, detail, wafers) => Json.obj("ruleId" -> rid, "ruleName" -> rname, "actionType" -> atype, "detail" -> detail, "affectedWafers" -> wafers)
       case PipelineStageFailed(stageName, equipId, errorCode, detail, ts) => Json.obj("stageName" -> stageName, "equipId" -> equipId, "errorCode" -> errorCode, "detail" -> detail, "timestamp" -> ts)
