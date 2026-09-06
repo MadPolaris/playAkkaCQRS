@@ -9,7 +9,24 @@
   :root { --ok:#1a7f37; --bad:#c62828; --warn:#b26a00; --run:#1565c0; --bg:#f5f7fa; --card:#fff; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:"Microsoft YaHei",system-ui,sans-serif; background:var(--bg); color:#222; }
-  header { background:#0d2b52; color:#fff; padding:14px 24px; }
+  .site-nav { background:#0d2b52; padding:10px 24px; display:flex; align-items:center; gap:8px; }
+  .site-nav .logo { font-weight:700; font-size:0.9rem; color:#fff; text-decoration:none; }
+  .site-nav nav { display:flex; gap:8px; margin-left:auto; align-items:center; }
+  .site-nav nav a, .site-nav .nav-dropdown-btn { color:rgba(255,255,255,0.85); text-decoration:none;
+    font-size:0.8rem; padding:4px 10px; border-radius:4px; cursor:pointer; }
+  .site-nav nav a:hover, .site-nav .nav-dropdown-btn:hover { color:#fff; background:rgba(255,255,255,0.12); }
+  .site-nav .nav-dropdown { position:relative; }
+  .site-nav .nav-dropdown-menu { display:none; position:absolute; right:0; top:100%; background:#fff;
+    border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.18); padding:6px; min-width:230px; z-index:50; }
+  .site-nav .nav-dropdown:hover .nav-dropdown-menu { display:block; }
+  .site-nav .nav-dropdown-item { display:flex; align-items:center; gap:6px; padding:6px 10px;
+    color:#222; text-decoration:none; font-size:0.8rem; border-radius:4px; }
+  .site-nav .nav-dropdown-item:hover { background:#f0f3f7; }
+  .milestone-badge { font-size:0.62rem; font-weight:700; padding:1px 6px; border-radius:3px;
+    background:#eef1f5; color:#555; }
+  .badge-m1 { background:#e8f0fe; color:#1565c0; } .badge-m2 { background:#f3e8ff; color:#7c3aed; }
+  .badge-m3 { background:#fdf3e7; color:#b26a00; }
+  header { background:#0d2b52; color:#fff; padding:14px 24px; border-top:1px solid rgba(255,255,255,0.08); }
   header h1 { margin:0; font-size:20px; }
   header p { margin:4px 0 0; font-size:13px; opacity:.85; }
   main { max-width:1200px; margin:18px auto; padding:0 16px; display:grid; gap:16px; }
@@ -35,6 +52,29 @@
 </style>
 </head>
 <body>
+<div class="site-nav">
+  <a href="/" class="logo">Reactive MES Kernel</a>
+  <nav>
+    <a href="/">首页</a>
+    <div class="nav-dropdown">
+      <span class="nav-dropdown-btn">里程碑 ▾</span>
+      <div class="nav-dropdown-menu">
+        <a href="/m1">M1 · Saga TCC 协调器</a>
+        <a href="/m2">M2 · 流批 DAG 引擎</a>
+        <a href="/m3">M3 · 自愈工序编排</a>
+      </div>
+    </div>
+    <div class="nav-dropdown">
+      <span class="nav-dropdown-btn">实战演示 ▾</span>
+      <div class="nav-dropdown-menu">
+        <a href="/saga">M1 · Saga 演示场</a>
+        <a href="/fab-demo/m35">M3.5 · Fab 自愈演示</a>
+        <a href="/bank-batch" style="font-weight:700;color:#16a34a">✓ 银行批量（当前）</a>
+      </div>
+    </div>
+    <a href="/bank-batch" style="color:#9fe19f;font-weight:600">Bank Batch</a>
+  </nav>
+</div>
 <header>
   <h1>🏦 银行批量充值 + 基金申购 · Monarch 双链（规模演示）</h1>
   <p>100,000 客户 · 每批 2,000 · 共 50 批 · 并发 6 —— 充值链（合作银行）到账后自动衔接申购链（基金公司）；两条链均支持宕机断点续跑与失败自动重批；账务更新含 1% 瞬时故障注入（自动重试 → 人工异常池）</p>
