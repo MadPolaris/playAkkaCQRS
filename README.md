@@ -34,9 +34,14 @@ sbt run                # http://localhost:9000
 ### 3. Build Docker Image
 
 ```bash
-sbt docker:publishLocal     # build image to local Docker daemon
+sbt dockerRelease           # clean + build image to local Docker daemon (recommended)
 docker run -p 9000:9000 minimal-cqrs:latest
 ```
+
+> **JDK note**: the image runs on `eclipse-temurin:11-jre`. Always build with `sbt dockerRelease`
+> (it runs `clean` first). An incremental `sbt docker:publishLocal` can carry stale classes
+> compiled by a newer JDK into the image, causing `UnsupportedClassVersionError ... class file
+> version 61.0` at runtime.
 
 Push to a registry:
 

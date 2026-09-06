@@ -25,6 +25,12 @@ logLevel := Level.Warn
 // joins after Phase C. E2E gates (G2 live-infra) are manual. Any FAIL breaks the build.
 addCommandAlias("acceptance", "test")
 
+// Docker release builds must start from a clean target/: sbt incremental compilation
+// does not recompile unchanged sources when the build JDK changes, so stale classes
+// compiled by a newer JDK (e.g. class-file 61) can survive into the image and then
+// fail at runtime on the 11-jre base image (UnsupportedClassVersionError).
+addCommandAlias("dockerRelease", ";clean;docker:publishLocal")
+
 
 val akkaVersion = "2.6.20"
 val AkkaManagementVersion = "1.1.4"
@@ -46,7 +52,7 @@ lazy val commonSettings = Seq(
     "-Xlog-reflective-calls",
     "-Xlint"
   ),
-  Compile / javacOptions ++= Seq("-Xlint:unchecked", "-Xlint:deprecation"),
+  Compile / javacOptions ++= Seq("--release", "11", "-Xlint:unchecked", "-Xlint:deprecation"),
   resolvers ++= Seq(
     "Aliyun" at "https://maven.aliyun.com/repository/public/",
     "Huawei" at "https://repo.huaweicloud.com/repository/maven/"

@@ -34,9 +34,13 @@ sbt run                # http://localhost:9000
 ### 3. 构建 Docker 镜像
 
 ```bash
-sbt docker:publishLocal     # 构建镜像到本地 Docker daemon
+sbt dockerRelease           # clean 后构建镜像到本地 Docker daemon（推荐）
 docker run -p 9000:9000 minimal-cqrs:latest
 ```
+
+> **JDK 注意**：镜像运行时是 `eclipse-temurin:11-jre`。请始终用 `sbt dockerRelease` 打包
+>（会先 clean）。直接增量 `sbt docker:publishLocal` 可能把更高 JDK 编译的残留类打进镜像，
+> 运行时报 `UnsupportedClassVersionError ... class file version 61.0`。
 
 推送到镜像仓库：
 
