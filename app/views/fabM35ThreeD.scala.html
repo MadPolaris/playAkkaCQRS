@@ -529,7 +529,7 @@ function bubblePush(key, text, color) {
   var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
   sp.scale.set(4.6, 0.94, 1);
   var p = AREA_POS[key];
-  sp.position.set(p.x + (Math.random() * 0.8 - 0.4), (BOARD_Y[key] || 4.5) + 1.1, p.z);
+  sp.position.set(p.x + (Math.random() * 0.8 - 0.4), (BOARD_Y[key] || 4.5) + 3.4, p.z);
   sp.renderOrder = 50;
   scene.add(sp);
   list.push({ sp: sp, tex: tex, born: performance.now() });
@@ -544,7 +544,7 @@ Object.keys(EQUIP_BY_AREA).forEach(function(k) {
   var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
   sp.scale.set(6.4, 1.6, 1);
   var ly = BOARD_Y[k] || 4.5;
-  sp.position.set(AREA_POS[k].x, ly - 2.0, AREA_POS[k].z);
+  sp.position.set(AREA_POS[k].x, ly + 2.0, AREA_POS[k].z);   // 状态屏在名称上方，避免被设备遮挡
   scene.add(sp);
   BOARDS[k] = { cv: cv, ctx: cv.getContext('2d'), tex: tex };
   BUBBLES[k] = [];
@@ -929,9 +929,12 @@ function handleEvent0(frame) {
       var st = stMap[d.status];
       if (st) {
         var q = d.queueDepth || 0;
-        var btxt = st[0] + (q > 0 ? ' ⏳' + q : '');
-        boardSet(aK, btxt, st[1]);
-        bubblePush(aK, btxt, st[1]);   // 上浮气泡：3 秒内最近 3 条状态变更
+        boardSet(aK, st[0] + (q > 0 ? ' ⏳' + q : ''), st[1]);
+        // 气泡展示事件动作（Actor 迁移 detail），而非状态名
+        var evMap = { trackIn: '📥 进站', processing: '⚙ 开始加工', 'process done': '✅ 加工完成',
+                      'trackOut unloading': '📤 出站', 'trackOut (auto-finish busy job)': '📤 出站',
+                      'unload complete — equipment idle': '💤 转待机', reset: '♻ 复位' };
+        bubblePush(aK, evMap[d.detail] || (d.detail || d.status), st[1]);
       }
     }
     if (d.status === 'DOWN') {
