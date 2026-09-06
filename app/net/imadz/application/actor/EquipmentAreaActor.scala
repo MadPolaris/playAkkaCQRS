@@ -62,11 +62,12 @@ object EquipmentAreaActor {
   final case class TrackOut(equipmentId: String, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
   final case class ReportFault(equipmentId: String, code: String, detail: String) extends Command
   /** 加工完成信号：由管线的设备模拟器 JobCompleted 驱动（时钟源唯一） */
-  final case class FinishProcess(equipmentId: String) extends Command
+  final case class FinishProcess(equipmentId: String, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
   case object Reset extends Command
   final case class GetState(replyTo: ActorRef[AreaSnapshot]) extends Command
   private case object ProcessWatchdog extends Command
   private case object UnloadDone extends Command
+  private case object RepairDone extends Command
   /** 最短驻留门控的延迟重放载体（携带原始命令） */
   private case class DeferredCmd(inner: Command) extends Command
 
@@ -92,19 +93,27 @@ object EquipmentAreaActor {
   // ============================================================
   object Registry {
     @volatile private var shardingOpt: Option[ClusterSharding] = None
+    @volatile private var schedOpt: Option[akka.actor.typed.Scheduler] = None
 
     /** 全部区域（含 STOCKER 仓库与 LOG 物流指挥） */
     val AllAreas: Seq[String] =
       Seq("STOCKER", "CLEAN", "DIFF", "LITHO", "ETCH", "IMPL", "DEP", "CMP", "MET", "DRY", "LOG")
 
-    def init(sharding: ClusterSharding, publisher: FabSimulationEvent => Unit): Unit = {
+    def init(sharding: ClusterSharding, publisher: FabSimulationEvent => Unit,
+             scheduler: akka.actor.typed.Scheduler): Unit = {
       shardingOpt = Some(sharding)
+      schedOpt = Some(scheduler)
       sharding.init(Entity(EntityKey)(ctx => apply(ctx.entityId, publisher)))
     }
 
     /** 未初始化（如纯 JVM 单测）返回 None，调用方静默跳过 —— 保持旧行为兼容 */
     def entityRef(areaId: String): Option[akka.cluster.sharding.typed.scaladsl.EntityRef[Command]] =
       shardingOpt.map(_.entityRefFor(EntityKey, canonical(areaId)))
+
+    def scheduler: akka.actor.typed.Scheduler =
+      schedOpt.getOrElse(throw new IllegalStateException("EquipmentAreaActors not initialized"))
+
+    def schedulerOpt: Option[akka.actor.typed.Scheduler] = schedOpt
 
     /** 用例启动时清场：所有区域复位到 IDLE（区域状态持久化、跨 run 共享，需显式清场） */
     def resetAll(): Unit =
@@ -195,7 +204,8 @@ object EquipmentAreaActor {
               .thenRun { ns => publish(publisher, areaId, ns.status, ns.equipmentId, recipe, "queued", ns.queue.size) }
           }
 
-        case (_, FinishProcess(equipId)) if state.status == Busy =>
+        case (_, FinishProcess(equipId, replyTo)) if state.status == Busy =>
+          replyTo.foreach(_ ! AreaReply(accepted = true, Finished, ""))
           accept(Finished, state.equipmentId, state.job, "process done")
 
         case (_, ProcessWatchdog) if state.status == Busy =>
@@ -217,7 +227,12 @@ object EquipmentAreaActor {
           accept(Idle, state.equipmentId, "", "unload complete — equipment idle")
 
         case (_, ReportFault(equipId, code, detail)) =>
+          // 设备自愈：DOWN 5 秒后修复完成回 IDLE（演示流程不因随机故障长期卡死）
+          timers.startSingleTimer(RepairDone, 5.seconds)
           accept(Down, equipId, state.job, s"$code: $detail")
+
+        case (_, RepairDone) if state.status == Down =>
+          accept(Idle, state.equipmentId, "", "repair complete")
 
         case (_, Reset) =>
           Effect.persist(Transitioned(Idle, state.equipmentId, "", "reset"), QueueCleared)

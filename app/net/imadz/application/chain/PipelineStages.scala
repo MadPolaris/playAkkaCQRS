@@ -10,10 +10,14 @@ import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoSta
 import net.imadz.fab.protocol._
 import net.imadz.application.scenario.{DecisionConfig, FabSimulationScenario}
 import net.imadz.application.actor.EquipmentAreaActor
+import akka.actor.typed.{ActorRef, Scheduler}
+import akka.actor.typed.scaladsl.AskPattern
+import akka.util.Timeout
 import org.slf4j.LoggerFactory
 
 import java.util.UUID
 import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
 import scala.concurrent.duration._
 
 /**
@@ -26,6 +30,29 @@ import scala.concurrent.duration._
 object PipelineStages {
 
   private val logger = LoggerFactory.getLogger("PipelineStages")
+
+  /**
+   * 同步等待设备区 Actor 接受迁移（ask）：确认 LOADED/BUSY/FINISHED 等状态真实落定后流水线才继续，
+   * 消除"管线旁白 vs 区域状态"的时序错位。区域未初始化（单测）或 ask 超时/被拒时仅告警并继续，不中断演示。
+   */
+  private def askArea(ctx: FabDemoContext, areaType: String,
+                      mk: Option[ActorRef[EquipmentAreaActor.AreaReply]] => EquipmentAreaActor.Command): Future[Boolean] = {
+    ctx.areaActorOf(areaType) match {
+      case Some(ref) =>
+        implicit val scheduler: Scheduler = EquipmentAreaActor.Registry.scheduler
+        implicit val timeout: Timeout = 5.seconds
+        ref.ask((replyTo: ActorRef[EquipmentAreaActor.AreaReply]) => mk(Some(replyTo)))
+          .map { r =>
+            if (!r.accepted) logger.warn(s"[Area $areaType] command rejected: ${r.reason} (status=${r.status})")
+            r.accepted
+          }(ctx.ec)
+          .recover { case ex =>
+            logger.warn(s"[Area $areaType] ask failed (continuing): ${ex.getMessage}")
+            false
+          }(ctx.ec)
+      case None => Future.successful(true)
+    }
+  }
 
   // ====================================================================
   // Stage 1: Load FOUP
@@ -65,9 +92,10 @@ object PipelineStages {
     ctx.publish(FoupArrivedAtPort(ctx.foupId, equipId, portId))
     val areaType = if (equipId.contains("LITHO")) "LITHO" else if (equipId.contains("CDSEM")) "METROLOGY" else equipId
     ctx.publish(FoupStateChanged(ctx.foupId, "ON_PORT", activeCount(state), 0, equipId, lotId = ctx.scenario.scenarioId))
-    // 设备状态（Load）由设备区 Actor 在接受迁移后自行发布 —— 流水线只发命令，不发设备状态
-    ctx.areaActorOf(areaType).foreach(_ ! EquipmentAreaActor.TrackIn(equipId, s"lot-${s.ledgerSeq}"))
-    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = equipId))
+    // 同步等待设备区 Actor 接受迁移（IDLE→LOADED）；设备状态（Load）由 Actor 接受后自行发布
+    askArea(ctx, areaType, replyTo => EquipmentAreaActor.TrackIn(equipId, s"lot-${s.ledgerSeq}", replyTo)).map { _ =>
+      s.copy(ledgerSeq = s.ledgerSeq + 1, currentArea = equipId)
+    }(ctx.ec)
   }
 
   // ====================================================================
@@ -91,21 +119,25 @@ object PipelineStages {
     ctx.stageProgress("PROCESSING", s"$equipId processing", "PhaseProcess")
     val scaledMs = (ctx.scenario.litho.processingTime.toMillis / ctx.speedMultiplier).toLong
     ctx.lotRef ! RecordEquipmentJobStarted(equipId, recipeId, ctx.ignoreLotReply)
-    ctx.publish(ProcessingStarted(equipId, recipeId, scaledMs))
-    ctx.areaActorOf(areaType).foreach(_ ! EquipmentAreaActor.StartProcess(equipId, recipeId, scaledMs))
-    ctx.adapter.sendCommand(equipId, ProcessRecipe(recipeId)).flatMap {
-      case JobCompleted(jobId, _, _) =>
-        ctx.lotRef ! RecordEquipmentJobCompleted(equipId, jobId, success = true, ctx.ignoreLotReply)
-        ctx.publish(ProcessingCompleted(equipId, jobId, success = true, ""))
-        Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
-      case JobFailed(jobId, _, errorCode, detail) =>
-        val err = StageError("Process", Some(equipId), errorCode, detail)
-        ctx.publish(net.imadz.domain.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
-        ctx.publish(ProcessingCompleted(equipId, jobId, success = false, detail))
-        // 设备级故障：区域 Actor 进入 DOWN（自行发布），需复位后才能继续
-        ctx.areaActorOf(areaType).foreach(_ ! EquipmentAreaActor.ReportFault(equipId, errorCode, detail))
-        Future.failed(StageFailedException(err))
-      case _ => Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+    // 等区域领取任务（LOADED→BUSY）后再宣告开始加工
+    askArea(ctx, areaType, replyTo => EquipmentAreaActor.StartProcess(equipId, recipeId, scaledMs, replyTo)).flatMap { _ =>
+      ctx.publish(ProcessingStarted(equipId, recipeId, scaledMs))
+      ctx.adapter.sendCommand(equipId, ProcessRecipe(recipeId)).flatMap {
+        case JobCompleted(jobId, _, _) =>
+          ctx.lotRef ! RecordEquipmentJobCompleted(equipId, jobId, success = true, ctx.ignoreLotReply)
+          ctx.publish(ProcessingCompleted(equipId, jobId, success = true, ""))
+          askArea(ctx, areaType, replyTo => EquipmentAreaActor.FinishProcess(equipId, replyTo)).map { _ =>
+            s.copy(ledgerSeq = s.ledgerSeq + 1)
+          }(ctx.ec)
+        case JobFailed(jobId, _, errorCode, detail) =>
+          val err = StageError("Process", Some(equipId), errorCode, detail)
+          ctx.publish(net.imadz.domain.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
+          ctx.publish(ProcessingCompleted(equipId, jobId, success = false, detail))
+          // 设备级故障：区域 Actor 进入 DOWN（自行发布），5 秒自愈
+          ctx.areaActorOf(areaType).foreach(_ ! EquipmentAreaActor.ReportFault(equipId, errorCode, detail))
+          Future.failed(StageFailedException(err))
+        case _ => Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+      }(ctx.ec)
     }(ctx.ec)
   }
 
@@ -116,10 +148,11 @@ object PipelineStages {
     val s = emitLedger(state, s"PhaseTrackOut: $equipId port $portId", ctx)
     ctx.stageProgress("TRACK_OUT", s"$equipId:$portId unloading", "PhaseTrackOut")
     val areaType = if (equipId.contains("LITHO")) "LITHO" else if (equipId.contains("CDSEM")) "METROLOGY" else equipId
-    // 物理顺序：先卸料（FOUP 出腔体回端口）；设备状态（UNLOADING→IDLE）由区域 Actor 自行发布
-    ctx.publish(FoupStateChanged(ctx.foupId, "UNLOADED", activeCount(state), 0, equipId, lotId = ctx.scenario.scenarioId))
-    ctx.areaActorOf(areaType).foreach(_ ! EquipmentAreaActor.TrackOut(equipId))
-    Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+    // 物理顺序：先出站（区域 Actor: UNLOADING→IDLE），卸料完成后 FOUP 离开设备
+    askArea(ctx, areaType, replyTo => EquipmentAreaActor.TrackOut(equipId, replyTo)).map { _ =>
+      ctx.publish(FoupStateChanged(ctx.foupId, "UNLOADED", activeCount(state), 0, equipId, lotId = ctx.scenario.scenarioId))
+      s.copy(ledgerSeq = s.ledgerSeq + 1)
+    }(ctx.ec)
   }
 
   // ====================================================================
@@ -130,30 +163,32 @@ object PipelineStages {
     ctx.stageProgress("MEASURING", "CD measurement", "PhaseMeasure")
     val scaledMs = (ctx.scenario.cdSem.processingTime.toMillis / ctx.speedMultiplier).toLong
     ctx.lotRef ! RecordEquipmentJobStarted(equipId, "CD-MEASURE-001", ctx.ignoreLotReply)
-    ctx.publish(ProcessingStarted(equipId, "CD-MEASURE-001", scaledMs))
-    ctx.areaActorOf("MET").foreach(_ ! EquipmentAreaActor.StartProcess(equipId, "CD-MEASURE-001", scaledMs))
-    ctx.adapter.sendCommand(equipId, ProcessRecipe("CD-MEASURE-001")).flatMap {
-      case JobCompleted(jobId, _, MetrologyResult(_, waferMeasurements)) =>
-        ctx.lotRef ! RecordEquipmentJobCompleted(equipId, jobId, success = true, ctx.ignoreLotReply)
-        ctx.publish(ProcessingCompleted(equipId, jobId, success = true, ""))
-        ctx.areaActorOf("MET").foreach(_ ! EquipmentAreaActor.FinishProcess(equipId))
-        val cdValues: Map[String, Double] = waferMeasurements.map { case (wid, cd) => wid -> cd.measuredNm }
-        logger.info(s"[Measure] CDSEM returned ${cdValues.size} wafer CD values: ${cdValues.map { case (k, v) => s"$k=$v" }.mkString(", ")}")
-        val newWafers = s.wafers.map { case (wid, info) =>
-          val cdVal = cdValues.get(wid)
-          if (cdVal.isEmpty) logger.warn(s"[Measure] No CD value for wafer $wid in CDSEM response! Available: ${cdValues.keys.mkString(", ")}")
-          wid -> info.copy(cdValueHistory = info.cdValueHistory ++ cdVal.toList)
-        }
-        Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1, wafers = newWafers))
-      case JobFailed(jobId, _, errorCode, detail) =>
-        val err = StageError("Measure", Some(equipId), errorCode, detail)
-        ctx.publish(net.imadz.domain.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
-        ctx.publish(ProcessingCompleted(equipId, jobId, success = false, detail))
-        ctx.areaActorOf("MET").foreach(_ ! EquipmentAreaActor.ReportFault(equipId, errorCode, detail))
-        Future.failed(StageFailedException(err))
-      case other =>
-        logger.warn(s"[Measure] Unexpected CDSEM response (expected MetrologyResult): ${other.getClass.getSimpleName}")
-        Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+    askArea(ctx, "MET", replyTo => EquipmentAreaActor.StartProcess(equipId, "CD-MEASURE-001", scaledMs, replyTo)).flatMap { _ =>
+      ctx.publish(ProcessingStarted(equipId, "CD-MEASURE-001", scaledMs))
+      ctx.adapter.sendCommand(equipId, ProcessRecipe("CD-MEASURE-001")).flatMap {
+        case JobCompleted(jobId, _, MetrologyResult(_, waferMeasurements)) =>
+          ctx.lotRef ! RecordEquipmentJobCompleted(equipId, jobId, success = true, ctx.ignoreLotReply)
+          ctx.publish(ProcessingCompleted(equipId, jobId, success = true, ""))
+          askArea(ctx, "MET", replyTo => EquipmentAreaActor.FinishProcess(equipId, replyTo)).map { _ =>
+            val cdValues: Map[String, Double] = waferMeasurements.map { case (wid, cd) => wid -> cd.measuredNm }
+            logger.info(s"[Measure] CDSEM returned ${cdValues.size} wafer CD values: ${cdValues.map { case (k, v) => s"$k=$v" }.mkString(", ")}")
+            val newWafers = s.wafers.map { case (wid, info) =>
+              val cdVal = cdValues.get(wid)
+              if (cdVal.isEmpty) logger.warn(s"[Measure] No CD value for wafer $wid in CDSEM response! Available: ${cdValues.keys.mkString(", ")}")
+              wid -> info.copy(cdValueHistory = info.cdValueHistory ++ cdVal.toList)
+            }
+            s.copy(ledgerSeq = s.ledgerSeq + 1, wafers = newWafers)
+          }(ctx.ec)
+        case JobFailed(jobId, _, errorCode, detail) =>
+          val err = StageError("Measure", Some(equipId), errorCode, detail)
+          ctx.publish(net.imadz.domain.events.PipelineStageFailed(err.stageName, err.equipId, err.errorCode, err.detail))
+          ctx.publish(ProcessingCompleted(equipId, jobId, success = false, detail))
+          ctx.areaActorOf("MET").foreach(_ ! EquipmentAreaActor.ReportFault(equipId, errorCode, detail))
+          Future.failed(StageFailedException(err))
+        case other =>
+          logger.warn(s"[Measure] Unexpected CDSEM response (expected MetrologyResult): ${other.getClass.getSimpleName}")
+          Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
+      }(ctx.ec)
     }(ctx.ec)
   }
 
