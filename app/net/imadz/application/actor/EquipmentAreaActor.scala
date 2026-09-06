@@ -182,6 +182,17 @@ object EquipmentAreaActor {
         case (_, TrackIn(equipId, job, replyTo)) if state.status == Down =>
           reject(replyTo, "area is DOWN (reset required)")
 
+        case (_, TrackIn(equipId, job, replyTo)) if state.queue.nonEmpty =>
+          // 空闲领取：队列里有待加工任务（其它批次预排的），装载后立即领取队首
+          replyTo.foreach(_ ! AreaReply(accepted = true, Busy, "claimed queued task"))
+          val head = state.queue.head
+          timers.startSingleTimer(ProcessWatchdog, (math.max(100, head.durationMs) + 8000).millis)
+          Effect.persist(
+              Transitioned(Loaded, equipId, job, "trackIn"),
+              Claimed,
+              Transitioned(Busy, equipId, head.recipe, "claim queued task"))
+            .thenRun { ns => publish(publisher, areaId, ns.status, equipId, ns.job, "processing", ns.queue.size) }
+
         case (_, TrackIn(equipId, job, replyTo)) =>
           replyTo.foreach(_ ! AreaReply(accepted = true, Loaded, ""))
           accept(Loaded, equipId, job, "trackIn")
@@ -197,7 +208,8 @@ object EquipmentAreaActor {
           if (claimNow) {
             // 看门狗：管线应在加工完成后发 FinishProcess；若信号丢失（宕机等）超时自动完成
             timers.startSingleTimer(ProcessWatchdog, (math.max(100, durationMs) + 8000).millis)
-            Effect.persist(Enqueued(recipe, durationMs, recipe), Transitioned(Busy, equipId, recipe, "processing"))
+            // 注意：Enqueued 后必须 Claimed，否则队列累积幽灵任务，队首被占导致后续永久卡在已装载
+            Effect.persist(Enqueued(recipe, durationMs, recipe), Claimed, Transitioned(Busy, equipId, recipe, "processing"))
               .thenRun { ns => publish(publisher, areaId, ns.status, equipId, recipe, "processing", ns.queue.size) }
           } else {
             Effect.persist(Enqueued(recipe, durationMs, recipe))
@@ -246,11 +258,11 @@ object EquipmentAreaActor {
       }
     }
 
-    // 外层：最短驻留门控 —— 过早到来的可见迁移延迟到驻留期满；故障/复位/查询立即执行
+    // 外层：最短驻留门控 —— 过早到来的可见迁移延迟到驻留期满；内部定时器/故障/复位/查询立即执行
     (state, cmd) => cmd match {
-      case _: ReportFault | Reset | _: GetState =>
+      case DeferredCmd(inner) =>
         lastMoveAt = System.currentTimeMillis()
-        run(state, cmd)
+        run(state, inner)
       case _: TrackIn | _: StartProcess | _: FinishProcess | _: TrackOut =>
         val elapsed = System.currentTimeMillis() - lastMoveAt
         if (elapsed >= MinStateDwellMs) {
@@ -260,9 +272,7 @@ object EquipmentAreaActor {
           timers.startSingleTimer(DeferredCmd(cmd), (MinStateDwellMs - elapsed).millis)
           Effect.none
         }
-      case DeferredCmd(inner) =>
-        lastMoveAt = System.currentTimeMillis()
-        run(state, inner)
+      case _ => run(state, cmd)   // 内部定时器（Watchdog/UnloadDone/RepairDone）、ReportFault、Reset、GetState
     }
   }
 
