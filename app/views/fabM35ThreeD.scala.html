@@ -487,10 +487,12 @@ Object.keys(AREA_T).forEach(function(k) {
 
 /* ===== 工位状态屏（实时显示 待机/进站/加工中/完成/宕机） ===== */
 var BOARDS = {};
+var boardTimers = {};   // boardFlash 回落定时器（须在 boardSet 首次调用前赋值）
 var BOARD_Y = { CLEAN: 4.6, DIFF: 5.7, LITHO: 4.9, ETCH: 5.1, IMPL: 4.4, DEP: 4.5,
                 CMP: 4.6, MET: 4.3, DRY: 4.3, STOCKER: 6.8, LOG: 7.8 };
 function boardSet(key, text, color) {
   var b = BOARDS[key]; if (!b) return;
+  clearTimeout(boardTimers[key]);   // 新状态接管屏幕：作废任何待触发的“回落待机”定时器
   var c = b.ctx;
   c.clearRect(0, 0, 256, 64);
   c.fillStyle = 'rgba(8,14,24,0.72)'; c.fillRect(0, 0, 256, 64);
@@ -555,7 +557,6 @@ Object.keys(EQUIP_BY_AREA).forEach(function(k) {
 var foupState = 'hidden';        // hidden | riding | docked | entering | inside | exiting
 var lastPadKey = 'STOCKER';      // 当前所在工位（装卸端口）
 var foupAnchor = new THREE.Vector3();
-var boardTimers = {};
 function liftFoup() { foupState = 'riding'; foup.visible = true; beaconColor(0xffb300); }
 function dockFoup(areaKey) {
   lastPadKey = PADS[areaKey] ? areaKey : 'STOCKER';
