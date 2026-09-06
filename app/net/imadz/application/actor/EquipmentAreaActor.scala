@@ -53,6 +53,8 @@ object EquipmentAreaActor {
   // Protocol
   // ============================================================
   // Protocol（跨分片/跨节点消息与持久化状态均需可序列化）
+  // 持久化事件的 serialVersionUID 固定在伴生对象（static 字段才生效），
+  // 类结构演进（新增字段）不再破坏旧事件反序列化
   // ============================================================
   sealed trait Command extends net.imadz.common.CborSerializable
   final case class TrackIn(equipmentId: String, job: String, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
@@ -81,6 +83,9 @@ object EquipmentAreaActor {
   final case class QueuedTask(recipe: String, durationMs: Long, job: String) extends net.imadz.common.CborSerializable
   final case class AreaState(status: String, equipmentId: String, job: String,
                              queue: Vector[QueuedTask] = Vector.empty) extends net.imadz.common.CborSerializable
+
+  object Transitioned { private val serialVersionUID = 1L }
+  object Enqueued { private val serialVersionUID = 1L }
 
   // ============================================================
   // Sharding init + 静态注册表（PipelineStages 通过 entityRef 下发迁移命令）

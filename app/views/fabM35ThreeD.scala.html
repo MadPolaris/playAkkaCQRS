@@ -526,10 +526,11 @@ function bubblePush(key, text, color) {
   c.fillStyle = '#e6edf3'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillText(text, 128, 27);
   var tex = new THREE.CanvasTexture(cv);
-  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.95, depthWrite: false }));
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
   sp.scale.set(4.6, 0.94, 1);
   var p = AREA_POS[key];
-  sp.position.set(p.x + (Math.random() * 0.8 - 0.4), (BOARD_Y[key] || 4.5) - 0.1, p.z);
+  sp.position.set(p.x + (Math.random() * 0.8 - 0.4), (BOARD_Y[key] || 4.5) + 1.1, p.z);
+  sp.renderOrder = 50;
   scene.add(sp);
   list.push({ sp: sp, tex: tex, born: performance.now() });
   while (list.length > 3) {   // 只留最近 3 条
@@ -543,7 +544,7 @@ Object.keys(EQUIP_BY_AREA).forEach(function(k) {
   var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
   sp.scale.set(6.4, 1.6, 1);
   var ly = BOARD_Y[k] || 4.5;
-  sp.position.set(AREA_POS[k].x, ly - 1.2, AREA_POS[k].z);
+  sp.position.set(AREA_POS[k].x, ly - 2.0, AREA_POS[k].z);
   scene.add(sp);
   BOARDS[k] = { cv: cv, ctx: cv.getContext('2d'), tex: tex };
   BUBBLES[k] = [];
