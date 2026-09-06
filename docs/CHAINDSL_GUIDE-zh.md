@@ -53,18 +53,21 @@ M2 的做法：每条业务生成一套专属 EventSourcedBehavior FSM（30+ Jav
 │                           FabChainExecutor、FabMeasurementClassifier（M3 复用）     │
 └────────────────────────────────────────┬───────────────────────────────────────────┘
                                          │ 只依赖 scala.concurrent.Future
-┌────────────────────── dag-engine-core/（无 Akka 依赖） ────────────────────────────┐
-│  net.imadz.m25.component                                                           │
-│    SubBatchPipeline     6 个阶段接口 + 数据契约                                     │
-│    SubBatchProcessor    按序执行一个批次的阶段序列                                   │
-│    ResultClassifier     三分类 + ErrorCodeBasedClassifier 通用实现                  │
+┌──────────── monarch-core/（引擎，零 Akka）+ dag-engine-core/ ───────────────────────┐
+│  net.imadz.monarch (monarch-core)                                                    │
+│    Monarch              可断点续跑阶段队列引擎：游标恢复、世代号、开放队列           │
+│  net.imadz.m25.component                                                             │
+│    SubBatchPipeline     6 个阶段接口 + 数据契约                                      │
+│    BankChain            六阶段的 Monarch 队列（现行执行器）                          │
+│    SubBatchProcessor    legacy for 推导执行器（M25PlusDemo 教学保留）                │
+│    ResultClassifier     三分类 + ErrorCodeBasedClassifier 通用实现                   │
 │    ReconfirmHandler     通过外部查证落定"可疑"项                                     │
-│    ReBatchRouter        失败路由决策（Process Manager 模式）                        │
-│    AreaScheduler        PhysicalConstraints 约束下的窗口式成批                      │
-└─────────────────────────────────────────────────────────────────────────────────────┘
+│    ReBatchRouter        失败路由决策（Process Manager 模式）                         │
+│    AreaScheduler        PhysicalConstraints 约束下的窗口式成批                       │
+└──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`dag-engine-core` **不依赖 Akka**——每个组件都是一个 trait 加数据 case class，返回 `Future`。正因如此，同一套组件既能被分片 Actor 使用，也能被 Play Controller 或 Fab 流水线直接复用。
+`monarch-core`（引擎）**零 Akka 依赖**——组件全是 trait + 数据 case class，返回 `Future`。正因如此，同一套组件既能被分片 Actor 使用，也能被 Play Controller 或 Fab 流水线直接复用。`BankChain.monarch(pipeline, hooks, runToken)` 是现行执行入口；`SubBatchProcessor` 为教学演示保留的 legacy 执行器。
 
 ## 3. 批次生命周期
 

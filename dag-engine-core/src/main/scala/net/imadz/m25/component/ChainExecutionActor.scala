@@ -354,11 +354,12 @@ object ChainExecutionActor {
         Effect.none
 
       // ---- Already idle/completed/failed, reject new Start ----
-      case (s, StartExecution(batchId, _, _)) =>
+      case (s, StartExecution(batchId, _, replyTo)) =>
         ctx.log.warn(
           s"[ChainExecutionActor:$chainId] Rejecting StartExecution for batch {} in state {}",
           batchId, s.getClass.getSimpleName
         )
+        replyTo ! ExecutionRejected(batchId, "start", s"state=${s.getClass.getSimpleName}")
         Effect.none
 
       case _ =>
@@ -408,9 +409,21 @@ object ChainExecutionActor {
       itemLoader: String => Future[Seq[Any]],
       observer: ChainExecutionObserver = ChainExecutionObserver.nop
   )(implicit ec: ExecutionContext): Unit = {
+    initFor(sharding, pipelineFor = _ => pipeline, itemLoaderFor = itemLoader, observerFor = _ => observer)
+  }
+
+  /** Per-entityId dispatch variant: one entity type, many chains — pipeline / itemLoader /
+    * observer are chosen by the entityId prefix (e.g. "bank-recharge-..." vs "bank-purchase-..."). */
+  def initFor(
+      sharding: akka.cluster.sharding.typed.scaladsl.ClusterSharding,
+      pipelineFor: String => SubBatchPipeline[Any, Any],
+      itemLoaderFor: String => Future[Seq[Any]],
+      observerFor: String => ChainExecutionObserver
+  )(implicit ec: ExecutionContext): Unit = {
     sharding.init(
       Entity(EntityKey) { entityContext =>
-        apply(entityContext.entityId, pipeline, itemLoader, observer)
+        val id = entityContext.entityId
+        apply(id, pipelineFor(id), itemLoaderFor, observerFor(id))
       }
     )
   }

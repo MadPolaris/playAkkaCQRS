@@ -53,10 +53,14 @@ The M2 approach generated a dedicated set of EventSourcedBehavior FSMs per busin
 │                           FabChainExecutor, FabMeasurementClassifier (M3 reuse)          │
 └──────────────────────────────────────────┬───────────────────────────────────────────────┘
                                            │ depends only on scala.concurrent.Future
-┌──────────────────────────── dag-engine-core/ (no Akka dependency) ───────────────────────┐
+┌──────────────────── monarch-core/ (engine, no Akka) + dag-engine-core/ ──────────────────┐
+│  net.imadz.monarch (monarch-core)                                                        │
+│    Monarch              resumable stage-queue engine: cursor resume, generation          │
+│                         tokens, open queue (injectHead/appendTail)                       │
 │  net.imadz.m25.component                                                                 │
 │    SubBatchPipeline     the 6 stage interfaces + their data contracts                    │
-│    SubBatchProcessor    executes the stage sequence for one batch                        │
+│    BankChain            the six stages as a Monarch queue (current executor)             │
+│    SubBatchProcessor    legacy for-comprehension executor (M25PlusDemo teaching)         │
 │    ResultClassifier     three-way classification + ErrorCodeBasedClassifier              │
 │    ReconfirmHandler     resolves Suspicious items via external verification              │
 │    ReBatchRouter        failure routing decisions (Process Manager)                      │
@@ -64,7 +68,7 @@ The M2 approach generated a dedicated set of EventSourcedBehavior FSMs per busin
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`dag-engine-core` has **no Akka dependency** — every component is a trait plus data case classes returning `Future`. That is what makes the same components reusable from a sharded actor, a Play controller, or the Fab pipeline.
+`monarch-core` (the engine) has **no Akka dependency** — every component is a trait plus data case classes returning `Future`. That is what makes the same components reusable from a sharded actor, a Play controller, or the Fab pipeline. `BankChain.monarch(pipeline, hooks, runToken)` is the current execution entry; `SubBatchProcessor` is the legacy for-comprehension executor kept for the teaching demo.
 
 ## 3. Batch Lifecycle
 

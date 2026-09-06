@@ -126,8 +126,15 @@ lazy val dagEngineCore = (project in file("dag-engine-core"))
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-persistence-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion,
-      "org.scalatest" %% "scalatest" % "3.2.15" % Test
-    )
+      "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
+      "com.typesafe.akka" %% "akka-persistence-testkit" % akkaVersion % Test,
+      // protobuf 运行时：common-core 的 proto 事件类在恢复/序列化路径上会触及
+      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % Test,
+      "org.scalatest" %% "scalatest" % "3.2.15" % Test,
+      "ch.qos.logback" % "logback-classic" % "1.4.5" % Test
+    ),
+    // protobuf 生成类在依赖层，默认分层类加载器会找不到 scalapb.GeneratedMessage
+    Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat
   )
 
 lazy val fabSimulation = (project in file("fab-simulation"))
