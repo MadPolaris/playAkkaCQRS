@@ -63,6 +63,8 @@ object EquipmentAreaActor {
   final case class GetState(replyTo: ActorRef[AreaSnapshot]) extends Command
   private case object ProcessWatchdog extends Command
   private case object UnloadDone extends Command
+  /** 最短驻留门控的延迟重放载体（携带原始命令） */
+  private case class DeferredCmd(inner: Command) extends Command
 
   final case class AreaReply(accepted: Boolean, status: String, reason: String)
   final case class AreaSnapshot(areaId: String, status: String, equipmentId: String, job: String)
@@ -122,7 +124,12 @@ object EquipmentAreaActor {
   private def commandHandler(areaId: String, publisher: FabSimulationEvent => Unit,
                              timers: TimerScheduler[Command], ctx: ActorContext[Command]
                             ): (AreaState, Command) => Effect[Event, AreaState] = {
-    (state, cmd) => {
+    // 状态最短驻留（演示节奏）：可见状态至少停留 MinStateDwellMs，过早到来的下一个迁移
+    // 会被延迟执行。仅内存时间戳，actor 重启后重新起算（不影响状态正确性）。
+    val MinStateDwellMs = 1800L
+    var lastMoveAt = 0L
+
+    def run(state: AreaState, cmd: Command): Effect[Event, AreaState] = {
       def accept(next: String, equipId: String, job: String, detail: String): Effect[Event, AreaState] =
         Effect.persist(Transitioned(next, equipId, job, detail)).thenRun { newState =>
           publish(publisher, areaId, newState.status, newState.equipmentId, newState.job, detail)
@@ -170,7 +177,7 @@ object EquipmentAreaActor {
           // 出站是有物理过程的：FOUP 从腔体搬回装载端口（UNLOADING），完成后设备才回到 IDLE 待机。
           // BUSY 下的 TrackOut 视为隐式完结加工（模拟器回调与管线线程跨发送者，FinishProcess 可能晚到）
           replyTo.foreach(_ ! AreaReply(accepted = true, Unloading, ""))
-          timers.startSingleTimer(UnloadDone, 900.millis)
+          timers.startSingleTimer(UnloadDone, 1500.millis)
           accept(Unloading, equipId, "",
             if (state.status == Busy) "trackOut (auto-finish busy job)" else "trackOut unloading")
 
@@ -192,6 +199,25 @@ object EquipmentAreaActor {
 
         case (_, ProcessWatchdog) => Effect.none // 非 BUSY 收到的迟到看门狗：忽略
       }
+    }
+
+    // 外层：最短驻留门控 —— 过早到来的可见迁移延迟到驻留期满；故障/复位/查询立即执行
+    (state, cmd) => cmd match {
+      case _: ReportFault | Reset | _: GetState =>
+        lastMoveAt = System.currentTimeMillis()
+        run(state, cmd)
+      case _: TrackIn | _: StartProcess | _: FinishProcess | _: TrackOut =>
+        val elapsed = System.currentTimeMillis() - lastMoveAt
+        if (elapsed >= MinStateDwellMs) {
+          lastMoveAt = System.currentTimeMillis()
+          run(state, cmd)
+        } else {
+          timers.startSingleTimer(DeferredCmd(cmd), (MinStateDwellMs - elapsed).millis)
+          Effect.none
+        }
+      case DeferredCmd(inner) =>
+        lastMoveAt = System.currentTimeMillis()
+        run(state, inner)
     }
   }
 
