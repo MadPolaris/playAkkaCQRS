@@ -1,0 +1,365 @@
+@()
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fab M3.5 · 3D Digital Twin</title>
+<style>
+  * { box-sizing:border-box; margin:0; }
+  body { font-family:"Microsoft YaHei",system-ui,sans-serif; background:#0b1220; color:#e6edf3; overflow:hidden; }
+  .site-nav { position:fixed; top:0; left:0; right:0; z-index:30; background:rgba(11,18,32,0.92); backdrop-filter:blur(10px);
+    padding:8px 20px; display:flex; align-items:center; gap:8px; border-bottom:1px solid rgba(255,255,255,0.08); }
+  .site-nav .logo { font-weight:700; font-size:0.9rem; color:#fff; text-decoration:none; }
+  .site-nav nav { display:flex; gap:6px; margin-left:auto; align-items:center; }
+  .site-nav nav a { color:rgba(255,255,255,0.8); text-decoration:none; font-size:0.78rem; padding:4px 10px; border-radius:4px; }
+  .site-nav nav a:hover, .site-nav nav a.here { color:#fff; background:rgba(255,255,255,0.1); }
+  .site-nav nav a.here { color:#9fe19f; font-weight:600; }
+  #stage3d { position:fixed; inset:0; z-index:1; }
+  .hud { position:fixed; z-index:20; background:rgba(13,23,38,0.85); border:1px solid rgba(255,255,255,0.1);
+    border-radius:10px; backdrop-filter:blur(8px); padding:10px 12px; font-size:12px; }
+  #hudLeft { left:14px; top:64px; width:250px; }
+  #hudRight { right:14px; top:64px; width:300px; max-height:55vh; overflow-y:auto; }
+  .hud h3 { margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#8fb8e8; }
+  .chip { display:inline-block; padding:3px 10px; border-radius:12px; margin:2px; font-size:11px;
+    background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); }
+  .chip.on { background:rgba(66,165,245,0.25); border-color:#42a5f5; color:#cfe8ff; }
+  .chip.done { background:rgba(26,127,55,0.25); border-color:var(--ok,1a7f37); color:#c9f0cf; }
+  .chip.fail { background:rgba(198,40,40,0.3); border-color:#c62828; color:#ffd2cd; }
+  .feed { max-height:50vh; overflow-y:auto; font-family:Consolas,monospace; font-size:11px; line-height:1.8; color:#9fe19f; }
+  .feed .err { color:#ff9b8a; }
+  .kpi { display:flex; gap:8px; margin:6px 0; flex-wrap:wrap; }
+  .kpi .chip b { color:#fff; }
+  #banner { position:fixed; top:52px; left:50%; transform:translateX(-50%); z-index:40;
+    padding:10px 22px; border-radius:10px; font-size:14px; font-weight:600; display:none; }
+  #banner.recovering { display:block; background:rgba(255,152,0,0.92); color:#1a1a1a; }
+  #banner.crash { display:block; background:rgba(198,40,40,0.92); color:#fff; }
+  #banner.done { display:block; background:rgba(26,127,55,0.92); color:#fff; }
+  .btnrow { display:flex; gap:8px; margin-top:8px; }
+  .btnrow button { flex:1; padding:8px 0; border:none; border-radius:6px; cursor:pointer; font-size:12px; font-weight:600; }
+  #btnStart { background:#1a7f37; color:#fff; } #btnCrash { background:#c62828; color:#fff; }
+  #btnStart:disabled { background:#455a64; }
+  #btnCam { background:#37474f; color:#cfd8dc; }
+  .hint { font-size:11px; color:#789; margin-top:6px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="site-nav">
+  <a href="/" class="logo">Reactive MES Kernel</a>
+  <nav>
+    <a href="/">首页</a>
+    <a href="/saga">M1 Saga</a>
+    <a href="/m2">M2 DAG</a>
+    <a href="/m3">M3</a>
+    <a href="/fab-demo/m35">2D 演示</a>
+    <a href="/bank-batch">银行批量</a>
+    <a href="/fab-demo/m35-3d" class="here">3D 孪生</a>
+  </nav>
+</div>
+
+<div id="stage3d"></div>
+<div id="banner"></div>
+
+<div class="hud" id="hudLeft">
+  <h3>工序游标（17 道链）</h3>
+  <div id="stageChips"></div>
+  <h3 style="margin-top:12px">运行状态</h3>
+  <div class="kpi">
+    <span class="chip">在途 <b id="kpiWip">0</b></span>
+    <span class="chip">恢复 <b id="kpiRec">0</b></span>
+    <span class="chip">OCAP <b id="kpiOcap">0</b></span>
+  </div>
+  <div class="btnrow">
+    <button id="btnStart">▶ 启动自愈演示</button>
+    <button id="btnCrash">⚡ 注入宕机</button>
+  </div>
+  <div class="btnrow">
+    <button id="btnCam">🎥 跟随 OHT</button>
+  </div>
+</div>
+
+<div class="hud" id="hudRight">
+  <h3>事件流</h3>
+  <div class="feed" id="feed"></div>
+</div>
+
+<script>
+window.__banner = function(text, cls) {
+  const b = document.getElementById("banner");
+  b.textContent = text; b.className = "banner " + (cls || "");
+  clearTimeout(b._t); b._t = setTimeout(function(){ b.className = ""; }, 6000);
+};
+window.__feed = function(line, isErr) {
+  const el = document.getElementById("feed");
+  const div = document.createElement("div");
+  if (isErr) div.className = "err";
+  div.textContent = line; el.prepend(div);
+  while (el.children.length > 60) el.removeChild(el.lastChild);
+};
+window.__setKpi = function(id, v) { const e = document.getElementById(id); if (e) e.textContent = v; };
+window.__chipState = function(i, cls) {
+  const el = document.getElementById("chip-" + i); if (el) el.className = "chip " + cls;
+};
+window.__activeWo = null;
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+var rngSeed = 42;
+function rng() { rngSeed = (rngSeed * 1103515245 + 12345) % 2147483648; return rngSeed / 2147483648; }
+
+const container = document.getElementById('stage3d');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+container.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b1220);
+scene.fog = new THREE.Fog(0x0b1220, 42, 130);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth/innerHeight, 0.1, 300);
+camera.position.set(2, 17, 21);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 1, 0);
+
+scene.add(new THREE.AmbientLight(0xbfd4ff, 0.55));
+var keyLight = new THREE.DirectionalLight(0xffffff, 1.5);
+keyLight.position.set(14, 28, 12);
+keyLight.castShadow = true;
+keyLight.shadow.mapSize.set(2048, 2048);
+keyLight.shadow.camera.left = -32; keyLight.shadow.camera.right = 32;
+keyLight.shadow.camera.top = 32; keyLight.shadow.camera.bottom = -32;
+scene.add(keyLight);
+var fillLight = new THREE.PointLight(0x88aaff, 0.45, 70);
+fillLight.position.set(-14, 12, -10); scene.add(fillLight);
+
+var floor = new THREE.Mesh(
+  new THREE.PlaneGeometry(48, 32),
+  new THREE.MeshStandardMaterial({ color: 0x1a2634, roughness: 0.85, metalness: 0.1 }));
+floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+var gridHelper = new THREE.GridHelper(48, 48, 0x2a3b52, 0x1c2a3c);
+gridHelper.position.y = 0.01; scene.add(gridHelper);
+
+var wallMat = new THREE.MeshStandardMaterial({ color: 0x14202e, transparent: true, opacity: 0.35, roughness: 0.4 });
+[[0,-16,48,0.3],[0,16,48,0.3]].forEach(function(p) {
+  var wall = new THREE.Mesh(new THREE.BoxGeometry(p[2], 6, p[3]), wallMat);
+  wall.position.set(p[0], 3, p[1] !== undefined ? 0 : 0); wall.position.z = p[1] !== undefined ? 0 : 0;
+  scene.add(wall);
+});
+[-24, 24].forEach(function(x) {
+  var wall = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 32), wallMat);
+  wall.position.set(x, 3, 0); scene.add(wall);
+});
+[4, -4].forEach(function(z) {
+  var truss = new THREE.Mesh(new THREE.BoxGeometry(46, 0.45, 0.8),
+    new THREE.MeshStandardMaterial({ color: 0x37474f, metalness: 0.8, roughness: 0.3 }));
+  truss.position.set(0, 5.6, z); scene.add(truss);
+});
+
+/* ===== 站位 ===== */
+var AREA_POS = {
+  STOCKER:  new THREE.Vector3(-15, 0, 0),
+  LITHO:    new THREE.Vector3(-3.5, 0, 0),
+  CDSEM:    new THREE.Vector3( 9,  0, 0),
+  REWORK:   new THREE.Vector3( 3,  0, 8.5),
+  STOCKER2: new THREE.Vector3( 15, 0, 0)
+};
+
+function equipmentBase(w, h, d, color) {
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
+    new THREE.MeshStandardMaterial({ color: color, metalness: 0.6, roughness: 0.35 }));
+  body.position.y = h / 2; body.castShadow = true; g.add(body);
+  var panel = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.5, 0.7),
+    new THREE.MeshStandardMaterial({ color: 0x0aa8a0, emissive: 0x0aa8a0, emissiveIntensity: 0.7 }));
+  panel.position.set(0, h * 0.72, d / 2 + 0.01); g.add(panel);
+  g.userData.panel = panel;
+  return g;
+}
+
+var litho = equipmentBase(5, 3.4, 3, 0x283593);
+var win = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1),
+  new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x40c4ff, emissiveIntensity: 0.9 }));
+win.position.set(0, 2.2, 1.52); litho.add(win);
+litho.userData.win = win;
+litho.position.copy(AREA_POS.LITHO); scene.add(litho);
+
+var cdsem = new THREE.Group();
+var col = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, 2.6, 16),
+  new THREE.MeshStandardMaterial({ color: 0x37474f, metalness: 0.75, roughness: 0.3 }));
+col.position.y = 1.3; col.castShadow = true; cdsem.add(col);
+var chamber = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 2.2),
+  new THREE.MeshStandardMaterial({ color: 0x263238, metalness: 0.5, roughness: 0.4 }));
+chamber.position.y = 0.55; cdsem.add(chamber);
+cdsem.position.copy(AREA_POS.CDSEM); scene.add(cdsem);
+
+var stocker = new THREE.Group();
+var shelfFrame = new THREE.Mesh(new THREE.BoxGeometry(4.6, 3.2, 1.4),
+  new THREE.MeshStandardMaterial({ color: 0x1c2a3a, metalness: 0.4, roughness: 0.5 }));
+shelfFrame.position.y = 1.6; stocker.add(shelfFrame);
+stocker.position.copy(AREA_POS.STOCKER); scene.add(stocker);
+
+var rework = equipmentBase(2.6, 1.8, 2, 0x4e342e);
+rework.position.copy(AREA_POS.REWORK); scene.add(rework);
+
+/* ===== OHT 天车 + FOUP ===== */
+var trackMat = new THREE.MeshStandardMaterial({ color: 0x546e7a, metalness: 0.8, roughness: 0.3 });
+var trackPts = [AREA_POS.STOCKER, AREA_POS.LITHO, AREA_POS.CDSEM, AREA_POS.STOCKER2]
+  .map(function(p) { return new THREE.Vector3(p.x, 5.15, p.z); });
+var track = new THREE.Mesh(
+  new THREE.TubeGeometry(new THREE.CatmullRomCurve3(trackPts, false, 'catmullrom', 0.1), 140, 0.09, 8),
+  trackMat);
+scene.add(track);
+
+var oht = new THREE.Group();
+var bridge = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.28, 0.7),
+  new THREE.MeshStandardMaterial({ color: 0xffb300, metalness: 0.6, roughness: 0.3 }));
+oht.add(bridge);
+var trolley = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
+  new THREE.MeshStandardMaterial({ color: 0xffcc80 }));
+trolley.position.y = -0.45; oht.add(trolley);
+var beacon = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10),
+  new THREE.MeshStandardMaterial({ color: 0x1a7f37, emissive: 0x1a7f37, emissiveIntensity: 1.2 }));
+beacon.position.set(0, 0.3, 0); oht.add(beacon); oht.userData.beacon = beacon;
+scene.add(oht);
+
+var foup = new THREE.Group();
+var foupBody = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.55, 0.55),
+  new THREE.MeshStandardMaterial({ color: 0xeceff1, metalness: 0.3, roughness: 0.4 }));
+foupBody.position.y = -0.85; foup.add(foupBody);
+var led = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8),
+  new THREE.MeshStandardMaterial({ color: 0x00e676, emissive: 0x00e676, emissiveIntensity: 1.5 }));
+led.position.set(0.2, -0.62, 0.28); foup.add(led); foup.userData.led = led;
+foup.visible = false; oht.add(foup);
+
+/* ===== 事件驱动（真实 WS 事件流） ===== */
+var activeWo = null;
+var wipCount = 0, recCount = 0, ocapCount = 0;
+var moveAnim = null;
+
+var feedEl = document.getElementById('feed');
+function feedAdd(line, isErr) {
+  var div = document.createElement('div');
+  if (isErr) div.className = 'err';
+  div.textContent = line; feedEl.prepend(div);
+  while (feedEl.children.length > 60) feedEl.removeChild(feedEl.lastChild);
+}
+function banner(text, cls) {
+  var b = document.getElementById('banner');
+  b.textContent = text; b.className = 'banner ' + (cls || '');
+  clearTimeout(b._t); b._t = setTimeout(function(){ b.className = ''; }, 6000);
+}
+function setKpi(id, v) { var e = document.getElementById(id); if (e) e.textContent = v; }
+
+var AREA_KEYS = ['STOCKER', 'LITHO', 'CDSEM'];
+var equipByArea = { LITHO: litho, CDSEM: cdsem };
+
+function beaconColor(c) {
+  oht.userData.beacon.material.color.set(c);
+  oht.userData.beacon.material.emissive.set(c);
+}
+function panelColor(area, color) {
+  var e = equipByArea[area]; if (!e || !e.userData.panel) return;
+  e.userData.panel.material.color.set(color);
+  e.userData.panel.material.emissive.set(color);
+}
+
+var moveAnim = null;
+function moveOHT(fromArea, toArea, etaMs) {
+  var from = AREA_POS[fromArea] || AREA_POS.STOCKER;
+  var to = AREA_POS[toArea] || AREA_POS.CDSEM;
+  foup.visible = true; beaconColor(0xffb300);
+  moveAnim = {
+    p0: new THREE.Vector3(from.x, 5.15, from.z),
+    p1: new THREE.Vector3(to.x, 5.15, to.z),
+    t0: performance.now(),
+    eta: Math.max(500, Math.min(etaMs || 1200, 6000))
+  };
+}
+
+var wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/fab-demo/m35/events';
+var ws;
+function connect() {
+  ws = new WebSocket(wsUrl);
+  ws.onmessage = function(ev) { handleEvent(JSON.parse(ev.data)); };
+  ws.onclose = function() { setTimeout(connect, 2000); };
+  ws.onerror = function() { ws.close(); };
+}
+function handleEvent(frame) {
+  var t = frame.type, d = frame.data || {};
+  if (t === 'DemoStarted') {
+    activeWo = d.workOrderId || null;
+    window.__activeWo = activeWo;
+    wipCount = d.waferCount || 5;
+    setKpi('kpiWip', wipCount);
+    banner('🚀 演示启动：' + wipCount + ' 片晶圆入库', 'recovering');
+    feedAdd('▶ 演示启动（' + wipCount + ' 片）');
+  } else if (t === 'FoupInTransit') {
+    moveOHT(d.fromArea, d.toArea, d.etaMs);
+  } else if (t === 'FoupArrivedAtPort') {
+    foup.visible = false; beaconColor(0x1a7f37);
+  } else if (t === 'ProcessingStarted') {
+    var area = findArea(d.equipmentId);
+    if (area) panelColor(area, 0xffb300);
+    setKpi('kpiWip', wipCount);
+  } else if (t === 'ProcessingCompleted') {
+    var area2 = findArea(d.jobId);
+    if (area2) panelColor(area2, 0x00e676);
+  } else if (t === 'EquipmentStateChanged') {
+    if (d.areaId) panelColor(d.areaId, d.status === 'RUN' ? 0x00e676 : (d.status === 'DOWN' ? 0xff5252 : 0xffb300));
+  } else if (t === 'MeasurementResultEvent') {
+    feedAdd('📏 ' + d.waferId + ' CD=' + d.cdNm + 'nm → ' + d.classification);
+  } else if (t === 'PipelineStageFailed') {
+    feedAdd('❌ ' + (d.phase || '') + '：' + (d.detail || ''), true);
+    banner('❌ 阶段失败：' + (d.detail || ''), 'crash');
+  } else if (t === 'OcapActionTriggered') {
+    ocapCount++; setKpi('kpiOcap', ocapCount);
+    banner('🛠 OCAP 拦截', 'recovering');
+    feedAdd('🛠 OCAP 处置');
+  } else if (t === 'RecoveryEvent') {
+    recCount++; setKpi('kpiRec', recCount);
+    banner('🔄 [' + (d.batchId || '') + '] 断点续跑（' + (d.phasesSkipped || 0) + ' 道已完成）', 'recovering');
+    feedAdd('🔄 断点续跑');
+  } else if (t === 'GlobalStatusChanged') {
+    if ((d.status || '').indexOf('Complete') >= 0) {
+      banner('✅ 全部完成', 'done');
+    }
+  }
+}
+function findArea(id) {
+  if (!id) return null;
+  var keys = Object.keys(equipByArea);
+  for (var i = 0; i < keys.length; i++) { if (id.indexOf(keys[i]) >= 0) return keys[i]; }
+  return null;
+}
+connect();
+
+/* ===== 启动/宕机按钮 ===== */
+document.getElementById('btnStart').addEventListener('click', function() {
+  fetch('/api/fab-demo/m35/start', {method: 'POST'});
+  banner('🚀 启动中……', 'recovering');
+});
+document.getElementById('btnCrash').addEventListener('click', function() {
+  if (!window.__activeWo) return;
+  fetch('/api/fab-demo/m35/inject-crash/' + window.__activeWo, {method: 'POST'});
+  banner('⚡ 宕机已注入——断点续跑即将开始', 'crash');
+});
+var camBtn = document.getElementById('btnCam');
+var followCam = false;
+camBtn.addEventListener('click', function() {
+  followCam = !followCam;
+  camBtn.textContent = followCam ? '🎥 跟随中' : '🎥 跟随 OHT';
+});
+</script>
+<script type="module">
+/* 渲染循环（与场景脚本分离，引用同一 THREE 实例） */
+</script>
+</body>
+</html>

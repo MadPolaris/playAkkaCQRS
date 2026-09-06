@@ -68,6 +68,7 @@ GET     /api/fab-demo/scenario/:id/route-graph   controllers.FabDemoController.g
 
 # M3.5 Self-Healing Demo
 GET     /fab-demo/m35                               controllers.FabDemoController.m35Demo()
+GET     /fab-demo/m35-3d                    controllers.FabDemoController.m35ThreeD()
 GET     /bank-batch                         controllers.BankBatchController.page
 GET     /api/bank-batch/state               controllers.BankBatchController.state
 POST    /api/bank-batch/start               controllers.BankBatchController.start

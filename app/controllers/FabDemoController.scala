@@ -84,7 +84,12 @@ class FabDemoController @Inject()(
     "fab-pipeline-projection"
   )
 
-  /** Render the Fab simulation page */
+  /** Render the Fab M3.5 3D digital-twin page (Monarch-driven, WebGL) */
+  def m35ThreeD() = Action { implicit request =>
+    Ok(views.html.fabM35ThreeD())
+  }
+
+    /** Render the Fab simulation page */
   def index() = Action { implicit request =>
     val langParam = request.getQueryString("lang").getOrElse("")
     val langs: Seq[Lang] = if (langParam.nonEmpty) Seq(Lang(langParam)) else request.acceptLanguages
