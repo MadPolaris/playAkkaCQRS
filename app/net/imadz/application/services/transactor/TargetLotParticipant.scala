@@ -40,6 +40,8 @@ case class TargetLotParticipant(targetLotId: Id, waferIds: Set[Id])(implicit ec:
   }
 
   override protected def customClassification: PartialFunction[Throwable, SagaParticipant.RetryableOrNotException] = {
-    case _: iMadzError => NonRetryableFailure("Lot invariant violation")
+    case e: iMadzError =>
+      logger.warn(s"[LotInvariant] target-lot reject: ${e.code}: ${e.message}")
+      NonRetryableFailure(s"Lot invariant violation (${e.code}: ${e.message})")
   }
 }

@@ -335,10 +335,26 @@ object FabDemoPipeline {
   private def handleScrap(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val scrapWafers = state.wafers.filter { case (_, w) => w.classification.contains("SCRAP") }.keys.toSeq
     if (scrapWafers.isEmpty || ctx.scrapLotId.isEmpty) Future.successful(state)
-    else sagaScrap(state, ctx, scrapWafers)
+    else {
+      implicit val ec: ExecutionContext = ctx.ec
+      // 拆批/合批后报废晶圆可能已随子批迁移（rwk/pilot/…）——按实际所属批分组；
+      // 先子批后主批：子批报废提交会把主批从 AwaitingSubLot 恢复 Active，主批的转移才不会被拒
+      val grouped: Map[Id, Seq[String]] = scrapWafers
+        .groupBy(wid => state.wafers.get(wid).flatMap(_.subLot).getOrElse("main"))
+        .map { case (lotKey, wids) =>
+          val srcId = if (lotKey == "main") ctx.sourceLotId
+                      else ctx.childLotIds.getOrElse(lotKey, ctx.sourceLotId)
+          srcId -> wids
+        }
+      val ordered: Seq[(Id, Seq[String])] =
+        grouped.toSeq.sortBy { case (srcId, _) => if (srcId == ctx.sourceLotId) 1 else 0 }
+      ordered.foldLeft(Future.successful(state)) { (accF, pair) =>
+        accF.flatMap(acc => sagaScrap(acc, ctx, pair._2, pair._1))(ctx.ec)
+      }
+    }
   }
 
-  private def sagaScrap(state: FabDemoState, ctx: FabDemoContext, scrapWaferIds: Seq[String]): Future[FabDemoState] = {
+  private def sagaScrap(state: FabDemoState, ctx: FabDemoContext, scrapWaferIds: Seq[String], fromLotId: Id): Future[FabDemoState] = {
     implicit val timeout: Timeout = 10.seconds
     val s = PipelineStages.emitLedger(state, "PhaseScrap: Saga Scrap (TCC)", ctx)
     ctx.stageProgress("SCRAPPING", "Saga TCC — scrap wafers", "PhaseScrap")
@@ -357,13 +373,17 @@ object FabDemoPipeline {
       ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
 
     createScrap.flatMap(_ =>
-      ctx.sagaTx(ctx.sourceLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet, None)
+      ctx.sagaTx(fromLotId, scrapLotId, scrapWaferUUIDs, scrapWaferIds.toSet, None)
     )(ctx.ec).flatMap { confirmation =>
       if (confirmation.error.isEmpty) {
         ctx.publish(SagaOperationEvent("SAGA-SCRAP", "ScrapLot", "COMMITTED",
           ctx.scenario.scenarioId, scrapLotIdStr, scrapWaferIds))
         ctx.publish(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "ScrapCompleted",
           s"TCC Scrap: ${scrapWaferIds.mkString(",")} → Scrap Lot", scrapWaferIds))
+        // 报废落定后恢复来源批 phase：AwaitingSubLot → Active（否则其后续转移会被 LOT_010 拒绝）
+        ctx.lotRef ! RecordSubLotScrapped(scrapLotId, "Scrap", scrapWaferUUIDs, ctx.ignoreLotReply)
+        if (fromLotId != ctx.sourceLotId)
+          ctx.lotRef ! RecordSubLotScrapped(fromLotId, "Scrap", scrapWaferUUIDs, ctx.ignoreLotReply)
         val scrapSet = scrapWaferIds.toSet
         val updatedWafers = state.wafers.map { case (wid, info) =>
           if (scrapSet.contains(wid)) wid -> info.copy(subLot = Some("scrap"))

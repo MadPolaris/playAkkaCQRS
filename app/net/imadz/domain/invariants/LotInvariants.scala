@@ -63,10 +63,8 @@ object LotInvariants {
       val transferId = param
       if (state.reservedWafers.contains(transferId))
         Right(List(WaferRemovalReleased(transferId)))
-      else if (state.completedTransferIds.contains(transferId))
-        Right(Nil) // already committed, release is a no-op — idempotent
       else
-        Left(iMadzError("LOT_014", s"Transfer $transferId not found in reserved wafers"))
+        Right(Nil) // 补偿幂等：预留不存在（从未成功或已释放）= 无需释放，视为成功
     }
   }
 
@@ -78,8 +76,9 @@ object LotInvariants {
       if (state.incomingWafers.contains(transferId))
         return Right(Nil)
 
-      // Validate lot can accept wafers (Active or Empty for split-to-new-lot)
-      if (state.phase != Active && state.phase != Empty)
+      // Validate lot can accept wafers (Active, Empty for split-to-new-lot,
+      // or AwaitingSubLot — the designated merge-back window while children are out)
+      if (state.phase != Active && state.phase != Empty && state.phase != AwaitingSubLot)
         return Left(iMadzError("LOT_020", s"Lot ${state.lotId} cannot accept wafers in phase ${state.phase}"))
 
       // FOUP capacity check: current + all incoming reservations + new wafers <= 25
