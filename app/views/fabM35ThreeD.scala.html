@@ -50,9 +50,17 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 #btnCrash { background:#c62828; color:#fff; }
 #btnStart:disabled { background:#455a64; }
 #btnCam { background:#37474f; color:#cfd8dc; }
-  .hint { font-size:11px; color:#789; margin-top:6px; line-height:1.6; }
-  @@keyframes chipPulse { 0%{box-shadow:0 0 0 0 rgba(66,165,245,.75)} 70%{box-shadow:0 0 0 9px rgba(66,165,245,0)} 100%{box-shadow:0 0 0 0 rgba(66,165,245,0)} }
-  .chip.pulse { animation:chipPulse 1.1s ease-out 2; border-color:#42a5f5 !important; color:#cfe8ff !important; }
+  .hint { font-size:11px; color:#6b7f95; margin-top:8px; line-height:1.5;
+    border-top:1px solid rgba(255,255,255,0.07); padding-top:7px; }
+  #areaGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; }
+  .areaCell { display:flex; align-items:center; gap:5px; padding:5px 6px;
+    background:rgba(255,255,255,0.045); border:1px solid rgba(255,255,255,0.09);
+    border-radius:7px; font-size:11px; color:#c8d6e5; white-space:nowrap;
+    transition:border-color .3s; }
+  .areaCell .dot { width:8px; height:8px; border-radius:50%;
+    background:#3d4d5f; flex:none; transition:background .3s, box-shadow .3s; }
+  @@keyframes cellPulse { 0%{ box-shadow:0 0 0 0 rgba(66,165,245,.55);} 70%{ box-shadow:0 0 0 7px rgba(66,165,245,0);} 100%{ box-shadow:0 0 0 0 rgba(66,165,245,0);} }
+  .areaCell.pulse { animation:cellPulse 1s ease-out 2; border-color:#42a5f5; }
   @@keyframes kpiPop { 0%{display:inline-block; transform:scale(1.7); color:#ffd54f} 100%{display:inline-block; transform:scale(1)} }
   .chip b.pop { animation:kpiPop .45s ease-out; }
   #narr { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:45;
@@ -90,9 +98,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 <div id="narr"></div>
 
 <div class="hud" id="hudLeft">
-  <h3>工序游标（17 道链）</h3>
-  <div id="stageChips"></div>
-  <h3 style="margin-top:12px">运行状态</h3>
+  <h3>运行状态</h3>
   <div class="kpi">
     <span class="chip">在途 <b id="kpiWip">0</b></span>
     <span class="chip">恢复 <b id="kpiRec">0</b></span>
@@ -114,7 +120,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <h3 style="margin-top:12px">批次谱系（拆批 / 合批）</h3>
   <div id="lotTree"></div>
   <h3 style="margin-top:12px">九大工作区</h3>
-  <div id="areaChips"></div>
+  <div id="areaGrid"></div>
   <div class="btnrow">
     <button id="btnStart">▶ 启动自愈演示</button>
     <button id="btnCrash">⚡ 注入宕机</button>
@@ -122,7 +128,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <div class="btnrow">
     <button id="btnCam">🎥 跟随 OHT</button>
   </div>
-  <p class="hint">按 EquipmentArea 权威模型绘制：9 大工艺区 + STOCKER + LOG 物流环线（单向 OHT）。真实引擎事件驱动，工艺路线 CLEAN → DIFF → LITHO → ETCH → LITHO(重入) → IMPL → DEP → CMP → MET → DRY。</p>
+  <p class="hint">状态由区域 Actor 权威推送 · 工艺模型见 EquipmentArea</p>
 </div>
 
 <div id="errPanel" style="position:fixed;bottom:14px;left:14px;right:14px;z-index:100;
@@ -647,7 +653,7 @@ function narrate(icon, html, ms, focusArea, pulseColor) {
   }
 }
 function chipPulse(key) {
-  var el = document.getElementById('chip-' + key);
+  var el = document.getElementById('cell-' + key);
   if (!el) return;
   el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse');
 }
@@ -867,13 +873,10 @@ function panelColor(areaKey, hex) {
   var o = eq.userData.orig;
   if (lamp) { lamp.material.color.setHex(hex); lamp.material.emissive.setHex(hex); }
   if (panel) { panel.material.color.setHex(hex); panel.material.emissive.setHex(hex); }
-  var chip = document.getElementById('chip-' + areaKey);
-  if (chip) chip.className = 'chip on';
   clearTimeout(panelTimers[areaKey]);
   panelTimers[areaKey] = setTimeout(function() {
     if (lamp) { lamp.material.color.setHex(o.lampC); lamp.material.emissive.setHex(o.lampE); }
     if (panel) { panel.material.color.setHex(o.panC); panel.material.emissive.setHex(o.panE); }
-    if (chip) chip.className = 'chip';
   }, 4000);
 }
 
@@ -955,6 +958,7 @@ function handleEvent0(frame) {
     // 设备区 Actor 的权威状态：状态屏以此为准（覆盖旁白事件的推断值）
     var aK = d.areaId;
     lastAreaStatus[aK] = d.status;
+    areaCellState(aK, d.status);
     if (BOARDS[aK]) {
       var stMap = { IDLE: ['待机', '#0aa8a0'], LOADED: ['已装载 · 待加工', '#ffb300'],
                     BUSY: ['⚙ 加工中', '#42a5f5'], FINISHED: ['完成 ✓ 待出站', '#00e676'],
@@ -1005,14 +1009,25 @@ function handleEvent0(frame) {
     }
   }
 }
-/* 九大工作区图例 */
+/* 九大工作区网格：状态点由区域 Actor 状态驱动 */
 var AREA_ORDER = ['CLEAN', 'DIFF', 'LITHO', 'ETCH', 'IMPL', 'DEP', 'CMP', 'MET', 'DRY'];
-var areaChipsEl = document.getElementById('areaChips');
+var areaGridEl = document.getElementById('areaGrid');
 AREA_ORDER.forEach(function(k) {
-  var s = document.createElement('span');
-  s.className = 'chip'; s.id = 'chip-' + k; s.textContent = AREA_NAME[k];
-  areaChipsEl.appendChild(s);
+  var cell = document.createElement('div');
+  cell.className = 'areaCell'; cell.id = 'cell-' + k;
+  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span>';
+  areaGridEl.appendChild(cell);
 });
+var CELL_STATUS_COLOR = { IDLE: '#455a64', LOADED: '#ffb300', BUSY: '#42a5f5',
+                          FINISHED: '#00e676', UNLOADING: '#ffd54f', DOWN: '#ff5252' };
+function areaCellState(key, status) {
+  var cell = document.getElementById('cell-' + key);
+  if (!cell) return;
+  var color = CELL_STATUS_COLOR[status] || '#455a64';
+  cell.querySelector('.dot').style.background = color;
+  cell.querySelector('.dot').style.boxShadow = status === 'IDLE' ? 'none' : '0 0 6px ' + color;
+  cell.style.borderColor = status === 'IDLE' ? 'rgba(255,255,255,0.09)' : color;
+}
 renderLotTree();
 connect();
 
