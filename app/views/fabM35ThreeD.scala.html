@@ -61,7 +61,30 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 #ruleLib .ruleRow .act { color:#6b7f95; font-size:10px; }
 #ruleLib .ruleRow .cnt { margin-left:auto; color:#ffd54f; font-weight:700; }
 #ruleLib .ruleRow.fired { color:#e6edf3; }
-#ruleLib .ruleRow.muted { color:#5a6b7d; border-bottom:none; }
+  #ruleLib .ruleRow.muted { color:#5a6b7d; border-bottom:none; }
+  /* 批次路线卡抽屉 */
+  #lotDrawer { position:fixed; top:104px; right:326px; width:330px; max-height:calc(100vh - 130px);
+    z-index:50; background:rgba(11,18,32,0.94); border:1px solid rgba(255,255,255,0.16);
+    border-radius:10px; padding:12px 14px; overflow-y:auto; display:none;
+    box-shadow:0 8px 28px rgba(0,0,0,.5); }
+  #lotDrawer.show { display:block; }
+  #lotDrawer h4 { margin:0 0 8px; font-size:12px; color:#8fb8e8; display:flex;
+    justify-content:space-between; align-items:center; letter-spacing:.5px; }
+  .ldRow { display:flex; gap:8px; font-size:11.5px; color:#cfe0f0; padding:2px 0; }
+  .ldk { font-size:10.5px; color:#7f95ab; display:block; }
+  #ldWo, #ldPhase { color:#e6edf3; }
+  #ldTrail { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  .trailNode { padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;
+    background:rgba(255,255,255,0.06); color:#7f92a8; border:1px solid rgba(255,255,255,0.08); }
+  .trailNode.visited { color:#9fe19f; border-color:rgba(26,127,55,0.5); }
+  .trailNode.current { color:#111; background:#ffb300; border-color:#ffb300;
+    box-shadow:0 0 8px rgba(255,179,0,.6); }
+  .trailNode.dyn { color:#ce93d8; border-color:rgba(186,104,200,0.5); }
+  .trailArrow { color:#5a6b7d; font-size:10px; }
+  #lotWafers { width:100%; font-size:10.5px; border-collapse:collapse; margin-top:2px; }
+  #lotWafers td { padding:2.5px 5px; border-bottom:1px solid rgba(255,255,255,0.05); color:#b8c9da; }
+  .cls-PASS { color:#69f0ae; } .cls-FAIL { color:#ff8a80; }
+  .cls-SCRAP { color:#ff5252; } .cls-BORDERLINE { color:#ffd54f; }
 .hud h3 { margin:0 0 8px; font-size:12px; text-transform:uppercase;
   letter-spacing:1px; color:#8fb8e8; }
 .chip { display:inline-block; padding:3px 10px; border-radius:12px;
@@ -209,6 +232,19 @@ window.addEventListener("unhandledrejection", function(e) {
 <div class="hud" id="hudRight">
   <h3>事件流</h3>
   <div id="feed" style="max-height:50vh;overflow-y:auto;font-family:Consolas,monospace;font-size:11px;line-height:1.8;color:#9fe19f;"></div>
+</div>
+
+<!-- 批次路线卡抽屉（点击批次谱系或详情按钮展开） -->
+<div id="lotDrawer">
+  <h4><span>📋 批次路线卡</span><span id="lotDrawerClose" style="cursor:pointer;color:#789;">✕</span></h4>
+  <div id="lotDrawerBody">
+    <div class="ldRow"><span class="ldk">批次</span><span id="ldWo">—</span></div>
+    <div class="ldRow"><span class="ldk">状态</span><span id="ldPhase">—</span></div>
+    <div class="ldk" style="margin:10px 0 4px;">实际路线（事件轨迹）</div>
+    <div id="ldTrail"></div>
+    <div class="ldk" style="margin:10px 0 4px;">晶圆明细</div>
+    <table id="lotWafers"></table>
+  </div>
 </div>
 
 <script type="importmap">
@@ -815,6 +851,7 @@ function resetDemoState() {
   recCount = 0; ocapCount = 0; setKpi('kpiRec', 0); setKpi('kpiOcap', 0);
   wipCount = 0; setKpi('kpiWip', 0);
   foup.visible = false; moveAnim = null; moveQueue = [];
+  window.__lotTrail = [];
   foupState = 'hidden'; lastPadKey = 'STOCKER';
   foup.scale.setScalar(1);
   setFocus(null);
@@ -969,6 +1006,7 @@ function handleEvent0(frame) {
   } else if (t === 'FoupInTransit') {
     moveOHT(d.fromArea, d.toArea, d.etaMs);
     routeActive(d.toArea);
+    trailPush(d.toArea);   // 批次路线卡：实际轨迹追加
     var fn = AREA_NAME[d.fromArea] || d.fromArea || '', tn2 = AREA_NAME[d.toArea] || d.toArea || '';
     if (tn2) narrate('🚗', '天车满载 FOUP：<b>' + fn + '</b> → <b>' + tn2 + '</b>', 3200, d.toArea);
   } else if (t === 'FoupArrivedAtPort') {
@@ -1069,6 +1107,17 @@ function handleEvent0(frame) {
       var badge2 = document.getElementById('runBadge');
       if (badge2) badge2.textContent = '● 已完成 ✓';
     }
+  } else if (t === 'DynamicStageInjected') {
+    // 动态工序注入：追加到批次路线卡轨迹（⚡ 标记）
+    window.__lotTrail.push('⚡ ' + (d.injectedStageType || d.parentNodeId || 'DYN'));
+    renderDrawerTrail();
+    feedAdd('⚡ 动态注入工序：' + (d.injectedStageType || d.parentNodeId || ''));
+    narrate('⚡', 'OCAP 动态注入工序：<b>' + (d.injectedStageType || d.parentNodeId || '') + '</b>', 3600);
+    if ((d.status || '').indexOf('Complete') >= 0) {
+      banner('✅ 全部完成', 'done');
+      var badge2 = document.getElementById('runBadge');
+      if (badge2) badge2.textContent = '● 已完成 ✓';
+    }
   }
 }
 /* 九大工作区网格：状态点由区域 Actor 状态驱动；点击格子可干预（停机/复位） */
@@ -1140,6 +1189,71 @@ function routeActive(areaKey) {
   var n = document.getElementById('rn-' + areaKey);
   if (n) n.classList.add('active');
 }
+/* ===== 批次路线卡抽屉：实际轨迹 + 晶圆明细（entity-state 轮询） ===== */
+window.__lotTrail = [];     // 实际走过的区域轨迹（事件追加）
+window.__lotDrawerOpen = false;
+var lotDrawerTimer = null;
+function trailPush(area) {
+  if (!window.__lotTrail.length || window.__lotTrail[window.__lotTrail.length - 1] !== area)
+    window.__lotTrail.push(area);
+  renderDrawerTrail();
+}
+function renderDrawerTrail() {
+  var el = document.getElementById('ldTrail');
+  if (!el || !window.__lotDrawerOpen) return;
+  el.innerHTML = '';
+  var t = window.__lotTrail;
+  for (var i = 0; i < t.length; i++) {
+    var n = document.createElement('span');
+    var isDyn = typeof t[i] === 'string' && t[i].indexOf('⚡') === 0;
+    n.className = 'trailNode' + (isDyn ? ' dyn' : (i === t.length - 1 ? ' current' : ' visited'));
+    n.textContent = t[i];
+    el.appendChild(n);
+    if (i < t.length - 1) {
+      var a = document.createElement('span');
+      a.className = 'trailArrow'; a.textContent = '→';
+      el.appendChild(a);
+    }
+  }
+}
+function openLotDrawer() {
+  window.__lotDrawerOpen = true;
+  var d = document.getElementById('lotDrawer');
+  if (d) d.classList.add('show');
+  var wo = document.getElementById('ldWo');
+  if (wo) wo.textContent = (window.__activeWo || '').slice(0, 8) || '—';
+  var trailEl = document.getElementById('ldTrail');
+  if (trailEl) trailEl.innerHTML = '<span class="trailNode current">STOCKER</span>';
+  window.__lotTrail = ['STOCKER'];
+  if (!lotDrawerTimer) lotDrawerTimer = setInterval(pollLotDrawer, 4000);
+}
+function pollLotDrawer() {
+  if (!window.__lotDrawerOpen || !window.__activeWo) return;
+  fetch('/api/fab-demo/entity-state/' + window.__activeWo)
+    .then(function(r) { return r.json(); })
+    .then(function(d) { renderLotDrawer(d); })
+    .catch(function() {});
+}
+function renderLotDrawer(d) {
+  var src = d.sourceLot || {};
+  var phase = document.getElementById('ldPhase');
+  if (phase) phase.textContent = src.phase || '—';
+  var trailEl = document.getElementById('ldTrail');
+  if (trailEl && window.__lotTrail.length) renderDrawerTrail();
+  var tbl = document.getElementById('lotWafers');
+  if (!tbl) return;
+  var rows = '<tr><td>晶圆</td><td>归属批</td><td>分类</td></tr>';
+  (d.wafers || []).slice(0, 30).forEach(function(w) {
+    var cls = w.classification || w.status || '—';
+    rows += '<tr><td>' + w.waferId.slice(0, 8) + '</td><td>' +
+      (w.lotId || '').slice(0, 8) + '</td><td class="cls-' + cls + '">' + cls + '</td></tr>';
+  });
+  tbl.innerHTML = rows;
+}
+document.getElementById('lotDrawerClose').addEventListener('click', function() {
+  document.getElementById('lotDrawer').classList.remove('show');
+  window.__lotDrawerOpen = false;
+});
 /* ===== OCAP 规则库（拉取全量规则 + 实时触发计数） ===== */
 var RULE_COUNTS = {};
 (function() {
@@ -1190,13 +1304,15 @@ document.getElementById('btnStart').addEventListener('click', function() {
   var sc = selEl.value;
   resetDemoState();
   currentScenario = sc;
-  if (sc === 'm35') {
-    fetch('/api/fab-demo/m35/start', {method: 'POST'});
-    banner('🚀 M3.5 自愈演示启动中……', 'recovering');
-  } else {
-    fetch('/api/fab-demo/start/' + sc, {method: 'POST'});
-    banner('🚀 用例启动：' + selEl.options[selEl.selectedIndex].text, 'recovering');
-  }
+  var url = sc === 'm35' ? '/api/fab-demo/m35/start' : '/api/fab-demo/start/' + sc;
+  // 捕获 workOrderId：批次路线卡抽屉的数据抓手
+  fetch(url, { method: 'POST' }).then(function(r) { return r.json(); }).then(function(j) {
+    if (j && j.workOrderId) {
+      window.__activeWo = j.workOrderId;
+      openLotDrawer();
+    }
+  }).catch(function() {});
+  banner('🚀 ' + (sc === 'm35' ? 'M3.5 自愈演示' : selEl.options[selEl.selectedIndex].text) + ' 启动中……', 'recovering');
 });
 btnCrashEl.addEventListener('click', function() {
   if (!window.__activeWo || selEl.value !== 'm35') return;
