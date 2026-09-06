@@ -164,10 +164,10 @@ scene.background = new THREE.Color(0x0b1220);
 scene.fog = new THREE.Fog(0x0b1220, 70, 190);
 
 var camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 400);
-camera.position.set(-8, 38, 46);
+camera.position.set(-6, 27, 33);
 var controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.target.set(-3, 1, 0);
+controls.target.set(-2, 2, -1);
 
 scene.add(new THREE.AmbientLight(0xbfd4ff, 0.55));
 var keyL = new THREE.DirectionalLight(0xffffff, 1.5);
@@ -429,6 +429,8 @@ var AREA_T = {};
     }
     AREA_T[k] = best / RING_SAMPLES;
   });
+AREA_T.METROLOGY = AREA_T.MET;   // 后端别名（CDSEM/METROLOGY 事件）
+AREA_T.CDSEM = AREA_T.MET;
 
 /* ===== OHT 天车 + FOUP ===== */
 var oht = new THREE.Group();
@@ -443,14 +445,86 @@ scene.add(oht);
 
 var foup = new THREE.Group();
 var foupBody = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.55, 0.55), mat(0xeceff1, 0.3, 0.4));
-foupBody.position.y = -0.85; foup.add(foupBody);
+foup.add(foupBody);
 var led = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8),
   new THREE.MeshStandardMaterial({ color: 0x00e676, emissive: 0x00e676, emissiveIntensity: 1.5 }));
-led.position.set(0.2, -0.62, 0.28); foup.add(led); foup.userData.led = led;
-foup.visible = false; oht.add(foup);
+led.position.set(0.2, 0.2, 0.28); foup.add(led); foup.userData.led = led;
+scene.add(foup); foup.visible = false;
 
 var curT = AREA_T.STOCKER;
 oht.position.copy(trackCurve.getPointAt(curT));
+
+/* ===== 各工位装载端口 Load Port（FOUP 上下车的垫台） ===== */
+var PADS = {};
+Object.keys(AREA_T).forEach(function(k) {
+  if (k === 'LOG') return;                      // 物流塔在环线中央，无端口
+  var rp = trackCurve.getPointAt(AREA_T[k]);
+  var sp = AREA_POS[k];
+  var dir = new THREE.Vector3(rp.x - sp.x, 0, rp.z - sp.z);
+  var dist = dir.length(); dir.normalize();
+  var off = Math.max(1.7, Math.min(3.2, dist - 1.0));
+  var pad = sp.clone().addScaledVector(dir, off); pad.y = 1.32;
+  PADS[k] = pad;
+  var ped = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.66, 1.3, 10), mat(0x263238, 0.6, 0.4));
+  ped.position.set(pad.x, 0.65, pad.z); scene.add(ped);
+  var plate = new THREE.Mesh(new THREE.CylinderGeometry(0.74, 0.74, 0.1, 12),
+    new THREE.MeshStandardMaterial({ color: 0x0aa8a0, emissive: 0x0aa8a0, emissiveIntensity: 0.5 }));
+  plate.position.set(pad.x, 1.34, pad.z); scene.add(plate);
+});
+
+/* ===== 工位状态屏（实时显示 待机/进站/加工中/完成/宕机） ===== */
+var BOARDS = {};
+var BOARD_Y = { CLEAN: 4.6, DIFF: 5.7, LITHO: 4.9, ETCH: 5.1, IMPL: 4.4, DEP: 4.5,
+                CMP: 4.6, MET: 4.3, DRY: 4.3, STOCKER: 6.8, LOG: 7.8 };
+function boardSet(key, text, color) {
+  var b = BOARDS[key]; if (!b) return;
+  var c = b.ctx;
+  c.clearRect(0, 0, 256, 64);
+  c.fillStyle = 'rgba(8,14,24,0.72)'; c.fillRect(0, 0, 256, 64);
+  c.strokeStyle = color; c.lineWidth = 2.5; c.strokeRect(2, 2, 252, 60);
+  c.font = 'bold 28px "Microsoft YaHei", sans-serif';
+  c.fillStyle = color; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(text, 128, 34);
+  b.tex.needsUpdate = true;
+}
+function boardFlash(key, text, color, revertMs) {
+  boardSet(key, text, color);
+  clearTimeout(boardTimers[key]);
+  boardTimers[key] = setTimeout(function() { boardSet(key, '待机', '#0aa8a0'); }, revertMs || 3000);
+}
+Object.keys(EQUIP_BY_AREA).forEach(function(k) {
+  var cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+  var tex = new THREE.CanvasTexture(cv);
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  sp.scale.set(6.4, 1.6, 1);
+  var ly = BOARD_Y[k] || 4.5;
+  sp.position.set(AREA_POS[k].x, ly - 1.2, AREA_POS[k].z);
+  scene.add(sp);
+  BOARDS[k] = { cv: cv, ctx: cv.getContext('2d'), tex: tex };
+  boardSet(k, '待机', '#0aa8a0');
+});
+
+/* ===== FOUP 上下车状态机 ===== */
+var foupState = 'hidden';        // hidden | riding | docked | entering | inside | exiting
+var lastPadKey = 'STOCKER';      // 当前所在工位（装卸端口）
+var foupAnchor = new THREE.Vector3();
+var boardTimers = {};
+function liftFoup() { foupState = 'riding'; foup.visible = true; beaconColor(0xffb300); }
+function dockFoup(areaKey) {
+  lastPadKey = PADS[areaKey] ? areaKey : 'STOCKER';
+  foupState = 'docked'; foup.visible = true;
+  foupAnchor.copy(PADS[lastPadKey]); foupAnchor.y += 0.3;
+  beaconColor(0x1a7f37);
+}
+function enterFoup(areaKey) {
+  if (foupState !== 'docked' && foupState !== 'entering') return;
+  foupState = 'entering';
+  foupAnchor.copy(AREA_POS[areaKey]); foupAnchor.y += 1.4;
+}
+function exitFoup() {
+  foupState = 'exiting'; foup.visible = true;
+  foupAnchor.copy(PADS[lastPadKey]); foupAnchor.y += 0.3;
+}
 /* ===== 事件处理（WS 实时引擎事件） ===== */
 var wipCount = 0, recCount = 0, ocapCount = 0;
 var moveAnim = null;
@@ -530,14 +604,12 @@ function spawnChildFoup(suffix) {
   g.position.set(-0.62, -0.85, 0);
   oht.add(g);
   childFoups[suffix] = g;
-  foup.position.x = 0.35;   // 主 FOUP 让位，OHT 双载
 }
 function removeChildFoup(suffix) {
   var g = childFoups[suffix];
   if (!g) return;
   oht.remove(g);
   delete childFoups[suffix];
-  if (Object.keys(childFoups).length === 0) foup.position.x = 0;
 }
 function resetDemoState() {
   Object.keys(childFoups).forEach(removeChildFoup);
@@ -547,7 +619,9 @@ function resetDemoState() {
   setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
   recCount = 0; ocapCount = 0; setKpi('kpiRec', 0); setKpi('kpiOcap', 0);
   wipCount = 0; setKpi('kpiWip', 0);
-  foup.visible = false; moveAnim = null;
+  foup.visible = false; moveAnim = null; moveQueue = [];
+  foupState = 'hidden'; lastPadKey = 'STOCKER';
+  foup.scale.setScalar(1);
   curT = AREA_T.STOCKER;
   oht.position.copy(trackCurve.getPointAt(curT));
   renderLotTree();
@@ -615,17 +689,26 @@ function findArea(id) {
   if (id.indexOf('CDSEM') >= 0 || id.indexOf('METROLOGY') >= 0) return 'MET';
   return null;
 }
+var moveQueue = [];    // 两段式：leg1 赶到发货站 → leg2 驶向收货站（只沿环线正向）
+var departAt = 0;      // FOUP 上车延迟
 function moveOHT(fromArea, toArea, etaMs) {
+  var tf = AREA_T[fromArea];
   var tt = (AREA_T[toArea] !== undefined) ? AREA_T[toArea]
-         : (AREA_T[fromArea] !== undefined ? AREA_T[fromArea] : AREA_T.MET);
-  var span = tt - curT;
-  if (span <= 0.003) span += 1;              // 单向环线，只沿正方向前进
-  foup.visible = true; beaconColor(0xffb300);
-  moveAnim = {
-    t0: curT, span: span,
-    start: performance.now(),
-    eta: Math.max(600, Math.min(etaMs || 1500, 6000))
-  };
+         : (tf !== undefined ? tf : AREA_T.MET);
+  moveQueue = [];
+  var probe = curT;
+  if (tf !== undefined) {
+    var s1 = (tf - curT + 1) % 1;
+    if (s1 > 0.012) {                                  // 不在发货站：先正向赶到
+      moveQueue.push({ t0: probe, span: s1, eta: Math.min(1100, 350 + s1 * 2400) });
+      probe = tf;
+    }
+  }
+  var s2 = (tt - probe + 1) % 1;
+  if (s2 <= 0.004) s2 += 1;                            // 同站目标 = 空跑一圈回本站
+  moveQueue.push({ t0: probe, span: s2, eta: Math.max(800, Math.min(etaMs || 1600, 5200)) });
+  departAt = performance.now() + 650;                  // 给 FOUP 上车留时间
+  liftFoup();
 }
 function beaconColor(hex) {
   beacon.material.color.setHex(hex);
@@ -687,16 +770,37 @@ function handleEvent0(frame) {
   } else if (t === 'FoupInTransit') {
     moveOHT(d.fromArea, d.toArea, d.etaMs);
   } else if (t === 'FoupArrivedAtPort') {
-    foup.visible = false; beaconColor(0x1a7f37);
+    var portArea = findArea(d.equipmentId) || 'STOCKER';
+    dockFoup(portArea);
+    if (BOARDS[portArea]) boardFlash(portArea, '在站 · 待加工', '#ffb300', 2500);
   } else if (t === 'ProcessingStarted') {
     var area = findArea(d.equipmentId);
-    if (area) panelColor(area, 0xffb300);
+    if (area) { panelColor(area, 0xffb300); boardSet(area, '⚙ 加工中', '#42a5f5'); }
     setKpi('kpiWip', wipCount);
   } else if (t === 'ProcessingCompleted') {
-    var area2 = findArea(d.jobId);
-    if (area2) panelColor(area2, 0x00e676);
+    var area2 = findArea(d.equipmentId);
+    if (area2) {
+      panelColor(area2, d.success === false ? 0xff5252 : 0x00e676);
+      boardFlash(area2, d.success === false ? '✖ 异常' : '完成 ✓', d.success === false ? '#ff5252' : '#00e676', 3000);
+    }
   } else if (t === 'EquipmentStateChanged') {
+    var eqArea = findArea(d.equipmentId);
     if (d.areaId) panelColor(d.areaId, d.status === 'RUN' ? 0x00e676 : (d.status === 'DOWN' ? 0xff5252 : 0xffb300));
+    if (d.status === 'Load' && eqArea) {                 // trackIn：FOUP 从端口进入设备
+      enterFoup(eqArea);
+      if (BOARDS[eqArea]) boardSet(eqArea, '进站中', '#ffb300');
+    } else if (d.status === 'Busy' && eqArea && BOARDS[eqArea]) {
+      boardSet(eqArea, '⚙ 加工中', '#42a5f5');
+    } else if (d.status === 'DOWN' && eqArea && BOARDS[eqArea]) {
+      boardSet(eqArea, '⚠ 宕机', '#ff5252');
+    } else if (d.status === 'Idle' && eqArea && BOARDS[eqArea]) {
+      boardFlash(eqArea, '待机', '#0aa8a0', 4000);
+    }
+  } else if (t === 'FoupStateChanged') {
+    if (d.status === 'UNLOADED') {                       // trackOut：FOUP 回到装载端口
+      exitFoup();
+      if (BOARDS[lastPadKey]) boardFlash(lastPadKey, '出站', '#ffd54f', 3000);
+    }
   } else if (t === 'SagaOperationEvent') {
     handleSaga(d);
   } else if (t === 'DecisionMade') {
@@ -772,6 +876,10 @@ camBtn.addEventListener('click', function() {
 var clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
+  if (!moveAnim && moveQueue.length && performance.now() >= departAt) {
+    var leg = moveQueue.shift();
+    moveAnim = { t0: leg.t0, span: leg.span, start: performance.now(), eta: leg.eta };
+  }
   if (moveAnim) {
     var k = Math.min(1, (performance.now() - moveAnim.start) / moveAnim.eta);
     var ease = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
@@ -779,8 +887,27 @@ function animate() {
     oht.position.copy(trackCurve.getPointAt(curT));
     var tan = trackCurve.getTangentAt(curT);
     oht.rotation.y = Math.atan2(tan.x, tan.z);
-    if (k >= 1) { moveAnim = null; beaconColor(0x1a7f37); }
+    if (k >= 1) {
+      curT = (moveAnim.t0 + moveAnim.span) % 1;
+      moveAnim = null;
+      beaconColor(moveQueue.length ? 0xffb300 : 0x1a7f37);
+    }
   }
+  /* FOUP 锚点追踪：骑行跟车 / 端口停靠 / 进出设备（缩放入腔） */
+  var rideOffX = Object.keys(childFoups).length > 0 ? 0.35 : 0;
+  if (foupState === 'riding') {
+    foupAnchor.set(oht.position.x + rideOffX, oht.position.y - 0.92, oht.position.z);
+  } else if (foupState === 'docked' || foupState === 'exiting') {
+    foupAnchor.copy(PADS[lastPadKey] || PADS.STOCKER); foupAnchor.y += 0.3;
+  } else if (foupState === 'entering' || foupState === 'inside') {
+    foupAnchor.copy(AREA_POS[lastPadKey]); foupAnchor.y += 1.4;
+  }
+  foup.position.lerp(foupAnchor, foupState === 'riding' ? 0.35 : 0.07);
+  var ts = (foupState === 'entering' || foupState === 'inside') ? 0.2 : 1;
+  var ns = foup.scale.x + (ts - foup.scale.x) * 0.12;
+  foup.scale.setScalar(ns);
+  if (foupState === 'entering' && ns < 0.26) foupState = 'inside';
+  foup.visible = (foupState !== 'hidden') && !(foupState === 'inside' && ns < 0.3);
   if (EQUIP_BY_AREA.LOG && EQUIP_BY_AREA.LOG.userData.radar)
     EQUIP_BY_AREA.LOG.userData.radar.rotation.y += 0.02;
   beacon.material.emissiveIntensity = 1.0 + Math.sin(performance.now() * 0.008) * 0.6;
