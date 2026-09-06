@@ -91,6 +91,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <h3 style="margin-top:12px">演示用例</h3>
   <select id="scenarioSel" style="width:100%;padding:6px;background:#0d1726;color:#e6edf3;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:12px;">
     <option value="m35">M3.5 自愈演示（宕机注入 + 断点续跑）</option>
+    <option value="cxmt-dram-full-25">长鑫 CXMT DRAM 满批：25 片整 FOUP · 拆批返工 + 报废</option>
     <option value="photo-cell-5wafer">拆批返工：2 返工 → PASS + 1 报废（5 片）</option>
     <option value="send-ahead-pilot">拆批试投：1 片先导 → 量测 → 合批（5 片）</option>
     <option value="sampling-demo">拆批抽检：抽 2 片量测 → 合批（6 片）</option>
@@ -479,19 +480,41 @@ var CHILD_LOT_META = {
   HOLD:   { name: '暂扣批', color: 0xffd54f },
   SCRAP:  { name: '报废批', color: 0xff5252 }
 };
-var childLots = {};    // suffix -> 在批片数
+var childLots = {};    // suffix -> 在批片数（UUID 兼容路径的回退计数）
 var childFoups = {};   // suffix -> THREE.Group（挂在 OHT 下的彩色子批 FOUP）
+var seenSagaKeys = {}; // saga 事务幂等去重（同一 txId 的重复 COMMITTED 不重复计数）
+var scrappedWafers = {};
+var waferLoc = {};     // waferId -> 'main' | suffix | 'SCRAP'（片级精确追踪）
 function lotMeta(suffix) { return CHILD_LOT_META[suffix] || { name: suffix || '子批', color: 0xff9800 }; }
+function isWaferName(v) { return typeof v === 'string' && v.length > 0 && v.length < 15 && v.indexOf('-') < 0; }
 function renderLotTree() {
   var el = document.getElementById('lotTree');
   if (!el) return;
-  var html = '<span class="chip on">主批 <b>' + lotMainCount + '</b></span>';
-  Object.keys(childLots).forEach(function(sfx) {
-    var m = lotMeta(sfx), c = m.color;
-    html += '<span class="chip on" style="border-color:rgb(' + ((c >> 16) & 255) + ',' + ((c >> 8) & 255) + ',' + (c & 255) + ')">'
-          + m.name + ' <b>' + childLots[sfx] + '</b></span>';
-  });
-  if (scrappedCount > 0) html += '<span class="chip fail">报废 <b>' + scrappedCount + '</b></span>';
+  var html;
+  if (Object.keys(waferLoc).length > 0) {
+    var main = 0, children = {};
+    Object.keys(waferLoc).forEach(function(wid) {
+      var loc = waferLoc[wid];
+      if (loc === 'SCRAP') return;
+      if (loc === 'main') main++;
+      else children[loc] = (children[loc] || 0) + 1;
+    });
+    html = '<span class="chip on">主批 <b>' + main + '</b></span>';
+    Object.keys(children).forEach(function(sfx) {
+      var m = lotMeta(sfx), c = m.color;
+      html += '<span class="chip on" style="border-color:rgb(' + ((c >> 16) & 255) + ',' + ((c >> 8) & 255) + ',' + (c & 255) + ')">'
+            + m.name + ' <b>' + children[sfx] + '</b></span>';
+    });
+    if (scrappedCount > 0) html += '<span class="chip fail">报废 <b>' + scrappedCount + '</b></span>';
+  } else {
+    html = '<span class="chip on">主批 <b>' + lotMainCount + '</b></span>';
+    Object.keys(childLots).forEach(function(sfx) {
+      var m = lotMeta(sfx), c = m.color;
+      html += '<span class="chip on" style="border-color:rgb(' + ((c >> 16) & 255) + ',' + ((c >> 8) & 255) + ',' + (c & 255) + ')">'
+            + m.name + ' <b>' + childLots[sfx] + '</b></span>';
+    });
+    if (scrappedCount > 0) html += '<span class="chip fail">报废 <b>' + scrappedCount + '</b></span>';
+  }
   el.innerHTML = html;
 }
 function spawnChildFoup(suffix) {
@@ -519,6 +542,7 @@ function removeChildFoup(suffix) {
 function resetDemoState() {
   Object.keys(childFoups).forEach(removeChildFoup);
   childLots = {};
+  seenSagaKeys = {}; scrappedWafers = {}; waferLoc = {};
   lotMainCount = 0; scrappedCount = 0; splitCount = 0; mergeCount = 0;
   setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
   recCount = 0; ocapCount = 0; setKpi('kpiRec', 0); setKpi('kpiOcap', 0);
@@ -545,23 +569,38 @@ function handleSaga(d) {
     return;
   }
   if (status !== 'COMMITTED') return;
+  var sagaKey = (d.transactionId || '') + '|' + op + '|' + suffix;
+  if (seenSagaKeys[sagaKey]) return;   // 同一 TCC 事务的重复 COMMITTED（重试/重放）只计一次
+  seenSagaKeys[sagaKey] = true;
+  var wids = (d.relatedWaferIds || []).filter(isWaferName);
   if (op === 'SplitLot') {
     splitCount++; setKpi('kpiSplit', splitCount);
     spawnChildFoup(suffix);
-    childLots[suffix] = (childLots[suffix] || 0) + n;
-    lotMainCount = Math.max(0, lotMainCount - n);
+    if (wids.length === (d.relatedWaferIds || []).length && wids.length > 0) {
+      wids.forEach(function(w) { waferLoc[w] = suffix; });   // 片级迁移：主批 → 子批
+    } else {
+      childLots[suffix] = (childLots[suffix] || 0) + n;
+      lotMainCount = Math.max(0, lotMainCount - n);
+    }
     renderLotTree();
     banner('✂️ 拆批已提交：' + n + ' 片 → ' + cn, 'recovering');
     feedAdd('✂️ SplitLot COMMITTED → ' + cn + '（' + n + ' 片）');
   } else if (op === 'MergeLot') {
     mergeCount++; setKpi('kpiMerge', mergeCount);
-    lotMainCount += childLots[suffix] || n;
+    if (wids.length === (d.relatedWaferIds || []).length && wids.length > 0) {
+      wids.forEach(function(w) { waferLoc[w] = 'main'; });   // 片级迁移：子批 → 主批
+    } else {
+      lotMainCount += childLots[suffix] || n;
+      delete childLots[suffix];
+    }
     removeChildFoup(suffix);
-    delete childLots[suffix];
     renderLotTree();
     banner('🧩 合批已提交：' + cn + ' 并回主批', 'done');
     feedAdd('🧩 MergeLot COMMITTED ← ' + cn + '（' + n + ' 片）');
   } else if (op === 'ScrapLot') {
+    if (wids.length === (d.relatedWaferIds || []).length && wids.length > 0) {
+      wids.forEach(function(w) { waferLoc[w] = 'SCRAP'; });
+    }
     removeChildFoup(suffix);
     delete childLots[suffix];
     renderLotTree();
@@ -636,6 +675,9 @@ function handleEvent0(frame) {
     window.__activeWo = d.workOrderId || null;
     wipCount = d.waferCount || d.lotSize || (d.waferIds ? d.waferIds.length : 5);
     lotMainCount = wipCount; childLots = {};
+    waferLoc = {};
+    if (d.waferIds) d.waferIds.forEach(function(w) { if (isWaferName(w)) waferLoc[w] = 'main'; });
+    seenSagaKeys = {}; scrappedWafers = {};
     splitCount = 0; mergeCount = 0; scrappedCount = 0;
     setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
     setKpi('kpiWip', wipCount);
@@ -660,7 +702,9 @@ function handleEvent0(frame) {
   } else if (t === 'DecisionMade') {
     feedAdd('⚖️ ' + d.waferId + ' → ' + d.action);
   } else if (t === 'ScrapEvent') {
-    scrappedCount++; setKpi('kpiScrap', scrappedCount);
+    if (!scrappedWafers[d.waferId]) { scrappedWafers[d.waferId] = 1; scrappedCount++; }
+    if (waferLoc[d.waferId]) waferLoc[d.waferId] = 'SCRAP';
+    setKpi('kpiScrap', scrappedCount);
     renderLotTree();
     feedAdd('🗑 ' + d.waferId + ' 报废：' + (d.reason || ''), true);
   } else if (t === 'MeasurementResultEvent') {

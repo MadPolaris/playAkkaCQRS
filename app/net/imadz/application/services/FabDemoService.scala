@@ -281,9 +281,10 @@ class FabDemoService @Inject()(
       case "scrap-downgrade"   => StandardScenarios.scrapDowngrade
       case "sampling-demo"     => StandardScenarios.samplingDemo
       case "hold-release"      => StandardScenarios.holdRelease
+      case "cxmt-dram-full-25" => StandardScenarios.cxmtDramFull25
       case _                   => StandardScenarios.photoCell5Wafer
     }
-    val isRework = scenarioId == "photo-cell-5wafer"
+    val isRework = scenarioId == "photo-cell-5wafer" || scenarioId == "cxmt-dram-full-25"
 
     val waferUUIDs: Map[String, Id] = scenario.waferIds.map { wid =>
       wid -> UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes)
@@ -711,6 +712,7 @@ class FabDemoService @Inject()(
   def getScenarios: Seq[Map[String, String]] = {
     val staticScenarios = Seq(
       Map("id" -> "photo-cell-5wafer", "name" -> "Rework (5 wafers)", "type" -> "rework"),
+      Map("id" -> "cxmt-dram-full-25", "name" -> "CXMT DRAM Full Lot (25 wafers)", "type" -> "rework"),
       Map("id" -> "send-ahead-pilot", "name" -> "Send-Ahead Pilot (5 wafers)", "type" -> "send-ahead"),
       Map("id" -> "scrap-downgrade", "name" -> "Scrap & Downgrade (3 wafers)", "type" -> "scrap"),
       Map("id" -> "sampling-demo", "name" -> "Metrology Sampling (6 wafers)", "type" -> "sampling"),
@@ -729,6 +731,7 @@ class FabDemoService @Inject()(
       case "scrap-downgrade"   => (scrapLedger,      "Scrap & Downgrade — Direct Scrap, no child lot", "—")
       case "sampling-demo"     => (samplingLedger,   "Metrology Sampling — 2 sampled, rest skipped", "Sample")
       case "hold-release"      => (holdReleaseLedger,"Hold & Release — Borderline → Hold → Review → Release", "Hold")
+      case "cxmt-dram-full-25" => (photoCellLedger, "CXMT DRAM Full Lot (25) — full-FOUP production batch: rework split + scrap", "Rework")
       case productId if PorRepository.findByProductId(productId).isDefined =>
         val routing = PorRepository.findByProductId(productId).get
         (generateRoutingLedger(routing), s"Dynamic POR: ${routing.productId} (${routing.steps.size} steps)", "—")

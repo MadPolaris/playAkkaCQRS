@@ -311,4 +311,65 @@ object StandardScenarios {
       )
     )
   }
+
+  /** F: CXMT-style DRAM full-FOUP production lot — 25 wafers (G2 17nm-class, AA critical layer).
+    *
+    * 真实背景：300mm 晶圆厂一片 FOUP 标准装载 25 片，DRAM 量产批即「满 FOUP」
+    * （部分厂用 24 片）。本场景按长鑫存储（CXMT）DRAM 量产批建模：
+    * W03/W14 光刻 AA 层 CD 超标 → 拆批返工（重入 LITHO）；W22 直接报废；
+    * 其余 PASS 随主批封批。批容量上限即 LOT_021 的 FOUP 25 片约束。
+    */
+  val cxmtDramFull25: FabSimulationScenario = {
+    val waferIds = (1 to 25).map(i => f"W$i%02d")
+    val outcomes = waferIds.map { w =>
+      val cls = w match {
+        case "W03" => "FAIL"
+        case "W14" => "FAIL"
+        case "W22" => "SCRAP"
+        case _     => "PASS"
+      }
+      w -> cls
+    }.toMap
+    FabSimulationScenario(
+      scenarioId = "cxmt-dram-full-25",
+      name = "CXMT DRAM Full Lot (25 wafers)",
+      description = "满 FOUP 量产批（W01–W25）：LITHO AA 层 → CD-SEM 量测 → W03/W14 拆批返工重入 → W22 报废 → 其余 PASS 合批封批",
+      lotSize = 25,
+      waferIds = waferIds,
+      litho = EquipmentConfig("LITHO-DR-01", "LITHO", processingTime = 8.seconds),
+      lithoDetail = LithoConfig(
+        waferCount = 25,
+        alignmentErrorRate = 0.10,
+        resistFailureRate = 0.05,
+        hardwareFaultRate = 0.02
+      ),
+      cdSem = EquipmentConfig("CDSEM-DR-01", "METROLOGY", processingTime = 5.seconds),
+      cdSemDetail = CdSemConfig(
+        waferIds = waferIds,
+        targetCdNm = 36.0,
+        passRate = 0.88,
+        borderlineRate = 0.07,
+        failRate = 0.04,
+        scrapRate = 0.01,
+        waferOutcomes = outcomes
+      ),
+      amhs = AmhsConfig(
+        routes = Map(
+          ("STOCKER", "LITHO")     -> 3.seconds,
+          ("LITHO", "CDSEM")       -> 2.seconds,
+          ("CDSEM", "STOCKER")     -> 3.seconds,
+          ("CDSEM", "LITHO")       -> 2.seconds   // rework path
+        ),
+        maxConcurrentTransports = 3
+      ),
+      stocker = StockerConfig("STOCKER-01", portCount = 4, loadTime = 2.seconds),
+      decision = DecisionConfig(
+        lowerSpecNm = 32.0,
+        upperSpecNm = 40.0,
+        borderlineWindowNm = 1.0,
+        maxReworkCount = 2,
+        reworkRecipeId = "REWORK-DR-LITHO-AA"
+      )
+    )
+  }
 }
