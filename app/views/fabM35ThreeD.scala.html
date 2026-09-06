@@ -85,6 +85,8 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
     <span class="chip">恢复 <b id="kpiRec">0</b></span>
     <span class="chip">OCAP <b id="kpiOcap">0</b></span>
   </div>
+  <h3 style="margin-top:12px">九大工作区</h3>
+  <div id="areaChips"></div>
   <div class="btnrow">
     <button id="btnStart">▶ 启动自愈演示</button>
     <button id="btnCrash">⚡ 注入宕机</button>
@@ -92,7 +94,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <div class="btnrow">
     <button id="btnCam">🎥 跟随 OHT</button>
   </div>
-  <p class="hint">3D 场景由 /ws/fab-demo/m35/events 的真实引擎事件驱动。工位：STOCKER → LITHO-01 → CDSEM-01 → 返工岛。</p>
+  <p class="hint">按 EquipmentArea 权威模型绘制：9 大工艺区 + STOCKER + LOG 物流环线（单向 OHT）。真实引擎事件驱动，工艺路线 CLEAN → DIFF → LITHO → ETCH → LITHO(重入) → IMPL → DEP → CMP → MET → DRY。</p>
 </div>
 
 <div id="errPanel" style="position:fixed;bottom:14px;left:14px;right:14px;z-index:100;
@@ -144,96 +146,280 @@ dbg('renderer created');
 
 var scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b1220);
-scene.fog = new THREE.Fog(0x0b1220, 40, 120);
+scene.fog = new THREE.Fog(0x0b1220, 70, 190);
 
-var camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 300);
-camera.position.set(2, 17, 21);
+var camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 400);
+camera.position.set(-8, 38, 46);
 var controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
-controls.target.set(0, 1, 0);
+controls.target.set(-3, 1, 0);
 
 scene.add(new THREE.AmbientLight(0xbfd4ff, 0.55));
 var keyL = new THREE.DirectionalLight(0xffffff, 1.5);
-keyL.position.set(14, 28, 12); keyL.castShadow = true; scene.add(keyL);
-var fillL = new THREE.PointLight(0x88aaff, 0.45, 70);
-fillL.position.set(-14, 12, -10); scene.add(fillL);
+keyL.position.set(20, 40, 18); keyL.castShadow = true; scene.add(keyL);
+var fillL = new THREE.PointLight(0x88aaff, 0.45, 90);
+fillL.position.set(-20, 16, -14); scene.add(fillL);
 
-/* ===== 洁净室 ===== */
-var floor = new THREE.Mesh(new THREE.PlaneGeometry(48, 32),
+/* ===== 洁净室：九大工作区 + 物流环线 =====
+   权威定义：fab-simulation/net/imadz/fab/model/EquipmentArea.scala
+   9 工艺区（CLEAN/DIFF/LITHO/ETCH/IMPL/DEP/CMP/MET/DRY）+ STOCKER + LOG 物流指挥 */
+var floor = new THREE.Mesh(new THREE.PlaneGeometry(84, 52),
   new THREE.MeshStandardMaterial({ color: 0x1a2634, roughness: 0.85 }));
 floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
-var gridH = new THREE.GridHelper(48, 48, 0x2a3b52, 0x1c2a3c);
+var gridH = new THREE.GridHelper(84, 84, 0x2a3b52, 0x1c2a3c);
 gridH.position.y = 0.01; scene.add(gridH);
 var wallMat = new THREE.MeshStandardMaterial({ color: 0x14202e, transparent: true, opacity: 0.35, roughness: 0.4 });
-[[-24, 0], [24, 0]].forEach(function(pz) {
-  var wall = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 32), wallMat);
-  wall.position.set(pz[0], 3, 0); scene.add(wall);
+[[0, -26], [0, 26]].forEach(function(p) {
+  var wall = new THREE.Mesh(new THREE.BoxGeometry(84, 6, 0.3), wallMat);
+  wall.position.set(p[0], 3, p[1]); scene.add(wall);
 });
-[4, -4].forEach(function(z) {
-  var truss = new THREE.Mesh(new THREE.BoxGeometry(46, 0.45, 0.8),
+[[-42, 0], [42, 0]].forEach(function(p) {
+  var wall = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 52), wallMat);
+  wall.position.set(p[0], 3, p[1]); scene.add(wall);
+});
+[-24, 24].forEach(function(z) {
+  var truss = new THREE.Mesh(new THREE.BoxGeometry(82, 0.45, 0.8),
     new THREE.MeshStandardMaterial({ color: 0x37474f, metalness: 0.8, roughness: 0.3 }));
   truss.position.set(0, 5.6, z); scene.add(truss);
 });
 
-/* ===== 设备模型 ===== */
+/* ===== 区域坐标与命名 ===== */
 var AREA_POS = {
-  STOCKER:  new THREE.Vector3(-15, 0, 0),
-  LITHO:    new THREE.Vector3(-3.5, 0, 0),
-  CDSEM:    new THREE.Vector3(9, 0, 0),
-  STOCKER2: new THREE.Vector3(-6, 0, 7)
+  STOCKER: new THREE.Vector3(-34, 0, 0),
+  CLEAN:   new THREE.Vector3(-24, 0, -17),
+  DIFF:    new THREE.Vector3(-12, 0, -17),
+  LITHO:   new THREE.Vector3(0, 0, -17),
+  ETCH:    new THREE.Vector3(12, 0, -17),
+  IMPL:    new THREE.Vector3(24, 0, -17),
+  DEP:     new THREE.Vector3(33, 0, 0),
+  CMP:     new THREE.Vector3(24, 0, 17),
+  MET:     new THREE.Vector3(12, 0, 17),
+  DRY:     new THREE.Vector3(0, 0, 17),
+  LOG:     new THREE.Vector3(0, 0, 0)
+};
+AREA_POS.METROLOGY = AREA_POS.MET;   // 后端别名
+AREA_POS.CDSEM = AREA_POS.MET;       // 设备名别名
+var AREA_NAME = {
+  CLEAN: '湿法清洗', DIFF: '扩散/氧化', LITHO: '光刻', ETCH: '刻蚀',
+  IMPL: '离子注入', DEP: '薄膜沉积', CMP: '化学机械抛光',
+  MET: '量测', DRY: '干燥', LOG: '物流指挥', STOCKER: '晶圆仓库'
 };
 var EQUIP_BY_AREA = {};
 
-function equipmentBase(w, h, d, color) {
-  var g = new THREE.Group();
-  var body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ color: color, metalness: 0.6, roughness: 0.35 }));
-  body.position.y = h / 2; body.castShadow = true; g.add(body);
-  var panel = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.5, 0.7),
-    new THREE.MeshStandardMaterial({ color: 0x0aa8a0, emissive: 0x0aa8a0, emissiveIntensity: 0.7 }));
-  panel.position.set(0, h * 0.72, d / 2 + 0.01); g.add(panel);
-  g.userData.panel = panel;
-  return g;
+/* ===== 建造辅助 ===== */
+function mat(color, metal, rough) {
+  return new THREE.MeshStandardMaterial({ color: color, metalness: metal, roughness: rough });
+}
+function lampFor(group, x, y, z) {
+  var lamp = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 10),
+    new THREE.MeshStandardMaterial({ color: 0x0aa8a0, emissive: 0x0aa8a0, emissiveIntensity: 1.1 }));
+  lamp.position.set(x, y, z); group.add(lamp); group.userData.lamp = lamp;
+}
+function labelSprite(text, x, y, z, accent) {
+  var cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+  var c = cv.getContext('2d');
+  c.fillStyle = 'rgba(8,14,24,0.78)'; c.fillRect(0, 0, 256, 64);
+  c.strokeStyle = accent; c.lineWidth = 3; c.strokeRect(2, 2, 252, 60);
+  c.font = 'bold 26px "Microsoft YaHei", sans-serif';
+  c.fillStyle = '#e6edf3'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(text, 128, 34);
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
+  sp.scale.set(6.4, 1.6, 1); sp.position.set(x, y, z);
+  scene.add(sp);
 }
 
-var litho = equipmentBase(5, 3.4, 3, 0x283593);
-var lithoWin = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1),
-  new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x40c4ff, emissiveIntensity: 0.9 }));
-lithoWin.position.set(0, 2.2, 1.52); litho.add(lithoWin);
-litho.position.copy(AREA_POS.LITHO); scene.add(litho);
-EQUIP_BY_AREA.LITHO = litho;
+/* ===== ① CLEAN 湿法清洗 —— 湿法台 + 冲洗槽 ===== */
+(function() {
+  var g = new THREE.Group();
+  var bench = new THREE.Mesh(new THREE.BoxGeometry(6, 1.6, 2.4), mat(0x00695c, 0.5, 0.4));
+  bench.position.y = 0.8; g.add(bench);
+  for (var i = 0; i < 4; i++) {
+    var tank = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.0, 1.8), mat(0x26c6da, 0.3, 0.2));
+    tank.position.set(-2.1 + i * 1.4, 2.1, 0); g.add(tank);
+  }
+  lampFor(g, 0, 3.2, 0); g.position.copy(AREA_POS.CLEAN); scene.add(g);
+  EQUIP_BY_AREA.CLEAN = g;
+  labelSprite('CLEAN · 湿法清洗', AREA_POS.CLEAN.x, 4.6, AREA_POS.CLEAN.z, '#26c6da');
+})();
 
-var cdsem = new THREE.Group();
-var col = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, 2.6, 16),
-  new THREE.MeshStandardMaterial({ color: 0x37474f, metalness: 0.75, roughness: 0.3 }));
-col.position.y = 1.3; cdsem.add(col);
-var chamber = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 2.2),
-  new THREE.MeshStandardMaterial({ color: 0x263238, metalness: 0.5, roughness: 0.4 }));
-chamber.position.y = 0.55; cdsem.add(chamber);
-cdsem.position.copy(AREA_POS.CDSEM); scene.add(cdsem);
-EQUIP_BY_AREA.CDSEM = cdsem;
+/* ===== ② DIFF 扩散/氧化 —— 立式炉管阵 ===== */
+(function() {
+  var g = new THREE.Group();
+  var base = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.5, 2.2), mat(0x4e342e, 0.4, 0.5));
+  base.position.y = 0.25; g.add(base);
+  for (var i = 0; i < 3; i++) {
+    var tube = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 4.2, 14), mat(0xbf360c, 0.6, 0.35));
+    tube.position.set(-1.5 + i * 1.5, 2.35, 0); g.add(tube);
+  }
+  lampFor(g, 0, 4.9, 0); g.position.copy(AREA_POS.DIFF); scene.add(g);
+  EQUIP_BY_AREA.DIFF = g;
+  labelSprite('DIFF · 扩散/氧化', AREA_POS.DIFF.x, 5.7, AREA_POS.DIFF.z, '#ff7043');
+})();
 
-var stocker = new THREE.Group();
-var shelfFrame = new THREE.Mesh(new THREE.BoxGeometry(4.6, 3.2, 1.4),
-  new THREE.MeshStandardMaterial({ color: 0x1c2a3a, metalness: 0.4, roughness: 0.5 }));
-shelfFrame.position.y = 1.6; stocker.add(shelfFrame);
-stocker.position.copy(AREA_POS.STOCKER); scene.add(stocker);
-EQUIP_BY_AREA.STOCKER = stocker;
+/* ===== ③ LITHO 光刻 —— Stepper ===== */
+(function() {
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(new THREE.BoxGeometry(5, 3.4, 3), mat(0x283593, 0.6, 0.35));
+  body.position.y = 1.7; body.castShadow = true; g.add(body);
+  var win = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1),
+    new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x40c4ff, emissiveIntensity: 0.9 }));
+  win.position.set(0, 2.2, 1.52); g.add(win); g.userData.panel = win;
+  lampFor(g, 0, 4.1, 0); g.position.copy(AREA_POS.LITHO); scene.add(g);
+  EQUIP_BY_AREA.LITHO = g;
+  labelSprite('LITHO · 光刻', AREA_POS.LITHO.x, 4.9, AREA_POS.LITHO.z, '#40c4ff');
+})();
+
+/* ===== ④ ETCH 刻蚀 —— 双腔刻蚀机 ===== */
+(function() {
+  var g = new THREE.Group();
+  var frame = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.4, 2.6), mat(0x263238, 0.5, 0.4));
+  frame.position.y = 0.7; g.add(frame);
+  [-1.4, 1.4].forEach(function(x) {
+    var ch = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 1.9, 16), mat(0x455a64, 0.7, 0.3));
+    ch.position.set(x, 2.35, 0); g.add(ch);
+    var cap = new THREE.Mesh(new THREE.SphereGeometry(0.95, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+      mat(0x607d8b, 0.7, 0.3));
+    cap.position.set(x, 3.3, 0); g.add(cap);
+  });
+  lampFor(g, 0, 3.9, 1.7); g.position.copy(AREA_POS.ETCH); scene.add(g);
+  EQUIP_BY_AREA.ETCH = g;
+  labelSprite('ETCH · 刻蚀', AREA_POS.ETCH.x, 5.1, AREA_POS.ETCH.z, '#80deea');
+})();
+
+/* ===== ⑤ IMPL 离子注入 —— 束流线 ===== */
+(function() {
+  var g = new THREE.Group();
+  var line = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 6, 14), mat(0x37474f, 0.75, 0.25));
+  line.rotation.z = Math.PI / 2; line.position.y = 1.5; g.add(line);
+  var source = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2.2, 1.6), mat(0x512da8, 0.6, 0.35));
+  source.position.set(-3, 1.1, 0); g.add(source);
+  var target = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 2), mat(0x7e57c2, 0.5, 0.4));
+  target.position.set(3, 0.9, 0); g.add(target);
+  lampFor(g, 0, 3.1, 0); g.position.copy(AREA_POS.IMPL); scene.add(g);
+  EQUIP_BY_AREA.IMPL = g;
+  labelSprite('IMPL · 离子注入', AREA_POS.IMPL.x, 4.4, AREA_POS.IMPL.z, '#b388ff');
+})();
+
+/* ===== ⑥ DEP 薄膜沉积 —— Cluster Tool ===== */
+(function() {
+  var g = new THREE.Group();
+  var hub = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 1.5, 18), mat(0x00838f, 0.7, 0.3));
+  hub.position.y = 1.4; g.add(hub);
+  for (var i = 0; i < 4; i++) {
+    var a = i * Math.PI / 2;
+    var ch = new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.62, 1.9, 14), mat(0x00acc1, 0.6, 0.35));
+    ch.position.set(Math.cos(a) * 2.1, 1.6, Math.sin(a) * 2.1); g.add(ch);
+  }
+  lampFor(g, 0, 3.2, 0); g.position.copy(AREA_POS.DEP); scene.add(g);
+  EQUIP_BY_AREA.DEP = g;
+  labelSprite('DEP · 薄膜沉积', AREA_POS.DEP.x, 4.5, AREA_POS.DEP.z, '#26c6da');
+})();
+
+/* ===== ⑦ CMP 化学机械抛光 —— 研磨盘 ===== */
+(function() {
+  var g = new THREE.Group();
+  var base = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.9, 1.0, 24), mat(0x455a64, 0.6, 0.4));
+  base.position.y = 0.5; g.add(base);
+  var platen = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.2, 0.35, 24), mat(0xff7043, 0.3, 0.6));
+  platen.position.y = 1.18; g.add(platen);
+  var arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.8, 0.4), mat(0x90a4ae, 0.7, 0.3));
+  arm.position.set(-2.6, 1.9, -1.6); g.add(arm);
+  lampFor(g, 0, 3.3, 0); g.position.copy(AREA_POS.CMP); scene.add(g);
+  EQUIP_BY_AREA.CMP = g;
+  labelSprite('CMP · 化学机械抛光', AREA_POS.CMP.x, 4.6, AREA_POS.CMP.z, '#ffab91');
+})();
+
+/* ===== ⑧ MET 量测 —— CD-SEM ===== */
+(function() {
+  var g = new THREE.Group();
+  var col = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, 2.6, 16), mat(0x37474f, 0.75, 0.3));
+  col.position.y = 1.3; g.add(col);
+  var chamber = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.1, 2.2), mat(0x263238, 0.5, 0.4));
+  chamber.position.y = 0.55; g.add(chamber);
+  lampFor(g, 0, 3.1, 0); g.position.copy(AREA_POS.MET); scene.add(g);
+  EQUIP_BY_AREA.MET = g;
+  labelSprite('MET · 量测', AREA_POS.MET.x, 4.3, AREA_POS.MET.z, '#a5d6a7');
+})();
+
+/* ===== ⑨ DRY 干燥 —— 旋转脱水/马兰戈尼 ===== */
+(function() {
+  var g = new THREE.Group();
+  var bath = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 2.1, 1.3, 20), mat(0x00695c, 0.4, 0.5));
+  bath.position.y = 0.65; g.add(bath);
+  var lid = new THREE.Mesh(new THREE.SphereGeometry(1.7, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+    new THREE.MeshStandardMaterial({ color: 0x4db6ac, transparent: true, opacity: 0.55, roughness: 0.2 }));
+  lid.position.y = 1.3; g.add(lid);
+  lampFor(g, 0, 3.1, 0); g.position.copy(AREA_POS.DRY); scene.add(g);
+  EQUIP_BY_AREA.DRY = g;
+  labelSprite('DRY · 干燥', AREA_POS.DRY.x, 4.3, AREA_POS.DRY.z, '#80cbc4');
+})();
+
+/* ===== STOCKER 晶圆仓库 —— 自动货架 ===== */
+(function() {
+  var g = new THREE.Group();
+  var rack = new THREE.Mesh(new THREE.BoxGeometry(4.6, 5.2, 1.6), mat(0x1c2a3a, 0.4, 0.5));
+  rack.position.y = 2.6; g.add(rack);
+  for (var r = 0; r < 4; r++) {
+    var strip = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.16, 0.1),
+      new THREE.MeshStandardMaterial({ color: 0x111111, emissive: 0x69f0ae, emissiveIntensity: 0.9 }));
+    strip.position.set(0, 1.1 + r * 1.15, 0.82); g.add(strip);
+  }
+  lampFor(g, 0, 6.0, 0); g.position.copy(AREA_POS.STOCKER); scene.add(g);
+  EQUIP_BY_AREA.STOCKER = g;
+  labelSprite('STOCKER · 晶圆仓库', AREA_POS.STOCKER.x, 6.8, AREA_POS.STOCKER.z, '#69f0ae');
+})();
+
+/* ===== LOG 物流指挥塔 —— 中央调度 ===== */
+(function() {
+  var g = new THREE.Group();
+  var pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.7, 5.6, 12), mat(0x37474f, 0.75, 0.3));
+  pillar.position.y = 2.8; g.add(pillar);
+  var radar = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.24, 0.5), mat(0xffb300, 0.6, 0.3));
+  radar.position.y = 5.8; g.add(radar); g.userData.radar = radar;
+  var beacon0 = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12),
+    new THREE.MeshStandardMaterial({ color: 0x1a7f37, emissive: 0x1a7f37, emissiveIntensity: 1.4 }));
+  beacon0.position.y = 6.5; g.add(beacon0);
+  g.position.copy(AREA_POS.LOG); scene.add(g);
+  EQUIP_BY_AREA.LOG = g;
+  labelSprite('LOG · 物流指挥', AREA_POS.LOG.x, 7.8, AREA_POS.LOG.z, '#ffd54f');
+})();
+
+/* ===== OHT 物流环线（单向闭合 AMHS） ===== */
+var trackMat = new THREE.MeshStandardMaterial({ color: 0x546e7a, metalness: 0.8, roughness: 0.3 });
+var ringPts = [
+  new THREE.Vector3(-28, 5.15, -12), new THREE.Vector3(0, 5.15, -12),
+  new THREE.Vector3(28, 5.15, -12), new THREE.Vector3(31, 5.15, 0),
+  new THREE.Vector3(28, 5.15, 12), new THREE.Vector3(0, 5.15, 12),
+  new THREE.Vector3(-28, 5.15, 12), new THREE.Vector3(-31, 5.15, 0)
+];
+var trackCurve = new THREE.CatmullRomCurve3(ringPts, true, 'catmullrom', 0.5);
+var track = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 220, 0.09, 8), trackMat);
+scene.add(track);
+for (var pi = 0; pi < 16; pi++) {
+  var pp = trackCurve.getPointAt(pi / 16);
+  var post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, pp.y, 8), trackMat);
+  post.position.set(pp.x, pp.y / 2, pp.z); scene.add(post);
+}
+/* 每个区域在环线上的参数（最近采样点） */
+var RING_SAMPLES = 512;
+var ringSamples = trackCurve.getSpacedPoints(RING_SAMPLES);
+var AREA_T = {};
+['STOCKER', 'CLEAN', 'DIFF', 'LITHO', 'ETCH', 'IMPL', 'DEP', 'CMP', 'MET', 'DRY', 'LOG']
+  .forEach(function(k) {
+    var best = 0, bd = Infinity;
+    for (var i = 0; i <= RING_SAMPLES; i++) {
+      var dx = ringSamples[i].x - AREA_POS[k].x, dz = ringSamples[i].z - AREA_POS[k].z;
+      var d = dx * dx + dz * dz;
+      if (d < bd) { bd = d; best = i; }
+    }
+    AREA_T[k] = best / RING_SAMPLES;
+  });
 
 /* ===== OHT 天车 + FOUP ===== */
-var trackMat = new THREE.MeshStandardMaterial({ color: 0x546e7a, metalness: 0.8, roughness: 0.3 });
-var trackPts = [AREA_POS.STOCKER, AREA_POS.LITHO, AREA_POS.CDSEM, AREA_POS.STOCKER2]
-  .map(function(p) { return new THREE.Vector3(p.x, 5.15, p.z); });
-var trackCurve = new THREE.CatmullRomCurve3(trackPts, false, 'catmullrom', 0.1);
-var track = new THREE.Mesh(new THREE.TubeGeometry(trackCurve, 140, 0.09, 8), trackMat);
-scene.add(track);
-
 var oht = new THREE.Group();
-var bridge = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.28, 0.7),
-  new THREE.MeshStandardMaterial({ color: 0xffb300, metalness: 0.6, roughness: 0.3 }));
+var bridge = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.28, 0.7), mat(0xffb300, 0.6, 0.3));
 oht.add(bridge);
-var trolley = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5),
-  new THREE.MeshStandardMaterial({ color: 0xffcc80 }));
+var trolley = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), mat(0xffcc80, 0.2, 0.5));
 trolley.position.y = -0.45; oht.add(trolley);
 var beacon = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10),
   new THREE.MeshStandardMaterial({ color: 0x1a7f37, emissive: 0x1a7f37, emissiveIntensity: 1.2 }));
@@ -241,14 +427,15 @@ beacon.position.set(0, 0.3, 0); oht.add(beacon); oht.userData.beacon = beacon;
 scene.add(oht);
 
 var foup = new THREE.Group();
-var foupBody = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.55, 0.55),
-  new THREE.MeshStandardMaterial({ color: 0xeceff1, metalness: 0.3, roughness: 0.4 }));
+var foupBody = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.55, 0.55), mat(0xeceff1, 0.3, 0.4));
 foupBody.position.y = -0.85; foup.add(foupBody);
 var led = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8),
   new THREE.MeshStandardMaterial({ color: 0x00e676, emissive: 0x00e676, emissiveIntensity: 1.5 }));
 led.position.set(0.2, -0.62, 0.28); foup.add(led); foup.userData.led = led;
 foup.visible = false; oht.add(foup);
 
+var curT = AREA_T.STOCKER;
+oht.position.copy(trackCurve.getPointAt(curT));
 /* ===== 事件处理（WS 实时引擎事件） ===== */
 var wipCount = 0, recCount = 0, ocapCount = 0;
 var moveAnim = null;
@@ -268,21 +455,23 @@ function banner(text, cls) {
 }
 function setKpi(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
 
-var AREA_KEYS = ['STOCKER', 'LITHO', 'CDSEM'];
+var AREA_KEYS = ['STOCKER', 'LITHO', 'ETCH', 'IMPL', 'DEP', 'CMP', 'MET', 'CLEAN', 'DIFF', 'DRY', 'LOG'];
 function findArea(id) {
   if (!id) return null;
   for (var i = 0; i < AREA_KEYS.length; i++) { if (id.indexOf(AREA_KEYS[i]) >= 0) return AREA_KEYS[i]; }
+  if (id.indexOf('CDSEM') >= 0 || id.indexOf('METROLOGY') >= 0) return 'MET';
   return null;
 }
 function moveOHT(fromArea, toArea, etaMs) {
-  var from = AREA_POS[fromArea] || AREA_POS.STOCKER;
-  var to = AREA_POS[toArea] || AREA_POS.CDSEM;
+  var tt = (AREA_T[toArea] !== undefined) ? AREA_T[toArea]
+         : (AREA_T[fromArea] !== undefined ? AREA_T[fromArea] : AREA_T.MET);
+  var span = tt - curT;
+  if (span <= 0.003) span += 1;              // 单向环线，只沿正方向前进
   foup.visible = true; beaconColor(0xffb300);
   moveAnim = {
-    p0: new THREE.Vector3(from.x, 5.15, from.z),
-    p1: new THREE.Vector3(to.x, 5.15, to.z),
-    t0: performance.now(),
-    eta: Math.max(500, Math.min(etaMs || 1200, 6000))
+    t0: curT, span: span,
+    start: performance.now(),
+    eta: Math.max(600, Math.min(etaMs || 1500, 6000))
   };
 }
 function beaconColor(hex) {
@@ -292,14 +481,26 @@ function beaconColor(hex) {
 var panelTimers = {};
 function panelColor(areaKey, hex) {
   var eq = EQUIP_BY_AREA[areaKey];
-  var panel = eq && eq.userData && eq.userData.panel;
-  if (!panel) return;
-  panel.material.color.setHex(hex);
-  panel.material.emissive.setHex(hex);
+  if (!eq) return;
+  var lamp = eq.userData.lamp, panel = eq.userData.panel;
+  if (!eq.userData.orig) {
+    eq.userData.orig = {
+      lampC: lamp ? lamp.material.color.getHex() : 0,
+      lampE: lamp ? lamp.material.emissive.getHex() : 0,
+      panC: panel ? panel.material.color.getHex() : 0,
+      panE: panel ? panel.material.emissive.getHex() : 0
+    };
+  }
+  var o = eq.userData.orig;
+  if (lamp) { lamp.material.color.setHex(hex); lamp.material.emissive.setHex(hex); }
+  if (panel) { panel.material.color.setHex(hex); panel.material.emissive.setHex(hex); }
+  var chip = document.getElementById('chip-' + areaKey);
+  if (chip) chip.className = 'chip on';
   clearTimeout(panelTimers[areaKey]);
   panelTimers[areaKey] = setTimeout(function() {
-    panel.material.color.setHex(0x0aa8a0);
-    panel.material.emissive.setHex(0x0aa8a0);
+    if (lamp) { lamp.material.color.setHex(o.lampC); lamp.material.emissive.setHex(o.lampE); }
+    if (panel) { panel.material.color.setHex(o.panC); panel.material.emissive.setHex(o.panE); }
+    if (chip) chip.className = 'chip';
   }, 4000);
 }
 
@@ -355,6 +556,14 @@ function handleEvent0(frame) {
     }
   }
 }
+/* 九大工作区图例 */
+var AREA_ORDER = ['CLEAN', 'DIFF', 'LITHO', 'ETCH', 'IMPL', 'DEP', 'CMP', 'MET', 'DRY'];
+var areaChipsEl = document.getElementById('areaChips');
+AREA_ORDER.forEach(function(k) {
+  var s = document.createElement('span');
+  s.className = 'chip'; s.id = 'chip-' + k; s.textContent = AREA_NAME[k];
+  areaChipsEl.appendChild(s);
+});
 connect();
 
 /* ===== 启动/宕机按钮 ===== */
@@ -379,12 +588,16 @@ var clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
   if (moveAnim) {
-    var k = Math.min(1, (performance.now() - moveAnim.t0) / moveAnim.eta);
+    var k = Math.min(1, (performance.now() - moveAnim.start) / moveAnim.eta);
     var ease = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-    oht.position.lerpVectors(moveAnim.p0, moveAnim.p1, ease);
-    if (k >= 1) moveAnim = null;
+    curT = (moveAnim.t0 + moveAnim.span * ease) % 1;
+    oht.position.copy(trackCurve.getPointAt(curT));
+    var tan = trackCurve.getTangentAt(curT);
+    oht.rotation.y = Math.atan2(tan.x, tan.z);
+    if (k >= 1) { moveAnim = null; beaconColor(0x1a7f37); }
   }
-  var pulse = 0.7 + Math.sin(performance.now() * 0.006) * 0.5;
+  if (EQUIP_BY_AREA.LOG && EQUIP_BY_AREA.LOG.userData.radar)
+    EQUIP_BY_AREA.LOG.userData.radar.rotation.y += 0.02;
   beacon.material.emissiveIntensity = 1.0 + Math.sin(performance.now() * 0.008) * 0.6;
   if (followCam) {
     camera.position.lerp(new THREE.Vector3(oht.position.x + 4, 8, oht.position.z + 8), 0.04);
