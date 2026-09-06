@@ -22,7 +22,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 .hud { position:fixed; z-index:20; background:rgba(13,23,38,0.88);
   border:1px solid rgba(255,255,255,0.1); border-radius:10px;
   padding:10px 12px; font-size:12px; }
-#hudLeft { left:14px; top:104px; width:258px; }
+#hudLeft { left:14px; top:104px; width:274px; }
 #hudRight { right:14px; top:104px; width:300px; max-height:52vh; overflow-y:auto; }
 /* 顶部演示控制条 */
 #ctrlBar { position:fixed; top:52px; left:0; right:0; z-index:35; display:flex;
@@ -90,20 +90,15 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 #btnCam { background:#37474f; color:#cfd8dc; }
   .hint { font-size:11px; color:#6b7f95; margin-top:8px; line-height:1.5;
     border-top:1px solid rgba(255,255,255,0.07); padding-top:7px; }
-  #areaGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:5px; }
-  .areaCell { display:flex; align-items:center; gap:5px; padding:5px 6px; cursor:pointer;
+  #areaGrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:4px; }
+  .areaCell { display:flex; align-items:center; gap:4px; padding:4px 5px; cursor:pointer;
     background:rgba(255,255,255,0.045); border:1px solid rgba(255,255,255,0.09);
-    border-radius:7px; font-size:11px; color:#c8d6e5; white-space:nowrap;
-    transition:border-color .3s; }
+    border-radius:7px; font-size:10px; color:#c8d6e5; white-space:nowrap;
+    overflow:hidden; transition:border-color .3s; }
   .areaCell:hover { border-color:rgba(255,255,255,0.25); }
   .areaCell.sel { border-color:#42a5f5; }
-  .areaCell .dot { width:8px; height:8px; border-radius:50%;
+  .areaCell .dot { width:7px; height:7px; border-radius:50%;
     background:#3d4d5f; flex:none; transition:background .3s, box-shadow .3s; }
-  .areaCell .iv { display:none; margin-left:auto; gap:3px; }
-  .areaCell.sel .iv { display:flex; }
-  .iv button { border:none; background:rgba(255,255,255,0.1); color:#e6edf3;
-    border-radius:4px; padding:1px 4px; font-size:10px; cursor:pointer; line-height:1.4; }
-  .iv button:hover { background:rgba(255,255,255,0.25); }
   @@keyframes cellPulse { 0%{ box-shadow:0 0 0 0 rgba(66,165,245,.55);} 70%{ box-shadow:0 0 0 7px rgba(66,165,245,0);} 100%{ box-shadow:0 0 0 0 rgba(66,165,245,0);} }
   .areaCell.pulse { animation:cellPulse 1s ease-out 2; border-color:#42a5f5; }
   @@keyframes kpiPop { 0%{display:inline-block; transform:scale(1.7); color:#ffd54f} 100%{display:inline-block; transform:scale(1)} }
@@ -156,6 +151,11 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <div id="lotTree"></div>
   <h3 style="margin-top:12px">九大工作区</h3>
   <div id="areaGrid"></div>
+  <div id="areaIv">
+    <span>干预 <b id="areaIvName"></b>：</span>
+    <button id="ivDown">⏻ 停机</button>
+    <button id="ivReset">🛠 复位</button>
+  </div>
   <h3 style="margin-top:12px">OCAP 规则库</h3>
   <div id="ruleLib"><div class="ruleRow muted">加载中…</div></div>
 </div>
@@ -1074,28 +1074,36 @@ function handleEvent0(frame) {
 /* 九大工作区网格：状态点由区域 Actor 状态驱动；点击格子可干预（停机/复位） */
 var AREA_ORDER = ['CLEAN', 'DIFF', 'LITHO', 'ETCH', 'IMPL', 'DEP', 'CMP', 'MET', 'DRY'];
 var areaGridEl = document.getElementById('areaGrid');
+var ivArea = null;   // 当前选中待干预的区域
 AREA_ORDER.forEach(function(k) {
   var cell = document.createElement('div');
   cell.className = 'areaCell'; cell.id = 'cell-' + k;
-  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span>' +
-    '<span class="iv"><button title="模拟故障停机" data-act="down">⏻</button>' +
-    '<button title="修复复位" data-act="reset">🛠</button></span>';
-  cell.addEventListener('click', function(ev) {
-    var btn = ev.target.closest('button');
-    var wasSel = cell.classList.contains('sel');
+  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span>';
+  cell.addEventListener('click', function() {
+    ivArea = (ivArea === k) ? null : k;
     document.querySelectorAll('.areaCell.sel').forEach(function(c) { c.classList.remove('sel'); });
-    if (btn) {
-      var act = btn.getAttribute('data-act');
-      fetch('/api/fab-demo/area/' + k + '/' + act, { method: 'POST' });
-      narrate(act === 'down' ? '⏻' : '🛠',
-        '驾驶舱干预：<b>' + (AREA_NAME[k] || k) + '</b> ' + (act === 'down' ? '人工停机' : '修复复位'), 3200, k,
-        act === 'down' ? '#ff5252' : '#00e676');
-      ev.stopPropagation();
-      return;
+    if (ivArea) cell.classList.add('sel');
+    var bar = document.getElementById('areaIv');
+    var label = document.getElementById('areaIvName');
+    if (bar) {
+      bar.style.display = ivArea ? 'flex' : 'none';
+      if (label) label.textContent = ivArea ? (AREA_NAME[ivArea] || ivArea) : '';
     }
-    if (!wasSel) cell.classList.add('sel');
   });
   areaGridEl.appendChild(cell);
+});
+document.getElementById('ivDown').addEventListener('click', function() {
+  if (!ivArea) return;
+  fetch('/api/fab-demo/area/' + ivArea + '/down', { method: 'POST' });
+  narrate('⏻', '驾驶舱干预：<b>' + (AREA_NAME[ivArea] || ivArea) + '</b> 人工停机（待复位）', 3600, ivArea, '#ff5252');
+});
+document.getElementById('ivReset').addEventListener('click', function() {
+  if (!ivArea) return;
+  fetch('/api/fab-demo/area/' + ivArea + '/reset', { method: 'POST' });
+  narrate('🛠', '驾驶舱干预：<b>' + (AREA_NAME[ivArea] || ivArea) + '</b> 修复复位', 3600, ivArea, '#00e676');
+  ivArea = null;
+  document.getElementById('areaIv').style.display = 'none';
+  document.querySelectorAll('.areaCell.sel').forEach(function(c) { c.classList.remove('sel'); });
 });
 var CELL_STATUS_COLOR = { IDLE: '#455a64', LOADED: '#ffb300', BUSY: '#42a5f5',
                           FINISHED: '#00e676', UNLOADING: '#ffd54f', DOWN: '#ff5252' };
