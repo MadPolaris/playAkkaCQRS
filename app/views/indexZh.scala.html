@@ -286,6 +286,7 @@
                     <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
                     <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 引擎</a>
                     <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈内核</a>
+                    <a href="/bank-batch" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5</span>银行批量 10 万</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -474,11 +475,11 @@
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker next">M3.5</div>
+            <div class="roadmap-marker done">M3.5</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">进行中 — 单 WO 自愈就绪</span>
+                <span class="badge badge-explore">已交付 — 10 万客户规模验证（终态对账全平）</span>
                 <h4>M3.5 · 自愈决策内核 — 0 卡死工单</h4>
-                <p>从"静态脚本"到"反应式内核"的关键一步。单 WorkOrder EventSourced 断点恢复已就绪：FabPipelineExecutionActor 崩溃后通过 Journal 重放恢复状态，resumeFromIndex 跳过已完成阶段从中断处继续。Pipeline Stage 失败 → OCAP 拦截 → 动态织造 Rework DSL → Saga 保证原子性。设备故障注入。工艺路线图实时反映动态分支。 <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">M3.5 自愈演示 →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">路线图 →</a></p>
+                <p>从"静态脚本"到"反应式内核"的关键一步。单 WorkOrder EventSourced 断点恢复已就绪：FabPipelineExecutionActor 崩溃后通过 Journal 重放恢复状态，resumeFromIndex 跳过已完成阶段从中断处继续。Pipeline Stage 失败 → OCAP 拦截 → 动态织造 Rework DSL → Saga 保证原子性。设备故障注入。已在 10 万客户规模验证：300 个批次全部跑通，终态对账严格守恒（96,243 入账 / 1,947 放弃 / 809 人工 / 1,001 异常池），运行中途注入宕机并断点续跑复验通过。 <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">M3.5 自愈演示 →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">路线图 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -552,6 +553,16 @@
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：Actor 崩溃 → 事件重放恢复 → 断点续传 → OCAP 故障拦截</p>
             <br>
             <a href="/fab-demo/m35" class="card-link">打开 M3.5 自愈演示 →</a>
+
+        <div class="card">
+            <div class="card-icon" style="background:rgba(34,197,94,0.12);color:#16a34a">🏦</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(34,197,94,0.15);color:#16a34a;font-weight:700;">M3.5</span><span class="tag">批量 10 万</span><span class="tag">双链</span><span class="tag">终态对账</span></div>
+            <h3>银行批量充值 + 基金申购</h3>
+            <p>100,000 客户 · 每批 2,000 · 共 50 批 · 并发 6 —— 同一副 Monarch 骨架跑两条链。充值链（合作银行）：文件交换六工序，约 2% 余额不足按策略放弃、约 2% 超时 → 查证 → 自动重批。申购链（基金公司）：充值到账客户自动衔接申购。账务更新注入 1% 瞬时故障 → 自动重试 → 人工异常池。终态账本实时核对严格守恒。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">跑一遍：启动 10 万 → 看 50 批分批推进 → ⚡ 注入宕机 → 在途归零、每笔单子恰好落进一个终态桶</p>
+            <br>
+            <a href="/bank-batch" class="card-link">打开银行批量演示 →</a>
+        </div>
         </div>
     </div>
 

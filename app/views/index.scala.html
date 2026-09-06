@@ -303,6 +303,7 @@
                     <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
                     <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
                     <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Self-Healing</a>
+                    <a href="/bank-batch" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5</span>Bank Batch 100k</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -348,7 +349,7 @@
         A streaming DAG execution engine that orchestrates across systems.
         <br><br>
         Milestones 1, 2, 2.5+ are live. M3 architecture and prototype are live.
-        M3.5 (self-healing) and M3.9 (cluster resilience) are the next two milestones —
+        M3.5 (self-healing) is shipped and verified at 100k scale; M3.9 (cluster resilience) is the next milestone —
         we're defining them <em>with</em> the Fab industry.
     </p>
     <div class="hero-actions">
@@ -495,11 +496,11 @@
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker next">M3.5</div>
+            <div class="roadmap-marker done">M3.5</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">In Progress — Single-WO Self-Healing Ready</span>
+                <span class="badge badge-explore">SHIPPED — Verified at 100k Scale (Terminal Accounting Balanced)</span>
                 <h4>M3.5 · Self-Healing Decision Kernel — 0 Stuck WorkOrders</h4>
-                <p>The critical step from "static script" to "reactive kernel." Single WorkOrder EventSourced breakpoint resume: FabPipelineExecutionActor recovers state via journal replay on crash, resumeFromIndex skips completed phases and continues from breakpoint. Pipeline Stage failure → OCAP intercepts → dynamically weaves Rework DSL → Saga guarantees atomicity → WorkOrder converges correctly. Equipment injects spontaneous faults. Multi-WorkOrder concurrent chaos testing (202 tests). <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">M3.5 Self-Healing Demo →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">Roadmap →</a></p>
+                <p>The critical step from "static script" to "reactive kernel." Single WorkOrder EventSourced breakpoint resume: FabPipelineExecutionActor recovers state via journal replay on crash, resumeFromIndex skips completed phases and continues from breakpoint. Pipeline Stage failure → OCAP intercepts → dynamically weaves Rework DSL → Saga guarantees atomicity → WorkOrder converges correctly. Equipment injects spontaneous faults. Verified at 100k-customer scale: 300 batches drained, terminal-state accounting balanced exactly (96,243 credited / 1,947 scrapped / 809 manual / 1,001 exception-pool), mid-run crash re-verified. <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">M3.5 Self-Healing Demo →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">Roadmap →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -573,6 +574,16 @@
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Actor crash - Journal replay recovery - Breakpoint resume - OCAP fault interception - Dynamic Rework DSL</p>
             <br>
             <a href="/fab-demo/m35" class="card-link">Open M3.5 Self-Healing Demo →</a>
+
+        <div class="card">
+            <div class="card-icon" style="background:rgba(34,197,94,0.12);color:#16a34a">🏦</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(34,197,94,0.15);color:#16a34a;font-weight:700;">M3.5</span><span class="tag">Batch 100k</span><span class="tag">Dual-Chain</span><span class="tag">Terminal Accounting</span></div>
+            <h3>Bank Batch Recharge + Fund Subscription</h3>
+            <p>100,000 customers, 2,000 per batch, 50 batches at concurrency 6 on the same Monarch skeleton. Chain 1 (partner bank): file-exchange six steps, ~2% balance-insufficient scrapped, ~2% timeout -> reconfirm -> auto re-batch. Chain 2 (fund company): auto-chained from credited customers. Account updates inject 1% transient faults -> auto-retry -> manual exception pool. Live terminal-state ledger reconciles exactly.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Run: start 100k -> watch 50-batch progress -> crash a batch -> in-flight drops to 0, every order in exactly one bucket</p>
+            <br>
+            <a href="/bank-batch" class="card-link">Open Bank Batch Demo →</a>
+        </div>
         </div>
     </div>
 

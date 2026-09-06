@@ -2,6 +2,7 @@ package net.imadz.m25.demo
 
 import net.imadz.m25.component._
 import net.imadz.m25.pipeline._
+import net.imadz.monarch.LifecycleHooks
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -121,20 +122,31 @@ object M25PlusDemo {
     }
 
   // ============================================================
-  // 组装：业务链路 = 标准组件 + 业务参数
+  // 组装：业务链路 = 标准组件 + 业务参数（Monarch 引擎驱动）
   // ============================================================
 
-  /** 通用链路组装器 */
+  /** 通用链路组装器——经 BankChain 六阶段队列由 monarch-core 的 Monarch 引擎执行。 */
   case class ChainAssembly[Item](
       chainId: String,
-      processor: SubBatchProcessor[Item, String],
+      pipeline: SubBatchPipeline[Item, String],
       reconfirm: ReconfirmHandler[Item],
       router: ReBatchRouter[Item],
       scheduler: AreaScheduler[Item]
   ) {
     def processBatch(batch: SubBatch[Item])(implicit ec: ExecutionContext): Future[Unit] = {
+      val monarch = BankChain.monarch[Item, String](pipeline,
+        hooks = new LifecycleHooks[BankStage, BankChainState[Item, String]] {
+          override def stageName(stage: BankStage): String = BankStage.stageName(stage)
+        })
+      monarch.initialize(BankStage.chain)
       for {
-        result <- processor.process(batch)
+        finalState <- monarch.process(BankChainState[Item, String](
+          batchId = batch.batchId, chainId = chainId, items = batch.items))
+        classifications = finalState.classifications.getOrElse(Seq.empty)
+        result = SubBatchResult(batch.batchId,
+          classifications.collect { case s: Success[Item] => s },
+          classifications.collect { case f: Failure[Item] => f },
+          classifications.collect { case s: Suspicious[Item] => s })
 
         // 可疑项 → 复核
         resolved <- if (result.suspicious.nonEmpty) {
@@ -180,7 +192,7 @@ object M25PlusDemo {
 
     ChainAssembly(
       chainId   = "recharge",
-      processor = new SubBatchProcessor[String, String](pipeline),
+      pipeline  = pipeline,
       reconfirm = new ReconfirmHandler[String] {
         override def reconfirm(
             suspicious: Seq[Suspicious[String]]): Future[Seq[Classification[String]]] =
@@ -202,7 +214,7 @@ object M25PlusDemo {
 
     ChainAssembly(
       chainId   = "purchase",
-      processor = new SubBatchProcessor[String, String](pipeline),
+      pipeline  = pipeline,
       reconfirm = new ReconfirmHandler[String] {
         override def reconfirm(
             suspicious: Seq[Suspicious[String]]): Future[Seq[Classification[String]]] =
