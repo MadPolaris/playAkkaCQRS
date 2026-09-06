@@ -22,8 +22,40 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 .hud { position:fixed; z-index:20; background:rgba(13,23,38,0.88);
   border:1px solid rgba(255,255,255,0.1); border-radius:10px;
   padding:10px 12px; font-size:12px; }
-#hudLeft { left:14px; top:56px; width:255px; }
-#hudRight { right:14px; top:56px; width:300px; max-height:55vh; overflow-y:auto; }
+#hudLeft { left:14px; top:104px; width:258px; }
+#hudRight { right:14px; top:104px; width:300px; max-height:52vh; overflow-y:auto; }
+/* 顶部演示控制条 */
+#ctrlBar { position:fixed; top:52px; left:0; right:0; z-index:35; display:flex;
+  align-items:center; gap:10px; padding:8px 16px; background:rgba(11,18,32,0.88);
+  backdrop-filter:blur(8px); border-bottom:1px solid rgba(255,255,255,0.08); }
+#ctrlBar select { flex:0 0 360px; padding:6px 8px; background:#0d1726; color:#e6edf3;
+  border:1px solid rgba(255,255,255,0.15); border-radius:6px; font-size:12px; }
+#ctrlBar button { padding:7px 14px; border:none; border-radius:6px; font-size:12px;
+  font-weight:600; cursor:pointer; }
+#ctrlBar button.hidden { display:none; }
+#btnStart { background:#1a7f37; color:#fff; }
+#btnCrash { background:#7a3c10; color:#ffd8b0; }
+#btnCam { background:#263442; color:#cfe0f0; }
+#runBadge { margin-left:auto; font-size:11px; color:#8fb8e8; letter-spacing:.5px; }
+/* 底部动态工艺路线条 */
+#routeStrip { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:34;
+  display:flex; align-items:center; gap:6px; padding:8px 14px;
+  background:rgba(11,18,32,0.85); border:1px solid rgba(255,255,255,0.12);
+  border-radius:10px; backdrop-filter:blur(6px); }
+.rnode { padding:3px 10px; border-radius:5px; font-size:11px; font-weight:600;
+  color:#7f92a8; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08);
+  letter-spacing:.5px; transition:all .25s; }
+.rnode.done { color:#9fe19f; border-color:rgba(26,127,55,0.55); }
+.rnode.active { color:#111; background:#ffb300; border-color:#ffb300;
+  box-shadow:0 0 12px rgba(255,179,0,.75); }
+.rarrow { color:#5a6b7d; font-size:11px; }
+/* OCAP 规则库 */
+#ruleLib .ruleRow { display:flex; align-items:center; gap:6px; font-size:11px;
+  padding:3px 0; color:#93a7bb; border-bottom:1px dashed rgba(255,255,255,0.05); }
+#ruleLib .ruleRow .act { color:#6b7f95; font-size:10px; }
+#ruleLib .ruleRow .cnt { margin-left:auto; color:#ffd54f; font-weight:700; }
+#ruleLib .ruleRow.fired { color:#e6edf3; }
+#ruleLib .ruleRow.muted { color:#5a6b7d; border-bottom:none; }
 .hud h3 { margin:0 0 8px; font-size:12px; text-transform:uppercase;
   letter-spacing:1px; color:#8fb8e8; }
 .chip { display:inline-block; padding:3px 10px; border-radius:12px;
@@ -63,7 +95,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   .areaCell.pulse { animation:cellPulse 1s ease-out 2; border-color:#42a5f5; }
   @@keyframes kpiPop { 0%{display:inline-block; transform:scale(1.7); color:#ffd54f} 100%{display:inline-block; transform:scale(1)} }
   .chip b.pop { animation:kpiPop .45s ease-out; }
-  #narr { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); z-index:45;
+  #narr { position:fixed; bottom:64px; left:50%; transform:translateX(-50%); z-index:45;
     max-width:70vw; padding:9px 20px; border-radius:22px; background:rgba(13,23,38,.9);
     border:1px solid rgba(255,255,255,.2); font-size:13.5px; color:#cfe8ff;
     display:none; align-items:center; gap:9px; backdrop-filter:blur(6px);
@@ -107,8 +139,18 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
     <span class="chip">合批 <b id="kpiMerge">0</b></span>
     <span class="chip">报废 <b id="kpiScrap">0</b></span>
   </div>
-  <h3 style="margin-top:12px">演示用例</h3>
-  <select id="scenarioSel" style="width:100%;padding:6px;background:#0d1726;color:#e6edf3;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:12px;">
+  <h3 style="margin-top:12px">批次谱系（拆批 / 合批）</h3>
+  <div id="lotTree"></div>
+  <h3 style="margin-top:12px">九大工作区</h3>
+  <div id="areaGrid"></div>
+  <h3 style="margin-top:12px">OCAP 规则库</h3>
+  <div id="ruleLib"><div class="ruleRow muted">加载中…</div></div>
+</div>
+
+<!-- 顶部演示控制条 -->
+<div id="ctrlBar">
+  <span style="font-size:11px;font-weight:700;color:#ffd54f;letter-spacing:1px;">LIVE DEMO</span>
+  <select id="scenarioSel">
     <option value="m35">M3.5 自愈演示（宕机注入 + 断点续跑）</option>
     <option value="cxmt-dram-full-25">长鑫 CXMT DRAM 满批：25 片整 FOUP · 拆批返工 + 报废</option>
     <option value="photo-cell-5wafer">拆批返工：2 返工 → PASS + 1 报废（5 片）</option>
@@ -117,19 +159,14 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
     <option value="hold-release">暂扣与放行：HOLD → 评审 15s → 合批（5 片）</option>
     <option value="scrap-downgrade">直接报废：SCRAP 子批分流（3 片）</option>
   </select>
-  <h3 style="margin-top:12px">批次谱系（拆批 / 合批）</h3>
-  <div id="lotTree"></div>
-  <h3 style="margin-top:12px">九大工作区</h3>
-  <div id="areaGrid"></div>
-  <div class="btnrow">
-    <button id="btnStart">▶ 启动自愈演示</button>
-    <button id="btnCrash">⚡ 注入宕机</button>
-  </div>
-  <div class="btnrow">
-    <button id="btnCam">🎥 跟随 OHT</button>
-  </div>
-  <p class="hint">状态由区域 Actor 权威推送 · 工艺模型见 EquipmentArea</p>
+  <button id="btnStart">▶ 启动</button>
+  <button id="btnCrash">⚡ 注入宕机</button>
+  <button id="btnCam">🎥 剧情镜头</button>
+  <span id="runBadge">WS 连接中…</span>
 </div>
+
+<!-- 底部动态工艺路线条 -->
+<div id="routeStrip"></div>
 
 <div id="errPanel" style="position:fixed;bottom:14px;left:14px;right:14px;z-index:100;
   background:#1a0000;color:#ff6b6b;font-family:Consolas,monospace;font-size:11px;
@@ -905,11 +942,15 @@ function handleEvent0(frame) {
     setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
     setKpi('kpiWip', wipCount);
     renderLotTree();
+    var badge = document.getElementById('runBadge');
+    if (badge) badge.textContent = '● 运行中 · ' + (d.name || '演示');
+    routeActive('STOCKER');
     banner('🚀 ' + (d.name || '演示') + '：' + wipCount + ' 片晶圆入库', 'recovering');
     feedAdd('▶ ' + (d.name || d.scenarioId || '演示') + ' 启动（' + wipCount + ' 片）');
     narrate('🎬', '用例启动：<b>' + (d.name || '演示') + '</b>，' + wipCount + ' 片晶圆出库', 4000, 'STOCKER', 0x00e676);
   } else if (t === 'FoupInTransit') {
     moveOHT(d.fromArea, d.toArea, d.etaMs);
+    routeActive(d.toArea);
     var fn = AREA_NAME[d.fromArea] || d.fromArea || '', tn2 = AREA_NAME[d.toArea] || d.toArea || '';
     if (tn2) narrate('🚗', '天车满载 FOUP：<b>' + fn + '</b> → <b>' + tn2 + '</b>', 3200, d.toArea);
   } else if (t === 'FoupArrivedAtPort') {
@@ -997,7 +1038,8 @@ function handleEvent0(frame) {
     ocapCount++; setKpi('kpiOcap', ocapCount);
     banner('🛠 OCAP 拦截', 'recovering');
     feedAdd('🛠 OCAP 处置');
-    narrate('🛠️', 'OCAP 异常处置介入：按规则自动补救', 3200);
+    ruleFired(d.ruleId);
+    narrate('🛠️', 'OCAP 异常处置介入：' + (d.ruleName || '') + ' → ' + (d.actionType || ''), 3200);
   } else if (t === 'RecoveryEvent') {
     recCount++; setKpi('kpiRec', recCount);
     banner('🔄 [' + (d.batchId || '') + '] 断点续跑（' + (d.phasesSkipped || 0) + ' 道已完成）', 'recovering');
@@ -1006,6 +1048,8 @@ function handleEvent0(frame) {
   } else if (t === 'GlobalStatusChanged') {
     if ((d.status || '').indexOf('Complete') >= 0) {
       banner('✅ 全部完成', 'done');
+      var badge2 = document.getElementById('runBadge');
+      if (badge2) badge2.textContent = '● 已完成 ✓';
     }
   }
 }
@@ -1031,13 +1075,63 @@ function areaCellState(key, status) {
 renderLotTree();
 connect();
 
+/* ===== 动态工艺路线条（底部） ===== */
+var ROUTE = ['CLEAN', 'DIFF', 'LITHO', 'ETCH', 'IMPL', 'DEP', 'CMP', 'MET', 'DRY'];
+(function() {
+  var strip = document.getElementById('routeStrip');
+  ROUTE.forEach(function(k, i) {
+    var n = document.createElement('span');
+    n.className = 'rnode'; n.id = 'rn-' + k; n.textContent = k;
+    strip.appendChild(n);
+    if (i < ROUTE.length - 1) {
+      var a = document.createElement('span');
+      a.className = 'rarrow'; a.textContent = '→';
+      strip.appendChild(a);
+    }
+  });
+})();
+function routeActive(areaKey) {
+  if (!areaKey) return;
+  var nodes = document.querySelectorAll('.rnode');
+  for (var i = 0; i < nodes.length; i++) nodes[i].classList.remove('active');
+  var n = document.getElementById('rn-' + areaKey);
+  if (n) n.classList.add('active');
+}
+/* ===== OCAP 规则库（拉取全量规则 + 实时触发计数） ===== */
+var RULE_COUNTS = {};
+(function() {
+  fetch('/api/fab-demo/m35/ocap-rules').then(function(r) { return r.json(); }).then(function(rules) {
+    var el = document.getElementById('ruleLib');
+    if (!el || !rules.length) return;
+    el.innerHTML = '';
+    rules.forEach(function(r) {
+      var row = document.createElement('div');
+      row.className = 'ruleRow'; row.id = 'rule-' + r.ruleId;
+      row.innerHTML = '<span>' + r.name + '</span><span class="act">' + r.actionType +
+        '</span><span class="cnt">·</span>';
+      el.appendChild(row);
+    });
+  }).catch(function() {
+    var el = document.getElementById('ruleLib');
+    if (el) el.innerHTML = '<div class="ruleRow muted">OCAP 规则库（选择 M3.5 用例后加载）</div>';
+  });
+})();
+function ruleFired(ruleId) {
+  RULE_COUNTS[ruleId] = (RULE_COUNTS[ruleId] || 0) + 1;
+  var row = document.getElementById('rule-' + ruleId);
+  if (row) {
+    row.querySelector('.cnt').textContent = '×' + RULE_COUNTS[ruleId];
+    row.classList.add('fired');
+  }
+}
 /* ===== 启动/宕机按钮（按用例分发） ===== */
 var selEl = document.getElementById('scenarioSel');
 var btnCrashEl = document.getElementById('btnCrash');
-selEl.addEventListener('change', function() {
-  btnCrashEl.disabled = selEl.value !== 'm35';
-  btnCrashEl.textContent = selEl.value !== 'm35' ? '⚡ 仅 M3.5 用例支持' : '⚡ 注入宕机';
-});
+function syncCrashVisibility() {
+  btnCrashEl.classList.toggle('hidden', selEl.value !== 'm35');
+}
+selEl.addEventListener('change', function() { syncCrashVisibility(); });
+syncCrashVisibility();
 document.getElementById('btnStart').addEventListener('click', function() {
   var sc = selEl.value;
   resetDemoState();
