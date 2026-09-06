@@ -244,15 +244,32 @@ function lampFor(group, x, y, z) {
   lamp.position.set(x, y, z); group.add(lamp); group.userData.lamp = lamp;
 }
 function labelSprite(text, x, y, z, accent) {
-  var cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+  var cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
   var c = cv.getContext('2d');
-  c.fillStyle = 'rgba(8,14,24,0.78)'; c.fillRect(0, 0, 256, 64);
-  c.strokeStyle = accent; c.lineWidth = 3; c.strokeRect(2, 2, 252, 60);
-  c.font = 'bold 26px "Microsoft YaHei", sans-serif';
-  c.fillStyle = '#e6edf3'; c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText(text, 128, 34);
-  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
-  sp.scale.set(6.4, 1.6, 1); sp.position.set(x, y, z);
+  var sep = text.indexOf('·');
+  var en = sep > 0 ? text.slice(0, sep).trim() : '';
+  var cn = sep > 0 ? text.slice(sep + 1).trim() : text;
+  var fontStack = '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif';
+  c.fillStyle = 'rgba(9,15,25,0.78)';
+  c.beginPath();
+  var r = 20;
+  c.moveTo(r, 0); c.lineTo(512 - r, 0); c.quadraticCurveTo(512, 0, 512, r);
+  c.lineTo(512, 128 - r); c.quadraticCurveTo(512, 128, 512 - r, 128);
+  c.lineTo(r, 128); c.quadraticCurveTo(0, 128, 0, 128 - r);
+  c.lineTo(0, r); c.quadraticCurveTo(0, 0, r, 0);
+  c.fill();
+  c.fillStyle = accent; c.fillRect(14, 30, 8, 68);          // 左侧色条
+  c.textAlign = 'left'; c.textBaseline = 'middle';
+  if (en) { c.font = '500 30px ' + fontStack; c.fillStyle = 'rgba(143,184,232,0.95)'; c.fillText(en, 42, 40); }
+  c.font = 'bold 50px ' + fontStack;
+  c.fillStyle = '#eef4fb';
+  c.shadowColor = 'rgba(0,0,0,0.9)'; c.shadowBlur = 6;
+  c.fillText(cn, en ? 40 : 42, 92);
+  c.shadowBlur = 0;
+  var tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
+  sp.scale.set(7.0, 1.75, 1); sp.position.set(x, y, z);
   scene.add(sp);
 }
 
@@ -494,12 +511,22 @@ function boardSet(key, text, color) {
   var b = BOARDS[key]; if (!b) return;
   clearTimeout(boardTimers[key]);   // 新状态接管屏幕：作废任何待触发的“回落待机”定时器
   var c = b.ctx;
-  c.clearRect(0, 0, 256, 64);
-  c.fillStyle = 'rgba(8,14,24,0.72)'; c.fillRect(0, 0, 256, 64);
-  c.strokeStyle = color; c.lineWidth = 2.5; c.strokeRect(2, 2, 252, 60);
-  c.font = 'bold 28px "Microsoft YaHei", sans-serif';
+  var W = 512, H = 128;
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = 'rgba(9,15,25,0.80)';
+  c.beginPath();
+  var r = 22;
+  c.moveTo(r, 0); c.lineTo(W - r, 0); c.quadraticCurveTo(W, 0, W, r);
+  c.lineTo(W, H - r); c.quadraticCurveTo(W, H, W - r, H);
+  c.lineTo(r, H); c.quadraticCurveTo(0, H, 0, H - r);
+  c.lineTo(0, r); c.quadraticCurveTo(0, 0, r, 0);
+  c.fill();
+  c.strokeStyle = color; c.lineWidth = 4; c.stroke();
+  c.shadowColor = 'rgba(0,0,0,0.85)'; c.shadowBlur = 8;
+  c.font = 'bold 56px "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif';
   c.fillStyle = color; c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText(text, 128, 34);
+  c.fillText(text, W / 2, H / 2 + 2);
+  c.shadowBlur = 0;
   b.tex.needsUpdate = true;
 }
 function boardFlash(key, text, color, revertMs) {
@@ -513,23 +540,27 @@ var BUBBLES = {};
 function bubblePush(key, text, color) {
   var list = BUBBLES[key];
   if (!list) return;
-  var cv = document.createElement('canvas'); cv.width = 256; cv.height = 52;
+  var cv = document.createElement('canvas'); cv.width = 512; cv.height = 104;
   var c = cv.getContext('2d');
-  c.fillStyle = 'rgba(13,23,38,0.82)';
+  var fontStack = '"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif';
+  c.fillStyle = 'rgba(11,19,31,0.88)';
   c.beginPath();
-  var r = 12;
-  c.moveTo(r, 0); c.lineTo(256 - r, 0); c.quadraticCurveTo(256, 0, 256, r);
-  c.lineTo(256, 52 - r); c.quadraticCurveTo(256, 52, 256 - r, 52);
-  c.lineTo(r, 52); c.quadraticCurveTo(0, 52, 0, 52 - r);
+  var r = 24;
+  c.moveTo(r, 0); c.lineTo(512 - r, 0); c.quadraticCurveTo(512, 0, 512, r);
+  c.lineTo(512, 104 - r); c.quadraticCurveTo(512, 104, 512 - r, 104);
+  c.lineTo(r, 104); c.quadraticCurveTo(0, 104, 0, 104 - r);
   c.lineTo(0, r); c.quadraticCurveTo(0, 0, r, 0);
   c.fill();
-  c.strokeStyle = color; c.lineWidth = 2; c.stroke();
-  c.font = 'bold 24px "Microsoft YaHei", sans-serif';
-  c.fillStyle = '#e6edf3'; c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText(text, 128, 27);
+  c.strokeStyle = color; c.lineWidth = 4; c.stroke();
+  c.font = 'bold 44px ' + fontStack;
+  c.fillStyle = '#eef4fb'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.shadowColor = 'rgba(0,0,0,0.85)'; c.shadowBlur = 6;
+  c.fillText(text, 256, 54);
+  c.shadowBlur = 0;
   var tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.95, depthWrite: false, depthTest: false }));
-  sp.scale.set(4.6, 0.94, 1);
+  sp.scale.set(4.9, 1.0, 1);
   var p = AREA_POS[key];
   sp.position.set(p.x + (Math.random() * 0.8 - 0.4), (BOARD_Y[key] || 4.5) + 3.4, p.z);
   sp.renderOrder = 50;
@@ -541,12 +572,13 @@ function bubblePush(key, text, color) {
   }
 }
 Object.keys(EQUIP_BY_AREA).forEach(function(k) {
-  var cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
+  var cv = document.createElement('canvas'); cv.width = 512; cv.height = 128;
   var tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
   var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true }));
   sp.scale.set(6.4, 1.6, 1);
   var ly = BOARD_Y[k] || 4.5;
-  sp.position.set(AREA_POS[k].x, ly + 2.0, AREA_POS[k].z);   // 状态屏在名称上方，避免被设备遮挡
+  sp.position.set(AREA_POS[k].x, ly + 2.0, AREA_POS[k].z);
   scene.add(sp);
   BOARDS[k] = { cv: cv, ctx: cv.getContext('2d'), tex: tex };
   BUBBLES[k] = [];
