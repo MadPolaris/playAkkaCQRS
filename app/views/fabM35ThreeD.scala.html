@@ -84,7 +84,21 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
     <span class="chip">在途 <b id="kpiWip">0</b></span>
     <span class="chip">恢复 <b id="kpiRec">0</b></span>
     <span class="chip">OCAP <b id="kpiOcap">0</b></span>
+    <span class="chip">拆批 <b id="kpiSplit">0</b></span>
+    <span class="chip">合批 <b id="kpiMerge">0</b></span>
+    <span class="chip">报废 <b id="kpiScrap">0</b></span>
   </div>
+  <h3 style="margin-top:12px">演示用例</h3>
+  <select id="scenarioSel" style="width:100%;padding:6px;background:#0d1726;color:#e6edf3;border:1px solid rgba(255,255,255,0.15);border-radius:6px;font-size:12px;">
+    <option value="m35">M3.5 自愈演示（宕机注入 + 断点续跑）</option>
+    <option value="photo-cell-5wafer">拆批返工：2 返工 → PASS + 1 报废（5 片）</option>
+    <option value="send-ahead-pilot">拆批试投：1 片先导 → 量测 → 合批（5 片）</option>
+    <option value="sampling-demo">拆批抽检：抽 2 片量测 → 合批（6 片）</option>
+    <option value="hold-release">暂扣与放行：HOLD → 评审 15s → 合批（5 片）</option>
+    <option value="scrap-downgrade">直接报废：SCRAP 子批分流（3 片）</option>
+  </select>
+  <h3 style="margin-top:12px">批次谱系（拆批 / 合批）</h3>
+  <div id="lotTree"></div>
   <h3 style="margin-top:12px">九大工作区</h3>
   <div id="areaChips"></div>
   <div class="btnrow">
@@ -455,6 +469,106 @@ function banner(text, cls) {
 }
 function setKpi(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
 
+/* ===== 演示用例 / 批次谱系（拆批·合批） ===== */
+var currentScenario = 'm35';
+var lotMainCount = 0, scrappedCount = 0, splitCount = 0, mergeCount = 0;
+var CHILD_LOT_META = {
+  RWK:    { name: '返工批', color: 0xff9800 },
+  PILOT:  { name: '试投批', color: 0x40c4ff },
+  SAMPLE: { name: '抽检批', color: 0xba68c8 },
+  HOLD:   { name: '暂扣批', color: 0xffd54f },
+  SCRAP:  { name: '报废批', color: 0xff5252 }
+};
+var childLots = {};    // suffix -> 在批片数
+var childFoups = {};   // suffix -> THREE.Group（挂在 OHT 下的彩色子批 FOUP）
+function lotMeta(suffix) { return CHILD_LOT_META[suffix] || { name: suffix || '子批', color: 0xff9800 }; }
+function renderLotTree() {
+  var el = document.getElementById('lotTree');
+  if (!el) return;
+  var html = '<span class="chip on">主批 <b>' + lotMainCount + '</b></span>';
+  Object.keys(childLots).forEach(function(sfx) {
+    var m = lotMeta(sfx), c = m.color;
+    html += '<span class="chip on" style="border-color:rgb(' + ((c >> 16) & 255) + ',' + ((c >> 8) & 255) + ',' + (c & 255) + ')">'
+          + m.name + ' <b>' + childLots[sfx] + '</b></span>';
+  });
+  if (scrappedCount > 0) html += '<span class="chip fail">报废 <b>' + scrappedCount + '</b></span>';
+  el.innerHTML = html;
+}
+function spawnChildFoup(suffix) {
+  if (childFoups[suffix]) return;
+  var c = lotMeta(suffix).color;
+  var g = new THREE.Group();
+  var body = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.5, 0.5),
+    new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.3, metalness: 0.3, roughness: 0.4 }));
+  g.add(body);
+  var ledc = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8),
+    new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.6 }));
+  ledc.position.set(0.15, 0.02, 0.26); g.add(ledc);
+  g.position.set(-0.62, -0.85, 0);
+  oht.add(g);
+  childFoups[suffix] = g;
+  foup.position.x = 0.35;   // 主 FOUP 让位，OHT 双载
+}
+function removeChildFoup(suffix) {
+  var g = childFoups[suffix];
+  if (!g) return;
+  oht.remove(g);
+  delete childFoups[suffix];
+  if (Object.keys(childFoups).length === 0) foup.position.x = 0;
+}
+function resetDemoState() {
+  Object.keys(childFoups).forEach(removeChildFoup);
+  childLots = {};
+  lotMainCount = 0; scrappedCount = 0; splitCount = 0; mergeCount = 0;
+  setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
+  recCount = 0; ocapCount = 0; setKpi('kpiRec', 0); setKpi('kpiOcap', 0);
+  wipCount = 0; setKpi('kpiWip', 0);
+  foup.visible = false; moveAnim = null;
+  curT = AREA_T.STOCKER;
+  oht.position.copy(trackCurve.getPointAt(curT));
+  renderLotTree();
+}
+function handleSaga(d) {
+  var op = d.operation || '', status = d.status || '';
+  var suffix = op === 'MergeLot'
+    ? (d.sourceLotId || '').split('-').pop().toUpperCase()
+    : (d.targetLotId || '').split('-').pop().toUpperCase();
+  var n = (d.relatedWaferIds || []).length || 1;
+  var cn = lotMeta(suffix).name;
+  if (status.indexOf('PREPARE') === 0) {
+    feedAdd('📋 [TCC] ' + (op === 'SplitLot' ? '拆批' : op === 'MergeLot' ? '合批' : '报废') + ' Try（' + cn + ' ' + n + ' 片）');
+    return;
+  }
+  if (status.indexOf('FAILED') === 0) {
+    feedAdd('❌ [TCC] ' + op + ' ' + status + '（' + cn + '）', true);
+    banner('❌ Saga ' + (op === 'SplitLot' ? '拆批' : '合批') + ' 失败：' + status, 'crash');
+    return;
+  }
+  if (status !== 'COMMITTED') return;
+  if (op === 'SplitLot') {
+    splitCount++; setKpi('kpiSplit', splitCount);
+    spawnChildFoup(suffix);
+    childLots[suffix] = (childLots[suffix] || 0) + n;
+    lotMainCount = Math.max(0, lotMainCount - n);
+    renderLotTree();
+    banner('✂️ 拆批已提交：' + n + ' 片 → ' + cn, 'recovering');
+    feedAdd('✂️ SplitLot COMMITTED → ' + cn + '（' + n + ' 片）');
+  } else if (op === 'MergeLot') {
+    mergeCount++; setKpi('kpiMerge', mergeCount);
+    lotMainCount += childLots[suffix] || n;
+    removeChildFoup(suffix);
+    delete childLots[suffix];
+    renderLotTree();
+    banner('🧩 合批已提交：' + cn + ' 并回主批', 'done');
+    feedAdd('🧩 MergeLot COMMITTED ← ' + cn + '（' + n + ' 片）');
+  } else if (op === 'ScrapLot') {
+    removeChildFoup(suffix);
+    delete childLots[suffix];
+    renderLotTree();
+    feedAdd('🗑 ScrapLot COMMITTED（' + cn + '）', true);
+  }
+}
+
 var AREA_KEYS = ['STOCKER', 'LITHO', 'ETCH', 'IMPL', 'DEP', 'CMP', 'MET', 'CLEAN', 'DIFF', 'DRY', 'LOG'];
 function findArea(id) {
   if (!id) return null;
@@ -480,7 +594,7 @@ function beaconColor(hex) {
 }
 var panelTimers = {};
 function panelColor(areaKey, hex) {
-  var eq = EQUIP_BY_AREA[areaKey];
+  var eq = EQUIP_BY_AREA[areaKey] || EQUIP_BY_AREA[findArea(areaKey)];
   if (!eq) return;
   var lamp = eq.userData.lamp, panel = eq.userData.panel;
   if (!eq.userData.orig) {
@@ -520,10 +634,14 @@ function handleEvent0(frame) {
   var t = frame.type, d = frame.data || {};
   if (t === 'DemoStarted') {
     window.__activeWo = d.workOrderId || null;
-    wipCount = d.waferCount || 5;
+    wipCount = d.waferCount || d.lotSize || (d.waferIds ? d.waferIds.length : 5);
+    lotMainCount = wipCount; childLots = {};
+    splitCount = 0; mergeCount = 0; scrappedCount = 0;
+    setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
     setKpi('kpiWip', wipCount);
-    banner('🚀 演示启动：' + wipCount + ' 片晶圆入库', 'recovering');
-    feedAdd('▶ 演示启动（' + wipCount + ' 片）');
+    renderLotTree();
+    banner('🚀 ' + (d.name || '演示') + '：' + wipCount + ' 片晶圆入库', 'recovering');
+    feedAdd('▶ ' + (d.name || d.scenarioId || '演示') + ' 启动（' + wipCount + ' 片）');
   } else if (t === 'FoupInTransit') {
     moveOHT(d.fromArea, d.toArea, d.etaMs);
   } else if (t === 'FoupArrivedAtPort') {
@@ -537,6 +655,14 @@ function handleEvent0(frame) {
     if (area2) panelColor(area2, 0x00e676);
   } else if (t === 'EquipmentStateChanged') {
     if (d.areaId) panelColor(d.areaId, d.status === 'RUN' ? 0x00e676 : (d.status === 'DOWN' ? 0xff5252 : 0xffb300));
+  } else if (t === 'SagaOperationEvent') {
+    handleSaga(d);
+  } else if (t === 'DecisionMade') {
+    feedAdd('⚖️ ' + d.waferId + ' → ' + d.action);
+  } else if (t === 'ScrapEvent') {
+    scrappedCount++; setKpi('kpiScrap', scrappedCount);
+    renderLotTree();
+    feedAdd('🗑 ' + d.waferId + ' 报废：' + (d.reason || ''), true);
   } else if (t === 'MeasurementResultEvent') {
     feedAdd('📏 ' + d.waferId + ' CD=' + d.cdNm + 'nm → ' + d.classification);
   } else if (t === 'PipelineStageFailed') {
@@ -564,15 +690,30 @@ AREA_ORDER.forEach(function(k) {
   s.className = 'chip'; s.id = 'chip-' + k; s.textContent = AREA_NAME[k];
   areaChipsEl.appendChild(s);
 });
+renderLotTree();
 connect();
 
-/* ===== 启动/宕机按钮 ===== */
-document.getElementById('btnStart').addEventListener('click', function() {
-  fetch('/api/fab-demo/m35/start', {method: 'POST'});
-  banner('🚀 启动中……', 'recovering');
+/* ===== 启动/宕机按钮（按用例分发） ===== */
+var selEl = document.getElementById('scenarioSel');
+var btnCrashEl = document.getElementById('btnCrash');
+selEl.addEventListener('change', function() {
+  btnCrashEl.disabled = selEl.value !== 'm35';
+  btnCrashEl.textContent = selEl.value !== 'm35' ? '⚡ 仅 M3.5 用例支持' : '⚡ 注入宕机';
 });
-document.getElementById('btnCrash').addEventListener('click', function() {
-  if (!window.__activeWo) return;
+document.getElementById('btnStart').addEventListener('click', function() {
+  var sc = selEl.value;
+  resetDemoState();
+  currentScenario = sc;
+  if (sc === 'm35') {
+    fetch('/api/fab-demo/m35/start', {method: 'POST'});
+    banner('🚀 M3.5 自愈演示启动中……', 'recovering');
+  } else {
+    fetch('/api/fab-demo/start/' + sc, {method: 'POST'});
+    banner('🚀 用例启动：' + selEl.options[selEl.selectedIndex].text, 'recovering');
+  }
+});
+btnCrashEl.addEventListener('click', function() {
+  if (!window.__activeWo || selEl.value !== 'm35') return;
   fetch('/api/fab-demo/m35/inject-crash/' + window.__activeWo, {method: 'POST'});
   banner('⚡ 宕机已注入——断点续跑即将开始', 'crash');
 });
