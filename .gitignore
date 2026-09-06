@@ -21,3 +21,4 @@ target
 /.vscode
 /.zcode
 *.DS_Store
+*.bak
