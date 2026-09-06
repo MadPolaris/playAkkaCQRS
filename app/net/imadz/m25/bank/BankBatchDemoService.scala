@@ -128,6 +128,52 @@ class BankBatchDemoService @Inject()(
   }
 
   // ====================================================================
+  // 人工异常池：账务更新两次失败的单子在此登记，支持查询与人工重放
+  // ====================================================================
+  case class PoolEntry(chain: String, customerId: String, name: String,
+                       amount: Double, reason: String, at: Long)
+  private val exceptionPool = new ConcurrentHashMap[String, PoolEntry]()
+
+  def exceptionList: Seq[PoolEntry] = exceptionPool.values().asScala.toSeq
+    .sortBy(-_.at)
+
+  def exceptionCount: Int = exceptionPool.size
+
+  /** 人工重放整个异常池（运维确认后一键处理）；返回成功条数。 */
+  def replayAllExceptions(): Future[Int] = {
+    val all = exceptionList
+    Future.sequence(all.map(e => replayException(e.chain, e.customerId)))
+      .map(_.count(identity))
+  }
+
+  /** 人工重放：运维确认后跳过故障注入直接重试账务；成功则落入成功终态。 */
+  def replayException(chain: String, customerId: String): Future[Boolean] = {
+    val key = s"$chain:$customerId"
+    Option(exceptionPool.remove(key)) match {
+      case Some(entry) =>
+        val c = customerById(customerId)
+        Future {
+          if (chain == "recharge") {
+            accountBalances.merge(c.customerId, c.amount, (a, b) => java.lang.Double.valueOf(a.doubleValue + b.doubleValue))
+            inc("recharge_amount", c.amount.toLong)
+          } else {
+            accountBalances.merge(c.customerId, -c.amount, (a, b) => java.lang.Double.valueOf(a.doubleValue + b.doubleValue))
+            fundPositions.merge(c.customerId, c.amount, (a, b) => java.lang.Double.valueOf(a.doubleValue + b.doubleValue))
+            inc("purchase_amount", c.amount.toLong)
+            inc("purchase_position_amount", c.amount.toLong)
+          }
+          setTerminal(chain, c, if (chain == "recharge") "credited" else "paid")
+          inc(s"${chain}_account_ok")
+          publish("credited", Map("chain" -> chain, "orderNo" -> c.customerId,
+            "customer" -> c.name, "amount" -> c.amount.toString))
+          feedAdd(s"[重放] ${c.name} ${c.amount} 元 账务处理成功（人工重放）")
+          true
+        }
+      case None => Future.successful(false)
+    }
+  }
+
+  // ====================================================================
   // 模拟核心账务系统（1% 瞬时故障 → 自动重试一次 → 人工异常池）
   // ====================================================================
   private val accountBalances = new ConcurrentHashMap[String, java.lang.Double]()
@@ -455,6 +501,8 @@ class BankBatchDemoService @Inject()(
           }
         } else if (setTerminal(chain, c, "except_pool")) {
           inc(s"${chain}_account_manual")
+          exceptionPool.put(s"$chain:${c.customerId}",
+            PoolEntry(chain, c.customerId, c.name, c.amount, "账务更新两次失败", System.currentTimeMillis()))
           feedAdd(s"[${chainOfWord(chain)}] ${c.name} 账务更新失败 → 人工异常池")
         }
       }

@@ -98,6 +98,20 @@
     </div>
   </div>
 
+  <div class="card" id="exceptCard">
+    <h2>⚠️ 入账异常池（人工确认后一键重放）</h2>
+    <div class="stats" style="margin-bottom:10px">
+      <div class="stat bad"><div class="num" id="exceptCount">0</div><div class="lbl">异常单</div></div>
+      <div class="stat warn"><div class="num" id="retryCount">0</div><div class="lbl">自动重试成功</div></div>
+    </div>
+    <table>
+      <thead><tr><th>链</th><th>客户</th><th>金额</th><th>原因</th><th></th></tr></thead>
+      <tbody id="exceptRows"></tbody>
+    </table>
+    <button id="btnReplayAll" onclick="replayAll()" style="margin-top:10px;font-size:13px;padding:8px 18px;border:none;border-radius:6px;background:#b26a00;color:#fff;cursor:pointer;">🔁 重放全部异常单</button>
+    <span class="hint" id="replayMsg"></span>
+  </div>
+
   <div class="card">
     <h2>📜 事件流（最近 40 条）</h2>
     <div class="ledger" id="ledger">（待启动）</div>
@@ -151,6 +165,18 @@ function addFeed(line) { const el = document.getElementById("ledger"); if (el.te
 function applyFeed(lines) { (lines || []).forEach(addFeed); }
 
 function refreshState() {
+  fetch("/api/bank-batch/exceptions").then(r => r.json()).then(x => {
+    document.getElementById("exceptCount").textContent = x.count;
+    const tb = document.getElementById("exceptRows");
+    tb.innerHTML = "";
+    (x.entries || []).slice(0, 20).forEach(e => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${e.chain}</td><td>${e.name}</td><td>${e.amount}</td><td>${e.reason}</td>` +
+        `<td><button onclick="replayOne('${e.chain}','${e.customerId}')" style="font-size:11px;padding:3px 10px;cursor:pointer;">重放</button></td>`;
+      tb.appendChild(tr);
+    });
+    document.getElementById("exceptCard").style.display = x.count > 0 ? "block" : "none";
+  }).catch(() => {});
   fetch("/api/bank-batch/state").then(r => r.json()).then(st => {
     render(st); applyFeed(st.feed);
     const running = ((st.batches || {}).running || 0) + ((st.batches || {}).queued || 0);
@@ -171,6 +197,29 @@ function crash() {
     if (j.crashed === false) document.getElementById("crashMsg").textContent = j.message || "没有运行中的批次";
   });
 }
+function replayOne(chain, customerId) {
+  fetch(`/api/bank-batch/exceptions/${chain}/${customerId}/replay`, {method: "POST"})
+    .then(r => r.json()).then(() => { refreshState(); refreshExceptions(); });
+}
+function replayAll() {
+  fetch("/api/bank-batch/exceptions/replay", {method: "POST"})
+    .then(r => r.json()).then(j => { document.getElementById("replayMsg").textContent = "已重放 " + j.replayed + " 笔"; refreshExceptions(); });
+}
+function refreshExceptions() {
+  fetch("/api/bank-batch/exceptions").then(r => r.json()).then(x => {
+    document.getElementById("exceptCount").textContent = x.count;
+    const tb = document.getElementById("exceptRows");
+    tb.innerHTML = "";
+    (x.entries || []).slice(0, 20).forEach(e => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${e.chain}</td><td>${e.name}</td><td>${e.amount}</td><td>${e.reason}</td>` +
+        `<td><button onclick="replayOne('${e.chain}','${e.customerId}')" style="font-size:11px;padding:3px 10px;cursor:pointer;">重放</button></td>`;
+      tb.appendChild(tr);
+    });
+  }).catch(() => {});
+}
+setInterval(refreshExceptions, 3000);
+
 function connect() {
   ws = new WebSocket(wsUrl);
   ws.onmessage = ev => {

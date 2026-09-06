@@ -72,6 +72,10 @@ GET     /bank-batch                         controllers.BankBatchController.page
 GET     /api/bank-batch/state               controllers.BankBatchController.state
 POST    /api/bank-batch/start               controllers.BankBatchController.start
 POST    /api/bank-batch/crash               controllers.BankBatchController.crash
+GET     /api/bank-batch/exceptions          controllers.BankBatchController.exceptions
+POST    /api/bank-batch/exceptions/replay   controllers.BankBatchController.replayAll()
+POST    /api/bank-batch/exceptions/:chain/:customerId/replay controllers.BankBatchController.replayOne(chain, customerId)
+
 GET     /ws/bank-batch/events               controllers.BankBatchController.events
 
 GET     /ws/fab-demo/m35/events                     controllers.FabDemoController.m35Socket
