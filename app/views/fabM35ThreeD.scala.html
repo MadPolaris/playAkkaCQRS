@@ -120,6 +120,10 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
     overflow:hidden; transition:border-color .3s; }
   .areaCell:hover { border-color:rgba(255,255,255,0.25); }
   .areaCell.sel { border-color:#42a5f5; }
+  .areaCell.queued { border-color:rgba(255,179,0,0.55); }
+  .qbadge { color:#ffd54f; font-weight:700; font-size:9.5px; flex:none; }
+  #loadSummary { margin-top:6px; font-size:10.5px; color:#7f95ab; display:flex; gap:10px; }
+  #loadSummary b { color:#cfe0f0; }
   .areaCell .dot { width:7px; height:7px; border-radius:50%;
     background:#3d4d5f; flex:none; transition:background .3s, box-shadow .3s; }
   @@keyframes cellPulse { 0%{ box-shadow:0 0 0 0 rgba(66,165,245,.55);} 70%{ box-shadow:0 0 0 7px rgba(66,165,245,0);} 100%{ box-shadow:0 0 0 0 rgba(66,165,245,0);} }
@@ -174,6 +178,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <div id="lotTree"></div>
   <h3 style="margin-top:12px">九大工作区</h3>
   <div id="areaGrid"></div>
+  <div id="loadSummary"></div>
   <div id="areaIv">
     <span>干预 <b id="areaIvName"></b>：</span>
     <button id="ivDown">⏻ 停机</button>
@@ -845,7 +850,7 @@ function removeChildFoup(suffix) {
 function resetDemoState() {
   Object.keys(childFoups).forEach(removeChildFoup);
   childLots = {};
-  seenSagaKeys = {}; scrappedWafers = {}; waferLoc = {}; lastAreaStatus = {};
+  seenSagaKeys = {}; scrappedWafers = {}; waferLoc = {}; lastAreaStatus = {}; areaLoad = {};
   lotMainCount = 0; scrappedCount = 0; splitCount = 0; mergeCount = 0;
   setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
   recCount = 0; ocapCount = 0; setKpi('kpiRec', 0); setKpi('kpiOcap', 0);
@@ -1056,6 +1061,8 @@ function handleEvent0(frame) {
     var aK = d.areaId;
     lastAreaStatus[aK] = d.status;
     areaCellState(aK, d.status);
+    areaLoad[aK] = { status: d.status, q: d.queueDepth || 0 };
+    renderLoadSummary();
     if (BOARDS[aK]) {
       var stMap = { IDLE: ['待机', '#0aa8a0'], LOADED: ['已装载 · 待加工', '#ffb300'],
                     BUSY: ['⚙ 加工中', '#42a5f5'], FINISHED: ['完成 ✓ 待出站', '#00e676'],
@@ -1127,7 +1134,7 @@ var ivArea = null;   // 当前选中待干预的区域
 AREA_ORDER.forEach(function(k) {
   var cell = document.createElement('div');
   cell.className = 'areaCell'; cell.id = 'cell-' + k;
-  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span>';
+  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span><span class="qbadge"></span>';
   cell.addEventListener('click', function() {
     ivArea = (ivArea === k) ? null : k;
     document.querySelectorAll('.areaCell.sel').forEach(function(c) { c.classList.remove('sel'); });
@@ -1163,6 +1170,26 @@ function areaCellState(key, status) {
   cell.querySelector('.dot').style.background = color;
   cell.querySelector('.dot').style.boxShadow = status === 'IDLE' ? 'none' : '0 0 6px ' + color;
   cell.style.borderColor = status === 'IDLE' ? 'rgba(255,255,255,0.09)' : color;
+}
+var areaLoad = {};   // areaId -> {status, q}
+function renderLoadSummary() {
+  var el = document.getElementById('loadSummary');
+  if (!el) return;
+  var idle = 0, working = 0, queued = 0;
+  Object.keys(areaLoad).forEach(function(k) {
+    var st = areaLoad[k].status, q = areaLoad[k].q || 0;
+    if (st === 'IDLE') idle++;
+    else if (q > 0) queued += q;
+    else working++;
+  });
+  el.innerHTML = '<span>空闲 <b>' + idle + '</b></span><span>加工 <b>' + working + '</b></span>' +
+    (queued > 0 ? '<span style="color:#ffd54f">排队 <b>' + queued + '</b></span>' : '');
+}
+function updateCellQueue(key, q) {
+  var cell = document.getElementById('cell-' + key);
+  if (!cell) return;
+  cell.classList.toggle('queued', q > 0);
+  cell.querySelector('.qbadge').textContent = q > 0 ? '⏳' + q : '';
 }
 renderLotTree();
 connect();
