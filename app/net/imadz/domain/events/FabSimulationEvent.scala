@@ -41,7 +41,8 @@ case class GlobalStatusChanged(status: String, detail: String, phase: String) ex
 
 /** 设备区状态机 Actor（每区一个分片实例）推送的权威区域状态 —— 状态同步的所有权在区域 Actor 自己 */
 case class AreaStateChanged(areaId: String, displayName: String, status: String,
-                            equipmentId: String = "", job: String = "", detail: String = "") extends FabSimulationEvent
+                            equipmentId: String = "", job: String = "", detail: String = "",
+                            queueDepth: Int = 0) extends FabSimulationEvent
 
 // --- Aggregate State (需求5: 业务聚合状态面板) ---
 case class AggregateStateUpdated(

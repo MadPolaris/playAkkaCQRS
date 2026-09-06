@@ -505,6 +505,38 @@ function boardFlash(key, text, color, revertMs) {
   clearTimeout(boardTimers[key]);
   boardTimers[key] = setTimeout(function() { boardSet(key, '待机', '#0aa8a0'); }, revertMs || 3000);
 }
+
+/* 上浮气泡：每区最多 3 条最近状态变更，向上飘散、3 秒淡出 */
+var BUBBLES = {};
+function bubblePush(key, text, color) {
+  var list = BUBBLES[key];
+  if (!list) return;
+  var cv = document.createElement('canvas'); cv.width = 256; cv.height = 52;
+  var c = cv.getContext('2d');
+  c.fillStyle = 'rgba(13,23,38,0.82)';
+  c.beginPath();
+  var r = 12;
+  c.moveTo(r, 0); c.lineTo(256 - r, 0); c.quadraticCurveTo(256, 0, 256, r);
+  c.lineTo(256, 52 - r); c.quadraticCurveTo(256, 52, 256 - r, 52);
+  c.lineTo(r, 52); c.quadraticCurveTo(0, 52, 0, 52 - r);
+  c.lineTo(0, r); c.quadraticCurveTo(0, 0, r, 0);
+  c.fill();
+  c.strokeStyle = color; c.lineWidth = 2; c.stroke();
+  c.font = 'bold 24px "Microsoft YaHei", sans-serif';
+  c.fillStyle = '#e6edf3'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(text, 128, 27);
+  var tex = new THREE.CanvasTexture(cv);
+  var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, opacity: 0.95, depthWrite: false }));
+  sp.scale.set(4.6, 0.94, 1);
+  var p = AREA_POS[key];
+  sp.position.set(p.x + (Math.random() * 0.8 - 0.4), (BOARD_Y[key] || 4.5) - 0.1, p.z);
+  scene.add(sp);
+  list.push({ sp: sp, tex: tex, born: performance.now() });
+  while (list.length > 3) {   // 只留最近 3 条
+    var old = list.shift();
+    scene.remove(old.sp); old.sp.material.dispose(); old.tex.dispose();
+  }
+}
 Object.keys(EQUIP_BY_AREA).forEach(function(k) {
   var cv = document.createElement('canvas'); cv.width = 256; cv.height = 64;
   var tex = new THREE.CanvasTexture(cv);
@@ -514,6 +546,7 @@ Object.keys(EQUIP_BY_AREA).forEach(function(k) {
   sp.position.set(AREA_POS[k].x, ly - 1.2, AREA_POS[k].z);
   scene.add(sp);
   BOARDS[k] = { cv: cv, ctx: cv.getContext('2d'), tex: tex };
+  BUBBLES[k] = [];
   boardSet(k, '待机', '#0aa8a0');
 });
 
@@ -893,7 +926,12 @@ function handleEvent0(frame) {
                     BUSY: ['⚙ 加工中', '#42a5f5'], FINISHED: ['完成 ✓ 待出站', '#00e676'],
                     UNLOADING: ['📤 出站中', '#ffd54f'], DOWN: ['⚠ 宕机', '#ff5252'] };
       var st = stMap[d.status];
-      if (st) boardSet(aK, st[0], st[1]);
+      if (st) {
+        var q = d.queueDepth || 0;
+        var btxt = st[0] + (q > 0 ? ' ⏳' + q : '');
+        boardSet(aK, btxt, st[1]);
+        bubblePush(aK, btxt, st[1]);   // 上浮气泡：3 秒内最近 3 条状态变更
+      }
     }
     if (d.status === 'DOWN') {
       panelColor(aK, 0xff5252);
@@ -1022,6 +1060,17 @@ function animate() {
     var rr = 1 + pr.t * 7;
     pr.mesh.scale.set(rr, rr, 1);
     pr.mesh.material.opacity = 0.85 * (1 - pr.t);
+  });
+  /* 上浮气泡：飘升 + 3 秒淡出 */
+  var nowMs = performance.now();
+  Object.keys(BUBBLES).forEach(function(k) {
+    BUBBLES[k] = BUBBLES[k].filter(function(bub) {
+      var age = (nowMs - bub.born) / 3000;
+      if (age >= 1) { scene.remove(bub.sp); bub.sp.material.dispose(); bub.tex.dispose(); return false; }
+      bub.sp.position.y += 0.014;
+      bub.sp.material.opacity = 0.95 * (1 - age * age);
+      return true;
+    });
   });
   if (focusKey && AREA_POS[focusKey]) {
     focusArrow.visible = true;

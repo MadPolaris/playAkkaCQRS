@@ -52,7 +52,9 @@ object EquipmentAreaActor {
   // ============================================================
   // Protocol
   // ============================================================
-  sealed trait Command
+  // Protocol（跨分片/跨节点消息与持久化状态均需可序列化）
+  // ============================================================
+  sealed trait Command extends net.imadz.common.CborSerializable
   final case class TrackIn(equipmentId: String, job: String, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
   final case class StartProcess(equipmentId: String, recipe: String, durationMs: Long, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
   final case class TrackOut(equipmentId: String, replyTo: Option[ActorRef[AreaReply]] = None) extends Command
@@ -66,13 +68,19 @@ object EquipmentAreaActor {
   /** 最短驻留门控的延迟重放载体（携带原始命令） */
   private case class DeferredCmd(inner: Command) extends Command
 
-  final case class AreaReply(accepted: Boolean, status: String, reason: String)
-  final case class AreaSnapshot(areaId: String, status: String, equipmentId: String, job: String)
+  final case class AreaReply(accepted: Boolean, status: String, reason: String) extends net.imadz.common.CborSerializable
+  final case class AreaSnapshot(areaId: String, status: String, equipmentId: String, job: String) extends net.imadz.common.CborSerializable
 
-  sealed trait Event
+  sealed trait Event extends net.imadz.common.CborSerializable
   final case class Transitioned(status: String, equipmentId: String, job: String, detail: String) extends Event
+  /** 多批次任务排队：繁忙时 StartProcess 入队，空闲(LOADED)时领取队首 */
+  final case class Enqueued(recipe: String, durationMs: Long, job: String) extends Event
+  case object Claimed extends Event
+  case object QueueCleared extends Event
 
-  final case class AreaState(status: String, equipmentId: String, job: String)
+  final case class QueuedTask(recipe: String, durationMs: Long, job: String) extends net.imadz.common.CborSerializable
+  final case class AreaState(status: String, equipmentId: String, job: String,
+                             queue: Vector[QueuedTask] = Vector.empty) extends net.imadz.common.CborSerializable
 
   // ============================================================
   // Sharding init + 静态注册表（PipelineStages 通过 entityRef 下发迁移命令）
@@ -113,13 +121,20 @@ object EquipmentAreaActor {
       commandHandler = commandHandler(areaId, publisher, timers, ctx),
       eventHandler = {
         case (state, Transitioned(status, equipId, job, _)) =>
-          AreaState(status, equipId, job)
+          state.copy(status = status, equipmentId = equipId, job = job)
+        case (state, Enqueued(recipe, ms, job)) =>
+          state.copy(queue = state.queue :+ QueuedTask(recipe, ms, job))
+        case (state, Claimed) =>
+          state.copy(queue = state.queue.drop(1))
+        case (state, QueueCleared) =>
+          state.copy(queue = Vector.empty)
       }
     ).receiveSignal {
       case (_, RecoveryCompleted) => // 状态由 eventHandler 恢复；BUSY 的计时器不持久化，见 commandHandler 恢复分支
       case (_, _) =>
     }
-      .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 50, keepNSnapshots = 2))
+  // 注意：不启用快照。区域状态模型仍在演进，快照类结构变更会让旧快照反序列化失败
+  // （并连坐快照插件的熔断器，阻塞其他实体的恢复）。事件重放足够轻。
 
   private def commandHandler(areaId: String, publisher: FabSimulationEvent => Unit,
                              timers: TimerScheduler[Command], ctx: ActorContext[Command]
@@ -132,7 +147,7 @@ object EquipmentAreaActor {
     def run(state: AreaState, cmd: Command): Effect[Event, AreaState] = {
       def accept(next: String, equipId: String, job: String, detail: String): Effect[Event, AreaState] =
         Effect.persist(Transitioned(next, equipId, job, detail)).thenRun { newState =>
-          publish(publisher, areaId, newState.status, newState.equipmentId, newState.job, detail)
+          publish(publisher, areaId, newState.status, newState.equipmentId, newState.job, detail, newState.queue.size)
         }
 
       def reject(replyTo: Option[ActorRef[AreaReply]], reason: String): Effect[Event, AreaState] = {
@@ -157,14 +172,23 @@ object EquipmentAreaActor {
           replyTo.foreach(_ ! AreaReply(accepted = true, Loaded, ""))
           accept(Loaded, equipId, job, "trackIn")
 
-        case (_, StartProcess(equipId, recipe, durationMs, replyTo)) if state.status != Loaded =>
-          reject(replyTo, s"StartProcess requires LOADED (now ${state.status})")
+        case (_, StartProcess(equipId, recipe, durationMs, replyTo)) if state.status == Down =>
+          reject(replyTo, "area is DOWN (reset required)")
 
         case (_, StartProcess(equipId, recipe, durationMs, replyTo)) =>
-          replyTo.foreach(_ ! AreaReply(accepted = true, Busy, ""))
-          // 看门狗：管线应在加工完成后发 FinishProcess；若信号丢失（宕机等）超时自动完成
-          timers.startSingleTimer(ProcessWatchdog, (math.max(100, durationMs) + 8000).millis)
-          accept(Busy, equipId, recipe, "processing")
+          // 多批次任务：繁忙时只能入队；空闲(LOADED 且队空)时立即领取队首
+          val claimNow = state.status == Loaded && state.queue.isEmpty
+          replyTo.foreach(_ ! AreaReply(accepted = true,
+            if (claimNow) Busy else "QUEUED", if (claimNow) "" else "queued"))
+          if (claimNow) {
+            // 看门狗：管线应在加工完成后发 FinishProcess；若信号丢失（宕机等）超时自动完成
+            timers.startSingleTimer(ProcessWatchdog, (math.max(100, durationMs) + 8000).millis)
+            Effect.persist(Enqueued(recipe, durationMs, recipe), Transitioned(Busy, equipId, recipe, "processing"))
+              .thenRun { ns => publish(publisher, areaId, ns.status, equipId, recipe, "processing", ns.queue.size) }
+          } else {
+            Effect.persist(Enqueued(recipe, durationMs, recipe))
+              .thenRun { ns => publish(publisher, areaId, ns.status, ns.equipmentId, recipe, "queued", ns.queue.size) }
+          }
 
         case (_, FinishProcess(equipId)) if state.status == Busy =>
           accept(Finished, state.equipmentId, state.job, "process done")
@@ -191,7 +215,8 @@ object EquipmentAreaActor {
           accept(Down, equipId, state.job, s"$code: $detail")
 
         case (_, Reset) =>
-          accept(Idle, state.equipmentId, "", "reset")
+          Effect.persist(Transitioned(Idle, state.equipmentId, "", "reset"), QueueCleared)
+            .thenRun { ns => publish(publisher, areaId, ns.status, ns.equipmentId, "", "reset", ns.queue.size) }
 
         case (_, GetState(replyTo)) =>
           replyTo ! AreaSnapshot(areaId, state.status, state.equipmentId, state.job)
@@ -222,8 +247,8 @@ object EquipmentAreaActor {
   }
 
   private def publish(publisher: FabSimulationEvent => Unit, areaId: String,
-                      status: String, equipId: String, job: String, detail: String): Unit = {
-    publisher(AreaStateChanged(areaId, DisplayName.getOrElse(areaId, areaId), status, equipId, job, detail))
+                      status: String, equipId: String, job: String, detail: String, queueDepth: Int = 0): Unit = {
+    publisher(AreaStateChanged(areaId, DisplayName.getOrElse(areaId, areaId), status, equipId, job, detail, queueDepth))
     // 兼容广播：2D 演示页等旧消费者仍监听 EquipmentStateChanged —— 状态值映射回旧词汇表
     val legacy = status match {
       case Loaded   => Some("Load")
