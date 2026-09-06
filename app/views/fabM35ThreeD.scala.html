@@ -1279,6 +1279,14 @@ function animate() {
   renderer.render(scene, camera);
 }
 animate();
+
+/* 窗口尺寸变化：同步相机纵横比与渲染器尺寸 */
+window.addEventListener('resize', function() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+});
 </script>
 </body>
 </html>
