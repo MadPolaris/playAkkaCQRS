@@ -245,6 +245,7 @@ window.addEventListener("unhandledrejection", function(e) {
   <div id="lotDrawerBody">
     <div class="ldRow"><span class="ldk">批次</span><span id="ldWo">—</span></div>
     <div class="ldRow"><span class="ldk">状态</span><span id="ldPhase">—</span></div>
+    <div class="ldRow"><span class="ldk">分布</span><span id="ldSummary" style="color:#e6edf3;">—</span></div>
     <div class="ldk" style="margin:10px 0 4px;">实际路线（事件轨迹）</div>
     <div id="ldTrail"></div>
     <div class="ldk" style="margin:10px 0 4px;">晶圆明细</div>
@@ -1265,17 +1266,38 @@ function renderLotDrawer(d) {
   var src = d.sourceLot || {};
   var phase = document.getElementById('ldPhase');
   if (phase) phase.textContent = src.phase || '—';
-  var trailEl = document.getElementById('ldTrail');
-  if (trailEl && window.__lotTrail.length) renderDrawerTrail();
+  if (window.__lotTrail.length) renderDrawerTrail();
+  var names = d.waferNames || {}, lotNames = d.lotNames || {};
+  var childCn = { rework: '返工批', scrap: '报废批', pilot: '试投批', sample: '抽检批', hold: '暂扣批' };
   var tbl = document.getElementById('lotWafers');
   if (!tbl) return;
+  var summary = {};
   var rows = '<tr><td>晶圆</td><td>归属批</td><td>分类</td></tr>';
-  (d.wafers || []).slice(0, 30).forEach(function(w) {
+  function waferRow(nm, lotLabel, cls) {
+    rows += '<tr><td>' + nm + '</td><td>' + lotLabel + '</td><td class="cls-' + cls + '">' + cls + '</td></tr>';
+    summary[cls] = (summary[cls] || 0) + 1;
+  }
+  (d.wafers || []).forEach(function(w) {
+    var nm = names[w.waferId] || w.waferId.slice(0, 8);
     var cls = w.classification || w.status || '—';
-    rows += '<tr><td>' + w.waferId.slice(0, 8) + '</td><td>' +
-      (w.lotId || '').slice(0, 8) + '</td><td class="cls-' + cls + '">' + cls + '</td></tr>';
+    waferRow(nm, lotNames[w.lotId] || '主批', cls);
+  });
+  Object.keys(d.childLots || {}).forEach(function(key) {
+    var cl = d.childLots[key];
+    var cn = childCn[key] || key;
+    (cl.waferIds || []).forEach(function(uid) {
+      var nm = names[uid] || uid.slice(0, 8);
+      var cls = (cl.waferClassifications && cl.waferClassifications[uid]) || '—';
+      waferRow(nm, cn, cls);
+    });
   });
   tbl.innerHTML = rows;
+  var sumEl = document.getElementById('ldSummary');
+  if (sumEl) {
+    var parts = [];
+    Object.keys(summary).forEach(function(c) { parts.push(c + ' ' + summary[c]); });
+    sumEl.textContent = parts.join(' · ') || '—';
+  }
 }
 document.getElementById('lotDrawerClose').addEventListener('click', function() {
   document.getElementById('lotDrawer').classList.remove('show');

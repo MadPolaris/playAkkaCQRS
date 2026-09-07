@@ -48,6 +48,9 @@ class FabDemoService @Inject()(
   // where no per-request WebSocket publisher is available.
   @volatile private var systemWidePublisher: Option[FabSimulationEvent => Unit] = None
 
+  /** workOrderId -> scenarioId（批次路线卡友好名映射用） */
+  private val workOrderScenarios = new java.util.concurrent.ConcurrentHashMap[String, String]()
+
   /** Current fault probability for M3.5 equipment simulators (0.0–1.0). */
   @volatile var currentFaultProbability: Double = 0.0
 
@@ -375,6 +378,7 @@ class FabDemoService @Inject()(
     net.imadz.application.projection.FabDemoViewProjection.resetChildLotRegistry()
     net.imadz.application.actor.EquipmentAreaActor.Registry.resetAll()
     val workOrderId = UUID.randomUUID().toString
+    workOrderScenarios.put(workOrderId, scenarioId)
     val scenario = scenarioId match {
       case "photo-cell-5wafer" => StandardScenarios.photoCell5Wafer
       case "send-ahead-pilot"  => StandardScenarios.sendAheadPilot
@@ -923,10 +927,45 @@ class FabDemoService @Inject()(
       }
 
       Future.sequence(childLotFutures).map { results =>
+        val childMap = results.flatten.toMap
+        // 友好名映射：晶圆 UUID -> 名称；批次 UUID -> 显示名（前端路线卡直接可读）
+        val waferNames: Map[String, String] =
+          Option(workOrderScenarios.get(workOrderId)).map { scenarioId =>
+            val scenario = scenarioId match {
+              case "photo-cell-5wafer" => StandardScenarios.photoCell5Wafer
+              case "send-ahead-pilot"  => StandardScenarios.sendAheadPilot
+              case "scrap-downgrade"   => StandardScenarios.scrapDowngrade
+              case "sampling-demo"     => StandardScenarios.samplingDemo
+              case "hold-release"      => StandardScenarios.holdRelease
+              case "cxmt-dram-full-25" => StandardScenarios.cxmtDramFull25
+              case _                   => StandardScenarios.photoCell5Wafer
+            }
+            scenario.waferIds.map { wid =>
+              UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes).toString -> wid
+            }.toMap
+          }.getOrElse(Map.empty)
+        val lotNames: Map[String, String] = {
+          val m = scala.collection.mutable.Map.empty[String, String]
+          m += (sourceLotUUID.toString -> "主批")
+          childMap.foreach { case (key, conf) =>
+            val cn = key match {
+              case "rework" => "返工批"
+              case "scrap"  => "报废批"
+              case "pilot"  => "试投批"
+              case "sample" => "抽检批"
+              case "hold"   => "暂扣批"
+              case other    => other
+            }
+            m += (conf.lotId.getOrElse("").toString -> cn)
+          }
+          m.toMap
+        }
         EntityStateSnapshot(
           workOrderId = workOrderId,
           lot = lotConf,
-          childLots = results.flatten.toMap
+          childLots = childMap,
+          waferNames = waferNames,
+          lotNames = lotNames
         )
       }
     }
@@ -1108,7 +1147,11 @@ class FabDemoService @Inject()(
   case class EntityStateSnapshot(
     workOrderId: String,
     lot: LotConfirmation,
-    childLots: Map[String, LotConfirmation]
+    childLots: Map[String, LotConfirmation],
+    /** waferId(UUID) -> 晶圆名（W01 等）——前端批次路线卡显示友好名 */
+    waferNames: Map[String, String],
+    /** lotId(UUID) -> 批次显示名（主批/返工批/报废批/试投批/抽检批/暂扣批） */
+    lotNames: Map[String, String]
   )
 
   // ===========================================================================

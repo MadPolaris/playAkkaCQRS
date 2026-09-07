@@ -290,6 +290,8 @@ class FabDemoController @Inject()(
           "currentStepIndex" -> l.currentStepIndex
         ),
         "childLots" -> state.childLots.map { case (key, conf) => key -> lotJson(conf) },
+        "waferNames" -> state.waferNames,
+        "lotNames" -> state.lotNames,
         "wafers" -> l.waferIds.map { wid =>
           val widStr = wid.toString
           val classification = l.waferClassifications.getOrElse(wid, "Pending")
