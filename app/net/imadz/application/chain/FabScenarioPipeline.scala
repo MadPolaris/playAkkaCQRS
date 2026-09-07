@@ -337,6 +337,9 @@ object FabScenarioPipeline {
     }.foreach { case (wid, info) =>
       val cdValue = info.cdValueHistory.lastOption.getOrElse(32.0)
       val cls = PipelineStages.classifyCd(cdValue, pilotCtx.scenario.decision)
+      // Entity records the DECISION (PASS/SCRAP), matching pipeline state; raw
+      // BORDERLINE/FAIL stays visible in the MeasurementResultEvent stream
+      val effectiveCls = if (cls == "PASS" || cls == "BORDERLINE") "PASS" else "SCRAP"
       pilotCtx.lotRef ! RecordWaferMeasured(pilotCtx.waferUUIDs(wid), cdValue, pilotCtx.ignoreLotReply)
       pilotCtx.publish(MeasurementResultEvent(wid, cdValue, cls, pilotCtx.scenario.decision.upperSpecNm))
 
@@ -349,7 +352,7 @@ object FabScenarioPipeline {
         pilotPassed = false
         pilotCtx.publish(DecisionMade(wid, "Pilot FAIL → Scrap", None))
       }
-      pilotCtx.lotRef ! RecordWaferClassified(pilotCtx.waferUUIDs(wid), cls, 0, cdValue, pilotCtx.ignoreLotReply)
+      pilotCtx.lotRef ! RecordWaferClassified(pilotCtx.waferUUIDs(wid), effectiveCls, 0, cdValue, pilotCtx.ignoreLotReply)
     }
 
     val totalPass = updatedWafers.values.count(w => !w.classification.contains("SCRAP") && !w.classification.contains("HOLD"))
@@ -511,8 +514,16 @@ object FabScenarioPipeline {
 
   private def scrapWafers(state: FabDemoState, ctx: FabDemoContext): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, "PhaseScrap: Scrap classified wafers", ctx)
-    state.wafers.filter(_._2.classification.contains("SCRAP")).keys.foreach { wid =>
+    val scrapIds = state.wafers.filter(_._2.classification.contains("SCRAP")).keys
+    scrapIds.foreach { wid =>
       ctx.publish(ScrapEvent(wid, "CD out of spec → SCRAP"))
+    }
+    // Source lot records the scrap sub-lot so AwaitingSubLot → Active;
+    // otherwise Seal is rejected (LOT_020) and the lot never completes
+    if (state.wafers.exists { case (_, w) => w.subLot.contains("scrap") }) {
+      val scrapLotId = ctx.childLotIds.getOrElse("scrap", ctx.reworkLotId)
+      ctx.lotRef ! RecordSubLotScrapped(scrapLotId, "CD out of spec → SCRAP",
+        scrapIds.flatMap(wid => ctx.waferUUIDs.get(wid)).toSet, ctx.ignoreLotReply)
     }
     Future.successful(s.copy(ledgerSeq = s.ledgerSeq + 1))
   }

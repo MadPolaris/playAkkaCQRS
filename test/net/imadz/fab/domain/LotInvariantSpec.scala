@@ -103,14 +103,14 @@ class LotInvariantSpec extends AnyWordSpec with Matchers {
     "accept incoming wafer for active lot" in {
       val transferId = UUID.randomUUID()
       val newWafer = UUID.randomUUID()
-      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, Set(newWafer)))
+      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, Set(newWafer), Map.empty))
       result shouldBe Right(List(WaferAdditionReserved(transferId, Set(newWafer))))
     }
 
     "reject when FOUP would exceed 25" in {
       val transferId = UUID.randomUUID()
       val manyWafers = (1 to 24).map(_ => UUID.randomUUID()).toSet
-      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, manyWafers))
+      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, manyWafers, Map.empty))
       result.isLeft shouldBe true
       result.left.get.code shouldBe "LOT_021"
     }
@@ -119,13 +119,13 @@ class LotInvariantSpec extends AnyWordSpec with Matchers {
       val transferId = UUID.randomUUID()
       val newWafer = UUID.randomUUID()
       val state = activeState.copy(incomingWafers = Map(transferId -> Set(newWafer)))
-      val result = LotInvariants.ReserveAddWaferRule(state, (transferId, Set(newWafer)))
+      val result = LotInvariants.ReserveAddWaferRule(state, (transferId, Set(newWafer), Map.empty))
       result shouldBe Right(Nil)
     }
 
     "reject wafers already present in lot" in {
       val transferId = UUID.randomUUID()
-      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, Set(wafer1)))
+      val result = LotInvariants.ReserveAddWaferRule(activeState, (transferId, Set(wafer1), Map.empty))
       result.isLeft shouldBe true
       result.left.get.code shouldBe "LOT_022"
     }

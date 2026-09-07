@@ -289,18 +289,38 @@ class FabDemoController @Inject()(
           "measuredWafers" -> l.measuredWafers.map(_.toString).toSeq,
           "currentStepIndex" -> l.currentStepIndex
         ),
-        "childLots" -> state.childLots.map { case (key, conf) => key -> lotJson(conf) },
+        "childLots" -> play.api.libs.json.JsObject(
+          state.childLots.map { case (key, conf) => key -> lotJson(conf) }.toSeq),
         "waferNames" -> state.waferNames,
         "lotNames" -> state.lotNames,
-        "wafers" -> l.waferIds.map { wid =>
-          val widStr = wid.toString
-          val classification = l.waferClassifications.getOrElse(wid, "Pending")
-          Json.obj(
-            "waferId" -> widStr,
-            "status" -> (if (classification == "SCRAP") "Scrapped" else "Active"),
-            "lotId" -> lotIdStr,
-            "classification" -> classification
-          )
+        "wafers" -> {
+          // Source lot + child lots union — wafers split to a child lot must stay visible
+          // (owned-lot classification), otherwise the pilot wafer vanishes from the drawer
+          val sourceEntries: Seq[(java.util.UUID, String, String, String)] =
+            l.waferIds.toSeq.map { wid =>
+              val cls = l.waferClassifications.getOrElse(wid, "Pending")
+              (wid, lotIdStr, cls, "main")
+            }
+          val childEntries: Seq[(java.util.UUID, String, String, String)] =
+            state.childLots.toSeq.flatMap { case (key, conf) =>
+              val childLotId = conf.lotId.getOrElse("")
+              conf.waferIds.toSeq.map { wid =>
+                val cls = conf.waferClassifications.getOrElse(wid, "Pending")
+                (wid, childLotId.toString, cls, key)
+              }
+            }
+          // Child-lot ownership wins (the wafer physically lives there while split out)
+          (sourceEntries ++ childEntries)
+            .groupBy(_._1).map(_._2.head).toSeq
+            .map { case (wid, ownerLotId, cls, lotKey) =>
+              Json.obj(
+                "waferId" -> wid.toString,
+                "status" -> (if (cls == "SCRAP") "Scrapped" else "Active"),
+                "lotId" -> ownerLotId,
+                "lotKey" -> lotKey,
+                "classification" -> cls
+              )
+            }
         }
       ))
     }.recover { case ex =>

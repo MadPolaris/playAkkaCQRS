@@ -305,13 +305,9 @@ object FabDemoPipeline {
               s"${ctx.scenario.scenarioId}-RWK", ctx.scenario.scenarioId, passWaferNames.toSeq))
             ctx.publish(OrchestratorCommand(PipelineStages.cmdId(), "SAGA-TCC", "MergeCompleted",
               s"TCC Merge: ${passWaferNames.mkString(",")} → Source Lot", passWaferNames.toSeq))
+            // Classification/measurement history now travels with the wafers via the
+            // TCC carried-state snapshot (ReserveAddWafer) — no re-record needed here.
             ctx.lotRef ! RecordSubLotMerged(ctx.reworkLotId, passWaferUUIDs.toSet, ctx.ignoreLotReply)
-            passWaferNames.foreach { name =>
-              state.wafers.get(name).foreach { info =>
-                val cdValue = info.cdValueHistory.lastOption.getOrElse(0.0)
-                ctx.lotRef ! RecordWaferClassified(ctx.waferUUIDs(name), "PASS", info.reworkCount, cdValue, ctx.ignoreLotReply)
-              }
-            }
             val nameSet = passWaferNames.toSet
             val mergedWafers = state.wafers.map { case (wid, info) =>
               if (nameSet.contains(wid)) wid -> info.copy(classification = Some("PASS"), subLot = None)

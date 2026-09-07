@@ -1309,30 +1309,21 @@ function renderLotDrawer(d) {
   if (phase) phase.textContent = src.phase || '—';
   renderDrawerLanes();
   var names = d.waferNames || {}, lotNames = d.lotNames || {};
-  var childCn = { rework: '返工批', scrap: '报废批', pilot: '试投批', sample: '抽检批', hold: '暂扣批' };
   var tbl = document.getElementById('lotWafers');
   if (!tbl) return;
   var summary = {};
   var rows = '<tr><td>晶圆</td><td>归属批</td><td>当前工位</td><td>分类</td></tr>';
   var pos = window.__lotPos || {};
-  function waferRow(nm, lotKey, lotLabel, cls) {
-    var at = pos[lotKey] || '—';
-    rows += '<tr><td>' + nm + '</td><td>' + lotLabel + '</td><td>' + at +
-      '</td><td class="cls-' + cls + '">' + cls + '</td></tr>';
-    summary[cls] = (summary[cls] || 0) + 1;
-  }
+  // 泳道 key 归一：后端 lotKey(rework/pilot/…) ↔ 泳道后缀(RWK/PILOT/…)
+  var LANE_OF = { REWORK: 'RWK', RWK: 'RWK', PILOT: 'PILOT', SCRAP: 'SCRAP', SAMPLE: 'SAMPLE', HOLD: 'HOLD' };
   (d.wafers || []).forEach(function(w) {
     var nm = names[w.waferId] || w.waferId.slice(0, 8);
-    waferRow(nm, 'main', lotNames[w.lotId] || '主批', w.classification || w.status || '—');
-  });
-  Object.keys(d.childLots || {}).forEach(function(key) {
-    var cl = d.childLots[key];
-    var cn = childCn[key] || key;
-    (cl.waferIds || []).forEach(function(uid) {
-      var nm = names[uid] || uid.slice(0, 8);
-      var cls = (cl.waferClassifications && cl.waferClassifications[uid]) || '—';
-      waferRow(nm, key, cn, cls);
-    });
+    var laneKey = LANE_OF[(w.lotKey || 'main').toUpperCase()] || 'main';
+    var lotLabel = lotNames[w.lotId] || '主批';
+    var cls = w.classification || w.status || '—';
+    rows += '<tr><td>' + nm + '</td><td>' + lotLabel + '</td><td>' + (pos[laneKey] || '—') +
+      '</td><td class="cls-' + cls + '">' + cls + '</td></tr>';
+    summary[cls] = (summary[cls] || 0) + 1;
   });
   tbl.innerHTML = rows;
   var sumEl = document.getElementById('ldSummary');

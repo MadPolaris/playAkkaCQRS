@@ -68,9 +68,9 @@ object LotInvariants {
     }
   }
 
-  implicit object ReserveAddWaferRule extends InvariantRule[LotEvent, LotState, (Id, Set[Id])] {
-    def apply(state: LotState, param: (Id, Set[Id])): Either[iMadzError, List[LotEvent]] = {
-      val (transferId, waferIds) = param
+  implicit object ReserveAddWaferRule extends InvariantRule[LotEvent, LotState, (Id, Set[Id], Map[Id, WaferState])] {
+    def apply(state: LotState, param: (Id, Set[Id], Map[Id, WaferState])): Either[iMadzError, List[LotEvent]] = {
+      val (transferId, waferIds, carriedWafers) = param
 
       // Idempotency
       if (state.incomingWafers.contains(transferId))
@@ -91,7 +91,7 @@ object LotInvariants {
       if (alreadyPresent.nonEmpty)
         return Left(iMadzError("LOT_022", s"Wafers $alreadyPresent already belong to this lot"))
 
-      Right(List(WaferAdditionReserved(transferId, waferIds)))
+      Right(List(WaferAdditionReserved(transferId, waferIds, carriedWafers)))
     }
   }
 

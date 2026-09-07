@@ -32,6 +32,7 @@ object LotBehaviors extends LotCommandHelpers {
         completedTransferIds = state.completedTransferIds,
         loadedFoupId = state.loadedFoupId,
         waferClassifications = state.waferClassifications.map { case (id, r) => id -> r.classification },
+        waferStates = state.wafers,
         measuredWafers = state.measuredWafers
       ))
   }

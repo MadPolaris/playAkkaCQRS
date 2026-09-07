@@ -19,6 +19,31 @@ trait LotProtoConverters extends PrimitiveConverter {
       WaferClassResult(classification = p.classification, cdValueNm = p.cdValueNm, reworkCount = p.reworkCount)
   }
 
+  object WaferStateConv extends ProtoConverter[WaferState, WaferStatePO] {
+    override def toProto(w: WaferState): WaferStatePO = WaferStatePO(
+      waferId = "",
+      name = w.name,
+      status = w.status.toString,
+      classification = w.classification.getOrElse(""),
+      reworkCount = w.reworkCount,
+      cdValue = w.cdValue.getOrElse(0.0),
+      measured = w.measured
+    )
+    override def fromProto(p: WaferStatePO): WaferState = WaferState(
+      name = p.name,
+      status = p.status match {
+        case "OnHold"    => WaferOnHold
+        case "Scrapped"  => WaferScrapped
+        case "Skipped"   => WaferSkipped
+        case _           => WaferActive
+      },
+      classification = if (p.classification.isEmpty) None else Some(p.classification),
+      reworkCount = p.reworkCount,
+      cdValue = if (p.cdValue == 0.0 && !p.measured) None else Some(p.cdValue),
+      measured = p.measured
+    )
+  }
+
   // --- SplitReason helpers ---
   private def splitReasonToString(sr: Option[SplitReason]): String = sr match {
     case Some(ReworkSplit) => "rework"
@@ -96,12 +121,24 @@ trait LotProtoConverters extends PrimitiveConverter {
   object WaferAdditionReservedConv extends ProtoConverter[WaferAdditionReserved, WaferAdditionReservedPO] {
     override def toProto(e: WaferAdditionReserved): WaferAdditionReservedPO = WaferAdditionReservedPO(
       transferId = IdConv.toProto(e.transferId),
-      waferIds = e.waferIds.map(IdConv.toProto).toSeq
+      waferIds = e.waferIds.map(IdConv.toProto).toSeq,
+      carriedWafers = e.carriedWafers.map { case (id, ws) =>
+        WaferStateConv.toProto(ws).copy(waferId = IdConv.toProto(id))
+      }.toSeq
     )
-    override def fromProto(p: WaferAdditionReservedPO): WaferAdditionReserved = WaferAdditionReserved(
-      transferId = IdConv.fromProto(p.transferId),
-      waferIds = p.waferIds.map(IdConv.fromProto).toSet
-    )
+    override def fromProto(p: WaferAdditionReservedPO): WaferAdditionReserved = {
+      // Java-serialized old-journal payloads bypass the constructor: the new field
+      // arrives as null, not as an empty seq — guard before touching it.
+      val carried: Map[Id, WaferState] = Option(p.carriedWafers)
+        .map(_.filter(po => po != null && !po.waferId.isEmpty)
+          .map(po => parseWaferId(po.waferId) -> WaferStateConv.fromProto(po)).toMap)
+        .getOrElse(Map.empty)
+      WaferAdditionReserved(
+        transferId = IdConv.fromProto(p.transferId),
+        waferIds = p.waferIds.map(IdConv.fromProto).toSet,
+        carriedWafers = carried
+      )
+    }
   }
 
   object WaferAdditionCommittedConv extends ProtoConverter[WaferAdditionCommitted, WaferAdditionCommittedPO] {

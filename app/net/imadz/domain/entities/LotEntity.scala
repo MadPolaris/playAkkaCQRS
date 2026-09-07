@@ -35,6 +35,9 @@ object LotEntity {
     reservedWafers: Map[Id, Set[Id]] = Map.empty,
     reservedWaferNames: Map[Id, Set[String]] = Map.empty,
     incomingWafers: Map[Id, Set[Id]] = Map.empty,
+    // transferId → wafer states snapshot taken at reserve time (source lot truth);
+    // applied onto wafers when the addition commits so transfers never lose history
+    incomingCarriedWafers: Map[Id, Map[Id, WaferState]] = Map.empty,
     phase: LotPhase = Empty,
     completedTransferIds: Set[Id] = Set.empty,
     loadedFoupId: Option[String] = None,
@@ -83,7 +86,7 @@ object LotEntity {
   case class WaferRemovalReserved(transferId: Id, waferIds: Set[Id], waferNames: Set[String]) extends LotEvent
   case class WaferRemovalCommitted(transferId: Id, waferNames: Set[String]) extends LotEvent
   case class WaferRemovalReleased(transferId: Id) extends LotEvent
-  case class WaferAdditionReserved(transferId: Id, waferIds: Set[Id]) extends LotEvent
+  case class WaferAdditionReserved(transferId: Id, waferIds: Set[Id], carriedWafers: Map[Id, WaferState] = Map.empty) extends LotEvent
   case class WaferAdditionCommitted(transferId: Id) extends LotEvent
   case class WaferAdditionCanceled(transferId: Id) extends LotEvent
   case class PhaseStarted(phaseId: String) extends LotEvent

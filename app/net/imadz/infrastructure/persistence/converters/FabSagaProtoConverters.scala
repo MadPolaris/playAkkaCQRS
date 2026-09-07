@@ -25,10 +25,15 @@ trait FabSagaProtoConverters extends PrimitiveConverter {
   case class TargetLotParticipantConv(lotRepository: LotRepository)(implicit ec: ExecutionContext) extends ProtoConverter[TargetLotParticipant, TargetLotParticipantPO] {
     override def toProto(d: TargetLotParticipant): TargetLotParticipantPO = TargetLotParticipantPO(
       targetLotId = IdConv.toProto(d.targetLotId),
-      waferIds = d.waferIds.map(IdConv.toProto).toSeq
+      waferIds = d.waferIds.map(IdConv.toProto).toSeq,
+      sourceLotId = IdConv.toProto(d.sourceLotId)
     )
     override def fromProto(p: TargetLotParticipantPO): TargetLotParticipant = TargetLotParticipant(
       targetLotId = IdConv.fromProto(p.targetLotId),
+      // Java-serialized old-journal payloads bypass the constructor: sourceLotId
+      // (added post-hoc) arrives as null — fall back to target id (graceful degrade)
+      sourceLotId = Option(p.sourceLotId).filter(_.nonEmpty)
+        .map(IdConv.fromProto).getOrElse(IdConv.fromProto(p.targetLotId)),
       waferIds = p.waferIds.map(IdConv.fromProto).toSet
     )
   }

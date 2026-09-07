@@ -37,19 +37,30 @@ object LotEventHandler {
         reservedWaferNames = state.reservedWaferNames - transferId
       )
 
-    case WaferAdditionReserved(transferId, waferIds) =>
-      state.copy(incomingWafers = state.incomingWafers + (transferId -> waferIds))
+    case WaferAdditionReserved(transferId, waferIds, carried) =>
+      state.copy(
+        incomingWafers = state.incomingWafers + (transferId -> waferIds),
+        incomingCarriedWafers = if (carried.isEmpty) state.incomingCarriedWafers
+                                else state.incomingCarriedWafers + (transferId -> carried)
+      )
 
     case WaferAdditionCommitted(transferId) =>
       val addedWafers = state.incomingWafers.getOrElse(transferId, Set.empty)
+      val carried = state.incomingCarriedWafers.getOrElse(transferId, Map.empty)
       state.copy(
-        wafers = state.wafers ++ addedWafers.map(id => id -> WaferState(name = id.toString.take(8))),
+        // Restores classification/cd/reworkCount/name for merge-backs; fresh state for brand-new wafers
+        wafers = state.wafers ++ addedWafers.map(id =>
+          id -> carried.getOrElse(id, WaferState(name = id.toString.take(8)))),
         incomingWafers = state.incomingWafers - transferId,
+        incomingCarriedWafers = state.incomingCarriedWafers - transferId,
         completedTransferIds = state.completedTransferIds + transferId
       )
 
     case WaferAdditionCanceled(transferId) =>
-      state.copy(incomingWafers = state.incomingWafers - transferId)
+      state.copy(
+        incomingWafers = state.incomingWafers - transferId,
+        incomingCarriedWafers = state.incomingCarriedWafers - transferId
+      )
 
     case PhaseStarted(_) => state
     case PhaseCompleted(_) => state

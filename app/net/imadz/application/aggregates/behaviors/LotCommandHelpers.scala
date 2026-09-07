@@ -37,10 +37,10 @@ trait LotCommandHelpers {
     override def createSuccessReply(param: Id)(state: LotState): WaferRemovalConfirmation = WaferRemovalConfirmation(param, None)
   }
 
-  implicit object ReserveAddWaferHelper extends CommandHelper[ReserveAddWafer, LotState, (Id, Set[Id]), WaferAdditionConfirmation] {
-    override def toParam(state: LotState, command: ReserveAddWafer): (Id, Set[Id]) = (command.transferId, command.waferIds)
-    override def createFailureReply(param: (Id, Set[Id]))(error: iMadzError): WaferAdditionConfirmation = WaferAdditionConfirmation(param._1, Some(error))
-    override def createSuccessReply(param: (Id, Set[Id]))(state: LotState): WaferAdditionConfirmation = WaferAdditionConfirmation(param._1, None)
+  implicit object ReserveAddWaferHelper extends CommandHelper[ReserveAddWafer, LotState, (Id, Set[Id], Map[Id, WaferState]), WaferAdditionConfirmation] {
+    override def toParam(state: LotState, command: ReserveAddWafer): (Id, Set[Id], Map[Id, WaferState]) = (command.transferId, command.waferIds, command.carriedWafers)
+    override def createFailureReply(param: (Id, Set[Id], Map[Id, WaferState]))(error: iMadzError): WaferAdditionConfirmation = WaferAdditionConfirmation(param._1, Some(error))
+    override def createSuccessReply(param: (Id, Set[Id], Map[Id, WaferState]))(state: LotState): WaferAdditionConfirmation = WaferAdditionConfirmation(param._1, None)
   }
 
   implicit object CommitAddWaferHelper extends CommandHelper[CommitAddWafer, LotState, Id, WaferAdditionConfirmation] {

@@ -225,15 +225,16 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
       result.state.waferIds should contain(w1) // wafer stays
     }
 
-    "reject release for unknown transferId" in {
+    "treat release for unknown transferId as idempotent success (LOT_014 compensation is best-effort)" in {
       createLot(fiveWafers)
       val unknownTx = UUID.randomUUID()
 
       val result = lotTestKit.runCommand[WaferRemovalConfirmation](replyTo =>
         ReleaseReservedWafer(unknownTx, replyTo))
 
-      result.reply.error shouldBe defined
-      result.reply.error.get.code shouldBe "LOT_014"
+      result.reply.error shouldBe None
+      result.events shouldBe empty // no event persisted — nothing to release
+      result.state.waferIds should have size 5
     }
   }
 
@@ -292,6 +293,48 @@ class LotAggregateSpec extends ScalaTestWithActorTestKit(FabSagaTestConfig.testC
 
       result2.reply.error shouldBe None
       result2.events shouldBe empty
+    }
+
+    "carry wafer state through reserve+commit so merge-back keeps classification" in {
+      createLot(fiveWafers) // phase Active (accepts additions)
+      val txId = UUID.randomUUID()
+      val returningWafer = UUID.randomUUID()
+      // Snapshot taken from the child lot at reserve time — the wafer earned
+      // PASS + a CD value while away; the merge must not wipe it to Pending
+      val carried = Map(returningWafer -> LotEntity.WaferState(
+        name = "PILOT-WAFER-1", classification = Some("PASS"),
+        reworkCount = 1, cdValue = Some(31.5), measured = true))
+
+      val reserved = lotTestKit.runCommand[WaferAdditionConfirmation](replyTo =>
+        ReserveAddWafer(txId, Set(returningWafer), replyTo, carried))
+      reserved.reply.error shouldBe None
+      reserved.events should contain(WaferAdditionReserved(txId, Set(returningWafer), carried))
+
+      val committed = lotTestKit.runCommand[WaferAdditionConfirmation](replyTo =>
+        CommitAddWafer(txId, replyTo))
+      committed.reply.error shouldBe None
+      val ws = committed.state.wafers(returningWafer)
+      ws.classification shouldBe Some("PASS")
+      ws.reworkCount shouldBe 1
+      ws.cdValue shouldBe Some(31.5)
+      ws.measured shouldBe true
+      ws.name shouldBe "PILOT-WAFER-1"
+      committed.state.incomingCarriedWafers shouldBe empty // stash cleaned up
+    }
+
+    "add brand-new wafers with fresh state when no carried snapshot exists" in {
+      createLot(fiveWafers)
+      val txId = UUID.randomUUID()
+      val newWafer = UUID.randomUUID()
+
+      lotTestKit.runCommand[WaferAdditionConfirmation](replyTo =>
+        ReserveAddWafer(txId, Set(newWafer), replyTo))
+      val committed = lotTestKit.runCommand[WaferAdditionConfirmation](replyTo =>
+        CommitAddWafer(txId, replyTo))
+
+      val ws = committed.state.wafers(newWafer)
+      ws.classification shouldBe None
+      ws.measured shouldBe false
     }
   }
 

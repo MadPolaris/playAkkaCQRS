@@ -104,9 +104,11 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
           publishLotState(lotId)
         }
 
-      case WaferAdditionReserved(transferId, waferIds) =>
+      case WaferAdditionReserved(transferId, waferIds, carried) =>
         lotStates.get(lotId).foreach { state =>
           state.pendingIncomingWafers(transferId.toString) = waferIds.map(_.toString)
+          if (carried.nonEmpty)
+            state.pendingIncomingCarried(transferId.toString) = carried.map { case (uuid, ws) => uuid.toString -> ws }
         }
 
       case WaferRemovalCommitted(_, waferNames) =>
@@ -130,6 +132,7 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
 
       case WaferAdditionCommitted(transferId) =>
         lotStates.get(lotId).foreach { state =>
+          val carried = state.pendingIncomingCarried.getOrElse(transferId.toString, Map.empty)
           state.pendingIncomingWafers.remove(transferId.toString).foreach { waferUuids =>
             waferUuids.foreach { uuid =>
               val name = waferRegistry.getOrElse(uuid, uuid.take(8))
@@ -137,7 +140,16 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
               state.nameToUuid(name) = uuid
             }
           }
+          // Restore classification/rework history carried from the source lot (merge-back)
+          carried.foreach { case (uuid, ws) =>
+            val name = waferRegistry.getOrElse(uuid, uuid.take(8))
+            ws.classification.foreach { cls => state.waferClassifications(name) = cls }
+            state.waferReworks(name) = ws.reworkCount
+          }
           state.waferCount = state.uuidToName.size
+          state.passCount = state.waferClassifications.values.count(_ == "PASS")
+          state.scrapCount = state.waferClassifications.values.count(_ == "SCRAP")
+          state.pendingIncomingCarried.remove(transferId.toString)
           publishLotState(lotId)
           state.parentLotId.foreach(pid => publishLotState(pid)) // cascade to parent
         }
@@ -145,6 +157,7 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
       case WaferAdditionCanceled(transferId) =>
         lotStates.get(lotId).foreach { state =>
           state.pendingIncomingWafers.remove(transferId.toString)
+          state.pendingIncomingCarried.remove(transferId.toString)
         }
 
       case LotSealed() =>
@@ -243,6 +256,7 @@ class FabDemoViewHandler(publishToUI: FabSimulationEvent => Unit)
     waferClassifications: mutable.Map[String, String] = mutable.Map.empty,
     waferReworks: mutable.Map[String, Int] = mutable.Map.empty,
     pendingIncomingWafers: mutable.Map[String, Set[String]] = mutable.Map.empty,
+    pendingIncomingCarried: mutable.Map[String, Map[String, WaferState]] = mutable.Map.empty,
     parentLotId: Option[String] = None,
     splitReason: Option[String] = None
   )

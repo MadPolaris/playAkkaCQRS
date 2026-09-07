@@ -4,7 +4,7 @@ import akka.actor.typed.ActorRef
 import akka.persistence.typed.scaladsl.Effect
 import net.imadz.common.CborSerializable
 import net.imadz.common.CommonTypes.{Id, iMadzError}
-import net.imadz.domain.entities.LotEntity.{LotEvent, LotPhase, LotState, SplitReason}
+import net.imadz.domain.entities.LotEntity.{LotEvent, LotPhase, LotState, SplitReason, WaferState}
 
 object LotProtocol {
 
@@ -21,8 +21,9 @@ object LotProtocol {
   case class CommitWaferRemoval(transferId: Id, replyTo: ActorRef[WaferRemovalConfirmation]) extends LotCommand
   case class ReleaseReservedWafer(transferId: Id, replyTo: ActorRef[WaferRemovalConfirmation]) extends LotCommand
 
-  // Target lot (incoming wafer reservation — for Saga)
-  case class ReserveAddWafer(transferId: Id, waferIds: Set[Id], replyTo: ActorRef[WaferAdditionConfirmation]) extends LotCommand
+  // Target lot (incoming wafer reservation — for Saga). carriedWafers = source-lot
+  // state snapshot so classification/measurement history survives split/merge/scrap.
+  case class ReserveAddWafer(transferId: Id, waferIds: Set[Id], replyTo: ActorRef[WaferAdditionConfirmation], carriedWafers: Map[Id, WaferState] = Map.empty) extends LotCommand
   case class CommitAddWafer(transferId: Id, replyTo: ActorRef[WaferAdditionConfirmation]) extends LotCommand
   case class CancelAddWafer(transferId: Id, replyTo: ActorRef[WaferAdditionConfirmation]) extends LotCommand
 
@@ -61,6 +62,7 @@ object LotProtocol {
                             routingStepReentry: Map[String, Int] = Map.empty,
                             loadedFoupId: Option[String] = None,
                             waferClassifications: Map[Id, String] = Map.empty,
+                            waferStates: Map[Id, WaferState] = Map.empty,
                             completedJobs: Set[String] = Set.empty,
                             measuredWafers: Set[Id] = Set.empty,
                             currentStepIndex: Int = 0) extends CborSerializable

@@ -55,9 +55,22 @@ message WaferRemovalReleasedPO {
   string transfer_id = 1;
 }
 
+// Full wafer intrinsic state — carried across lot transfers so splits/merges
+// never lose classification/measurement history (preserved on journal replay).
+message WaferStatePO {
+  string wafer_id = 1;
+  string name = 2;
+  string status = 3;         // "Active"|"OnHold"|"Scrapped"|"Skipped"
+  string classification = 4; // empty if unclassified
+  int32 rework_count = 5;
+  double cd_value = 6;
+  bool measured = 7;
+}
+
 message WaferAdditionReservedPO {
   string transfer_id = 1;
   repeated string wafer_ids = 2;
+  repeated WaferStatePO carried_wafers = 3;  // wafer states snapshot from the source lot (optional)
 }
 
 message WaferAdditionCommittedPO {

@@ -48,7 +48,7 @@ object FabSagaDefinition {
       argsCodec = codec,
       steps = args => {
         val source = SourceLotParticipant(Id.of(args.sourceLotId), args.waferIds.map(Id.of).toSet, args.waferNames.toSet)
-        val target = TargetLotParticipant(Id.of(args.targetLotId), args.waferIds.map(Id.of).toSet)
+        val target = TargetLotParticipant(Id.of(args.targetLotId), Id.of(args.sourceLotId), args.waferIds.map(Id.of).toSet)
         Seq(
           SagaStep("source-lot", source, Policy, stepGroup = 1),
           SagaStep("target-lot", target, Policy, stepGroup = 1))
