@@ -74,6 +74,15 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   .ldk { font-size:10.5px; color:#7f95ab; display:block; }
   #ldWo, #ldPhase { color:#e6edf3; }
   #ldTrail { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+  #ldLanes { display:flex; flex-direction:column; gap:8px; margin:6px 0; }
+  .laneRow { border:1px solid rgba(255,255,255,0.09); border-radius:8px;
+    padding:6px 8px; background:rgba(255,255,255,0.03); }
+  .laneRow.active { border-color:rgba(66,165,245,0.55); background:rgba(66,165,245,0.06); }
+  .laneHead { font-size:11px; color:#e6edf3; margin-bottom:4px; }
+  .laneHead .wcnt { color:#8fb8e8; margin-left:6px; font-size:10px; }
+  .laneHead em { color:#789; font-style:normal; margin-left:6px; font-size:10px; }
+  .laneFork { font-size:10px; color:#ce93d8; margin:2px 0 4px; }
+  .laneAreas { display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
   .trailNode { padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600;
     background:rgba(255,255,255,0.06); color:#7f92a8; border:1px solid rgba(255,255,255,0.08); }
   .trailNode.visited { color:#9fe19f; border-color:rgba(26,127,55,0.5); }
@@ -246,8 +255,8 @@ window.addEventListener("unhandledrejection", function(e) {
     <div class="ldRow"><span class="ldk">批次</span><span id="ldWo">—</span></div>
     <div class="ldRow"><span class="ldk">状态</span><span id="ldPhase">—</span></div>
     <div class="ldRow"><span class="ldk">分布</span><span id="ldSummary" style="color:#e6edf3;">—</span></div>
-    <div class="ldk" style="margin:10px 0 4px;">实际路线（事件轨迹）</div>
-    <div id="ldTrail"></div>
+    <div class="ldk" style="margin:10px 0 4px;">批次泳道（分叉 / 合并 / 报废）</div>
+    <div id="ldLanes"></div>
     <div class="ldk" style="margin:10px 0 4px;">晶圆明细</div>
     <table id="lotWafers"></table>
   </div>
@@ -852,12 +861,13 @@ function resetDemoState() {
   Object.keys(childFoups).forEach(removeChildFoup);
   childLots = {};
   seenSagaKeys = {}; scrappedWafers = {}; waferLoc = {}; lastAreaStatus = {}; areaLoad = {};
+  window.__lotPos = { main: 'STOCKER' };
   lotMainCount = 0; scrappedCount = 0; splitCount = 0; mergeCount = 0;
   setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
   recCount = 0; ocapCount = 0; setKpi('kpiRec', 0); setKpi('kpiOcap', 0);
   wipCount = 0; setKpi('kpiWip', 0);
   foup.visible = false; moveAnim = null; moveQueue = [];
-  window.__lotTrail = [];
+  window.__lanes = []; window.__curLane = null;
   foupState = 'hidden'; lastPadKey = 'STOCKER';
   foup.scale.setScalar(1);
   setFocus(null);
@@ -895,6 +905,13 @@ function handleSaga(d) {
       childLots[suffix] = (childLots[suffix] || 0) + n;
       lotMainCount = Math.max(0, lotMainCount - n);
     }
+    // 泳道分叉：子批从当前泳道的当前位置分出
+    var pl = window.__curLane;
+    var startArea = pl && pl.areas.length ? pl.areas[pl.areas.length - 1] : 'CDSEM';
+    var child = { name: cn, wafers: n, areas: [startArea], forkFrom: pl || null, state: 'active', key: suffix };
+    window.__lanes.push(child);
+    window.__curLane = child;
+    window.__lotPos[suffix] = window.__lotPos.main || startArea;
     renderLotTree();
     banner('✂️ 拆批已提交：' + n + ' 片 → ' + cn, 'recovering');
     feedAdd('✂️ SplitLot COMMITTED → ' + cn + '（' + n + ' 片）');
@@ -906,6 +923,12 @@ function handleSaga(d) {
     } else {
       lotMainCount += childLots[suffix] || n;
       delete childLots[suffix];
+    }
+    // 泳道合并：子泳道标记已并回，活跃泳道切回主批
+    if (window.__curLane && window.__curLane.forkFrom) {
+      window.__curLane.state = 'merged';
+      window.__lotPos.main = window.__lotPos[suffix] || window.__lotPos.main;
+      window.__curLane = window.__curLane.forkFrom;
     }
     removeChildFoup(suffix);
     renderLotTree();
@@ -1003,6 +1026,12 @@ function handleEvent0(frame) {
     setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
     setKpi('kpiWip', wipCount);
     renderLotTree();
+    if (!window.__lanes.length) {
+      var main = { name: '主批', wafers: wipCount, areas: ['STOCKER'], forkFrom: null, state: 'active' };
+      window.__lanes = [main];
+      window.__curLane = main;
+    }
+    window.__lotPos = { main: 'STOCKER' };
     var badge = document.getElementById('runBadge');
     if (badge) badge.textContent = '● 运行中 · ' + (d.name || '演示');
     routeActive('STOCKER');
@@ -1013,6 +1042,10 @@ function handleEvent0(frame) {
     moveOHT(d.fromArea, d.toArea, d.etaMs);
     routeActive(d.toArea);
     trailPush(d.toArea);   // 批次路线卡：实际轨迹追加
+    // 位置归属：子批泳道开启时移动子批，否则移动主批
+    var movingLane = (window.__curLane && window.__curLane.forkFrom) ? window.__curLane.key : 'main';
+    window.__lotPos[movingLane] = d.toArea;
+    if (window.__lotDrawerOpen && window.__lastES) renderLotDrawer(window.__lastES);
     var fn = AREA_NAME[d.fromArea] || d.fromArea || '', tn2 = AREA_NAME[d.toArea] || d.toArea || '';
     if (tn2) narrate('🚗', '天车满载 FOUP：<b>' + fn + '</b> → <b>' + tn2 + '</b>', 3200, d.toArea);
   } else if (t === 'FoupArrivedAtPort') {
@@ -1117,8 +1150,10 @@ function handleEvent0(frame) {
     }
   } else if (t === 'DynamicStageInjected') {
     // 动态工序注入：追加到批次路线卡轨迹（⚡ 标记）
-    window.__lotTrail.push('⚡ ' + (d.injectedStageType || d.parentNodeId || 'DYN'));
-    renderDrawerTrail();
+    if (window.__curLane) {
+      window.__curLane.areas.push('⚡ ' + (d.injectedStageType || d.parentNodeId || 'DYN'));
+      renderDrawerLanes();
+    }
     feedAdd('⚡ 动态注入工序：' + (d.injectedStageType || d.parentNodeId || ''));
     narrate('⚡', 'OCAP 动态注入工序：<b>' + (d.injectedStageType || d.parentNodeId || '') + '</b>', 3600);
     if ((d.status || '').indexOf('Complete') >= 0) {
@@ -1222,27 +1257,30 @@ window.__lotTrail = [];     // 实际走过的区域轨迹（事件追加）
 window.__lotDrawerOpen = false;
 var lotDrawerTimer = null;
 function trailPush(area) {
-  if (!window.__lotTrail.length || window.__lotTrail[window.__lotTrail.length - 1] !== area)
-    window.__lotTrail.push(area);
-  renderDrawerTrail();
+  var lane = window.__curLane;
+  if (!lane) return;
+  if (lane.areas[lane.areas.length - 1] !== area) lane.areas.push(area);
+  renderDrawerLanes();
 }
-function renderDrawerTrail() {
-  var el = document.getElementById('ldTrail');
+function renderDrawerLanes() {
+  var el = document.getElementById('ldLanes');
   if (!el || !window.__lotDrawerOpen) return;
-  el.innerHTML = '';
-  var t = window.__lotTrail;
-  for (var i = 0; i < t.length; i++) {
-    var n = document.createElement('span');
-    var isDyn = typeof t[i] === 'string' && t[i].indexOf('⚡') === 0;
-    n.className = 'trailNode' + (isDyn ? ' dyn' : (i === t.length - 1 ? ' current' : ' visited'));
-    n.textContent = t[i];
-    el.appendChild(n);
-    if (i < t.length - 1) {
-      var a = document.createElement('span');
-      a.className = 'trailArrow'; a.textContent = '→';
-      el.appendChild(a);
-    }
-  }
+  var html = '';
+  window.__lanes.forEach(function(lane) {
+    var isActive = lane === window.__curLane;
+    html += '<div class="laneRow' + (isActive ? ' active' : '') + '">';
+    html += '<div class="laneHead"><b>' + lane.name + '</b><span class="wcnt">' + lane.wafers + ' 片</span>' +
+      (lane.state === 'merged' ? '<em>↩ 已并回主批</em>' : lane.state === 'scrapped' ? '<em>🗑 已报废</em>' : '') + '</div>';
+    if (lane.forkFrom) html += '<div class="laneFork">↘ 从 ' + lane.forkFrom.name + ' 分叉</div>';
+    html += '<div class="laneAreas">';
+    lane.areas.forEach(function(a, i) {
+      var dyn = typeof a === 'string' && a.indexOf('⚡') === 0;
+      html += '<span class="trailNode' + (dyn ? ' dyn' : ' visited') + '">' + a + '</span>';
+      if (i < lane.areas.length - 1) html += '<span class="trailArrow">→</span>';
+    });
+    html += '</div></div>';
+  });
+  el.innerHTML = html;
 }
 function openLotDrawer() {
   window.__lotDrawerOpen = true;
@@ -1250,37 +1288,42 @@ function openLotDrawer() {
   if (d) d.classList.add('show');
   var wo = document.getElementById('ldWo');
   if (wo) wo.textContent = (window.__activeWo || '').slice(0, 8) || '—';
-  var trailEl = document.getElementById('ldTrail');
-  if (trailEl) trailEl.innerHTML = '<span class="trailNode current">STOCKER</span>';
-  window.__lotTrail = ['STOCKER'];
+  if (!window.__lanes.length) {
+    var main = { name: '主批', wafers: (wipCount || 5), areas: ['STOCKER'], forkFrom: null, state: 'active' };
+    window.__lanes = [main];
+    window.__curLane = main;
+  }
+  renderDrawerLanes();
   if (!lotDrawerTimer) lotDrawerTimer = setInterval(pollLotDrawer, 4000);
 }
 function pollLotDrawer() {
   if (!window.__lotDrawerOpen || !window.__activeWo) return;
   fetch('/api/fab-demo/entity-state/' + window.__activeWo)
     .then(function(r) { return r.json(); })
-    .then(function(d) { renderLotDrawer(d); })
+    .then(function(d) { window.__lastES = d; renderLotDrawer(d); })
     .catch(function() {});
 }
 function renderLotDrawer(d) {
   var src = d.sourceLot || {};
   var phase = document.getElementById('ldPhase');
   if (phase) phase.textContent = src.phase || '—';
-  if (window.__lotTrail.length) renderDrawerTrail();
+  renderDrawerLanes();
   var names = d.waferNames || {}, lotNames = d.lotNames || {};
   var childCn = { rework: '返工批', scrap: '报废批', pilot: '试投批', sample: '抽检批', hold: '暂扣批' };
   var tbl = document.getElementById('lotWafers');
   if (!tbl) return;
   var summary = {};
-  var rows = '<tr><td>晶圆</td><td>归属批</td><td>分类</td></tr>';
-  function waferRow(nm, lotLabel, cls) {
-    rows += '<tr><td>' + nm + '</td><td>' + lotLabel + '</td><td class="cls-' + cls + '">' + cls + '</td></tr>';
+  var rows = '<tr><td>晶圆</td><td>归属批</td><td>当前工位</td><td>分类</td></tr>';
+  var pos = window.__lotPos || {};
+  function waferRow(nm, lotKey, lotLabel, cls) {
+    var at = pos[lotKey] || '—';
+    rows += '<tr><td>' + nm + '</td><td>' + lotLabel + '</td><td>' + at +
+      '</td><td class="cls-' + cls + '">' + cls + '</td></tr>';
     summary[cls] = (summary[cls] || 0) + 1;
   }
   (d.wafers || []).forEach(function(w) {
     var nm = names[w.waferId] || w.waferId.slice(0, 8);
-    var cls = w.classification || w.status || '—';
-    waferRow(nm, lotNames[w.lotId] || '主批', cls);
+    waferRow(nm, 'main', lotNames[w.lotId] || '主批', w.classification || w.status || '—');
   });
   Object.keys(d.childLots || {}).forEach(function(key) {
     var cl = d.childLots[key];
@@ -1288,7 +1331,7 @@ function renderLotDrawer(d) {
     (cl.waferIds || []).forEach(function(uid) {
       var nm = names[uid] || uid.slice(0, 8);
       var cls = (cl.waferClassifications && cl.waferClassifications[uid]) || '—';
-      waferRow(nm, cn, cls);
+      waferRow(nm, key, cn, cls);
     });
   });
   tbl.innerHTML = rows;
