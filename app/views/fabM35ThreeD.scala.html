@@ -63,7 +63,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
 #ruleLib .ruleRow.fired { color:#e6edf3; }
   #ruleLib .ruleRow.muted { color:#5a6b7d; border-bottom:none; }
   /* 批次路线卡抽屉 */
-  #lotDrawer { position:fixed; top:104px; right:326px; width:330px; max-height:calc(100vh - 130px);
+  #lotDrawer { position:fixed; top:104px; right:326px; width:392px; max-height:calc(100vh - 130px);
     z-index:50; background:rgba(11,18,32,0.94); border:1px solid rgba(255,255,255,0.16);
     border-radius:10px; padding:12px 14px; overflow-y:auto; display:none;
     box-shadow:0 8px 28px rgba(0,0,0,.5); }
@@ -862,6 +862,7 @@ function resetDemoState() {
   childLots = {};
   seenSagaKeys = {}; scrappedWafers = {}; waferLoc = {}; lastAreaStatus = {}; areaLoad = {};
   window.__lotPos = { main: 'STOCKER' };
+  window.__stageState = { main: '存放' };
   lotMainCount = 0; scrappedCount = 0; splitCount = 0; mergeCount = 0;
   setKpi('kpiSplit', 0); setKpi('kpiMerge', 0); setKpi('kpiScrap', 0);
   recCount = 0; ocapCount = 0; setKpi('kpiRec', 0); setKpi('kpiOcap', 0);
@@ -912,6 +913,7 @@ function handleSaga(d) {
     window.__lanes.push(child);
     window.__curLane = child;
     window.__lotPos[suffix] = window.__lotPos.main || startArea;
+    window.__stageState[suffix] = window.__stageState.main || '存放';
     renderLotTree();
     banner('✂️ 拆批已提交：' + n + ' 片 → ' + cn, 'recovering');
     feedAdd('✂️ SplitLot COMMITTED → ' + cn + '（' + n + ' 片）');
@@ -928,6 +930,7 @@ function handleSaga(d) {
     if (window.__curLane && window.__curLane.forkFrom) {
       window.__curLane.state = 'merged';
       window.__lotPos.main = window.__lotPos[suffix] || window.__lotPos.main;
+      window.__stageState.main = window.__stageState[suffix] || window.__stageState.main;
       window.__curLane = window.__curLane.forkFrom;
     }
     removeChildFoup(suffix);
@@ -1032,6 +1035,7 @@ function handleEvent0(frame) {
       window.__curLane = main;
     }
     window.__lotPos = { main: 'STOCKER' };
+    window.__stageState = { main: '存放' };
     var badge = document.getElementById('runBadge');
     if (badge) badge.textContent = '● 运行中 · ' + (d.name || '演示');
     routeActive('STOCKER');
@@ -1045,16 +1049,23 @@ function handleEvent0(frame) {
     // 位置归属：子批泳道开启时移动子批，否则移动主批
     var movingLane = (window.__curLane && window.__curLane.forkFrom) ? window.__curLane.key : 'main';
     window.__lotPos[movingLane] = d.toArea;
+    window.__stageState[movingLane] = '运输中';
     if (window.__lotDrawerOpen && window.__lastES) renderLotDrawer(window.__lastES);
     var fn = AREA_NAME[d.fromArea] || d.fromArea || '', tn2 = AREA_NAME[d.toArea] || d.toArea || '';
     if (tn2) narrate('🚗', '天车满载 FOUP：<b>' + fn + '</b> → <b>' + tn2 + '</b>', 3200, d.toArea);
   } else if (t === 'FoupArrivedAtPort') {
     var portArea = findArea(d.equipmentId) || 'STOCKER';
     dockFoup(portArea);
+    // 到站：STOCKER 即存放，设备装载端口即待进站
+    var arrivedLane = (window.__curLane && window.__curLane.forkFrom) ? window.__curLane.key : 'main';
+    window.__stageState[arrivedLane] = (portArea === 'STOCKER') ? '存放' : '待进站';
     if (BOARDS[portArea]) boardFlash(portArea, '在站 · 待加工', '#ffb300', 2500);
     narrate('🛬', 'FOUP 在 <b>' + (AREA_NAME[portArea] || portArea) + '</b> 装载端口降落', 3000, portArea);
   } else if (t === 'ProcessingStarted') {
     var area = findArea(d.equipmentId);
+    var procLane = (window.__curLane && window.__curLane.forkFrom) ? window.__curLane.key : 'main';
+    window.__stageState[procLane] = '加工中';
+    if (window.__lotDrawerOpen && window.__lastES) renderLotDrawer(window.__lastES);
     if (area) {
       panelColor(area, 0xffb300); boardSet(area, '⚙ 加工中', '#42a5f5');
       narrate('⚙️', '<b>' + (AREA_NAME[area] || area) + '</b> 加工中 · 配方 ' + (d.recipeId || ''), 3200, area, '#42a5f5');
@@ -1062,6 +1073,9 @@ function handleEvent0(frame) {
     setKpi('kpiWip', wipCount);
   } else if (t === 'ProcessingCompleted') {
     var area2 = findArea(d.equipmentId);
+    var doneLane = (window.__curLane && window.__curLane.forkFrom) ? window.__curLane.key : 'main';
+    window.__stageState[doneLane] = d.success === false ? '加工异常' : '待出站';
+    if (window.__lotDrawerOpen && window.__lastES) renderLotDrawer(window.__lastES);
     if (area2) {
       panelColor(area2, d.success === false ? 0xff5252 : 0x00e676);
       boardFlash(area2, d.success === false ? '✖ 异常' : '完成 ✓', d.success === false ? '#ff5252' : '#00e676', 3000);
@@ -1312,8 +1326,12 @@ function renderLotDrawer(d) {
   var tbl = document.getElementById('lotWafers');
   if (!tbl) return;
   var summary = {};
-  var rows = '<tr><td>晶圆</td><td>归属批</td><td>当前工位</td><td>分类</td></tr>';
+  var rows = '<tr><td>晶圆</td><td>归属批</td><td>当前工位</td><td>工序态</td><td>分类</td></tr>';
   var pos = window.__lotPos || {};
+  var stages = window.__stageState || {};
+  // 工序态配色：与状态屏语义一致
+  var STAGE_C = { '存放': '#8a9aa8', '运输中': '#ffb300', '待进站': '#ffb300',
+                  '加工中': '#42a5f5', '待出站': '#ffd54f', '加工异常': '#ff5252' };
   // 泳道 key 归一：后端 lotKey(rework/pilot/…) ↔ 泳道后缀(RWK/PILOT/…)
   var LANE_OF = { REWORK: 'RWK', RWK: 'RWK', PILOT: 'PILOT', SCRAP: 'SCRAP', SAMPLE: 'SAMPLE', HOLD: 'HOLD' };
   (d.wafers || []).forEach(function(w) {
@@ -1321,7 +1339,9 @@ function renderLotDrawer(d) {
     var laneKey = LANE_OF[(w.lotKey || 'main').toUpperCase()] || 'main';
     var lotLabel = lotNames[w.lotId] || '主批';
     var cls = w.classification || w.status || '—';
+    var st = stages[laneKey] || '存放';
     rows += '<tr><td>' + nm + '</td><td>' + lotLabel + '</td><td>' + (pos[laneKey] || '—') +
+      '</td><td style="color:' + (STAGE_C[st] || '#c8d6e5') + '">' + st +
       '</td><td class="cls-' + cls + '">' + cls + '</td></tr>';
     summary[cls] = (summary[cls] || 0) + 1;
   });
