@@ -32,25 +32,44 @@ object PipelineStages {
   private val logger = LoggerFactory.getLogger("PipelineStages")
 
   /**
-   * 同步等待设备区 Actor 接受迁移（ask）：确认 LOADED/BUSY/FINISHED 等状态真实落定后流水线才继续，
-   * 消除"管线旁白 vs 区域状态"的时序错位。区域未初始化（单测）或 ask 超时/被拒时仅告警并继续，不中断演示。
+   * 同步等待设备区 Actor 接受命令：确认 LOADED/BUSY/FINISHED 等状态真实落定后流水线才继续。
+   * 区域拒绝（DOWN / Busy / 队列满）= 物理世界不允许该动作 —— 流水线在原地等待恢复并周期性
+   * 广播 WAIT_RECOVERY，而不是无视拒绝继续旁白加工。区域未初始化（单测）直接放行。
+   * 超过上限仍未被接受则判定阶段失败，由上层引擎决定跳过或终止。
    */
   private def askArea(ctx: FabDemoContext, areaType: String,
                       mk: Option[ActorRef[EquipmentAreaActor.AreaReply]] => EquipmentAreaActor.Command): Future[Boolean] = {
+    implicit val ec: ExecutionContext = ctx.ec
     ctx.areaActorOf(areaType) match {
+      case None => Future.successful(true) // 单测 / 无 Actor 路径
       case Some(ref) =>
-        implicit val scheduler: Scheduler = EquipmentAreaActor.Registry.scheduler
         implicit val timeout: Timeout = 5.seconds
-        ref.ask((replyTo: ActorRef[EquipmentAreaActor.AreaReply]) => mk(Some(replyTo)))
-          .map { r =>
-            if (!r.accepted) logger.warn(s"[Area $areaType] command rejected: ${r.reason} (status=${r.status})")
-            r.accepted
-          }(ctx.ec)
-          .recover { case ex =>
-            logger.warn(s"[Area $areaType] ask failed (continuing): ${ex.getMessage}")
-            false
-          }(ctx.ec)
-      case None => Future.successful(true)
+        val retryMs = 700L
+        val maxAttempts = 240 // ≈3 分钟真实时间，足够驾驶舱人工复位
+        def attempt(): Future[Option[String]] =
+          ref.ask((replyTo: ActorRef[EquipmentAreaActor.AreaReply]) => mk(Some(replyTo)))
+            .map { r => if (r.accepted) None else Some(r.reason) }(ctx.ec)
+            .recover { case ex => Some(s"ask failed: ${ex.getMessage}") }(ctx.ec)
+        def delayThen(next: => Future[Boolean]): Future[Boolean] =
+          scala.concurrent.Future {
+            scala.concurrent.blocking { Thread.sleep(retryMs) }
+          }.flatMap(_ => next)(ctx.ec)
+        def loop(remaining: Int, narratedReason: Option[String]): Future[Boolean] =
+          attempt().flatMap {
+            case None => Future.successful(true)
+            case Some(reason) if remaining <= 0 =>
+              Future.failed(new IllegalStateException(s"[Area $areaType] 等待恢复超时: $reason"))
+            case Some(reason) =>
+              val tell = narratedReason.forall(_ != reason)
+              if (tell) {
+                logger.warn(s"[Area $areaType] command waiting for recovery: $reason")
+                // 直发 WS（stageProgress 在 Actor 路径会转 journal 事件，页面收不到）
+                ctx.publish(net.imadz.domain.events.GlobalStatusChanged(
+                  "WAIT_RECOVERY", s"$areaType $reason", "PhaseWaitRecovery"))
+              }
+              delayThen(loop(remaining - 1, if (tell) Some(reason) else narratedReason))
+          }
+        loop(maxAttempts, narratedReason = None)
     }
   }
 

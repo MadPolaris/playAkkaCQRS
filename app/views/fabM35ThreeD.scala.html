@@ -157,6 +157,32 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
     background:#3d4d5f; flex:none; transition:background .3s, box-shadow .3s; }
   @@keyframes cellPulse { 0%{ box-shadow:0 0 0 0 rgba(66,165,245,.55);} 70%{ box-shadow:0 0 0 7px rgba(66,165,245,0);} 100%{ box-shadow:0 0 0 0 rgba(66,165,245,0);} }
   .areaCell.pulse { animation:cellPulse 1s ease-out 2; border-color:#42a5f5; }
+  /* 工作区状态强化：背景着色 + 右侧状态字，一眼可读 */
+  .areaCell .st { margin-left:auto; font-size:9.5px; font-weight:600; letter-spacing:1px; color:#7f95ab; }
+  .areaCell.st-LOADED  { background:rgba(255,179,0,0.14);  border-color:#ffb300; }
+  .areaCell.st-LOADED  .st { color:#ffb300; }
+  .areaCell.st-BUSY    { background:rgba(66,165,245,0.18); border-color:#42a5f5; }
+  .areaCell.st-BUSY    .st { color:#64b5f6; }
+  .areaCell.st-FINISHED{ background:rgba(0,230,118,0.13);  border-color:#00e676; }
+  .areaCell.st-FINISHED .st { color:#00e676; }
+  .areaCell.st-UNLOADING{ background:rgba(255,213,79,0.13); border-color:#ffd54f; }
+  .areaCell.st-UNLOADING .st { color:#ffd54f; }
+  .areaCell.st-DOWN    { background:rgba(255,82,82,0.17);  border-color:#ff5252; }
+  .areaCell.st-DOWN    .st { color:#ff8a80; }
+  @@keyframes cellDown { 0%,100% { box-shadow:0 0 0 0 rgba(255,82,82,.35); }
+                         50%     { box-shadow:0 0 9px 2px rgba(255,82,82,.30); } }
+  .areaCell.st-DOWN { animation:cellDown 1.3s ease-in-out infinite; }
+  /* 干预按钮：与驾驶舱同语言的语义色 */
+  #areaIv { display:none; align-items:center; gap:7px; margin-top:8px;
+    font-size:11px; color:#7f95ab; }
+  #areaIv b { color:#e6edf3; }
+  #ivDown, #ivReset { padding:4px 14px; border-radius:6px; font-size:11.5px; font-weight:600;
+    letter-spacing:2px; cursor:pointer; background:rgba(255,255,255,0.04);
+    border:1px solid; transition:all .2s; }
+  #ivDown  { color:#ff8a80; border-color:rgba(255,82,82,0.5); }
+  #ivDown:hover  { background:rgba(255,82,82,0.14);  box-shadow:0 0 9px rgba(255,82,82,0.28); }
+  #ivReset { color:#69f0ae; border-color:rgba(105,240,174,0.5); }
+  #ivReset:hover { background:rgba(105,240,174,0.10); box-shadow:0 0 9px rgba(105,240,174,0.24); }
   @@keyframes kpiPop { 0%{display:inline-block; transform:scale(1.7); color:#ffd54f} 100%{display:inline-block; transform:scale(1)} }
   .chip b.pop { animation:kpiPop .45s ease-out; }
   #narr { position:fixed; bottom:64px; left:50%; transform:translateX(-50%); z-index:45;
@@ -209,9 +235,9 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <div id="areaGrid"></div>
   <div id="loadSummary"></div>
   <div id="areaIv">
-    <span>干预 <b id="areaIvName"></b>：</span>
-    <button id="ivDown">⏻ 停机</button>
-    <button id="ivReset">🛠 复位</button>
+    <span>干预 <b id="areaIvName"></b></span>
+    <button id="ivDown">停机</button>
+    <button id="ivReset">复位</button>
   </div>
   <h3 style="margin-top:12px">OCAP 规则库</h3>
   <div id="ruleLib"><div class="ruleRow muted">加载中…</div></div>
@@ -1141,16 +1167,23 @@ function handleEvent0(frame) {
     }
   } else if (t === 'AreaStateChanged') {
     // 设备区 Actor 的权威状态：状态屏以此为准（覆盖旁白事件的推断值）
+    // Actor 发的是 CamelCase（Busy/Down…），此处统一大写后再喂给色表/状态屏
     var aK = d.areaId;
-    lastAreaStatus[aK] = d.status;
-    areaCellState(aK, d.status);
-    areaLoad[aK] = { status: d.status, q: d.queueDepth || 0 };
+    var aSt = (d.status || '').toUpperCase();
+    lastAreaStatus[aK] = aSt;
+    areaCellState(aK, aSt);
+    areaLoad[aK] = { status: aSt, q: d.queueDepth || 0 };
     renderLoadSummary();
+    var waitBadge = document.getElementById('runBadge');
+    if (waitBadge && waitBadge.textContent === '● 等待设备恢复…' && aSt !== 'DOWN' &&
+        Object.keys(areaLoad).some(function(k) { return areaLoad[k].status !== 'DOWN'; })) {
+      waitBadge.textContent = '● 运行中';
+    }
     if (BOARDS[aK]) {
       var stMap = { IDLE: ['待机', '#0aa8a0'], LOADED: ['已装载 · 待加工', '#ffb300'],
                     BUSY: ['⚙ 加工中', '#42a5f5'], FINISHED: ['完成 ✓ 待出站', '#00e676'],
                     UNLOADING: ['📤 出站中', '#ffd54f'], DOWN: ['⚠ 宕机', '#ff5252'] };
-      var st = stMap[d.status];
+      var st = stMap[aSt];
       if (st) {
         var q = d.queueDepth || 0;
         boardSet(aK, st[0] + (q > 0 ? ' ⏳' + q : ''), st[1]);
@@ -1196,6 +1229,11 @@ function handleEvent0(frame) {
       banner('✅ 全部完成', 'done');
       var badge2 = document.getElementById('runBadge');
       if (badge2) badge2.textContent = '● 已完成 ✓';
+    } else if ((d.status || '') === 'WAIT_RECOVERY') {
+      banner('⏳ ' + (d.detail || '设备不可用，等待恢复') + '……', 'crash');
+      narrate('⏳', '<b>' + (d.detail || '') + '</b>——流水线原地等待，FOUP 停靠端口不会入站', 5000);
+      var badge3 = document.getElementById('runBadge');
+      if (badge3) badge3.textContent = '● 等待设备恢复…';
     }
   } else if (t === 'DynamicStageInjected') {
     // 动态工序注入：追加到批次路线卡轨迹（⚡ 标记）
@@ -1219,7 +1257,7 @@ var ivArea = null;   // 当前选中待干预的区域
 AREA_ORDER.forEach(function(k) {
   var cell = document.createElement('div');
   cell.className = 'areaCell'; cell.id = 'cell-' + k;
-  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span><span class="qbadge"></span>';
+  cell.innerHTML = '<span class="dot"></span><span>' + AREA_NAME[k] + '</span><span class="st">空闲</span><span class="qbadge"></span>';
   cell.addEventListener('click', function() {
     ivArea = (ivArea === k) ? null : k;
     document.querySelectorAll('.areaCell.sel').forEach(function(c) { c.classList.remove('sel'); });
@@ -1248,13 +1286,22 @@ document.getElementById('ivReset').addEventListener('click', function() {
 });
 var CELL_STATUS_COLOR = { IDLE: '#455a64', LOADED: '#ffb300', BUSY: '#42a5f5',
                           FINISHED: '#00e676', UNLOADING: '#ffd54f', DOWN: '#ff5252' };
+var AREA_STATUS_CN = { IDLE: '空闲', LOADED: '上料', BUSY: '加工', FINISHED: '完成',
+                       UNLOADING: '出站', DOWN: '宕机' };
 function areaCellState(key, status) {
   var cell = document.getElementById('cell-' + key);
   if (!cell) return;
   var color = CELL_STATUS_COLOR[status] || '#455a64';
   cell.querySelector('.dot').style.background = color;
-  cell.querySelector('.dot').style.boxShadow = status === 'IDLE' ? 'none' : '0 0 6px ' + color;
-  cell.style.borderColor = status === 'IDLE' ? 'rgba(255,255,255,0.09)' : color;
+  cell.querySelector('.dot').style.boxShadow = (status === 'IDLE' || status === 'Down') ? 'none' : '0 0 6px ' + color;
+  cell.style.borderColor = (status === 'IDLE') ? 'rgba(255,255,255,0.09)' : color;
+  cell.classList.remove('st-LOADED', 'st-BUSY', 'st-FINISHED', 'st-UNLOADING', 'st-DOWN');
+  if (status !== 'IDLE') cell.classList.add('st-' + status);
+  var st = cell.querySelector('.st');
+  if (st) {
+    st.textContent = AREA_STATUS_CN[status] || status || '—';
+    st.style.color = (status === 'IDLE') ? '#7f95ab' : color;
+  }
 }
 var areaLoad = {};   // areaId -> {status, q}
 function renderLoadSummary() {

@@ -222,6 +222,15 @@ object EquipmentAreaActor {
           replyTo.foreach(_ ! AreaReply(accepted = true, Finished, ""))
           accept(Finished, state.equipmentId, state.job, "process done")
 
+        case (_, FinishProcess(_, replyTo)) if state.status == Finished =>
+          // 幂等：晚到/重试的完结信号（看门狗先到、驻留门控延迟等）——已 FINISHED 直接确认
+          replyTo.foreach(_ ! AreaReply(accepted = true, Finished, ""))
+          Effect.none
+
+        case (_, FinishProcess(_, replyTo)) =>
+          // 全状态有应答：ask 不得悬空超时（LOADED=尚未开始，让管线重试等待）
+          reject(replyTo, s"FinishProcess requires BUSY/FINISHED (now ${state.status})")
+
         case (_, ProcessWatchdog) if state.status == Busy =>
           ctx.log.warn(s"[Area $areaId] process watchdog fired — FinishProcess signal lost, auto-finishing")
           accept(Finished, state.equipmentId, state.job, "process done (watchdog)")
