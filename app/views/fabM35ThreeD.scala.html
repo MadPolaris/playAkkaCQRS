@@ -74,6 +74,22 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   #lotDrawer h4:hover { color:#b9d4f2; }
   #lotDrawer.collapsed #lotDrawerBody { display:none; }
   #lotDrawer.collapsed { overflow-y:hidden; }
+  /* 路线定义长横条：通栏贴底，横向铺开完整 DAG */
+  #routeDefStrip { position:fixed; bottom:8px; left:14px; right:14px; z-index:46;
+    background:rgba(11,18,32,0.94); border:1px solid rgba(255,255,255,0.14);
+    border-radius:10px; padding:8px 12px 10px; display:none;
+    box-shadow:0 8px 28px rgba(0,0,0,.5); }
+  #routeDefStrip.show { display:block; }
+  #routeDefStrip .rdsHead { display:flex; justify-content:space-between; align-items:center;
+    font-size:11.5px; color:#8fb8e8; margin-bottom:6px; }
+  #routeDefStrip .rdsHead .rdsName { font-weight:700; letter-spacing:.5px; }
+  #routeDefStrip .rdsHead .rdsDesc { color:#7f95ab; font-size:10.5px; margin-left:10px; }
+  #rdsClose { cursor:pointer; color:#789; padding:0 4px; }
+  #rdsClose:hover { color:#e6edf3; }
+  #rdsCanvas { overflow-x:auto; border-radius:7px; background:rgba(0,0,0,0.25); }
+  #btnRouteDef { padding:6px 12px; border:1px solid rgba(255,255,255,0.15); border-radius:6px;
+    font-size:12px; font-weight:600; cursor:pointer; background:#12314f; color:#8fb8e8; }
+  #btnRouteDef.active { color:#ffd54f; border-color:rgba(255,213,79,0.4); }
   .ldRow { display:flex; gap:8px; font-size:11.5px; color:#cfe0f0; padding:2px 0; }
   .ldk { font-size:10.5px; color:#7f95ab; display:block; }
   #ldWo, #ldPhase { color:#e6edf3; }
@@ -216,6 +232,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <button id="btnStart">▶ 启动</button>
   <button id="btnCrash">⚡ 注入宕机</button>
   <button id="btnCam">🎥 剧情镜头</button>
+  <button id="btnRouteDef">📐 路线定义</button>
   <span id="faultWrap">
     <label>故障率</label>
     <input type="range" id="faultSlider" min="0" max="100" value="20">
@@ -265,13 +282,19 @@ window.addEventListener("unhandledrejection", function(e) {
     <div class="ldRow"><span class="ldk">批次</span><span id="ldWo">—</span></div>
     <div class="ldRow"><span class="ldk">状态</span><span id="ldPhase">—</span></div>
     <div class="ldRow"><span class="ldk">分布</span><span id="ldSummary" style="color:#e6edf3;">—</span></div>
-    <div class="ldk" id="ldDefToggle" style="margin:10px 0 4px;cursor:pointer;user-select:none;">▾ 路线定义（计划）</div>
-    <div id="ldRouteDef" style="overflow-x:auto; border:1px solid rgba(255,255,255,0.07); border-radius:7px; background:rgba(0,0,0,0.25);"></div>
     <div class="ldk" style="margin:10px 0 4px;">批次泳道（分叉 / 合并 / 报废）</div>
     <div id="ldLanes"></div>
     <div class="ldk" style="margin:10px 0 4px;">晶圆明细</div>
     <table id="lotWafers"></table>
   </div>
+</div>
+
+<div id="routeDefStrip">
+  <div class="rdsHead">
+    <span><span class="rdsName" id="rdsName">路线定义</span><span class="rdsDesc" id="rdsDesc"></span></span>
+    <span id="rdsClose" title="收起">✕</span>
+  </div>
+  <div id="rdsCanvas"></div>
 </div>
 
 <script type="importmap">
@@ -1329,12 +1352,16 @@ function openLotDrawer() {
   if (!lotDrawerTimer) lotDrawerTimer = setInterval(pollLotDrawer, 4000);
 }
 
-/* ===== 路线定义图（计划 DAG）— 数据来自 /route-graph，按场景缓存 ===== */
+/* ===== 路线定义图（计划 DAG）— 底部通栏长横条，横向铺开 =====
+ * 流程图天然横向：用服务端布局坐标原尺寸绘制，宽屏无需滚动即可看全。
+ * 异常流虚线橙色；按场景缓存。 */
 var __routeDefCache = {};
 var __routeDefFor = null;
 function renderRouteDef(g) {
-  var box = document.getElementById('ldRouteDef');
+  var box = document.getElementById('rdsCanvas');
   if (!box || !g || !g.nodes) return;
+  document.getElementById('rdsName').textContent = g.name || '路线定义';
+  document.getElementById('rdsDesc').textContent = g.description || '';
   var nodes = g.nodes, edges = g.edges || [];
   var byId = {};
   nodes.forEach(function(n) { byId[n.id] = n; });
@@ -1347,7 +1374,7 @@ function renderRouteDef(g) {
     classify:  { fill: 'rgba(58,52,16,0.92)',  stroke: '#c0ca33', w: 1.5 },
     decision:  { fill: 'rgba(58,36,16,0.92)',  stroke: '#ff9800', w: 1.5 }
   };
-  var svg = '<svg width="' + (maxX + 10) + '" height="' + (maxY + 14) + '" style="display:block">'
+  var svg = '<svg width="' + (maxX + 10) + '" height="' + (maxY + 12) + '" style="display:block">'
     + '<defs>'
     + '<marker id="ldArrow" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#5b87b0"/></marker>'
     + '<marker id="ldArrowEx" markerWidth="7" markerHeight="7" refX="6" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#ff9800"/></marker>'
@@ -1384,20 +1411,32 @@ function renderRouteDef(g) {
   });
   box.innerHTML = svg + '</svg>';
 }
+function setRouteDefStrip(show) {
+  var strip = document.getElementById('routeDefStrip');
+  if (strip) strip.classList.toggle('show', show);
+  var btn = document.getElementById('btnRouteDef');
+  if (btn) btn.classList.toggle('active', show);
+}
 function loadRouteDef(sc) {
-  var box = document.getElementById('ldRouteDef');
+  var box = document.getElementById('rdsCanvas');
   if (!box) return;
   if (sc === 'm35' || !sc) {
-    box.innerHTML = '<div style="padding:8px;font-size:10.5px;color:#7f95ab;">M3.5 混沌用例使用动态 OCAP 路线，无静态定义图</div>';
+    box.innerHTML = '<div style="padding:10px;font-size:11px;color:#7f95ab;">M3.5 混沌用例使用动态 OCAP 路线，无静态定义图</div>';
+    document.getElementById('rdsName').textContent = '路线定义';
+    document.getElementById('rdsDesc').textContent = '';
+    setRouteDefStrip(false);
     return;
   }
-  if (__routeDefFor === sc && box.innerHTML && box.innerHTML.indexOf('svg') === 0) return;
+  var draw = function(g) {
+    renderRouteDef(g);
+    if (!__rdsUserClosed) setRouteDefStrip(true);
+  };
+  if (__routeDefCache[sc]) { draw(__routeDefCache[sc]); return; }
   __routeDefFor = sc;
-  if (__routeDefCache[sc]) { renderRouteDef(__routeDefCache[sc]); return; }
-  box.innerHTML = '<div style="padding:8px;font-size:10.5px;color:#7f95ab;">加载路线定义…</div>';
+  box.innerHTML = '<div style="padding:10px;font-size:11px;color:#7f95ab;">加载路线定义…</div>';
   fetch('/api/fab-demo/scenario/' + sc + '/route-graph').then(function(r) { return r.json(); })
-    .then(function(g) { __routeDefCache[sc] = g; if (__routeDefFor === sc) renderRouteDef(g); })
-    .catch(function() { box.innerHTML = '<div style="padding:8px;font-size:10.5px;color:#ff8a80;">路线定义加载失败</div>'; });
+    .then(function(g) { __routeDefCache[sc] = g; if (__routeDefFor === sc) draw(g); })
+    .catch(function() { box.innerHTML = '<div style="padding:10px;font-size:11px;color:#ff8a80;">路线定义加载失败</div>'; });
 }
 function pollLotDrawer() {
   if (!window.__lotDrawerOpen || !window.__activeWo) return;
@@ -1454,12 +1493,18 @@ document.getElementById('lotDrawerHead').addEventListener('click', function() {
   var caret = document.getElementById('lotDrawerCaret');
   if (caret) caret.textContent = folded ? '▸' : '▾';
 });
-/* 路线定义区块折叠 */
-document.getElementById('ldDefToggle').addEventListener('click', function() {
-  var box = document.getElementById('ldRouteDef');
-  var hide = box.style.display !== 'none';
-  box.style.display = hide ? 'none' : 'block';
-  this.textContent = (hide ? '▸' : '▾') + ' 路线定义（计划）';
+/* 路线定义横条：ctrlBar 按钮 / 横条 ✕ 开合 */
+var __rdsUserClosed = false;
+document.getElementById('btnRouteDef').addEventListener('click', function() {
+  var strip = document.getElementById('routeDefStrip');
+  var willShow = !strip.classList.contains('show');
+  __rdsUserClosed = !willShow;
+  setRouteDefStrip(willShow);
+  if (willShow) loadRouteDef(currentScenario);
+});
+document.getElementById('rdsClose').addEventListener('click', function() {
+  __rdsUserClosed = true;
+  setRouteDefStrip(false);
 });
 /* ===== OCAP 规则库（拉取全量规则 + 实时触发计数） ===== */
 var RULE_COUNTS = {};
@@ -1510,6 +1555,7 @@ faultSlider.addEventListener('change', function() {
 document.getElementById('btnStart').addEventListener('click', function() {
   var sc = selEl.value;
   resetDemoState();
+  __rdsUserClosed = false;      // 新一轮演示重新自动展开路线定义横条
   currentScenario = sc;
   var url = sc === 'm35' ? '/api/fab-demo/m35/start' : '/api/fab-demo/start/' + sc;
   // 捕获 workOrderId：批次路线卡抽屉的数据抓手
