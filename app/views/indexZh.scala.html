@@ -275,7 +275,7 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>内核双引擎 Saga + 持久化</a>
+                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>内核双引擎 Saga + Monarch</a>
                     <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>动态 DAG 跑批</a>
                     <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>韧性运行时</a>
                     <a href="/fab-demo/m35-3d" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M4</span>3D 数字孪生</a>
@@ -448,8 +448,8 @@
             <div class="roadmap-marker done">M1</div>
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
-                <h4>内核双引擎 — Saga 引擎 + 持久化流批一体向前补偿引擎</h4>
-                <p>两台引擎托底整个内核。<strong>Saga 引擎</strong>（发布构件 <code>monarch-core</code>）：TCC（Try-Confirm/Cancel）跨系统事务编排，<em>向前补偿</em>——失败只补偿已 Try 的步骤，绝不回滚整个世界；挂起交易提供人工修复面板。<strong>持久化流批一体引擎</strong>：每一步落事件日志——崩溃后重放、从断点精确续跑；有界重试、手动修复恢复；流式与跑批共用同一执行内核。 <a href="/saga" style="color:var(--accent);font-weight:600;">Saga 演示 →</a> <a href="/m1" style="color:var(--accent);font-weight:600;">详解 →</a></p>
+                <h4>内核双引擎 — Saga 引擎 + Monarch 持久化流批一体向前补偿引擎</h4>
+                <p>两台引擎托底整个内核。<strong>Saga 引擎</strong>：TCC（Try-Confirm/Cancel）跨系统事务编排，<em>向前补偿</em>——失败只补偿已 Try 的步骤，绝不回滚整个世界；挂起交易提供人工修复面板。<strong>Monarch 引擎</strong>（发布构件 <code>monarch-core</code>）：每一步落事件日志——崩溃后重放、从断点精确续跑；有界重试、手动修复恢复；流式与跑批共用同一执行内核。 <a href="/saga" style="color:var(--accent);font-weight:600;">Saga 演示 →</a> <a href="/m1" style="color:var(--accent);font-weight:600;">详解 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
@@ -497,9 +497,9 @@
     <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">持久化引擎</span><span class="tag">向前补偿</span></div>
-            <h3>内核双引擎：Saga + 持久化向前补偿</h3>
-            <p>M1 交付两台引擎：<strong>Saga 引擎</strong>负责跨系统事务——分布式转账在 Saga 状态机中执行，观察 Prepare → Commit → Compensate 全生命周期，任意步骤注入故障，挂起交易从人工修复面板恢复；<strong>持久化流批一体引擎</strong>把每一步落日志——杀掉进程，从断点精确续跑。</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">Monarch</span><span class="tag">向前补偿</span></div>
+            <h3>内核双引擎：Saga + Monarch</h3>
+            <p>M1 交付两台引擎：<strong>Saga 引擎</strong>负责跨系统事务——分布式转账在 Saga 状态机中执行，观察 Prepare → Commit → Compensate 全生命周期，任意步骤注入故障，挂起交易从人工修复面板恢复；<strong>Monarch 持久化流批一体引擎</strong>把每一步落日志——杀掉进程，从断点精确续跑。</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：MES ↔ EAP ↔ RMS 事务，绝不回滚整个世界</p>
             <br>
             <a href="/saga" class="card-link">打开演示 →</a>
@@ -570,7 +570,7 @@
             M1–M4 已以线上质量运行：内核双引擎、银行与 Fab 动态 DAG 跑批、
             韧性运行时、3D 数字孪生驾驶舱。
             M5 将完成反应式 MES 内核 v1.0 的最后两块拼图——Akka Cluster 多节点韧性
-            （杀节点不丢事件、工单不卡死）与 Saga 引擎（<code>monarch-core</code>）发布 Maven Central。
+            （杀节点不丢事件、工单不卡死）与 Monarch 引擎（<code>monarch-core</code>）发布 Maven Central。
             <br><br>
             如果你是 Fab 工程师、自动化架构师或制造系统专家——
             我们希望听到那些在你的工厂现场最重要的故障场景、恢复预期和集群需求。

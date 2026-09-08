@@ -292,7 +292,7 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Twin Engines — Saga + Persisted</a>
+                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Twin Engines — Saga + Monarch</a>
                     <a href="/en/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>Dynamic DAG Batch</a>
                     <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Resilient Runtime</a>
                     <a href="/fab-demo/m35-3d" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M4</span>3D Digital Twin</a>
@@ -470,13 +470,13 @@
             <div class="roadmap-marker done">M1</div>
             <div class="roadmap-body">
                 <span class="badge badge-done">Production Quality — Live</span>
-                <h4>Twin Kernel Engines — Saga + Persisted Stream-Batch Forward Recovery</h4>
-                <p>Two engines anchor the kernel. <strong>Saga engine</strong> (published artifact <code>monarch-core</code>):
+                <h4>Twin Kernel Engines — Saga + Monarch (Persisted Stream-Batch Forward Recovery)</h4>
+                <p>Two engines anchor the kernel. <strong>Saga engine</strong>:
                 Try-Confirm/Cancel orchestration across systems with <em>forward compensation</em> — on failure only the
                 already-prepared steps are compensated, the world is never rolled back; suspended transactions get a
-                manual-fix panel. <strong>Persisted stream-batch engine</strong>: every step is journaled — crash, replay,
-                resume from the exact breakpoint; bounded retries, manual-fix recovery, and one execution core shared by
-                streaming and batch workloads. <a href="/saga" style="color:var(--accent);font-weight:600;">Saga demo →</a>
+                manual-fix panel. <strong>Monarch engine</strong> (published artifact <code>monarch-core</code>): every step
+                is journaled — crash, replay, resume from the exact breakpoint; bounded retries, manual-fix recovery, and
+                one execution core shared by streaming and batch workloads. <a href="/saga" style="color:var(--accent);font-weight:600;">Saga demo →</a>
                 <a href="/en/m1" style="color:var(--accent);font-weight:600;">Explainer →</a></p>
             </div>
         </div>
@@ -542,9 +542,9 @@
     <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">Persisted Engine</span><span class="tag">Forward Compensation</span></div>
-            <h3>Twin Engines — Saga + Persisted Forward Recovery</h3>
-            <p>M1 ships two engines. The <strong>Saga engine</strong> owns cross-system transactions: a money transfer flows through Prepare → Commit → Compensate, inject faults at any step, recover suspended transactions from the manual-fix panel. The <strong>persisted stream-batch engine</strong> journals every step — kill the process and it resumes from the exact breakpoint.</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">Monarch</span><span class="tag">Forward Compensation</span></div>
+            <h3>Twin Engines — Saga + Monarch</h3>
+            <p>M1 ships two engines. The <strong>Saga engine</strong> owns cross-system transactions: a money transfer flows through Prepare → Commit → Compensate, inject faults at any step, recover suspended transactions from the manual-fix panel. <strong>Monarch</strong>, the persisted stream-batch engine, journals every step — kill the process and it resumes from the exact breakpoint.</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: MES ↔ EAP ↔ RMS transactions that never roll the world back</p>
             <br>
             <a href="/saga" class="card-link">Open Demo →</a>
@@ -615,7 +615,7 @@
             M1–M4 are running in production-quality code: the twin engines, dynamic DAG
             batch for bank &amp; fab, the resilient runtime, and the 3D twin cockpit.
             M5 completes reactive MES kernel v1.0 — Akka Cluster multi-node resilience
-            (kill a node, lose nothing) and the open-source release of the saga engine
+            (kill a node, lose nothing) and the open-source release of the Monarch engine
             (<code>monarch-core</code> to Maven Central).
             <br><br>
             If you're a Fab engineer, an automation architect, or a manufacturing systems expert —
