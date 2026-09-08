@@ -90,17 +90,21 @@ object Por {
   }
 
   /**
-   * SK hynix HBM3E 工艺路线（教学简化版，12-Hi 堆叠的 DRAM die 部分流程）：
+   * SK hynix HBM3E 工艺路线 v2（依据 Redknot 视频解析，12-Hi 堆叠 DRAM die 教学简化版）：
    *
    * FEOL 阵列区:  CLEAN(进站清洗) → DIFF(阱区/热氧化) → LITHO(AA 有源区) → ETCH(AA)
    *               → IMPL(沟道注入) → DEP(栅氧/字线沉积) → LITHO(WL 字线, 重入) → ETCH(WL)
    *               → MET(栅 CD 量测 — 关键尺寸)
-   * TSV 中段区:   DEP(TSV 绝缘层 CVD) → LITHO(TSV 孔光刻, 重入) → ETCH(Bosch 深硅刻蚀)
-   *               → DEP(阻挡/种子层 + ECD 铜填孔) → CMP(TSV reveal) → MET(TSV 量测)
-   * 堆叠前处理:   DRY(减薄前处理) → CLEAN(MR-MUF 键合前清洗)
+   * TSV 中段区:   DEP(TSV 绝缘层 CVD) → LITHO(TSV 信号孔, 重入) → ETCH(DRIE 深硅刻蚀)
+   *               → ETCH(散热专用通道刻蚀 ★ 不传数据专职导热)
+   *               → DEP(TSV 铜填孔) → CMP(TSV reveal) → MET(TSV 量测)
+   * 微凸点+减薄:  DEP(微凸点 UBM 金属化 ★) → DRY(晶圆减薄)
+   * MR-MUF 整体注塑 ★★（海力士独门，对比对手的逐层 C4/薄膜层压）:
+   *               CLEAN(键合前清洗) → DEP(整体入模·注入掺导热颗粒的液态环氧)
+   *               → DIFF(一次性加热加压固化·微凸点同步焊接) → MET(X-Ray/声扫空洞检查)
    *
-   * 12 片晶圆 = 12-Hi 堆叠的 12 层 DRAM die；量测 FAIL 的层拆批返工，不可返工的报废，
-   * 其余合批进入堆叠（本演示到键合前清洗封批为止）。
+   * 12 片晶圆 = 12 层堆叠的 DRAM die（DRAM-L01..L12）；量测 FAIL 的层拆批返工，
+   * 不可返工的报废，其余合批。封批后 die 送去硅中介层（Silicon Interposer）与 GPU 合封。
    */
   val hynixHbm3ePor: Por = {
     import scala.concurrent.duration._
@@ -121,13 +125,18 @@ object Por {
         PorStep("hb-100", Deposition,  "DEP-TSV-INS-001",   45.minutes),
         PorStep("hb-110", Lithography, "LITHO-TSV-001",     45.minutes, fallbackAreas = List(Lithography)),
         PorStep("hb-120", Etch,        "ETCH-TSV-DRIE-001", 55.minutes),
+        PorStep("hb-125", Etch,        "ETCH-TSV-THRM-001", 40.minutes),
         PorStep("hb-130", Deposition,  "DEP-TSV-CU-001",    50.minutes),
         PorStep("hb-140", CMP,         "CMP-TSV-REVEAL-001", 35.minutes),
         PorStep("hb-150", Metrology,   "MET-TSV-001",       18.minutes, maxRetries = 2),
-        PorStep("hb-160", Drying,      "DRY-THIN-001",      15.minutes),
-        PorStep("hb-170", WetClean,    "CLEAN-MRMUF-001",   20.minutes)
+        PorStep("hb-160", Deposition,  "DEP-UBM-BUMP-001",  40.minutes),
+        PorStep("hb-170", Drying,      "DRY-THIN-001",      15.minutes),
+        PorStep("hb-180", WetClean,    "CLEAN-MRMUF-001",   20.minutes),
+        PorStep("hb-190", Deposition,  "DEP-MRMUF-MOLD-001", 55.minutes),
+        PorStep("hb-200", Diffusion,   "DIFF-MRMUF-CURE-001", 45.minutes),
+        PorStep("hb-210", Metrology,   "MET-MRMUF-VOID-001", 18.minutes, maxRetries = 2)
       ),
-      version = 1,
+      version = 2,
       mergeBeforeWarehouse = true
     )
   }
