@@ -249,6 +249,7 @@ body { overflow:hidden; background:#0b1220; color:#e6edf3;
   <select id="scenarioSel">
     <option value="m35">M3.5 自愈演示（宕机注入 + 断点续跑）</option>
     <option value="cxmt-dram-full-25">长鑫 CXMT DRAM 满批：25 片整 FOUP · 拆批返工 + 报废</option>
+    <option value="hynix-hbm3e">海力士 HBM3E：12-Hi 堆叠 TSV 全流程（12 片）</option>
     <option value="photo-cell-5wafer">拆批返工：2 返工 → PASS + 1 报废（5 片）</option>
     <option value="send-ahead-pilot">拆批试投：1 片先导 → 量测 → 合批（5 片）</option>
     <option value="sampling-demo">拆批抽检：抽 2 片量测 → 合批（6 片）</option>
@@ -1604,7 +1605,9 @@ document.getElementById('btnStart').addEventListener('click', function() {
   resetDemoState();
   __rdsUserClosed = false;      // 新一轮演示重新自动展开路线定义横条
   currentScenario = sc;
-  var url = sc === 'm35' ? '/api/fab-demo/m35/start' : '/api/fab-demo/start/' + sc;
+  var url = sc === 'm35' ? '/api/fab-demo/m35/start'
+          : sc === 'hynix-hbm3e' ? '/api/fab-demo/product/hynix-hbm3e/start'
+          : '/api/fab-demo/start/' + sc;
   // 捕获 workOrderId：批次路线卡抽屉的数据抓手
   fetch(url, { method: 'POST' }).then(function(r) { return r.json(); }).then(function(j) {
     if (j && j.workOrderId) {

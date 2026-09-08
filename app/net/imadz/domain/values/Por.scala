@@ -88,4 +88,47 @@ object Por {
       mergeBeforeWarehouse = true
     )
   }
+
+  /**
+   * SK hynix HBM3E 工艺路线（教学简化版，12-Hi 堆叠的 DRAM die 部分流程）：
+   *
+   * FEOL 阵列区:  CLEAN(进站清洗) → DIFF(阱区/热氧化) → LITHO(AA 有源区) → ETCH(AA)
+   *               → IMPL(沟道注入) → DEP(栅氧/字线沉积) → LITHO(WL 字线, 重入) → ETCH(WL)
+   *               → MET(栅 CD 量测 — 关键尺寸)
+   * TSV 中段区:   DEP(TSV 绝缘层 CVD) → LITHO(TSV 孔光刻, 重入) → ETCH(Bosch 深硅刻蚀)
+   *               → DEP(阻挡/种子层 + ECD 铜填孔) → CMP(TSV reveal) → MET(TSV 量测)
+   * 堆叠前处理:   DRY(减薄前处理) → CLEAN(MR-MUF 键合前清洗)
+   *
+   * 12 片晶圆 = 12-Hi 堆叠的 12 层 DRAM die；量测 FAIL 的层拆批返工，不可返工的报废，
+   * 其余合批进入堆叠（本演示到键合前清洗封批为止）。
+   */
+  val hynixHbm3ePor: Por = {
+    import scala.concurrent.duration._
+    import EquipmentArea._
+
+    Por(
+      productId = "hynix-hbm3e",
+      steps = List(
+        PorStep("hb-010", WetClean,    "CLEAN-IN-001",      20.minutes),
+        PorStep("hb-020", Diffusion,   "DIFF-OX-001",       40.minutes),
+        PorStep("hb-030", Lithography, "LITHO-AA-001",      40.minutes, fallbackAreas = List(Lithography)),
+        PorStep("hb-040", Etch,        "ETCH-AA-001",       35.minutes),
+        PorStep("hb-050", Implant,     "IMPL-CH-001",       25.minutes),
+        PorStep("hb-060", Deposition,  "DEP-GOX-WL-001",    45.minutes),
+        PorStep("hb-070", Lithography, "LITHO-WL-001",      40.minutes, fallbackAreas = List(Lithography)),
+        PorStep("hb-080", Etch,        "ETCH-WL-001",       30.minutes),
+        PorStep("hb-090", Metrology,   "MET-GATE-CD-001",   18.minutes, maxRetries = 2),
+        PorStep("hb-100", Deposition,  "DEP-TSV-INS-001",   45.minutes),
+        PorStep("hb-110", Lithography, "LITHO-TSV-001",     45.minutes, fallbackAreas = List(Lithography)),
+        PorStep("hb-120", Etch,        "ETCH-TSV-DRIE-001", 55.minutes),
+        PorStep("hb-130", Deposition,  "DEP-TSV-CU-001",    50.minutes),
+        PorStep("hb-140", CMP,         "CMP-TSV-REVEAL-001", 35.minutes),
+        PorStep("hb-150", Metrology,   "MET-TSV-001",       18.minutes, maxRetries = 2),
+        PorStep("hb-160", Drying,      "DRY-THIN-001",      15.minutes),
+        PorStep("hb-170", WetClean,    "CLEAN-MRMUF-001",   20.minutes)
+      ),
+      version = 1,
+      mergeBeforeWarehouse = true
+    )
+  }
 }

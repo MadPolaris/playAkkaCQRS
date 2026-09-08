@@ -344,6 +344,13 @@ object FabFlowEngine {
   private def sealComplete(state: FabDemoState, ctx: FabDemoContext, routing: Por): Future[FabDemoState] = {
     val s = PipelineStages.emitLedger(state, s"PhaseComplete: All ${routing.steps.size} steps done — ${routing.productId}", ctx)
     ctx.stageProgress("COMPLETED", s"${routing.productId} completed: ${state.passCount} PASS, ${state.scrapCount} SCRAP", "PhaseComplete")
+    // 动态引擎是单管线语义：拆出的返工批由返工链路独立处置（留在谱系中待流转）。
+    // 封批前必须把主批从 AwaitingSubLot 恢复，否则 SealLot 被拒、批生命周期无法闭合。
+    if (state.childLotView.exists { case (_, (st, _)) => st == "Active" }) {
+      ctx.childLotIds.foreach { case (_, childId) =>
+        ctx.lotRef ! RecordSubLotMerged(childId, Set.empty, ctx.ignoreLotReply)
+      }
+    }
     ctx.lotRef ! SealLot(ctx.ignoreLotReply)
     ctx.lotRef ! CompleteProcess(routing.productId, state.passCount, state.scrapCount, 0, ctx.ignoreLotReply)
     ctx.publish(FoupStateChanged(ctx.foupId, "COMPLETED", 0, 0, "STOCKER", lotId = routing.productId))

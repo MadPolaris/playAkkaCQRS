@@ -447,8 +447,12 @@ class FabDemoService @Inject()(
     net.imadz.application.actor.EquipmentAreaActor.Registry.resetAll()
     val routing = PorRepository.findByProductId(productId)
       .getOrElse(throw new IllegalArgumentException(s"Unknown product: $productId"))
-    val waferIds = (1 to 5).map(i => s"WAFER-$i")
+    // HBM3E: 12 片 = 12-Hi 堆叠的 12 层 DRAM die
+    val waferIds =
+      if (productId == "hynix-hbm3e") (1 to 12).map(i => f"DRAM-L$i%02d")
+      else (1 to 5).map(i => s"WAFER-$i")
     val workOrderId = UUID.randomUUID().toString
+    workOrderScenarios.put(workOrderId, productId)
 
     publisherRegistry.put(workOrderId, publisher.asInstanceOf[Any => Unit])
     val ref = sharding.entityRefFor(WorkOrderAggregate.WorkOrderEntityTypeKey, workOrderId)
@@ -517,10 +521,15 @@ class FabDemoService @Inject()(
 
     // CD-SEM simulator (for measurement)
     val cdSemId = FabFlowEngine.CdsemEquipId
+    // HBM3E 剧本：L03/L07 层 CD 超规 → 拆批返工；L12 报废（保证演示有拆批/合批戏份）
+    val cdOutcomes: Map[String, String] =
+      if (routing.productId == "hynix-hbm3e")
+        Map("DRAM-L03" -> "FAIL", "DRAM-L07" -> "FAIL", "DRAM-L12" -> "SCRAP")
+      else Map.empty
     val cdSemCfg = CdSemConfig(
       waferIds = waferIds,
       targetCdNm = 32.0,
-      waferOutcomes = Map.empty // will use random generation
+      waferOutcomes = cdOutcomes
     )
     val cdSemActor = system.systemActorOf(
       new CdSemSimulator(cdSemCfg)(EquipmentConfig(cdSemId, "METROLOGY", processingTime = 5.seconds, faultProbability = fp)),
@@ -940,7 +949,10 @@ class FabDemoService @Inject()(
               case "cxmt-dram-full-25" => StandardScenarios.cxmtDramFull25
               case _                   => StandardScenarios.photoCell5Wafer
             }
-            scenario.waferIds.map { wid =>
+            val displayIds: Seq[String] =
+              if (scenarioId == "hynix-hbm3e") (1 to 12).map(i => f"DRAM-L$i%02d")
+              else scenario.waferIds
+            displayIds.map { wid =>
               UUID.nameUUIDFromBytes(s"$workOrderId-$wid".getBytes).toString -> wid
             }.toMap
           }.getOrElse(Map.empty)

@@ -9,7 +9,8 @@ package net.imadz.domain.values
 object PorRepository {
 
   private var routings: Map[String, Por] = Map(
-    Por.logic28nmPor.productId -> Por.logic28nmPor
+    Por.logic28nmPor.productId -> Por.logic28nmPor,
+    Por.hynixHbm3ePor.productId -> Por.hynixHbm3ePor
   )
 
   def findByProductId(productId: String): Option[Por] =
