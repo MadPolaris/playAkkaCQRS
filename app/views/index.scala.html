@@ -292,18 +292,19 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">Milestones <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Coordinator</a>
-                    <a href="/en/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>Stream-Batch DAG Engine</a>
-                    <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Self-Healing Orchestration</a>
+                    <a href="/en/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Twin Engines — Saga + Persisted</a>
+                    <a href="/en/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>Dynamic DAG Batch</a>
+                    <a href="/en/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Resilient Runtime</a>
+                    <a href="/fab-demo/m35-3d" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M4</span>3D Digital Twin</a>
                 </div>
             </div>
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">Live Demo <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
-                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG Engine</a>
-                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Self-Healing</a>
-                    <a href="/bank-batch" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5</span>Bank Batch 100k</a>
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga Engine</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>Dynamic DAG</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>Resilient Runtime</a>
+                    <a href="/fab-demo/m35-3d" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M4</span>3D Twin Cockpit</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -348,9 +349,11 @@
         Event sourcing instead of giant transactions. Sagas instead of stored procedures.
         A streaming DAG execution engine that orchestrates across systems.
         <br><br>
-        Milestones 1, 2, 2.5+ are live. M3 architecture and prototype are live.
-        M3.5 (self-healing) is shipped and verified at 100k scale; M3.9 (cluster resilience) is the next milestone —
-        we're defining them <em>with</em> the Fab industry.
+        Milestones M1–M4 are live: the twin kernel engines (M1), dynamic DAG
+        batch for bank &amp; fab (M2), the resilient runtime verified at 100k
+        scale (M3), and the 3D digital-twin cockpit with human intervention (M4).
+        M5 — cluster resilience and the open-source release of the saga engine —
+        is next; we're defining it <em>with</em> the Fab industry.
     </p>
     <div class="hero-actions">
         <a href="#problem" class="btn btn-primary">Read the Story</a>
@@ -467,48 +470,63 @@
             <div class="roadmap-marker done">M1</div>
             <div class="roadmap-body">
                 <span class="badge badge-done">Production Quality — Live</span>
-                <h4>Saga Distributed Transaction Coordinator</h4>
-                <p>Splits giant transactions into independent Try-Confirm/Cancel steps. Only locks the resources needed right now. Automatic compensation on failure. Suspended transactions support manual intervention via emergency fix panel. This directly addresses the 1.58M-row transaction problem.</p>
+                <h4>Twin Kernel Engines — Saga + Persisted Stream-Batch Forward Recovery</h4>
+                <p>Two engines anchor the kernel. <strong>Saga engine</strong> (published artifact <code>monarch-core</code>):
+                Try-Confirm/Cancel orchestration across systems with <em>forward compensation</em> — on failure only the
+                already-prepared steps are compensated, the world is never rolled back; suspended transactions get a
+                manual-fix panel. <strong>Persisted stream-batch engine</strong>: every step is journaled — crash, replay,
+                resume from the exact breakpoint; bounded retries, manual-fix recovery, and one execution core shared by
+                streaming and batch workloads. <a href="/saga" style="color:var(--accent);font-weight:600;">Saga demo →</a>
+                <a href="/en/m1" style="color:var(--accent);font-weight:600;">Explainer →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
             <div class="roadmap-marker done">M2</div>
             <div class="roadmap-body">
                 <span class="badge badge-done">Production Quality — Live</span>
-                <h4>Streaming-Batch Multi-Level DAG Execution Engine</h4>
-                <p>A 5-level DAG execution engine: 23 Persistent FSMs with 4 built-in resilience patterns — supervision with auto-restart, timeout resource protection, compensating recovery to eventual consistency. Each node independently versionable, testable, and deployable. Unified pipeline handles both streaming and batch workloads, with a communication layer that encapsulates heterogeneous external systems. <a href="/dag" style="color:var(--accent);font-weight:600;">Watch M2 demo →</a></p>
+                <h4>Dynamically Generated DAG — One Engine, Bank &amp; Fab Batch</h4>
+                <p>ChainDSL compiles at runtime into a dynamic DAG on top of the M1 engines. The same engine runs two
+                very different batches: <strong>bank batch</strong> — the file-exchange chain (generate → upload → ack →
+                poll → parse → classify), 100k customers in 50 concurrent batches, terminal ledger reconciles exactly;
+                <strong>fab batch</strong> — POR baseline routes dynamically woven with facts: split, merge, and rework
+                injected per wafer. <a href="/dag" style="color:var(--accent);font-weight:600;">DAG demo →</a>
+                <a href="/bank-batch" style="color:var(--accent);font-weight:600;">Bank batch 100k →</a>
+                <a href="/en/m2" style="color:var(--accent);font-weight:600;">Explainer →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker done">M2.5</div>
+            <div class="roadmap-marker done">M3</div>
             <div class="roadmap-body">
-                <span class="badge badge-done">Production Quality — Live</span>
-                <h4>Standard Component Library — Fix Once, Apply Everywhere</h4>
-                <p>6 standard components replace 4 hand-written FSM templates: SubBatchProcessor, ResultClassifier, ReconfirmHandler, ReBatchRouter, AreaScheduler, and ExceptionScheduler. Same pipeline handles recharge and purchase — only error-code mapping differs. One fix point, every instance updated globally. M3 Fab dynamic process orchestration reuses all 6 components directly. <a href="/en/m2" style="color:var(--accent);font-weight:600;">Read the Explainer →</a> <a href="/dag" style="color:var(--accent);font-weight:600;">Live Demo →</a></p>
+                <span class="badge badge-done">Shipped — Verified at 100k Scale, 0 Stuck WorkOrders</span>
+                <h4>Resilient Runtime — Chaos, OCAP, Breakpoint Resume</h4>
+                <p>Failures are part of the show: equipment fault injection and a fault-rate dial, OCAP disposition rules
+                (Rework / Scrap / Hold / Notify) intercepting stage failures, and event-sourced WorkOrders that resume
+                from the exact breakpoint after a crash. Verified at 100k scale — 300 batches drained, terminal-state
+                accounting balanced exactly (96,243 credited / 1,947 scrapped / 809 manual / 1,001 exception pool).
+                <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">Resilience demo →</a>
+                <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">Roadmap →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker next">M3</div>
+            <div class="roadmap-marker done">M4</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">Architecture — Prototype Running</span>
-                <h4>M3 · Fact-Driven Fab Decision Kernel — Dynamic Process Weaving + MU Lifecycle</h4>
-                <p>A decision layer on top of M2.5+. POR Repository holds baseline process routes. Dynamic Flow Assembler weaves ChainDSL in real-time based on facts — PASS advances, FAIL triggers rework DSL, BORDERLINE re-verifies. Saga + LotContext (MU Account Matrix) guarantee atomicity of every dynamically woven segment. All 6 M2.5+ standard components reused without modification. Prototype code runs in FabDemo. <a href="/en/m3" style="color:var(--accent);font-weight:600;">Explore M3 →</a></p>
+                <span class="badge badge-done">Live</span>
+                <h4>3D Digital-Twin Cockpit — Plan Meets Actual, Humans in the Loop</h4>
+                <p>A 3D twin of the fab driven by the same event stream: route definition DAG (the plan) vs swim lanes
+                (the actual) vs per-wafer stage/classification (the state), side by side. An intervention layer lets
+                operators stop and reset equipment areas, turn the fault-rate dial — and the FSM gate means a stopped
+                area <em>really</em> stops: the OHT waits at the port until a human resets it.
+                <a href="/fab-demo/m35-3d" style="color:var(--accent);font-weight:600;">Open the cockpit →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker done">M3.5</div>
+            <div class="roadmap-marker next">M5</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">SHIPPED — Verified at 100k Scale (Terminal Accounting Balanced)</span>
-                <h4>M3.5 · Self-Healing Decision Kernel — 0 Stuck WorkOrders</h4>
-                <p>The critical step from "static script" to "reactive kernel." Single WorkOrder EventSourced breakpoint resume: FabPipelineExecutionActor recovers state via journal replay on crash, resumeFromIndex skips completed phases and continues from breakpoint. Pipeline Stage failure → OCAP intercepts → dynamically weaves Rework DSL → Saga guarantees atomicity → WorkOrder converges correctly. Equipment injects spontaneous faults. Verified at 100k-customer scale: 300 batches drained, terminal-state accounting balanced exactly (96,243 credited / 1,947 scrapped / 809 manual / 1,001 exception-pool), mid-run crash re-verified. <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">M3.5 Self-Healing Demo →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">Roadmap →</a></p>
-            </div>
-        </div>
-        <div class="roadmap-item">
-            <div class="roadmap-marker next">M3.9</div>
-            <div class="roadmap-body">
-                <span class="badge badge-explore">Planned — After M3.5</span>
-                <h4>M3.9 · Cluster Resilience — 0 Lost Events</h4>
-                <p>Akka Cluster multi-node deployment. Kill one node — WorkOrders don't stall, events don't drop, UI recovers automatically. 50 concurrent WorkOrders across 3 nodes. The reactive MES kernel v1.0 is complete when M3.5 + M3.9 are both proven.</p>
+                <span class="badge badge-explore">Next</span>
+                <h4>Cluster Resilience &amp; Open-Source Release — Kernel v1.0</h4>
+                <p>Akka Cluster multi-node: kill a node — WorkOrders don't stall, events don't drop, the UI recovers.
+                monarch-core published to Maven Central via ci-release. Reactive MES kernel v1.0 is complete when
+                M1–M5 are all proven.</p>
             </div>
         </div>
     </div>
@@ -518,72 +536,49 @@
 <section class="section" id="showcases">
     <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> See It In Action</h2>
     <p class="section-desc">
-        Six interactive demos connected to the same live system, organized by milestone and best-practice layers.
+        Four interactive demos, one live system — one per milestone.
     </p>
 
     <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">Compensation</span></div>
-            <h3>Saga TCC Demo</h3>
-            <p>A distributed money transfer flowing through the Saga state machine. Watch the Prepare → Commit → Compensate lifecycle. Inject faults at any step. See automatic retries, backward recovery, and suspended-transaction recovery in real time.</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: MES ↔ EAP ↔ RMS data alignment</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">Forward Compensation</span></div>
+            <h3>Saga Engine — Twin Engines</h3>
+            <p>A distributed money transfer flowing through the Saga state machine. Watch Prepare → Commit → Compensate, inject faults at any step, and recover suspended transactions from the manual-fix panel. The persisted stream-batch engine underneath journals every step — crash it and it resumes from the breakpoint.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: MES ↔ EAP ↔ RMS transactions that never roll the world back</p>
             <br>
             <a href="/saga" class="card-link">Open Demo →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(240,136,62,0.12);color:var(--orange)">⚙️</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M2</span><span class="tag">DAG</span><span class="tag">FSM</span><span class="tag">Resilience</span><span class="tag">Stream-Batch</span></div>
-            <h3>DAG Execution Engine</h3>
-            <p>23 Akka Persistent FSMs collaborate across 5 levels to orchestrate a salary deposit scenario. Step through 5 phases, watch 4 resilience patterns — Orchestrator, Protector, Communicator, Compensator — in real time. Click any node to drill into its state machine.</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M2</span><span class="tag">Dynamic DAG</span><span class="tag">Bank Batch</span><span class="tag">Fab Batch</span></div>
+            <h3>Dynamically Generated DAG — Bank &amp; Fab Batch</h3>
+            <p>ChainDSL compiles into a dynamic DAG at runtime. The same engine runs the bank file-exchange batch (100k customers, 50 concurrent batches, terminal ledger balanced) and the fab batch — POR routes woven with facts: split, merge, rework per wafer. Also powers the 5-level salary-deposit demo with 23 persistent FSMs.</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: DAG orchestration across MES, EAP, RMS, SPC</p>
             <br>
-            <a href="/dag" class="card-link">Open Demo →</a>
+            <a href="/dag" class="card-link">Open DAG Demo →</a>
+            <a href="/bank-batch" class="card-link" style="margin-left:16px;">Bank Batch 100k →</a>
         </div>
     </div>
 
     <div class="card-grid-2" style="margin-top: 24px;">
         <div class="card">
-            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🧩</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M2.5+</span><span class="tag">Component Library</span><span class="tag">Fix Once</span></div>
-            <h3>M2.5+ Standard Component Library</h3>
-            <p>6 standard components replace 4 hand-written FSM templates. Same pipeline handles recharge and purchase — only the error-code mapping differs. SMS notification reuses the same pipeline stages. One fix point, every instance updated globally. M3 Fab dynamic process orchestration reuses all 6 components directly.</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: SubBatchProcessor → any equipment area; ResultClassifier → any quality gate</p>
+            <div class="card-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">🛡️</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">Chaos</span><span class="tag">OCAP</span><span class="tag">Breakpoint Resume</span></div>
+            <h3>Resilient Runtime — 0 Stuck WorkOrders</h3>
+            <p>Inject crashes and equipment faults on purpose: WorkOrders recover via journal replay, resume from the exact breakpoint, and OCAP rules dispose failures into Rework / Scrap / Hold / Notify. Verified at 100k scale — 300 batches drained, terminal accounting balanced exactly.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: crash → replay → resume → OCAP disposition, every order in exactly one bucket</p>
             <br>
-            <a href="/en/m2" class="card-link">Read the Explainer →</a>
-            <a href="/dag" class="card-link" style="margin-left:16px;">Open Live Demo →</a>
-        </div>
-    </div>
-
-
-    <div class="card-grid-2" style="margin-top: 24px;">
-        <div class="card">
-            <div class="card-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">🏭</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">Decision Layer</span><span class="tag">Dynamic Weaving</span><span class="tag">MU Matrix</span></div>
-            <h3>M3 Fact-Driven Fab Decision Kernel</h3>
-            <p>Decision layer for Fab environments. POR → Dynamic Flow Assembler → Saga/LotContext → ChainDSL injection into M2.5+. Dynamically weaves process routes based on real-time facts from the factory floor. MU Account Matrix (Lot/Wafer/Die) tracks every manufacturing unit as an event-sourcing projection. Zero modification to M2.5+ execution engine.</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: POR→Assembler→Saga/LotContext→ChainDSL; fact-driven closed loop</p>
-            <br>
-            <a href="/en/m3" class="card-link">Explore M3 →</a>
+            <a href="/fab-demo/m35" class="card-link">Open Resilience Demo →</a>
         </div>
         <div class="card">
-            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🛡️</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M3.5</span><span class="tag">Self-Healing</span><span class="tag">OCAP</span><span class="tag">Breakpoint Resume</span></div>
-            <h3>M3.5 Self-Healing Decision Kernel</h3>
-            <p>Single WorkOrder EventSourced crash recovery. FabPipelineExecutionActor recovers state via journal replay on crash, resumeFromIndex skips completed phases and continues from breakpoint. OCAP rule engine intercepts faults and executes Rework/Scrap/Hold/Notify actions. OCAP-Rework DSL dynamic weaving. Concurrent multi-WorkOrder chaos testing. 202 tests.</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: Actor crash - Journal replay recovery - Breakpoint resume - OCAP fault interception - Dynamic Rework DSL</p>
+            <div class="card-icon" style="background:rgba(34,197,94,0.12);color:#16a34a">🏭</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(34,197,94,0.15);color:#16a34a;font-weight:700;">M4</span><span class="tag">3D Twin</span><span class="tag">Intervention</span><span class="tag">Plan vs Actual</span></div>
+            <h3>3D Digital-Twin Cockpit</h3>
+            <p>The fab in 3D, driven by the live event stream. Route definition DAG (plan), swim lanes (actual), and per-wafer stage/classification (state) side by side. Stop or reset equipment areas, turn the fault-rate dial — the FSM gate means a stopped area really stops, and the OHT waits at the port for a human.</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab: nine equipment areas, OHT transport, TCC split/merge visible in real time</p>
             <br>
-            <a href="/fab-demo/m35" class="card-link">Open M3.5 Self-Healing Demo →</a>
-
-        <div class="card">
-            <div class="card-icon" style="background:rgba(34,197,94,0.12);color:#16a34a">🏦</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(34,197,94,0.15);color:#16a34a;font-weight:700;">M3.5</span><span class="tag">Batch 100k</span><span class="tag">Dual-Chain</span><span class="tag">Terminal Accounting</span></div>
-            <h3>Bank Batch Recharge + Fund Subscription</h3>
-            <p>100,000 customers, 2,000 per batch, 50 batches at concurrency 6 on the same Monarch skeleton. Chain 1 (partner bank): file-exchange six steps, ~2% balance-insufficient scrapped, ~2% timeout -> reconfirm -> auto re-batch. Chain 2 (fund company): auto-chained from credited customers. Account updates inject 1% transient faults -> auto-retry -> manual exception pool. Live terminal-state ledger reconciles exactly.</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Run: start 100k -> watch 50-batch progress -> crash a batch -> in-flight drops to 0, every order in exactly one bucket</p>
-            <br>
-            <a href="/bank-batch" class="card-link">Open Bank Batch Demo →</a>
-        </div>
+            <a href="/fab-demo/m35-3d" class="card-link">Open the Cockpit →</a>
         </div>
     </div>
 
@@ -615,11 +610,13 @@
 <!-- ==================== CTA: INVITATION ==================== -->
 <section class="section" id="collaborate">
     <div class="cta-section">
-        <h2>M3.5 &amp; M3.9 — Define the Reactive MES Kernel With Us</h2>
+        <h2>M5 — Finish the Kernel With Us</h2>
         <p>
-            M1, M2, M2.5+, and M3 architecture are running in production-quality code.
-            M3.5 (self-healing decision kernel) and M3.9 (cluster resilience) are the next two milestones
-            that will complete the reactive MES kernel v1.0.
+            M1–M4 are running in production-quality code: the twin engines, dynamic DAG
+            batch for bank &amp; fab, the resilient runtime, and the 3D twin cockpit.
+            M5 completes reactive MES kernel v1.0 — Akka Cluster multi-node resilience
+            (kill a node, lose nothing) and the open-source release of the saga engine
+            (<code>monarch-core</code> to Maven Central).
             <br><br>
             If you're a Fab engineer, an automation architect, or a manufacturing systems expert —
             we want to hear about the failure scenarios, recovery expectations, and cluster

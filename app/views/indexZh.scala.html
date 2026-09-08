@@ -275,18 +275,19 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">里程碑 <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 分布式事务协调器</a>
-                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>流批一体 DAG 引擎</a>
-                    <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈动态工序编排</a>
+                    <a href="/m1" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>内核双引擎 Saga + 持久化</a>
+                    <a href="/m2" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>动态 DAG 跑批</a>
+                    <a href="/m3" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>韧性运行时</a>
+                    <a href="/fab-demo/m35-3d" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M4</span>3D 数字孪生</a>
                 </div>
             </div>
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">在线演示 <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga TCC</a>
-                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>DAG 引擎</a>
-                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>自愈内核</a>
-                    <a href="/bank-batch" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3.5</span>银行批量 10 万</a>
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 引擎</a>
+                    <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>动态 DAG</a>
+                    <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>韧性运行时</a>
+                    <a href="/fab-demo/m35-3d" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M4</span>3D 孪生驾驶舱</a>
                 </div>
             </div>
             <div class="nav-dropdown">
@@ -330,8 +331,9 @@
         用事件溯源取代巨型事务，用 Saga 取代存储过程，
         用流批一体的 DAG 执行引擎编排跨系统流程。
         <br><br>
-        里程碑 1、2、2.5+ 已完成上线。M3 架构与原型代码已就绪。
-        M3.5（自愈决策内核）和 M3.9（集群韧性）是接下来的两个里程碑——
+        里程碑 M1–M4 已上线：内核双引擎（M1）、银行与 Fab 动态 DAG 跑批（M2）、
+        10 万规模验证的韧性运行时（M3）、带人工干预的 3D 数字孪生驾驶舱（M4）。
+        M5——集群韧性与 Saga 引擎开源发布——是下一个里程碑，
         我们希望<em>与 Fab 行业的人一起定义</em>。
     </p>
     <div class="hero-actions">
@@ -446,48 +448,40 @@
             <div class="roadmap-marker done">M1</div>
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
-                <h4>Saga 分布式事务协调器</h4>
-                <p>将巨型事务拆分为独立的 Try-Confirm/Cancel 步骤。只锁定当前需要的资源，失败自动补偿。挂起事务支持通过紧急修复面板人工介入。直接回应 158 万行巨型事务的难题。</p>
+                <h4>内核双引擎 — Saga 引擎 + 持久化流批一体向前补偿引擎</h4>
+                <p>两台引擎托底整个内核。<strong>Saga 引擎</strong>（发布构件 <code>monarch-core</code>）：TCC（Try-Confirm/Cancel）跨系统事务编排，<em>向前补偿</em>——失败只补偿已 Try 的步骤，绝不回滚整个世界；挂起交易提供人工修复面板。<strong>持久化流批一体引擎</strong>：每一步落事件日志——崩溃后重放、从断点精确续跑；有界重试、手动修复恢复；流式与跑批共用同一执行内核。 <a href="/saga" style="color:var(--accent);font-weight:600;">Saga 演示 →</a> <a href="/m1" style="color:var(--accent);font-weight:600;">详解 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
             <div class="roadmap-marker done">M2</div>
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
-                <h4>流批一体多层级 DAG 执行引擎</h4>
-                <p>5 层级 DAG 执行引擎，23 个 Persistent FSM 内建 4 种弹性模式——监督自动重启、超时资源保护、失败补偿最终一致。每个节点独立版本化、测试和部署。统一管道同时处理流式与批量负载，通信层封装异构外部系统。 <a href="/dag" style="color:var(--accent);font-weight:600;">观看 M2 演示 →</a></p>
+                <h4>动态生成的 DAG — 一台引擎，银行与 Fab 两种跑批</h4>
+                <p>ChainDSL 运行时编译成动态 DAG，叠加在 M1 双引擎之上。同一引擎跑两种截然不同的跑批：<strong>银行跑批</strong>——文件交换链（生成 → 上传 → 回执 → 轮询 → 解析 → 分类），10 万客户 50 批并发，终态对账分毫不差；<strong>Fab 跑批</strong>——POR 基线路线按事实动态织造：拆批、合批、返工按片注入。 <a href="/dag" style="color:var(--accent);font-weight:600;">DAG 演示 →</a> <a href="/bank-batch" style="color:var(--accent);font-weight:600;">银行批量 10 万 →</a> <a href="/m2" style="color:var(--accent);font-weight:600;">详解 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker done">M2.5</div>
+            <div class="roadmap-marker done">M3</div>
             <div class="roadmap-body">
-                <span class="badge badge-done">线上质量 — 已完成</span>
-                <h4>标准组件库 — 修复一次，全局生效</h4>
-                <p>6 大标准组件替代 4 种手写 FSM 模板：SubBatchProcessor、ResultClassifier、ReconfirmHandler、ReBatchRouter、AreaScheduler、ExceptionScheduler。充值/申购同一套组件，仅错误码映射不同。一个修复点，所有实例同步更新。M3 Fab 动态工序编排直接复用全部 6 个组件。 <a href="/m2" style="color:var(--accent);font-weight:600;">阅读详解 →</a> <a href="/dag" style="color:var(--accent);font-weight:600;">在线演示 →</a></p>
+                <span class="badge badge-done">已交付 — 10 万规模验证 · 0 卡死工单</span>
+                <h4>韧性运行时 — 混沌注入 · OCAP · 断点续跑</h4>
+                <p>故障本身就是演示的一部分：设备宕机注入与故障率旋钮，OCAP 处置规则（返工 / 报废 / 暂扣 / 通知）拦截阶段失败，WorkOrder 事件溯源断点续跑。10 万客户规模验证——300 批全部跑通，终态对账严格守恒（96,243 入账 / 1,947 报废 / 809 人工 / 1,001 异常池）。 <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">韧性演示 →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">路线图 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker next">M3</div>
+            <div class="roadmap-marker done">M4</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">架构就绪 — 原型可运行</span>
-                <h4>M3 · 事实驱动的 Fab 决策内核 — 动态工艺织造 + MU 生命周期</h4>
-                <p>叠加在 M2.5+ 之上的决策层。POR 工艺路线库存放静态基准。Dynamic Flow Assembler 根据产线实时事实动态织造 ChainDSL——PASS 则继续推进、FAIL 则织造 Rework DSL、BORDERLINE 则复验。Saga + LotContext（MU 账户矩阵）保障每一段动态 DSL 的原子性。M2.5+ 全部 6 个标准组件零修改复用。原型代码在 FabDemo 中可运行。 <a href="/m3" style="color:var(--accent);font-weight:600;">了解 M3 →</a></p>
+                <span class="badge badge-done">已上线</span>
+                <h4>3D 数字孪生驾驶舱 — 计划对照实际，人在回路</h4>
+                <p>同一事件流驱动的 3D 孪生工厂：路线定义 DAG（计划）、批次泳道（实际）、逐片工序态与分类（状态）三层对照。干预层让操作员停机 / 复位设备区、拧故障率旋钮——FSM 门控保证停机即真停：天车在端口等待，直到人来复位。 <a href="/fab-demo/m35-3d" style="color:var(--accent);font-weight:600;">打开驾驶舱 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
-            <div class="roadmap-marker done">M3.5</div>
+            <div class="roadmap-marker next">M5</div>
             <div class="roadmap-body">
-                <span class="badge badge-explore">已交付 — 10 万客户规模验证（终态对账全平）</span>
-                <h4>M3.5 · 自愈决策内核 — 0 卡死工单</h4>
-                <p>从"静态脚本"到"反应式内核"的关键一步。单 WorkOrder EventSourced 断点恢复已就绪：FabPipelineExecutionActor 崩溃后通过 Journal 重放恢复状态，resumeFromIndex 跳过已完成阶段从中断处继续。Pipeline Stage 失败 → OCAP 拦截 → 动态织造 Rework DSL → Saga 保证原子性。设备故障注入。已在 10 万客户规模验证：300 个批次全部跑通，终态对账严格守恒（96,243 入账 / 1,947 放弃 / 809 人工 / 1,001 异常池），运行中途注入宕机并断点续跑复验通过。 <a href="/fab-demo/m35" style="color:var(--accent);font-weight:600;">M3.5 自愈演示 →</a> <a href="/m3-roadmap" style="color:var(--accent);font-weight:600;">路线图 →</a></p>
-            </div>
-        </div>
-        <div class="roadmap-item">
-            <div class="roadmap-marker next">M3.9</div>
-            <div class="roadmap-body">
-                <span class="badge badge-explore">规划中 — M3.5 之后</span>
-                <h4>M3.9 · 集群韧性 — 0 丢失事件</h4>
-                <p>Akka Cluster 多节点部署。杀一个节点——WorkOrder 不卡，事件不丢，UI 自动恢复。3 节点 50 WorkOrder 并发。M3.5 + M3.9 全部验证通过之时，反应式 MES 内核 v1.0 正式成立。</p>
+                <span class="badge badge-explore">下一步</span>
+                <h4>集群韧性与开源发布 — 内核 v1.0</h4>
+                <p>Akka Cluster 多节点：杀一个节点——工单不卡、事件不丢、UI 自动恢复。monarch-core 经 ci-release 发布 Maven Central。M1–M5 全部验证通过之时，反应式 MES 内核 v1.0 正式成立。</p>
             </div>
         </div>
     </div>
@@ -497,72 +491,49 @@
 <section class="section" id="showcases">
     <h2 class="section-title"><span class="dot" style="background:var(--accent)"></span> 在线演示 — 看到实际运行的代码</h2>
     <p class="section-desc">
-        六个交互式 Demo 连接到同一个实时系统，按里程碑与最佳实践分层展示。
+        四个交互式 Demo，对应四个里程碑，连接同一个实时系统。
     </p>
 
     <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">补偿</span></div>
-            <h3>Saga TCC 演示</h3>
-            <p>一个分布式转账流程在 Saga 状态机中执行。观察 Prepare → Commit → Compensate 的完整生命周期。在任意步骤注入故障。实时观察自动重试、向后补偿和挂起事务的恢复过程。</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：MES ↔ EAP ↔ RMS 的跨系统数据对齐</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">向前补偿</span></div>
+            <h3>Saga 引擎 — 内核双引擎</h3>
+            <p>分布式转账在 Saga 状态机中执行。观察 Prepare → Commit → Compensate 全生命周期，任意步骤注入故障，挂起交易从人工修复面板恢复。底层的持久化流批一体引擎把每一步落日志——杀掉进程，从断点精确续跑。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：MES ↔ EAP ↔ RMS 事务，绝不回滚整个世界</p>
             <br>
             <a href="/saga" class="card-link">打开演示 →</a>
         </div>
         <div class="card">
             <div class="card-icon" style="background:rgba(240,136,62,0.12);color:var(--orange)">⚙️</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M2</span><span class="tag">DAG</span><span class="tag">FSM</span><span class="tag">弹性</span><span class="tag">流批一体</span></div>
-            <h3>DAG 执行引擎演示</h3>
-            <p>23 个 Akka Persistent FSM 跨 5 层级协作，完成薪资存入场景的完整编排。逐步推进 5 个阶段，观察编排器、保护器、通信器、补偿器 4 种弹性模式的实时运作。点击任意节点深入状态机内部。</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：跨 MES/EAP/RMS/SPC 的 DAG 流程编排引擎</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M2</span><span class="tag">动态 DAG</span><span class="tag">银行跑批</span><span class="tag">Fab 跑批</span></div>
+            <h3>动态生成的 DAG — 银行与 Fab 跑批</h3>
+            <p>ChainDSL 运行时编译成动态 DAG。同一引擎跑银行文件交换批（10 万客户 50 批并发，终态对账守恒）与 Fab 跑批——POR 路线按事实织造：拆批、合批、返工按片注入。另驱动 5 层级薪资存入演示（23 个 Persistent FSM）。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：跨 MES/EAP/RMS/SPC 的 DAG 流程编排</p>
             <br>
-            <a href="/dag" class="card-link">打开演示 →</a>
+            <a href="/dag" class="card-link">打开 DAG 演示 →</a>
+            <a href="/bank-batch" class="card-link" style="margin-left:16px;">银行批量 10 万 →</a>
         </div>
     </div>
 
     <div class="card-grid-2" style="margin-top: 24px;">
         <div class="card">
-            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🧩</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M2.5+</span><span class="tag">组件库</span><span class="tag">修复一次全局生效</span></div>
-            <h3>M2.5+ 标准组件库</h3>
-            <p>6 大标准组件替代 4 种手写 FSM 模板。充值/申购同一套组件，仅错误码映射不同。SMS 通知复用同一条 Pipeline 的阶段。一个修复点，所有实例同步更新。M3 Fab 动态工序编排直接复用全部 6 个组件。</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：SubBatchProcessor → 任意设备区；ResultClassifier → 任意质量门禁</p>
+            <div class="card-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">🛡️</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">混沌注入</span><span class="tag">OCAP</span><span class="tag">断点续跑</span></div>
+            <h3>韧性运行时 — 0 卡死工单</h3>
+            <p>故意注入崩溃与设备故障：WorkOrder 经 Journal 重放恢复，从断点精确续跑，OCAP 规则把失败处置为返工 / 报废 / 暂扣 / 通知。10 万规模验证——300 批全部跑通，终态对账严格守恒。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：崩溃 → 重放 → 续跑 → OCAP 处置，每笔单子恰好落进一个终态桶</p>
             <br>
-            <a href="/m2" class="card-link">阅读详解 →</a>
-            <a href="/dag" class="card-link" style="margin-left:16px;">打开演示 →</a>
-        </div>
-    </div>
-
-
-    <div class="card-grid-2" style="margin-top: 24px;">
-        <div class="card">
-            <div class="card-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">🏭</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(245,158,11,0.15);color:#f59e0b;font-weight:700;">M3</span><span class="tag">决策层</span><span class="tag">动态织造</span><span class="tag">MU 矩阵</span></div>
-            <h3>M3 事实驱动的 Fab 决策内核</h3>
-            <p>面向 Fab 的决策层。POR → Dynamic Flow Assembler → Saga/LotContext → ChainDSL 注入 M2.5+。根据产线实时事实动态织造工艺路线。MU 账户矩阵（Lot/Wafer/Die）以事件溯源投影追踪每个制造单元。M2.5+ 执行引擎零修改。</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：POR→Assembler→Saga/LotContext→ChainDSL；事实驱动闭环</p>
-            <br>
-            <a href="/m3" class="card-link">了解 M3 →</a>
+            <a href="/fab-demo/m35" class="card-link">打开韧性演示 →</a>
         </div>
         <div class="card">
-            <div class="card-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">🛡️</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(168,85,247,0.15);color:#a855f7;font-weight:700;">M3.5</span><span class="tag">自愈</span><span class="tag">OCAP</span><span class="tag">断点恢复</span></div>
-            <h3>M3.5 自愈决策内核（进行中）</h3>
-            <p>单 WorkOrder EventSourced 崩溃自愈已就绪。FabPipelineExecutionActor 通过 Journal 重放恢复状态，resumeFromIndex 断点续传跳过已完成阶段。OCAP 规则引擎拦截故障并执行 Rework/Scrap/Hold/Notify。演示包含崩溃注入、恢复过程、OCAP 触发实时可视化。</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：Actor 崩溃 → 事件重放恢复 → 断点续传 → OCAP 故障拦截</p>
+            <div class="card-icon" style="background:rgba(34,197,94,0.12);color:#16a34a">🏭</div>
+            <div class="card-tags"><span class="tag" style="background:rgba(34,197,94,0.15);color:#16a34a;font-weight:700;">M4</span><span class="tag">3D 孪生</span><span class="tag">人工干预</span><span class="tag">计划对照实际</span></div>
+            <h3>3D 数字孪生驾驶舱</h3>
+            <p>实时事件流驱动的 3D 孪生工厂。路线定义 DAG（计划）、批次泳道（实际）、逐片工序态与分类（状态）三层对照。停机 / 复位设备区、拧故障率旋钮——FSM 门控保证停机即真停：天车在端口等人工复位。</p>
+            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：九大设备区、天车运输、TCC 拆批/合批实时可见</p>
             <br>
-            <a href="/fab-demo/m35" class="card-link">打开 M3.5 自愈演示 →</a>
-
-        <div class="card">
-            <div class="card-icon" style="background:rgba(34,197,94,0.12);color:#16a34a">🏦</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(34,197,94,0.15);color:#16a34a;font-weight:700;">M3.5</span><span class="tag">批量 10 万</span><span class="tag">双链</span><span class="tag">终态对账</span></div>
-            <h3>银行批量充值 + 基金申购</h3>
-            <p>100,000 客户 · 每批 2,000 · 共 50 批 · 并发 6 —— 同一副 Monarch 骨架跑两条链。充值链（合作银行）：文件交换六工序，约 2% 余额不足按策略放弃、约 2% 超时 → 查证 → 自动重批。申购链（基金公司）：充值到账客户自动衔接申购。账务更新注入 1% 瞬时故障 → 自动重试 → 人工异常池。终态账本实时核对严格守恒。</p>
-            <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">跑一遍：启动 10 万 → 看 50 批分批推进 → ⚡ 注入宕机 → 在途归零、每笔单子恰好落进一个终态桶</p>
-            <br>
-            <a href="/bank-batch" class="card-link">打开银行批量演示 →</a>
-        </div>
+            <a href="/fab-demo/m35-3d" class="card-link">打开驾驶舱 →</a>
         </div>
     </div>
 
@@ -594,10 +565,12 @@
 <!-- ==================== CTA：邀请协作 ==================== -->
 <section class="section" id="collaborate">
     <div class="cta-section">
-        <h2>M3.5 &amp; M3.9 — 与我们一起定义反应式 MES 内核</h2>
+        <h2>M5 — 与我们一起完成内核 v1.0</h2>
         <p>
-            M1、M2、M2.5+ 和 M3 架构已经以线上质量运行。
-            M3.5（自愈决策内核）和 M3.9（集群韧性）是完成反应式 MES 内核 v1.0 的最后两个里程碑。
+            M1–M4 已以线上质量运行：内核双引擎、银行与 Fab 动态 DAG 跑批、
+            韧性运行时、3D 数字孪生驾驶舱。
+            M5 将完成反应式 MES 内核 v1.0 的最后两块拼图——Akka Cluster 多节点韧性
+            （杀节点不丢事件、工单不卡死）与 Saga 引擎（<code>monarch-core</code>）发布 Maven Central。
             <br><br>
             如果你是 Fab 工程师、自动化架构师或制造系统专家——
             我们希望听到那些在你的工厂现场最重要的故障场景、恢复预期和集群需求。
