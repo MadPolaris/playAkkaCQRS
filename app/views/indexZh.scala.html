@@ -449,7 +449,7 @@
             <div class="roadmap-body">
                 <span class="badge badge-done">线上质量 — 已完成</span>
                 <h4>内核双引擎 — Saga 引擎 + Monarch 持久化流批一体向前补偿引擎</h4>
-                <p>两台引擎托底整个内核。<strong>Saga 引擎</strong>：TCC（Try-Confirm/Cancel）跨系统事务编排，<em>向前补偿</em>——失败只补偿已 Try 的步骤，绝不回滚整个世界；挂起交易提供人工修复面板。<strong>Monarch 引擎</strong>（发布构件 <code>monarch-core</code>）：每一步落事件日志——崩溃后重放、从断点精确续跑；有界重试、手动修复恢复；流式与跑批共用同一执行内核。 <a href="/saga" style="color:var(--accent);font-weight:600;">Saga 演示 →</a> <a href="/m1" style="color:var(--accent);font-weight:600;">详解 →</a></p>
+                <p>两台引擎托底整个内核。<strong>Saga 引擎</strong>：TCC（Try-Confirm/Cancel）跨系统事务编排，<em>向前补偿</em>——失败只补偿已 Try 的步骤，绝不回滚整个世界；挂起交易提供人工修复面板。<strong>Monarch 引擎</strong>（开源构件 <code>monarch-core</code>）：每一步落事件日志——崩溃后重放、从断点精确续跑；有界重试、手动修复恢复；流式与跑批共用同一执行内核。 <a href="/saga" style="color:var(--accent);font-weight:600;">Saga 演示 →</a> <a href="/m1" style="color:var(--accent);font-weight:600;">详解 →</a></p>
             </div>
         </div>
         <div class="roadmap-item">
