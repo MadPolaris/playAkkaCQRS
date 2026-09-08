@@ -284,7 +284,7 @@
             <div class="nav-dropdown">
                 <span class="nav-dropdown-btn">在线演示 <span class="arrow">▾</span></span>
                 <div class="nav-dropdown-menu">
-                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>Saga 引擎</a>
+                    <a href="/saga" class="nav-dropdown-item"><span class="milestone-badge badge-m1">M1</span>双引擎 · Saga 演示</a>
                     <a href="/dag" class="nav-dropdown-item"><span class="milestone-badge badge-m2">M2</span>动态 DAG</a>
                     <a href="/fab-demo/m35" class="nav-dropdown-item"><span class="milestone-badge badge-m3">M3</span>韧性运行时</a>
                     <a href="/fab-demo/m35-3d" class="nav-dropdown-item"><span class="milestone-badge badge-m25">M4</span>3D 孪生驾驶舱</a>
@@ -497,9 +497,9 @@
     <div class="card-grid-2">
         <div class="card">
             <div class="card-icon" style="background:rgba(168,85,247,0.12);color:var(--purple)">🔄</div>
-            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">TCC</span><span class="tag">向前补偿</span></div>
-            <h3>Saga 引擎 — 内核双引擎</h3>
-            <p>分布式转账在 Saga 状态机中执行。观察 Prepare → Commit → Compensate 全生命周期，任意步骤注入故障，挂起交易从人工修复面板恢复。底层的持久化流批一体引擎把每一步落日志——杀掉进程，从断点精确续跑。</p>
+            <div class="card-tags"><span class="tag" style="background:rgba(63,185,80,0.15);color:#3fb950;font-weight:700;">M1</span><span class="tag">Saga</span><span class="tag">持久化引擎</span><span class="tag">向前补偿</span></div>
+            <h3>内核双引擎：Saga + 持久化向前补偿</h3>
+            <p>M1 交付两台引擎：<strong>Saga 引擎</strong>负责跨系统事务——分布式转账在 Saga 状态机中执行，观察 Prepare → Commit → Compensate 全生命周期，任意步骤注入故障，挂起交易从人工修复面板恢复；<strong>持久化流批一体引擎</strong>把每一步落日志——杀掉进程，从断点精确续跑。</p>
             <p class="fab-tag" style="display:inline-block; margin-bottom:12px;">Fab 场景：MES ↔ EAP ↔ RMS 事务，绝不回滚整个世界</p>
             <br>
             <a href="/saga" class="card-link">打开演示 →</a>
