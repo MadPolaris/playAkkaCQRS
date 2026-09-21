@@ -122,6 +122,25 @@ lazy val sagaCore = (project in file("saga-core"))
     )
   )
 
+lazy val authCore = (project in file("auth-core"))
+  .settings(
+    commonSettings,
+    publish / skip := true,
+    name := "auth-core",
+    // auth 面（Endpoint DSL / ApiError / TokenService / 身份 store）与 saga-core 同为模块无关的基建层：
+    // 依赖 play 栈（json/mvc/Configuration/PBJ）+ jjwt + caffeine + mongo。按模块生成的桩
+    // （CommandRoleMap/ViewKeys，各模块 key 不同）留目标工程，不进本模块。
+    libraryDependencies ++= Seq(
+      "com.typesafe.play" %% "play-json" % "2.9.3",
+      "com.typesafe.play" %% "play" % "2.8.20",
+      "com.github.jwt-scala" %% "jwt-play" % "9.1.2",
+      "com.github.ben-manes.caffeine" % "caffeine" % "3.1.8",
+      "org.mongodb.scala" %% "mongo-scala-driver" % "4.11.0",
+      "javax.inject" % "javax.inject" % "1",
+      "com.google.inject" % "guice" % "5.1.0"
+    )
+  )
+
 lazy val dagEngineCore = (project in file("dag-engine-core"))
   .dependsOn(commonCore, monarchCore)
   .settings(
@@ -168,8 +187,8 @@ lazy val monarchCore = (project in file("monarch-core"))
 
 lazy val root = (project in file("."))
   .enablePlugins(PlayScala, JavaAppPackaging, DockerPlugin)
-  .dependsOn(commonCore, sagaCore, dagEngineCore, fabSimulation, monarchCore)
-  .aggregate(commonCore, sagaCore, dagEngineCore, fabSimulation, monarchCore)
+  .dependsOn(commonCore, sagaCore, authCore, dagEngineCore, fabSimulation, monarchCore)
+  .aggregate(commonCore, sagaCore, authCore, dagEngineCore, fabSimulation, monarchCore)
   .settings(
     commonSettings,
     publish / skip := true,
