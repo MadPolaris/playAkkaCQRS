@@ -1,6 +1,6 @@
 package net.imadz.m25.component
 
-import net.imadz.monarch.{LifecycleHooks, Monarch, RunRegistry}
+import net.imadz.monarch.{Monarch, RunRegistry}
 
 import akka.actor.typed.scaladsl.{ActorContext, Behaviors}
 import akka.actor.typed.{ActorRef, Behavior}
@@ -209,11 +209,12 @@ object ChainExecutionActor {
       /** Build a generation-guarded engine for one run. Journaling hooks re-check the
         * token at send time — a superseded chain must not journal anything. */
       def monarchFor(runToken: () => Boolean): Monarch[BankStage, BankChainState[Any, Any]] =
-        BankChain.monarch(pipeline, hooks = new LifecycleHooks[BankStage, BankChainState[Any, Any]] {
-          override def stageName(stage: BankStage): String = BankStage.stageName(stage)
-          override def onStageStart(cursor: String): Unit =
+        BankChain.builder(pipeline)
+          .withGenerationGuard(runToken)
+          .onStageStart { cursor =>
             if (runToken()) observer.onStageStart(cursor)
-          override def onStageComplete(cursor: String, state: BankChainState[Any, Any], metadata: Map[String, String]): Unit =
+          }
+          .onStageCompleteWithMeta { (cursor, state, metadata) =>
             if (runToken()) {
               observer.onStageComplete(cursor, metadata, Some(state))
               state.lastStage.foreach { stage =>
@@ -221,18 +222,19 @@ object ChainExecutionActor {
                   BankStage.stageName(stage), BankChain.metadataOf(state), Some(state))
               }
             }
-          override def onStageFailed(cursor: String, error: net.imadz.monarch.StageError): Unit =
+          }
+          .onStageFailed { (cursor, error) =>
             if (runToken()) {
               observer.onStageFailed(cursor, error.detail)
               actorContext.log.warn(
                 s"[ChainExecutionActor:$chainId] Stage failed at {}: {}",
                 cursor, error.detail)
             }
-        }, runToken = runToken)
+          }
+          .build()
 
       def runBatch(batchId: String, items: Seq[Any], skip: Int, snapshot: Option[BankChainState[Any, Any]], runToken: () => Boolean): Unit = {
         val monarch = monarchFor(runToken)
-        monarch.initialize(BankStage.chain)
         // 恢复时快照优先（含已完成的中间值），items 以 loader 结果为准（最新事实）
         val resumeState = snapshot.fold(BankChainState[Any, Any](
           batchId = batchId, chainId = chainId, items = items,

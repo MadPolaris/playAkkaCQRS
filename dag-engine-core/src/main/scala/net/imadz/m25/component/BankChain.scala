@@ -1,6 +1,6 @@
 package net.imadz.m25.component
 
-import net.imadz.monarch.{LifecycleHooks, Monarch, StageError, StageFailedException, StageInterpreter}
+import net.imadz.monarch.{LifecycleHooks, Monarch, MonarchBuilder, StageError, StageFailedException, StageInterpreter}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -86,6 +86,16 @@ object BankChain {
         }.getOrElse(Map.empty)
       case None => Map.empty
     }
+
+  /** Pre-configured [[MonarchBuilder]] for the six-stage bank chain: stage naming,
+    * stage interpreter, and the standard six-stage queue (`BankStage.chain`) are already wired. */
+  def builder[Item, Raw](
+      pipeline: SubBatchPipeline[Item, Raw]
+  ): MonarchBuilder[BankStage, BankChainState[Item, Raw]] =
+    Monarch.builder[BankStage, BankChainState[Item, Raw]]
+      .namingStages(BankStage.stageName)
+      .withStages(BankStage.chain)
+      .withExecutionEc((stage, state, ec) => runStage(stage, state, pipeline)(ec))
 
   /** Build a Monarch engine executing the six-stage chain against `pipeline`.
     *

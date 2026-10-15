@@ -2,8 +2,9 @@ package net.imadz.infra.saga.dsl
 
 import akka.actor.typed.{ActorRef, RecipientRef, Scheduler}
 import net.imadz.infra.saga.SagaParticipant.SagaResult
+import net.imadz.infra.saga.SagaPhase
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ExecutionContext, Future}
 import scala.concurrent.duration._
 
 /** Fluent builder for creating declarative [[SagaStep]] instances with inline ask bindings,
@@ -75,6 +76,15 @@ final class SagaStepBuilder[E, C] private (
   ): SagaStepBuilder[E, C] =
     copy(compensateAskOpt = Some(PhaseAsk.ask(ref, cmd, map)))
 
+  def prepareDirect(f: (String, C, String) => Future[Either[E, SagaResult[String]]]): SagaStepBuilder[E, C] =
+    copy(prepareAskOpt = Some(PhaseAsk.direct(f)))
+
+  def commitDirect(f: (String, C, String) => Future[Either[E, SagaResult[String]]]): SagaStepBuilder[E, C] =
+    copy(commitAskOpt = Some(PhaseAsk.direct(f)))
+
+  def compensateDirect(f: (String, C, String) => Future[Either[E, SagaResult[String]]]): SagaStepBuilder[E, C] =
+    copy(compensateAskOpt = Some(PhaseAsk.direct(f)))
+
   def prepareBinding(ask: PhaseAsk[E, String, C]): SagaStepBuilder[E, C] =
     copy(prepareAskOpt = Some(ask))
 
@@ -88,10 +98,24 @@ final class SagaStepBuilder[E, C] private (
     val prep = prepareAskOpt
     val comm = commitAskOpt
     val comp = compensateAskOpt
-    val participant = new AskParticipant[E, String, C](errorRules, timeout)(ec, scheduler) {
+    val participant = new AskParticipant[E, String, C](errorRules, timeout)(ec, scheduler)
+      with PhaseAwareParticipant[E, String, C] {
       override protected val prepareBinding: Option[PhaseAsk[E, String, C]] = prep
       override protected val commitBinding: Option[PhaseAsk[E, String, C]] = comm
       override protected val compensateBinding: Option[PhaseAsk[E, String, C]] = comp
+      override val boundPhases: Set[SagaPhase.TransactionPhase] = {
+        val phases: Set[SagaPhase.TransactionPhase] = Set[Option[SagaPhase.TransactionPhase]](
+          prep.map(_ => SagaPhase.PreparePhase: SagaPhase.TransactionPhase),
+          comm.map(_ => SagaPhase.CommitPhase: SagaPhase.TransactionPhase),
+          comp.map(_ => SagaPhase.CompensatePhase: SagaPhase.TransactionPhase)
+        ).flatten
+        if (phases.nonEmpty) phases
+        else Set[SagaPhase.TransactionPhase](
+          SagaPhase.PreparePhase,
+          SagaPhase.CommitPhase,
+          SagaPhase.CompensatePhase
+        )
+      }
     }
     SagaStep(stepId, participant, resilience, group)
   }

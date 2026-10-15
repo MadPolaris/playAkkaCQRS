@@ -11,11 +11,11 @@ import scala.concurrent.{ExecutionContext, Future}
   * {{{
   * val monarch = Monarch.builder[BankStage, BankChainState[Item, Raw]]
   *   .namingStages(stage => BankStage.stageName(stage))
-  *   .withExecution((stage, state, ec) => BankChain.runStage(stage, state, pipeline)(ec))
-  *   .onFailure((cursor, err, state, ec) => ocapInterceptor(cursor, err, state)(ec))
+  *   .withExecution((stage, state) => BankChain.runStage(stage, state, pipeline))
+  *   .onFailure((cursor, err, state) => ocapInterceptor(cursor, err, state))
   *   .withGenerationGuard(() => RunRegistry.isFresh(key, gen))
   *   .onStageStart(cursor => observer.onStageStart(cursor))
-  *   .onStageComplete((cursor, state, meta) => observer.onStageComplete(cursor, meta, Some(state)))
+  *   .onStageCompleteWithMeta((cursor, state, meta) => observer.onStageComplete(cursor, meta, Some(state)))
   *   .build()
   * }}}
   */
@@ -40,7 +40,7 @@ final class MonarchBuilder[Stage, State] private (
   def withExecution(interpreter: (Stage, State) => Future[State]): MonarchBuilder[Stage, State] =
     copy(interpreterOpt = Some((st, s, _) => interpreter(st, s)))
 
-  def withExecution(interpreter: (Stage, State, ExecutionContext) => Future[State]): MonarchBuilder[Stage, State] =
+  def withExecutionEc(interpreter: (Stage, State, ExecutionContext) => Future[State]): MonarchBuilder[Stage, State] =
     copy(interpreterOpt = Some(interpreter))
 
   def onStageStart(hook: String => Unit): MonarchBuilder[Stage, State] =
@@ -61,7 +61,7 @@ final class MonarchBuilder[Stage, State] private (
   def onFailure(interceptor: (String, StageError, State) => Future[State]): MonarchBuilder[Stage, State] =
     copy(failureInterceptorOpt = Some((c, e, s, _) => interceptor(c, e, s)))
 
-  def onFailure(interceptor: (String, StageError, State, ExecutionContext) => Future[State]): MonarchBuilder[Stage, State] =
+  def onFailureEc(interceptor: (String, StageError, State, ExecutionContext) => Future[State]): MonarchBuilder[Stage, State] =
     copy(failureInterceptorOpt = Some(interceptor))
 
   def withGenerationGuard(runToken: () => Boolean): MonarchBuilder[Stage, State] =

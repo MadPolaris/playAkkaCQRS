@@ -2,7 +2,6 @@ package net.imadz.m25.business
 
 import net.imadz.m25.component._
 import net.imadz.m25.pipeline._
-import net.imadz.monarch.LifecycleHooks
 
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 import scala.concurrent.{ExecutionContext, Future}
@@ -204,11 +203,7 @@ object ChainDsl {
     def processBatch(items: Seq[Item], source: ItemSource = ItemSource.NewArrival)
                     (implicit ec: ExecutionContext): Future[SubBatchResult[Classification[Item]]] = {
       val batchId = s"$chainId-${System.currentTimeMillis()}"
-      val monarch = BankChain.monarch[Item, Any](pipeline,
-        hooks = new LifecycleHooks[BankStage, BankChainState[Item, Any]] {
-          override def stageName(stage: BankStage): String = BankStage.stageName(stage)
-        })
-      monarch.initialize(BankStage.chain)
+      val monarch = BankChain.builder[Item, Any](pipeline).build()
 
       for {
         finalState <- monarch.process(BankChainState[Item, Any](

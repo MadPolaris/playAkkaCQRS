@@ -174,5 +174,31 @@ class MonarchEngineSpec extends AsyncWordSpec with Matchers {
       val (m, _) = makeMonarch()
       m.process(S(n = 7)).map(_.n should be(7))
     }
+
+    "assemble and run via Monarch.builder fluent API" in {
+      val events = mutable.ListBuffer.empty[String]
+      val m = Monarch.builder[Stage, S]
+        .namingStages(nameOf)
+        .withStages(Seq(Alpha, Boom, Beta))
+        .withExecution { (stage, st) =>
+          if (stage == Boom) Future.failed(StageFailedException(StageError("Boom#1", Some("ERR"), "ERR", "simulated")))
+          else Future.successful(st.copy(log = st.log :+ nameOf(stage), n = st.n + 1))
+        }
+        .onStageStart(c => { events += s"start:$c"; () })
+        .onStageComplete((c, st) => { events += s"done:$c(${st.n})"; () })
+        .onStageFailed((c, _) => { events += s"failed:$c"; () })
+        .onStageResolved((c, _, st) => { events += s"resolved:$c(${st.n})"; () })
+        .onFailure((c, err, st) => Future.successful(st.copy(log = st.log :+ s"recovered:${err.errorCode}@$c", n = st.n + 1)))
+        .build()
+
+      m.process(S()).map { result =>
+        result.log should be(List("Alpha", "recovered:ERR@Boom#1", "Beta"))
+        result.n should be(3)
+        events.toList should be(List(
+          "start:Alpha#0", "done:Alpha#0(1)",
+          "start:Boom#1", "failed:Boom#1", "resolved:Boom#1(2)",
+          "start:Beta#2", "done:Beta#2(3)"))
+      }
+    }
   }
 }

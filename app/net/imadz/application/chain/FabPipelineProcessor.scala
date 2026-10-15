@@ -4,7 +4,6 @@ import net.imadz.application.chain.FabExecutionModel.{FabDemoContext, FabDemoSta
 import net.imadz.application.chain.FabExecutionModel.{StageError => FabStageError, StageFailedException => FabStageFailedException}
 import net.imadz.application.chain.FabScenarioPipeline.PipelineStage
 import net.imadz.monarch.{Monarch, StageError => MonarchStageError, StageFailedException => MonarchStageFailedException}
-import net.imadz.monarch.{FailureInterceptor, LifecycleHooks, StageInterpreter}
 
 import scala.concurrent.{ExecutionContext, Future}
 
@@ -65,35 +64,25 @@ object FabPipelineProcessor {
     def toFabError(error: MonarchStageError): FabStageError =
       FabStageError(error.stage, error.code, error.errorCode, error.detail)
 
-    new Monarch[PipelineStage, FabDemoState](
-      interpreter = new StageInterpreter[PipelineStage, FabDemoState] {
-        override def run(stage: PipelineStage, state: FabDemoState)(implicit ec: ExecutionContext): Future[FabDemoState] =
-          FabScenarioPipeline.runStage(stage, state, ctx).recoverWith {
-            // Preserve business classification: stage bodies throw the FAB exception type;
-            // re-throw it as the engine's type so the failure is intercepted, not wrapped
-            // as UNEXPECTED.
-            case FabStageFailedException(err) =>
-              Future.failed(MonarchStageFailedException(
-                MonarchStageError(err.stageName, err.equipId, err.errorCode, err.detail)))
-          }
-      },
-      hooks = new LifecycleHooks[PipelineStage, FabDemoState] {
-        // NOTE: must qualify — an unqualified stageName(stage) here resolves to this
-        // anonymous override itself and tail-recurses into a silent infinite loop.
-        override def stageName(stage: PipelineStage): String = FabPipelineProcessor.stageName(stage)
-        override def onStageStart(cursor: String): Unit = onPhaseStart(cursor)
-        override def onStageComplete(cursor: String, state: FabDemoState, metadata: Map[String, String]): Unit =
-          onPhaseComplete(cursor, state)
-        override def onStageFailed(cursor: String, error: MonarchStageError): Unit =
-          onPhaseFailed(cursor, toFabError(error))
-        override def onStageResolved(cursor: String, error: MonarchStageError, state: FabDemoState): Unit =
-          onOcapResolved(cursor, toFabError(error), state)
-      },
-      failureInterceptor = Some(new FailureInterceptor[PipelineStage, FabDemoState] {
-        override def intercept(cursor: String, error: MonarchStageError, state: FabDemoState)(implicit ec: ExecutionContext): Future[FabDemoState] =
-          FabScenarioPipeline.invokeOcapInterceptor(state, ctx, toFabError(error))
-      }),
-      runToken = ctx.runToken
-    )
+    Monarch.builder[PipelineStage, FabDemoState]
+      .namingStages(stageName)
+      .withExecution { (stage, state) =>
+        FabScenarioPipeline.runStage(stage, state, ctx).recoverWith {
+          // Preserve business classification: stage bodies throw the FAB exception type;
+          // re-throw it as the engine's type so the failure is intercepted, not wrapped
+          // as UNEXPECTED.
+          case FabStageFailedException(err) =>
+            Future.failed(MonarchStageFailedException(
+              MonarchStageError(err.stageName, err.equipId, err.errorCode, err.detail)))
+        }
+      }
+      .onStageStart(onPhaseStart)
+      .onStageComplete(onPhaseComplete)
+      .onStageFailed((cursor, error) => onPhaseFailed(cursor, toFabError(error)))
+      .onStageResolved((cursor, error, state) => onOcapResolved(cursor, toFabError(error), state))
+      .onFailure((_, error, state) =>
+        FabScenarioPipeline.invokeOcapInterceptor(state, ctx, toFabError(error)))
+      .withGenerationGuard(ctx.runToken)
+      .build()
   }
 }

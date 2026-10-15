@@ -2,10 +2,13 @@ package net.imadz.application.services.transactor
 
 import akka.actor.typed.{ActorSystem, Scheduler}
 import akka.cluster.sharding.typed.scaladsl.EntityRef
+import akka.util.Timeout
+import net.imadz.application.aggregates.LotProtocol._
 import net.imadz.common.Id
-import net.imadz.common.CommonTypes.iMadzError
+import net.imadz.common.CommonTypes.{Id, iMadzError}
+import net.imadz.infra.saga.SagaParticipant.SagaResult
 import net.imadz.infra.saga.SagaTransactionCoordinator
-import net.imadz.infra.saga.dsl.{ArgsCodec, RecoveryBehavior, ResiliencePolicy, SagaBusinessEvent, SagaDefinition, SagaRunner, SagaRegistry, SagaStep}
+import net.imadz.infra.saga.dsl.{ArgsCodec, ErrorAction, ErrorRules, RecoveryBehavior, ResiliencePolicy, SagaBusinessEvent, SagaDefinition, SagaRegistry, SagaRunner, SagaStep}
 import play.api.libs.json.Format
 
 import scala.concurrent.ExecutionContext
@@ -41,17 +44,74 @@ object FabSagaDefinition {
     timeoutPerAttempt = 30.seconds,
     recovery = RecoveryBehavior.RetryIfOngoing)
 
+  private val LotErrorRules: ErrorRules[iMadzError] = ErrorRules(
+    business = { case _: iMadzError => ErrorAction.NonRetryable },
+    describe = e => s"Lot invariant violation (${e.code}: ${e.message})"
+  )
+
   def definition(implicit ec: ExecutionContext, scheduler: Scheduler): SagaDefinition[iMadzError, AppSagaContext, FabSagaArgs] =
     SagaDefinition[iMadzError, AppSagaContext, FabSagaArgs](
       name = Name,
       version = Version,
       argsCodec = codec,
       steps = args => {
-        val source = SourceLotParticipant(Id.of(args.sourceLotId), args.waferIds.map(Id.of).toSet, args.waferNames.toSet)
-        val target = TargetLotParticipant(Id.of(args.targetLotId), Id.of(args.sourceLotId), args.waferIds.map(Id.of).toSet)
+        val sourceLotId = Id.of(args.sourceLotId)
+        val targetLotId = Id.of(args.targetLotId)
+        val waferIdSet = args.waferIds.map(Id.of).toSet
+        val waferNameSet = args.waferNames.toSet
         Seq(
-          SagaStep("source-lot", source, Policy, stepGroup = 1),
-          SagaStep("target-lot", target, Policy, stepGroup = 1))
+          SagaStep.builder[iMadzError, AppSagaContext]("source-lot")
+            .inGroup(1)
+            .withErrorRules(LotErrorRules)
+            .withTimeout(5.seconds)
+            .withResilience(Policy)
+            .prepareAsk[ReserveWaferRemoval, WaferRemovalConfirmation](
+              ref = ctx => ctx.lots.findLotById(sourceLotId),
+              cmd = (txId, replyTo) => ReserveWaferRemoval(Id.of(txId), waferIdSet, waferNameSet, replyTo),
+              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
+            )
+            .commitAsk[CommitWaferRemoval, WaferRemovalConfirmation](
+              ref = ctx => ctx.lots.findLotById(sourceLotId),
+              cmd = (txId, replyTo) => CommitWaferRemoval(Id.of(txId), replyTo),
+              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
+            )
+            .compensateAsk[ReleaseReservedWafer, WaferRemovalConfirmation](
+              ref = ctx => ctx.lots.findLotById(sourceLotId),
+              cmd = (txId, replyTo) => ReleaseReservedWafer(Id.of(txId), replyTo),
+              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
+            )
+            .build(),
+          SagaStep.builder[iMadzError, AppSagaContext]("target-lot")
+            .inGroup(1)
+            .withErrorRules(LotErrorRules)
+            .withTimeout(5.seconds)
+            .withResilience(Policy)
+            .prepareDirect { (txId, ctx, _) =>
+              implicit val askTimeout: Timeout = 5.seconds
+              val sourceRef = ctx.lots.findLotById(sourceLotId)
+              val targetRef = ctx.lots.findLotById(targetLotId)
+              val carriedFuture = sourceRef.ask(GetLotState(_)).mapTo[LotConfirmation]
+                .map(conf => conf.waferStates.filter { case (k, _) => waferIdSet.contains(k) }.toMap)
+                .recover { case _ => Map.empty[Id, net.imadz.domain.entities.LotEntity.WaferState] }
+              carriedFuture.flatMap { carried =>
+                targetRef.ask(ReserveAddWafer(Id.of(txId), waferIdSet, _, carried))
+                  .mapTo[WaferAdditionConfirmation]
+                  .map(c => c.error.map[Either[iMadzError, SagaResult[String]]](Left.apply)
+                    .getOrElse(Right(SagaResult(c.transferId.toString))))
+              }
+            }
+            .commitAsk[CommitAddWafer, WaferAdditionConfirmation](
+              ref = ctx => ctx.lots.findLotById(targetLotId),
+              cmd = (txId, replyTo) => CommitAddWafer(Id.of(txId), replyTo),
+              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
+            )
+            .compensateAsk[CancelAddWafer, WaferAdditionConfirmation](
+              ref = ctx => ctx.lots.findLotById(targetLotId),
+              cmd = (txId, replyTo) => CancelAddWafer(Id.of(txId), replyTo),
+              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
+            )
+            .build()
+        )
       },
       onResult = (args, result) => List(FabSagaCompleted(
         result.snapshot.transactionId, args.sourceLotId, args.targetLotId,

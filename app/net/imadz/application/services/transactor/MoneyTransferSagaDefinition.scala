@@ -3,15 +3,17 @@ package net.imadz.application.services.transactor
 import akka.actor.typed.ActorSystem
 import akka.actor.typed.Scheduler
 import akka.cluster.sharding.typed.scaladsl.EntityRef
-import net.imadz.application.aggregates.repository.CreditBalanceRepository
+import net.imadz.application.aggregates.CreditBalanceProtocol._
 import net.imadz.common.CommonTypes.iMadzError
+import net.imadz.common.Id
 import net.imadz.domain.values.Money
+import net.imadz.infra.saga.SagaParticipant.SagaResult
 import net.imadz.infra.saga.SagaTransactionCoordinator
-import net.imadz.infra.saga.SagaTransactionCoordinator.TransactionResult
-import net.imadz.infra.saga.dsl.{ArgsCodec, ResiliencePolicy, SagaBusinessEvent, SagaDefinition, SagaRunner, SagaRegistry, SagaStep}
+import net.imadz.infra.saga.dsl.{ArgsCodec, ErrorAction, ErrorRules, ResiliencePolicy, SagaBusinessEvent, SagaDefinition, SagaRegistry, SagaRunner, SagaStep}
 import play.api.libs.json.{Format, Json}
 
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 /** Declarative money-transfer saga — the single artifact a business developer writes.
   * Participants are pure functions of (definition, args); the journal never stores them. */
@@ -40,6 +42,11 @@ object MoneyTransferSagaDefinition {
     implicit val writes: play.api.libs.json.Writes[MoneyTransferCompleted] = Json.writes[MoneyTransferCompleted]
   }
 
+  private val AccountErrorRules: ErrorRules[iMadzError] = ErrorRules(
+    business = { case iMadzError("60003", _) | iMadzError("60004", _) => ErrorAction.NonRetryable },
+    describe = e => s"${e.code}: ${e.message}"
+  )
+
   def definition(implicit ec: ExecutionContext, scheduler: Scheduler): SagaDefinition[iMadzError, AppSagaContext, TransferArgs] =
     SagaDefinition[iMadzError, AppSagaContext, TransferArgs](
       name = Name,
@@ -47,9 +54,52 @@ object MoneyTransferSagaDefinition {
       argsCodec = ArgsCodec.playJson[TransferArgs],
       steps = args => {
         val money = TransferArgs.toMoney(args)
+        val fromUserId = Id.of(args.fromUserId)
+        val toUserId = Id.of(args.toUserId)
         Seq(
-          SagaStep("transfer-out", FromAccountParticipant(net.imadz.common.Id.of(args.fromUserId), money), ResiliencePolicy(maxRetries = 5), stepGroup = 1),
-          SagaStep("transfer-in", ToAccountParticipant(net.imadz.common.Id.of(args.toUserId), money), ResiliencePolicy(maxRetries = 5), stepGroup = 1))
+          SagaStep.builder[iMadzError, AppSagaContext]("transfer-out")
+            .inGroup(1)
+            .withErrorRules(AccountErrorRules)
+            .withTimeout(5.seconds)
+            .withResilience(ResiliencePolicy(maxRetries = 5))
+            .prepareAsk[ReserveFunds, FundsReservationConfirmation](
+              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
+              cmd = (txId, replyTo) => ReserveFunds(Id.of(txId), money, replyTo),
+              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+            )
+            .commitAsk[DeductFunds, FundsDeductionConfirmation](
+              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
+              cmd = (txId, replyTo) => DeductFunds(Id.of(txId), replyTo),
+              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+            )
+            .compensateAsk[ReleaseReservedFunds, FundsReleaseConfirmation](
+              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
+              cmd = (txId, replyTo) => ReleaseReservedFunds(Id.of(txId), replyTo),
+              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+            )
+            .build(),
+          SagaStep.builder[iMadzError, AppSagaContext]("transfer-in")
+            .inGroup(1)
+            .withErrorRules(AccountErrorRules)
+            .withTimeout(5.seconds)
+            .withResilience(ResiliencePolicy(maxRetries = 5))
+            .prepareAsk[RecordIncomingCredits, RecordIncomingCreditsConfirmation](
+              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
+              cmd = (txId, replyTo) => RecordIncomingCredits(Id.of(txId), money, replyTo),
+              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+            )
+            .commitAsk[CommitIncomingCredits, CommitIncomingCreditsConfirmation](
+              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
+              cmd = (txId, replyTo) => CommitIncomingCredits(Id.of(txId), replyTo),
+              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+            )
+            .compensateAsk[CancelIncomingCredit, CancelIncomingCreditConfirmation](
+              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
+              cmd = (txId, replyTo) => CancelIncomingCredit(Id.of(txId), replyTo),
+              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
+            )
+            .build()
+        )
       },
       preCheck = args =>
         if (args.amount > 0 && args.fromUserId != args.toUserId) Right(args)

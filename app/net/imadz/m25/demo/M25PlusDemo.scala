@@ -2,7 +2,6 @@ package net.imadz.m25.demo
 
 import net.imadz.m25.component._
 import net.imadz.m25.pipeline._
-import net.imadz.monarch.LifecycleHooks
 
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -134,11 +133,7 @@ object M25PlusDemo {
       scheduler: AreaScheduler[Item]
   ) {
     def processBatch(batch: SubBatch[Item])(implicit ec: ExecutionContext): Future[Unit] = {
-      val monarch = BankChain.monarch[Item, String](pipeline,
-        hooks = new LifecycleHooks[BankStage, BankChainState[Item, String]] {
-          override def stageName(stage: BankStage): String = BankStage.stageName(stage)
-        })
-      monarch.initialize(BankStage.chain)
+      val monarch = BankChain.builder[Item, String](pipeline).build()
       for {
         finalState <- monarch.process(BankChainState[Item, String](
           batchId = batch.batchId, chainId = chainId, items = batch.items))
