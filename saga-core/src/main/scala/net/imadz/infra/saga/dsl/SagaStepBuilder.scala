@@ -1,12 +1,10 @@
 package net.imadz.infra.saga.dsl
 
-import akka.actor.typed.{ActorRef, Scheduler}
-import akka.actor.typed.RecipientRef
-import net.imadz.infra.saga.SagaParticipant
+import akka.actor.typed.{ActorRef, RecipientRef, Scheduler}
 import net.imadz.infra.saga.SagaParticipant.SagaResult
 
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
+import scala.concurrent.duration._
 
 /** Fluent builder for creating declarative [[SagaStep]] instances with inline ask bindings,
   * eliminating the need to write boilerplate [[AskParticipant]] subclasses.
@@ -14,7 +12,7 @@ import scala.concurrent.ExecutionContext
   * {{{
   * val step = SagaStep.builder[iMadzError, AppSagaContext]("transfer-out")
   *   .inGroup(1)
-  *   .withAsk[ReserveFunds, FundsReservationConfirmation](
+  *   .prepareAsk[ReserveFunds, FundsReservationConfirmation](
   *     ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(userId),
   *     cmd = (txId, replyTo) => ReserveFunds(Id.of(txId), amount, replyTo),
   *     map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))

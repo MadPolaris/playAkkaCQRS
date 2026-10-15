@@ -130,6 +130,9 @@ class Monarch[Stage, State](
 
 object Monarch {
 
+  /** Fluent builder entry point for assembling a generation-guarded [[Monarch]] engine. */
+  def builder[Stage, State]: MonarchBuilder[Stage, State] = MonarchBuilder.empty[Stage, State]
+
   /** Convenience factory: hook functions instead of the trait (multi-method traits are not
     * SAM-convertible, so this takes them explicitly). */
   def apply[Stage, State](

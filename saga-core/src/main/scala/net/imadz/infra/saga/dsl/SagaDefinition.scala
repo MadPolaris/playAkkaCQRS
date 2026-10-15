@@ -28,6 +28,11 @@ final case class SagaStep[E, R, C](
     stepGroup: Int = 1
 )
 
+object SagaStep {
+  /** Create a fluent builder for declarative step construction. */
+  def builder[E, C](stepId: String): SagaStepBuilder[E, C] = SagaStepBuilder.of[E, C](stepId)
+}
+
 /**
  * The declarative saga definition — the single artifact a business developer writes.
  * `steps` must be a pure function of (definition, args): participants are deterministic
