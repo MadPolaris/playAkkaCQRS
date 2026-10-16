@@ -1,4 +1,4 @@
-name := """minimal-cqrs"""
+name := """minimal-cqrs-saga-monarch"""
 
 inThisBuild(List(
   organization := "net.imadz",
@@ -202,11 +202,11 @@ lazy val root = (project in file("."))
   .settings(
     commonSettings,
     publish / skip := true,
-    name := "minimal-cqrs",
+    name := "minimal-cqrs-saga-monarch",
     dockerBaseImage := "eclipse-temurin:11-jre",
     dockerExposedPorts := Seq(9000),
     Docker / daemonUser := "daemon",
-    dockerEntrypoint := Seq("sh", "-c", "mkdir -p /opt/docker/logs && exec bin/minimal-cqrs"),
+    dockerEntrypoint := Seq("sh", "-c", "mkdir -p /opt/docker/logs && exec bin/minimal-cqrs-saga-monarch"),
     dockerUpdateLatest := true,
     bashScriptExtraDefines += """addJava "-Dconfig.resource=docker.conf"""",
     Universal / mappings := (Universal / mappings).value.filterNot {
