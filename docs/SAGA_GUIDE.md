@@ -75,12 +75,12 @@ Design points worth knowing:
 
 ## 3. How a Transfer Works
 
-The banking app wires the engine to the DDD aggregates like this:
+The banking app (`MoneyTransferSagaDefinition`) wires the engine to the DDD aggregates via `SagaStep.builder`:
 
-| Step | Participant | prepare (Try) | commit (Confirm) | compensate (Cancel) | Error classification |
+| Step | Definition | prepare (Try) | commit (Confirm) | compensate (Cancel) | Error classification |
 |---|---|---|---|---|---|
-| `transfer-out` | `FromAccountParticipant` | `ReserveFunds` | `DeductFunds` | `ReleaseReservedFunds` | 60003/60004 → non-retryable |
-| `transfer-in` | `ToAccountParticipant` | `RecordIncomingCredits` | `CommitIncomingCredits` | `CancelIncomingCredit` | 60003/60004 → non-retryable |
+| `transfer-out` | `SagaStep.builder("transfer-out")` (or `FromAccountParticipant`) | `ReserveFunds` | `DeductFunds` | `ReleaseReservedFunds` | 60003/60004 → non-retryable |
+| `transfer-in` | `SagaStep.builder("transfer-in")` (or `ToAccountParticipant`) | `RecordIncomingCredits` | `CommitIncomingCredits` | `CancelIncomingCredit` | 60003/60004 → non-retryable |
 
 Both steps sit in `stepGroup = 1` (they run in parallel). `preCheck` rejects non-positive amounts (40001) and self-transfers (40002) before anything starts. On completion, `onResult` emits a `MoneyTransferCompleted` business event which the `SagaBusinessEventProjection` resolves and publishes.
 
@@ -88,17 +88,24 @@ Both steps sit in `stepGroup = 1` (they run in parallel). `preCheck` rejects non
 
 Four steps to run your own saga (full text also in [`saga-core/README.md`](../saga-core/README.md)):
 
-**1. Define a participant** — extend `AskParticipant` and bind the phases you care about:
+**1. Define steps & phase bindings** — use **`SagaStep.builder[E, C](stepId)`** (or `stepBuilder[E, C](stepId)`) for fluent inline definitions. It automatically mixes in `PhaseAwareParticipant` (only bound phases expand into engine steps) and provides `prepareAsk` / `commitAsk` / `compensateAsk` (for Akka Typed `ask`) alongside `prepareDirect` / `commitDirect` / `compensateDirect` (for async functions):
 
 ```scala
-class MyParticipant(id: String)(implicit ec, scheduler)
-    extends AskParticipant[String, String, MyCtx](rules = ErrorRules.none, askTimeout = 5.seconds) {
+import net.imadz.infra.saga.dsl._
 
-  override val prepareBinding = Some(PhaseAsk.direct((txId, ctx, _) => ctx.repo.reserve(txId)))
-  override val commitBinding  = Some(PhaseAsk.direct((txId, ctx, _) => ctx.repo.deduct(txId)))
-  override val compensateBinding = Some(PhaseAsk.direct((txId, ctx, _) => ctx.repo.release(txId)))
-}
+def step1(args: MyArgs)(implicit ec: ExecutionContext, scheduler: Scheduler): SagaStep[String, String, MyCtx] =
+  SagaStep.builder[String, MyCtx]("step-1")
+    .inGroup(1)
+    .withResilience(ResiliencePolicy(maxRetries = 3))
+    .withTimeout(5.seconds)
+    .withErrorRules(ErrorRules.none)
+    .prepareDirect((txId, ctx, _) => ctx.repo.reserve(txId, args))
+    .commitDirect((txId, ctx, _) => ctx.repo.deduct(txId, args))
+    .compensateDirect((txId, ctx, _) => ctx.repo.release(txId, args))
+    .build()
 ```
+
+> **Tip**: For Akka Typed actors, call `.prepareAsk[Cmd, Reply](ref = ..., command = ..., mapReply = ...)` directly without repeating the 5 type parameters of `PhaseAsk.ask`. When a participant is shared across multiple sagas, you can still subclass `AskParticipant[E, R, C]`.
 
 **2. Define the transaction** — declarative, type-safe, replayable:
 
@@ -107,8 +114,12 @@ val definition = SagaDefinition[String, MyCtx, MyArgs](
   name = "my-saga", version = 1,
   argsCodec = ArgsCodec.playJson[MyArgs],
   steps = args => Seq(
-    SagaStep("step-1", new MyParticipant("s1"), ResiliencePolicy(maxRetries = 3), stepGroup = 1),
-    SagaStep("step-2", new MyParticipant("s2"), stepGroup = 2)),   // group 2 starts after group 1
+    step1(args),
+    SagaStep.builder[String, MyCtx]("step-2")
+      .inGroup(2)                                                   // group 2 starts after group 1
+      .prepareDirect((txId, ctx, _) => ctx.repo.notify(txId, args)) // unbound commit/compensate skipped automatically
+      .build()
+  ),
   preCheck = args => if (args.valid) Right(args) else Left("40001"),
   onResult = (args, result) => Seq(MySagaCompleted(args.key))
 )

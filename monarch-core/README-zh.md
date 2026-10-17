@@ -22,32 +22,29 @@
 
 ## 1. 引擎契约
 
-Monarch 不含任何策略：它驱动一个**不透明的 `Stage` 队列**，经过**你提供的解释器**执行，并通过**钩子**回报进度。宿主要提供四样东西：
+Monarch 不含任何策略：它驱动一个**不透明的 `Stage` 队列**，经过**你提供的解释器**执行，并通过**钩子**回报进度。推荐通过 **`Monarch.builder[Stage, State]`** 流式组装宿主的四项扩展点（与真源树 `*.monarch.yaml` 一一对应，底层 `new Monarch(...)` 构造器同样保留）：
 
 ```scala
 import net.imadz.monarch._
 
-val engine = new Monarch[MyStage, MyState](
-  // 1. 唯一必须编写的宿主代码：如何执行一个阶段。
-  interpreter = new StageInterpreter[MyStage, MyState] {
-    def run(stage: MyStage, state: MyState)(implicit ec: ExecutionContext): Future[MyState] = ...
-  },
-  // 2. 命名 + 观察。stageName 定义了恢复跳转逻辑所依赖的【游标词汇表】；
-  //    生命周期回调是宿主写日志/发事件的地方。
-  hooks = new LifecycleHooks[MyStage, MyState] {
-    def stageName(stage: MyStage): String = ...
-    override def onStageStart(cursor: String): Unit = ...
-    override def onStageComplete(cursor: String, state: MyState, metadata: Map[String, String]): Unit = ...
-    override def onStageFailed(cursor: String, error: StageError): Unit = ...
-    override def onStageResolved(cursor: String, error: StageError, state: MyState): Unit = ...
-  },
-  // 3. 可选的业务失败处置（Fab 演示里就是 OCAP 评估/处置）。
-  failureInterceptor = None,
-  // 4. 世代过期守卫（由 RunRegistry 支撑）。
-  runToken = () => RunRegistry.isFresh(runKey, myGeneration)
-)
+val engine = Monarch.builder[MyStage, MyState]
+  // 1. 游标词汇表：定义恢复跳转逻辑所依赖的稳定阶段名
+  .namingStages(stage => stage.id)
+  // 2. 初始阶段队列（也可后续调用 engine.initialize(...)）
+  .withStages(Seq(stageA, stageB, stageC))
+  // 3. 唯一必须编写的宿主逻辑：如何执行一个阶段（另有 withExecutionEc 接收隐式 ec）
+  .withExecution((stage, state) => runMyStage(stage, state))
+  // 4. 按需挂载生命周期回调（写日志 / 发事件，未关注的钩子无需覆写）
+  .onStageStart(cursor => ...)
+  .onStageCompleteWithMeta((cursor, state, meta) => ...) // 或 .onStageComplete((cursor, state) => ...)
+  .onStageFailed((cursor, error) => ...)
+  .onStageResolved((cursor, error, state) => ...)
+  // 5. 可选的业务失败处置（Fab 演示里就是 OCAP 评估/处置；另有 onFailureEc）
+  .onFailure((cursor, error, state) => resolveOrFail(cursor, error, state))
+  // 6. 世代过期守卫（由 RunRegistry 支撑）
+  .withGenerationGuard(() => RunRegistry.isFresh(runKey, myGeneration))
+  .build()
 
-engine.initialize(Seq(stageA, stageB, stageC))  // 装载队列
 engine.process(initialState)                     // Future[MyState]
 engine.injectHead(Seq(emergencyStage))           // 运行时织入
 engine.resumeFromIndex(replayedState, done = 9)  // 崩溃恢复
@@ -176,9 +173,21 @@ def runStage(stage: BankStage, state: BankChainState[Item, Raw], pipeline: SubBa
 }
 ```
 
-**包装层**（`ChainExecutionActor`，事件溯源）——第 5 步模式的完整落地：
+**包装层**（`ChainExecutionActor`，事件溯源）——通过 `BankChain.builder(pipeline)` 预置六阶段队列、阶段命名与执行器，Actor 只需挂载持久化和世代守卫：
 
 ```scala
+// BankChain.builder 已预置 BankStage.chain、BankStage.stageName 与 BankChain.runStage
+private def monarchFor(runToken: () => Boolean, ctx: ActorContext[Command]) =
+  BankChain.builder(pipeline)
+    .onStageCompleteWithMeta { (cursor, state, _) =>
+      if (runToken()) {
+        val stageName = cursor.takeWhile(_ != '#')
+        ctx.self ! PhaseCompleted(stageName, BankChain.metadataOf(state), Some(state))
+      }
+    }
+    .withGenerationGuard(runToken)
+    .build()
+
 // StartExecution——注册世代，从阶段 0 开始
 val generation = RunRegistry.register(s"$chainId-$batchId")
 runBatch(batchId, items, skip = 0, snapshot = None, runToken = ...)
@@ -201,31 +210,39 @@ Fab 流程更复杂：十七个阶段变体（含 OCAP 评估与返工子 lot sa
 
 **阶段 ADT 与状态**（第 1–2 步）：`FabScenarioPipeline.PipelineStage`（十七个 case）与 `FabDemoState`——领域早已建模好，没有发明任何新类型。
 
-**适配器**（`app/.../FabPipelineProcessor.scala`——整个文件就是一个适配器）：
+**适配器**（`app/.../FabPipelineProcessor.scala`——通过 `Monarch.builder` 流式装配）：
 
 ```scala
-new Monarch[PipelineStage, FabDemoState](
-  interpreter = stage =>
+Monarch.builder[PipelineStage, FabDemoState]
+  .namingStages(stageName)
+  .withExecutionEc { (stage, state, ec) =>
+    implicit val implEc: ExecutionContext = ec
     FabScenarioPipeline.runStage(stage, state, ctx).recoverWith {
       // 把 FAB 的失败类型翻译成引擎的，保留业务分类：
       case FabStageFailedException(err) =>
-        Future.failed(MonarchStageFailedException(
-          MonarchStageError(err.stageName, err.equipId, err.errorCode, err.detail)))
-    },
-  hooks = new LifecycleHooks[PipelineStage, FabDemoState] {
-    def stageName(stage: PipelineStage): String = FabPipelineProcessor.stageName(stage)
-    // journal 回调 → actor 命令 → 入日志的事件
-    override def onStageStart(cursor: String) = if (runToken()) ctx.self ! PhaseStarting(cursor)
-    override def onStageComplete(cursor: String, state: FabDemoState, _) =
-      if (runToken()) ctx.self ! PhaseCompleted(cursor, Map.empty, Some(state))
-    override def onStageFailed(cursor: String, error: StageError) =
-      if (runToken()) ctx.self ! PhaseFailed(cursor, toFabError(error))
-    override def onStageResolved(cursor: String, error: StageError, state: FabDemoState) =
-      if (runToken()) ctx.self ! OcapResolved(cursor, toFabError(error), state)
-  },
-  failureInterceptor = Some((cursor, error, state) =>
-    FabScenarioPipeline.invokeOcapInterceptor(state, ctx, toFabError(error))),  // ← OCAP 住在这里
-  runToken = ctx.runToken)
+        Future.failed(MonarchStageFailedException(toMonarchError(err)))
+    }
+  }
+  // journal 回调 → actor 命令 → 入日志的事件
+  .onStageStart { cursor =>
+    if (ctx.runToken()) ctx.self ! PhaseStarting(cursor)
+  }
+  .onStageCompleteWithMeta { (cursor, state, metadata) =>
+    if (ctx.runToken()) ctx.self ! PhaseCompleted(cursor, metadata, Some(state))
+  }
+  .onStageFailed { (cursor, error) =>
+    if (ctx.runToken()) ctx.self ! PhaseFailed(cursor, toFabError(error))
+  }
+  .onStageResolved { (cursor, error, state) =>
+    if (ctx.runToken()) ctx.self ! OcapResolved(cursor, toFabError(error), state)
+  }
+  // OCAP 业务失败处置器住在这里
+  .onFailureEc { (_, error, state, ec) =>
+    implicit val implEc: ExecutionContext = ec
+    FabScenarioPipeline.invokeOcapInterceptor(state, ctx, toFabError(error))
+  }
+  .withGenerationGuard(ctx.runToken)
+  .build()
 ```
 
 两个只属于适配器的关注点值得注意：**异常翻译**（阶段体抛的是 Fab 的失败类型；引擎必须看到自己的类型，否则已分类的失败会退化成 `UNEXPECTED`）和**四条 journal 协议**（`PhaseStarting/PhaseCompleted/PhaseFailed/OcapResolved`）——迁移过程中日志 schema 和 WebSocket UI 完全没动。

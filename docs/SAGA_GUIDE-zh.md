@@ -75,12 +75,12 @@ sequenceDiagram
 
 ## 3. 转账是如何工作的
 
-银行应用这样把引擎接到 DDD 聚合上：
+银行应用（`MoneyTransferSagaDefinition`）通过 `SagaStep.builder` 把引擎接到 DDD 聚合上：
 
-| 步骤 | 参与者 | prepare（Try） | commit（Confirm） | compensate（Cancel） | 错误分类 |
+| 步骤 | 定义方式 | prepare（Try） | commit（Confirm） | compensate（Cancel） | 错误分类 |
 |---|---|---|---|---|---|
-| `transfer-out` | `FromAccountParticipant` | `ReserveFunds` | `DeductFunds` | `ReleaseReservedFunds` | 60003/60004 → 不可重试 |
-| `transfer-in` | `ToAccountParticipant` | `RecordIncomingCredits` | `CommitIncomingCredits` | `CancelIncomingCredit` | 60003/60004 → 不可重试 |
+| `transfer-out` | `SagaStep.builder("transfer-out")`（或 `FromAccountParticipant`） | `ReserveFunds` | `DeductFunds` | `ReleaseReservedFunds` | 60003/60004 → 不可重试 |
+| `transfer-in` | `SagaStep.builder("transfer-in")`（或 `ToAccountParticipant`） | `RecordIncomingCredits` | `CommitIncomingCredits` | `CancelIncomingCredit` | 60003/60004 → 不可重试 |
 
 两个步骤都在 `stepGroup = 1`（并行执行）。`preCheck` 在启动前拒绝非正金额（40001）和自我转账（40002）。完成后 `onResult` 产出 `MoneyTransferCompleted` 业务事件，由 `SagaBusinessEventProjection` 解析并发布。
 
@@ -88,17 +88,24 @@ sequenceDiagram
 
 运行你自己的 Saga 只需四步（全文另见 [`saga-core/README.md`](../saga-core/README.md)）：
 
-**1. 定义参与者** —— 继承 `AskParticipant`，绑定你关心的阶段：
+**1. 定义步骤与阶段绑定** —— 推荐使用 **`SagaStep.builder[E, C](stepId)`**（或 `stepBuilder[E, C](stepId)`）流式内联定义，它自动混入 `PhaseAwareParticipant`（只展开实际绑定的阶段），并提供 `prepareAsk` / `commitAsk` / `compensateAsk`（Actor ask）与 `prepareDirect` / `commitDirect` / `compensateDirect`（直接异步函数）：
 
 ```scala
-class MyParticipant(id: String)(implicit ec, scheduler)
-    extends AskParticipant[String, String, MyCtx](rules = ErrorRules.none, askTimeout = 5.seconds) {
+import net.imadz.infra.saga.dsl._
 
-  override val prepareBinding = Some(PhaseAsk.direct((txId, ctx, _) => ctx.repo.reserve(txId)))
-  override val commitBinding  = Some(PhaseAsk.direct((txId, ctx, _) => ctx.repo.deduct(txId)))
-  override val compensateBinding = Some(PhaseAsk.direct((txId, ctx, _) => ctx.repo.release(txId)))
-}
+def step1(args: MyArgs)(implicit ec: ExecutionContext, scheduler: Scheduler): SagaStep[String, String, MyCtx] =
+  SagaStep.builder[String, MyCtx]("step-1")
+    .inGroup(1)
+    .withResilience(ResiliencePolicy(maxRetries = 3))
+    .withTimeout(5.seconds)
+    .withErrorRules(ErrorRules.none)
+    .prepareDirect((txId, ctx, _) => ctx.repo.reserve(txId, args))
+    .commitDirect((txId, ctx, _) => ctx.repo.deduct(txId, args))
+    .compensateDirect((txId, ctx, _) => ctx.repo.release(txId, args))
+    .build()
 ```
+
+> **提示**：对于 Akka Typed Actor 交互，直接调用 `.prepareAsk[Cmd, Reply](ref = ..., command = ..., mapReply = ...)` 即可，无需手写 5 个泛型参数的 `PhaseAsk.ask`。若某参与者需在多个 Saga 间复用，也可继承 `AskParticipant[E, R, C]`。
 
 **2. 定义事务** —— 声明式、类型安全、可重放：
 
@@ -107,8 +114,12 @@ val definition = SagaDefinition[String, MyCtx, MyArgs](
   name = "my-saga", version = 1,
   argsCodec = ArgsCodec.playJson[MyArgs],
   steps = args => Seq(
-    SagaStep("step-1", new MyParticipant("s1"), ResiliencePolicy(maxRetries = 3), stepGroup = 1),
-    SagaStep("step-2", new MyParticipant("s2"), stepGroup = 2)),   // 组 2 在组 1 之后
+    step1(args),
+    SagaStep.builder[String, MyCtx]("step-2")
+      .inGroup(2)                                                   // 组 2 在组 1 之后
+      .prepareDirect((txId, ctx, _) => ctx.repo.notify(txId, args)) // 仅绑定 prepare，commit/compensate 自动跳过
+      .build()
+  ),
   preCheck = args => if (args.valid) Right(args) else Left("40001"),
   onResult = (args, result) => Seq(MySagaCompleted(args.key))
 )

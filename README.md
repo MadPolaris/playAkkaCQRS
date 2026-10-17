@@ -107,7 +107,7 @@ Read the full architecture reference: [`knowledge_base/architecture/onion-cqrs-r
 
 ## M1 — Saga Distributed Transaction Coordinator (v3 engine)
 
-TCC transactions on Akka Persistence, driven by the **saga_v3 DSL**: define a chain as a `SagaDefinition` (steps, step groups, participants with prepare/commit/compensate), register it in the `SagaRegistry`, and start it through `SagaRunner` with typed args codecs. One sharded `SagaTransactionCoordinator` owns the transaction state machine; each step×phase runs in its own `StepExecutor` with retries, timeouts, circuit breaking, and business-error classification.
+TCC transactions on Akka Persistence, driven by the **saga_v3 DSL**: define a chain as a `SagaDefinition` (using `SagaStep.builder` to fluently wire step groups, resilience, error rules, and `prepareAsk`/`commitAsk`/`compensateAsk` bindings inline, or via reusable `AskParticipant` classes), register it in the `SagaRegistry`, and start it through `SagaRunner` with typed args codecs. One sharded `SagaTransactionCoordinator` owns the transaction state machine; each step×phase runs in its own `StepExecutor` with retries, timeouts, circuit breaking, and business-error classification.
 
 Design invariants that make recovery safe:
 
@@ -124,7 +124,7 @@ Read the details: [Saga Engine Guide](docs/SAGA_GUIDE.md) / [中文](docs/SAGA_G
 
 The repo's second standalone engine, on equal footing with the saga engine: an Akka-free, Maven-Central-bound executor for arbitrary stage queues. Three mechanisms, named for the monarch butterfly — metamorphosis (an open stage queue), diapause (cursor-based checkpoint resume), cross-generation migration (generation tokens that outlive any individual run).
 
-Both production pipelines run on it: the Fab M3.5 self-healing demo (17 stages — crash at `Measure#9`, resume from the same cursor, complete through `SealComplete#16`) and dag-engine-core's recharge chain (`BankChain`, 6 stages, snapshot-carrying `PhaseDone` + `resumeFromIndex` recovery).
+Both production pipelines are assembled via fluent builders (`Monarch.builder` / `BankChain.builder`) on top of it: the Fab M3.5 self-healing demo (17 stages — crash at `Measure#9`, resume from the same cursor, complete through `SealComplete#16`) and dag-engine-core's recharge chain (`BankChain`, 6 stages, snapshot-carrying `PhaseDone` + `resumeFromIndex` recovery).
 
 Read the guide: [monarch-core/README.md](monarch-core/README.md) / [中文](monarch-core/README-zh.md) — engine contract, the five-step modeling method, and both host case studies.
 

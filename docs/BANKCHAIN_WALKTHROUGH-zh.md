@@ -165,14 +165,15 @@ case BankStage.WaitAck =>
 
 要点：每个分支 = 读输入槽位 → 调实现 → 写输出槽位 + `lastStage`。业务失败用 `fail(...)` 抛分类异常。
 
-### 4.2 引擎接入（一行装配）
+### 4.2 引擎接入（`BankChain.builder` 流式装配）
 
 ```scala
-val monarch = BankChain.monarch(pipeline,
-  hooks = new LifecycleHooks[BankStage, BankChainState[Item, String]] {
-    override def stageName(stage: BankStage): String = BankStage.stageName(stage)
-  })  // 无拦截器：失败即终止（充值/申购的默认策略）
-monarch.initialize(BankStage.chain)
+// BankChain.builder 已预置 BankStage.chain 六阶段队列、BankStage.stageName 与 BankChain.runStage
+val monarch = BankChain.builder[Item, String](pipeline)
+  .onStageCompleteWithMeta { (cursor, state, _) => ... } // 按需挂载持久化和观测回调
+  .withGenerationGuard(runToken)                         // 挂载世代守卫
+  .build()  // 无拦截器：失败即终止（充值/申购的默认策略）
+
 monarch.process(BankChainState(batchId = ..., chainId = ..., items = ...))
 ```
 

@@ -67,7 +67,7 @@ M2 的做法：每条业务生成一套专属 EventSourcedBehavior FSM（30+ Jav
 └──────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`monarch-core`（引擎）**零 Akka 依赖**——组件全是 trait + 数据 case class，返回 `Future`。正因如此，同一套组件既能被分片 Actor 使用，也能被 Play Controller 或 Fab 流水线直接复用。`BankChain.monarch(pipeline, hooks, runToken)` 是现行执行入口；`SubBatchProcessor` 为教学演示保留的 legacy 执行器。
+`monarch-core`（引擎）**零 Akka 依赖**——组件全是 trait + 数据 case class，返回 `Future`。正因如此，同一套组件既能被分片 Actor 使用，也能被 Play Controller 或 Fab 流水线直接复用。`BankChain.builder(pipeline)`（及底层 `BankChain.monarch`）是现行执行入口；`SubBatchProcessor` 为教学演示保留的 legacy 执行器。
 
 ## 3. 批次生命周期
 

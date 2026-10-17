@@ -106,7 +106,7 @@ infrastructure/  ← 适配层：框架集成（Akka、Play、Guice、MongoDB、
 
 ## M1 — Saga 分布式事务协调器（v3 引擎）
 
-基于 Akka Persistence 的 TCC 事务，由 **saga_v3 DSL** 驱动：链路声明为 `SagaDefinition`（步骤、步骤组、带 prepare/commit/compensate 的参与者），注册进 `SagaRegistry`，通过 `SagaRunner` 携带类型化参数编解码启动。一个分片的 `SagaTransactionCoordinator` 拥有事务状态机；每个步骤×阶段运行在独立的 `StepExecutor` 中，具备重试、超时、熔断和业务错误分类。
+基于 Akka Persistence 的 TCC 事务，由 **saga_v3 DSL** 驱动：链路声明为 `SagaDefinition`（通过 `SagaStep.builder` 流式内联定义步骤组、弹性策略、错误规则与 `prepareAsk`/`commitAsk`/`compensateAsk` 三阶段绑定，或复用 `AskParticipant`），注册进 `SagaRegistry`，通过 `SagaRunner` 携带类型化参数编解码启动。一个分片的 `SagaTransactionCoordinator` 拥有事务状态机；每个步骤×阶段运行在独立的 `StepExecutor` 中，具备重试、超时、熔断和业务错误分类。
 
 让恢复安全的设计不变量：
 
@@ -123,7 +123,7 @@ infrastructure/  ← 适配层：框架集成（Akka、Play、Guice、MongoDB、
 
 本仓库第二个独立引擎，与 Saga 引擎同级：零 Akka、面向 Maven Central 发布的任意阶段队列执行器。三大机制以帝王斑蝶命名——完全变态（开放阶段队列）、滞育（游标断点续跑）、跨代迁徙（世代号，比任何单次运行都长寿）。
 
-两条生产流水线都跑在它上面：Fab M3.5 自愈演示（17 个阶段——`Measure#9` 处崩溃、从同一游标恢复、一路走完 `SealComplete#16`）与 dag-engine-core 的充值链路（`BankChain`，6 个阶段，`PhaseDone` 携带快照 + `resumeFromIndex` 恢复）。
+两条生产流水线都通过流式构建器（`Monarch.builder` / `BankChain.builder`）跑在它上面：Fab M3.5 自愈演示（17 个阶段——`Measure#9` 处崩溃、从同一游标恢复、一路走完 `SealComplete#16`）与 dag-engine-core 的充值链路（`BankChain`，6 个阶段，`PhaseDone` 携带快照 + `resumeFromIndex` 恢复）。
 
 详见：[monarch-core/README.md](monarch-core/README.md) / [中文](monarch-core/README-zh.md) —— 引擎契约、五步建模法、两个宿主的完整案例。
 

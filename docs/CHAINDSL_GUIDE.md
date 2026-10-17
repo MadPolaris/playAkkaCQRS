@@ -68,7 +68,7 @@ The M2 approach generated a dedicated set of EventSourcedBehavior FSMs per busin
 └───────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-`monarch-core` (the engine) has **no Akka dependency** — every component is a trait plus data case classes returning `Future`. That is what makes the same components reusable from a sharded actor, a Play controller, or the Fab pipeline. `BankChain.monarch(pipeline, hooks, runToken)` is the current execution entry; `SubBatchProcessor` is the legacy for-comprehension executor kept for the teaching demo.
+`monarch-core` (the engine) has **no Akka dependency** — every component is a trait plus data case classes returning `Future`. That is what makes the same components reusable from a sharded actor, a Play controller, or the Fab pipeline. `BankChain.builder(pipeline)` (and underlying `BankChain.monarch`) is the current execution entry; `SubBatchProcessor` is the legacy for-comprehension executor kept for the teaching demo.
 
 ## 3. Batch Lifecycle
 

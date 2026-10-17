@@ -20,32 +20,29 @@ Other guides: [ChainDsl Guide](../docs/CHAINDSL_GUIDE.md) — the two hosts belo
 
 ## 1. The engine contract
 
-Monarch is policy-free. It walks a queue of **opaque `Stage` values** through an **interpreter you provide**, and reports progress through **hooks**. You supply four things:
+Monarch is policy-free. It walks a queue of **opaque `Stage` values** through an **interpreter you provide**, and reports progress through **hooks**. Assemble the engine fluently via **`Monarch.builder[Stage, State]`** (aligned 1-to-1 with `*.monarch.yaml` truth-source definitions; the underlying `new Monarch(...)` constructor remains available):
 
 ```scala
 import net.imadz.monarch._
 
-val engine = new Monarch[MyStage, MyState](
-  // 1. The ONLY mandatory host code: how to execute one stage.
-  interpreter = new StageInterpreter[MyStage, MyState] {
-    def run(stage: MyStage, state: MyState)(implicit ec: ExecutionContext): Future[MyState] = ...
-  },
-  // 2. Naming + observation. stageName defines the CURSOR VOCABULARY that recovery
-  //    skip logic is expressed in; the callbacks are where the host journals progress.
-  hooks = new LifecycleHooks[MyStage, MyState] {
-    def stageName(stage: MyStage): String = ...
-    override def onStageStart(cursor: String): Unit = ...
-    override def onStageComplete(cursor: String, state: MyState, metadata: Map[String, String]): Unit = ...
-    override def onStageFailed(cursor: String, error: StageError): Unit = ...
-    override def onStageResolved(cursor: String, error: StageError, state: MyState): Unit = ...
-  },
-  // 3. Optional business resolution of failures (the Fab demo: OCAP evaluate/resolve).
-  failureInterceptor = None,
-  // 4. Generation staleness guard (RunRegistry-backed).
-  runToken = () => RunRegistry.isFresh(runKey, myGeneration)
-)
+val engine = Monarch.builder[MyStage, MyState]
+  // 1. Cursor vocabulary: stable stage naming used by recovery skip logic
+  .namingStages(stage => stage.id)
+  // 2. Initial stage queue (or call engine.initialize(...) later)
+  .withStages(Seq(stageA, stageB, stageC))
+  // 3. The ONLY mandatory host logic: how to execute one stage (or .withExecutionEc)
+  .withExecution((stage, state) => runMyStage(stage, state))
+  // 4. Attach only the lifecycle callbacks you need to journal/observe
+  .onStageStart(cursor => ...)
+  .onStageCompleteWithMeta((cursor, state, meta) => ...) // or .onStageComplete((cursor, state) => ...)
+  .onStageFailed((cursor, error) => ...)
+  .onStageResolved((cursor, error, state) => ...)
+  // 5. Optional business resolution of failures (the Fab demo: OCAP evaluate/resolve; or .onFailureEc)
+  .onFailure((cursor, error, state) => resolveOrFail(cursor, error, state))
+  // 6. Generation staleness guard (RunRegistry-backed)
+  .withGenerationGuard(() => RunRegistry.isFresh(runKey, myGeneration))
+  .build()
 
-engine.initialize(Seq(stageA, stageB, stageC))  // set the queue
 engine.process(initialState)                     // Future[MyState]
 engine.injectHead(Seq(emergencyStage))           // runtime weaving
 engine.resumeFromIndex(replayedState, done = 9)  // crash recovery
@@ -174,9 +171,21 @@ def runStage(stage: BankStage, state: BankChainState[Item, Raw], pipeline: SubBa
 }
 ```
 
-**The wrapper** (`ChainExecutionActor`, event-sourced) — the Step 5 pattern end to end:
+**The wrapper** (`ChainExecutionActor`, event-sourced) — `BankChain.builder(pipeline)` pre-wires the six-stage queue, stage naming, and interpreter so the actor only attaches journaling and the generation guard:
 
 ```scala
+// BankChain.builder pre-configures BankStage.chain, BankStage.stageName, and BankChain.runStage
+private def monarchFor(runToken: () => Boolean, ctx: ActorContext[Command]) =
+  BankChain.builder(pipeline)
+    .onStageCompleteWithMeta { (cursor, state, _) =>
+      if (runToken()) {
+        val stageName = cursor.takeWhile(_ != '#')
+        ctx.self ! PhaseCompleted(stageName, BankChain.metadataOf(state), Some(state))
+      }
+    }
+    .withGenerationGuard(runToken)
+    .build()
+
 // StartExecution — register a generation, run from stage 0
 val generation = RunRegistry.register(s"$chainId-$batchId")
 runBatch(batchId, items, skip = 0, snapshot = None, runToken = ...)
@@ -199,31 +208,39 @@ The Fab flow is richer: seventeen stage variants (including OCAP evaluation and 
 
 **Stage ADT & State** (Steps 1–2): `FabScenarioPipeline.PipelineStage` (seventeen cases) and `FabDemoState` — the domain already modeled them; no new types were invented.
 
-**The adapter** (`app/.../FabPipelineProcessor.scala` — the whole file is an adapter):
+**The adapter** (`app/.../FabPipelineProcessor.scala` — assembled fluently via `Monarch.builder`):
 
 ```scala
-new Monarch[PipelineStage, FabDemoState](
-  interpreter = stage =>
+Monarch.builder[PipelineStage, FabDemoState]
+  .namingStages(stageName)
+  .withExecutionEc { (stage, state, ec) =>
+    implicit val implEc: ExecutionContext = ec
     FabScenarioPipeline.runStage(stage, state, ctx).recoverWith {
       // Translate the FAB failure type to the engine's, preserving classification:
       case FabStageFailedException(err) =>
-        Future.failed(MonarchStageFailedException(
-          MonarchStageError(err.stageName, err.equipId, err.errorCode, err.detail)))
-    },
-  hooks = new LifecycleHooks[PipelineStage, FabDemoState] {
-    def stageName(stage: PipelineStage): String = FabPipelineProcessor.stageName(stage)
-    // journal callbacks → actor commands → journaled events
-    override def onStageStart(cursor: String) = if (runToken()) ctx.self ! PhaseStarting(cursor)
-    override def onStageComplete(cursor: String, state: FabDemoState, _) =
-      if (runToken()) ctx.self ! PhaseCompleted(cursor, Map.empty, Some(state))
-    override def onStageFailed(cursor: String, error: StageError) =
-      if (runToken()) ctx.self ! PhaseFailed(cursor, toFabError(error))
-    override def onStageResolved(cursor: String, error: StageError, state: FabDemoState) =
-      if (runToken()) ctx.self ! OcapResolved(cursor, toFabError(error), state)
-  },
-  failureInterceptor = Some((cursor, error, state) =>
-    FabScenarioPipeline.invokeOcapInterceptor(state, ctx, toFabError(error))),  // ← OCAP lives here
-  runToken = ctx.runToken)
+        Future.failed(MonarchStageFailedException(toMonarchError(err)))
+    }
+  }
+  // journal callbacks → actor commands → journaled events
+  .onStageStart { cursor =>
+    if (ctx.runToken()) ctx.self ! PhaseStarting(cursor)
+  }
+  .onStageCompleteWithMeta { (cursor, state, metadata) =>
+    if (ctx.runToken()) ctx.self ! PhaseCompleted(cursor, metadata, Some(state))
+  }
+  .onStageFailed { (cursor, error) =>
+    if (ctx.runToken()) ctx.self ! PhaseFailed(cursor, toFabError(error))
+  }
+  .onStageResolved { (cursor, error, state) =>
+    if (ctx.runToken()) ctx.self ! OcapResolved(cursor, toFabError(error), state)
+  }
+  // OCAP business failure interceptor lives here
+  .onFailureEc { (_, error, state, ec) =>
+    implicit val implEc: ExecutionContext = ec
+    FabScenarioPipeline.invokeOcapInterceptor(state, ctx, toFabError(error))
+  }
+  .withGenerationGuard(ctx.runToken)
+  .build()
 ```
 
 Two adapter-only concerns worth noticing: **exception translation** (stage bodies throw the Fab failure type; the engine must see its own, otherwise a classified failure degrades to `UNEXPECTED`) and **the four journal protocols** (`PhaseStarting/PhaseCompleted/PhaseFailed/OcapResolved`) — the journal schema and the WebSocket UI did not change at all during the migration.

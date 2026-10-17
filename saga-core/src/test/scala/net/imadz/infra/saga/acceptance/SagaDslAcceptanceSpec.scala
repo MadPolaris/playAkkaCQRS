@@ -9,13 +9,13 @@ import com.typesafe.config.ConfigFactory
 import net.imadz.infra.saga.SagaParticipant.SagaResult
 import net.imadz.infra.saga.SagaPhase._
 import net.imadz.infra.saga.SagaTransactionCoordinator._
-import net.imadz.infra.saga.dsl._
-import net.imadz.infra.saga.{SagaTransactionCoordinator, SagaTransactionStep, StepDescriptor, StepExecutor}
+import net.imadz.infra.saga.{SagaTransactionCoordinator, StepDescriptor, StepExecutor, SagaTransactionStep}
+import net.imadz.infra.saga.dsl.{ErrorAction, ErrorRules, PhaseAsk, RecoveryBehavior, ResiliencePolicy, SagaDefinition, SagaRegistry, SagaStep}
 import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpecLike
 
-import scala.concurrent.Future.successful
 import scala.concurrent.duration._
+import scala.util.Success
 
 /** G1 acceptance: DSL-level and coordinator-level criteria (AC-1.1/1.2/1.3/1.7/1.8/1.10/1.11). */
 class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
@@ -101,10 +101,7 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
   // ------------------------------------------------------------------
   "AC-1.2 dual-track classification" should {
     val rules = ErrorRules[String](
-      business = {
-        case "60003" => ErrorAction.NonRetryable;
-        case "60009" => ErrorAction.Retryable
-      },
+      business = { case "60003" => ErrorAction.NonRetryable; case "60009" => ErrorAction.Retryable },
       describe = (e: String) => s"iMadzError($e)"
     )
 
@@ -302,7 +299,6 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
     "carry definition ref + args + descriptors and never a participant payload" in {
       import net.imadz.infra.saga.persistence.converters.SagaCoordinatorProtoConverters
       import net.imadz.infra.saga.proto.saga_v3.SagaTransactionCoordinatorEventPO
-
       import scala.collection.JavaConverters._
       val classic = system.classicSystem.asInstanceOf[akka.actor.ExtendedActorSystem]
       val converter = new SagaCoordinatorProtoConverters {
@@ -350,11 +346,8 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
           pending.add(p)
           p.future
         }
-
-        override def doCommit(transactionId: String, context: Any, traceId: String) = successful(Right(SagaResult("committed")))
-
-        override def doCompensate(transactionId: String, context: Any, traceId: String) = successful(Right(SagaResult("compensated")))
-
+        override def doCommit(transactionId: String, context: Any, traceId: String) = scala.concurrent.scala.concurrent.Future.successful(Right(SagaResult("committed")))
+        override def doCompensate(transactionId: String, context: Any, traceId: String) = scala.concurrent.scala.concurrent.Future.successful(Right(SagaResult("compensated")))
         override protected def customClassification: PartialFunction[Throwable, net.imadz.infra.saga.SagaParticipant.RetryableOrNotException] = PartialFunction.empty
       }
       val definition = registerDefinition("ac14-def", steps = Seq(
@@ -375,9 +368,7 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
       val completionProbe = createTestProbe[TransactionResult]()
       kit.runCommand(StartSaga("tx-14", "ac14-def", 1, argsBytesOf(TransferArgs("a", "b", 1)), "t", singleStep = false, Some(startProbe.ref), Some(completionProbe.ref)))
       startProbe.expectMessage(Started)
-      eventually {
-        calls.get() shouldBe 1
-      } // original dispatch in flight (promise pending)
+      eventually { calls.get() shouldBe 1 } // original dispatch in flight (promise pending)
 
       // coordinator crash: journal replay → RecoveredInProgress → steps rematerialized from
       // (definitionRef, args) — the participant is rebuilt, never read back from the journal.
@@ -385,9 +376,7 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
       kit.restart()
 
       // the respawned executor replays as Ongoing; RetryIfOngoing re-issues the SAME generation once
-      eventually {
-        calls.get() shouldBe 2
-      }
+      eventually { calls.get() shouldBe 2 }
 
       // the recovered invocation drives the transaction to completion end to end. The in-memory
       // completion channel is lost across the crash by design (durable callers poll statusOf),
@@ -396,19 +385,9 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
       import net.imadz.infra.saga.proto.saga_v3.SagaTransactionCoordinatorEventPO
       def nextPo: SagaTransactionCoordinatorEventPO.Event =
         kit.persistenceTestKit.expectNextPersistedType[SagaTransactionCoordinatorEventPO]("ac14-tx", 20.seconds).event
-
-      nextPo match {
-        case SagaTransactionCoordinatorEventPO.Event.Started(_) =>
-        case o => fail(s"expected Started, got $o")
-      }
-      nextPo match {
-        case SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(_) =>
-        case o => fail(s"expected PhaseSucceeded, got $o")
-      }
-      nextPo match {
-        case SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(_) =>
-        case o => fail(s"expected PhaseSucceeded, got $o")
-      }
+      nextPo match { case SagaTransactionCoordinatorEventPO.Event.Started(_) => case o => fail(s"expected Started, got $o") }
+      nextPo match { case SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(_) => case o => fail(s"expected PhaseSucceeded, got $o") }
+      nextPo match { case SagaTransactionCoordinatorEventPO.Event.PhaseSucceeded(_) => case o => fail(s"expected PhaseSucceeded, got $o") }
       nextPo match {
         case SagaTransactionCoordinatorEventPO.Event.TransactionCompleted(c) => c.transactionId shouldBe "tx-14"
         case o => fail(s"expected TransactionCompleted, got $o")
@@ -445,15 +424,15 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
       val fullStep = SagaStep.builder[String, Any]("fluent-full")
         .inGroup(1)
         .withResilience(ResiliencePolicy(maxRetries = 4))
-        .prepareDirect((_, _, _) => successful(Right(SagaResult("prep"))))
-        .commitDirect((_, _, _) => successful(Right(SagaResult("comm"))))
-        .compensateDirect((_, _, _) => successful(Right(SagaResult("comp"))))
+        .prepareDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("prep"))))
+        .commitDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("comm"))))
+        .compensateDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("comp"))))
         .build()(ec, scheduler)
 
       val twoPhaseStep = SagaStep.builder[String, Any]("fluent-2pc")
         .inGroup(2)
-        .prepareDirect((_, _, _) => successful(Right(SagaResult("prep"))))
-        .commitDirect((_, _, _) => successful(Right(SagaResult("comm"))))
+        .prepareDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("prep"))))
+        .commitDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("comm"))))
         .build()(ec, scheduler)
 
       val definition = registerDefinition("ac11-builder", steps = Seq(fullStep, twoPhaseStep))

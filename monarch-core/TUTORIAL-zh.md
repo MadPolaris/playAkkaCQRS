@@ -153,6 +153,18 @@ ChainDsl.define("payroll") { c =>                    // 代付
 
 骨架（六阶段队列 + 断点续跑 + 世代守卫 + 账本）全部复用。这就是噩梦六的答案：**第一次把骨架写对，之后每个业务只写血肉**。本仓库里，银行链（6 阶段）和晶圆厂链（17 阶段，见下）就是这么共用的。
 
+底层把这副骨架装进引擎，也只需一段流式的 **`Monarch.builder`**（银行链更进一步封装成了开箱即用的 **`BankChain.builder(pipeline)`**）：
+
+```scala
+val engine = Monarch.builder[BankStage, BankChainState[Item, Raw]]
+  .namingStages(BankStage.stageName)                           // 游标名：file-gen / upload / ...
+  .withStages(BankStage.chain)                                 // 装入六道工序
+  .withExecution((stage, state) => BankChain.runStage(stage, state, pipeline))
+  .onStageCompleteWithMeta((cursor, state, meta) => ...)       // 写账本 + 存产物快照
+  .withGenerationGuard(runToken)                               // 世代守卫：旧链自动退场
+  .build()
+```
+
 ---
 
 ## 6. 总对照表：业务问题 → 机制 → 名字 → 源码
@@ -160,11 +172,11 @@ ChainDsl.define("payroll") { c =>                    // 代付
 | 业务问题 | 引擎的回答 | 机制名 | 源码入口 |
 |---|---|---|---|
 | 做到一半断了怎么接着做？ | 记账 + 产物快照，跳过做完的 | 断点续跑 | `resumeFromIndex` / `PhaseDone(快照)` |
-| 旧进程的残留任务会不会捣乱？ | 启动编号，旧链下一边界自动退场 | 世代守卫 | `RunRegistry` / `StaleRun` |
+| 旧进程的残留任务会不会捣乱？ | 启动编号，旧链下一边界自动退场 | 世代守卫 | `RunRegistry` / `.withGenerationGuard` / `StaleRun` |
 | 超时的单子悬着怎么办？ | 三分类，可疑必须查证落定 | 三分类 | `Classification` / `ReconfirmHandler` |
 | 失败重试策略怎么不发版改？ | 策略即配置：错误码 → 动作 | 重批策略 | `ReBatchPolicy` / `NextStep` |
-| 监管要逐笔追溯？ | 每阶段一条事件：谁/何时/产物 | 事件溯源 | `PhaseDone` 事件 |
-| 新业务不想从头写？ | 骨架复用，只换错误码和策略 | 声明式定义 | `ChainDsl.define` |
+| 监管要逐笔追溯？ | 每阶段一条事件：谁/何时/产物 | 事件溯源 | `.onStageCompleteWithMeta` / `PhaseDone` 事件 |
+| 新业务不想从头写？ | 骨架复用，只换错误码和策略 | 声明式定义 | `ChainDsl.define` / `BankChain.builder` |
 
 引擎**不管**的事：账本存哪（MongoDB）、怎么跟基金公司传文件（SFTP）、可疑找谁查证（查证接口）、失败项什么时候重新组批（重批调度）——全是宿主业务代码。引擎只保证一件事：**控制流永远是对的**——顺序不乱、断点准确、失败处理恰好一次、没有僵尸任务。
 
@@ -175,8 +187,9 @@ ChainDsl.define("payroll") { c =>                    // 代付
 | 阶段 | 6 道：文件交换六工序 | 17 道：装舟→转运→上机→跑 recipe→量测→OCAP 处置→… |
 | 失败处置 | 无拦截器：失败即终止，失败项进重批队列 | OCAP 拦截器：按规则返工/报废/挂起，处置完继续走 |
 | 宕机恢复 | 从 PhaseDone 快照断点续跑 | 崩溃在 `Measure#9`，10 秒后从 `#9` 恢复走完全部 |
+| 组装入口 | `BankChain.builder(pipeline)` | `Monarch.builder[PipelineStage, FabDemoState]` |
 
-接入方式一模一样：**写阶段解释器 → 定义游标名 → 把钩子接到日志 → （可选）配失败处置器**。五步建模法见[参考手册 §2](README-zh.md)；完整业务文档见 [ChainDsl 指南](../docs/CHAINDSL_GUIDE-zh.md)。
+接入方式一模一样：通过 `Monarch.builder` **定义游标名（`.namingStages`）→ 绑定阶段执行（`.withExecution`）→ 把钩子接到日志（`.onStageCompleteWithMeta`）→ （可选）配失败处置器（`.onFailure`）→ 挂载世代守卫（`.withGenerationGuard`）**。五步建模法见[参考手册 §2](README-zh.md)；完整业务文档见 [ChainDsl 指南](../docs/CHAINDSL_GUIDE-zh.md)。
 
 ---
 

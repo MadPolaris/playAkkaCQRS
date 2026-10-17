@@ -20,31 +20,44 @@
 
 ## 快速上手（v3 DSL）
 
-### 1. 定义参与者 (AskParticipant)
+### 1. 定义步骤与参与者 (`SagaStep.builder` / `AskParticipant`)
 
-参与者按阶段声明 ask 绑定，业务错误（`Left(E)`）在 ask 边界仍带类型时分类：
+推荐使用 **`SagaStep.builder[E, C](stepId)`**（或包函数 `stepBuilder[E, C](stepId)`）流式定义步骤。它直接与真源树（`*.saga.yaml`）字段一一对应，免去显式编写 5 个泛型参数的 `PhaseAsk.ask[Cmd, Reply, E, R, C]`，并自动混入 `PhaseAwareParticipant`（未绑定的阶段在 `expand` 时自动跳过）：
 
 ```scala
-case class FromAccountParticipant(fromUserId: Id, amount: Money)(implicit ec: ExecutionContext, scheduler: Scheduler)
-    extends AskParticipant[iMadzError, String, MoneyTransferContext](
-      rules = ErrorRules(
-        business = { case iMadzError("60003", _) => ErrorAction.NonRetryable },
-        describe = e => s"${e.code}: ${e.message}"),
-      askTimeout = 5.seconds) {
+import net.imadz.infra.saga.dsl._
 
-  override protected val prepareBinding: Option[PhaseAsk[iMadzError, String, MoneyTransferContext]] =
-    Some(PhaseAsk.ask[ReserveFunds, FundsReservationConfirmation, iMadzError, String, MoneyTransferContext](
-      ref = ctx => ctx.repository.findCreditBalanceByUserId(fromUserId),
-      command = (txId, replyTo) => ReserveFunds(Id.of(txId), amount, replyTo),
-      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))))
-  // commitBinding / compensateBinding 同理；未绑定的阶段自动跳过
-}
+val transferOutStep =
+  SagaStep.builder[iMadzError, MoneyTransferContext]("transfer-out")
+    .inGroup(1)
+    .withResilience(ResiliencePolicy(maxRetries = 5))
+    .withTimeout(5.seconds)
+    .withErrorRules(ErrorRules(
+      business = { case iMadzError("60003" | "60004", _) => ErrorAction.NonRetryable },
+      describe = e => s"${e.code}: ${e.message}"))
+    .prepareAsk[ReserveFunds, FundsReservationConfirmation](
+      ref      = _.repository.findCreditBalanceByUserId(fromUserId),
+      command  = (txId, replyTo) => ReserveFunds(Id.of(txId), money, replyTo),
+      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .commitAsk[DeductFunds, FundsDeductionConfirmation](
+      ref      = _.repository.findCreditBalanceByUserId(fromUserId),
+      command  = (txId, replyTo) => DeductFunds(Id.of(txId), money, replyTo),
+      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .compensateAsk[ReleaseReservedFunds, FundsReleaseConfirmation](
+      ref      = _.repository.findCreditBalanceByUserId(fromUserId),
+      command  = (txId, replyTo) => ReleaseReservedFunds(Id.of(txId), money, replyTo),
+      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .build()
 ```
 
+*   **三种阶段绑定方式**：
+    *   `prepareAsk[Cmd, Reply](ref, command, mapReply)` / `commitAsk` / `compensateAsk`：面向 Akka Typed Actor `ask` 调用，只需指定 `[Cmd, Reply]` 两个类型参数。
+    *   `prepareDirect(fn)` / `commitDirect(fn)` / `compensateDirect(fn)`：面向直接返回 `Future[Either[E, SagaResult[R]]]` 的异步函数。
+    *   `prepareBinding(PhaseAsk)` / `commitBinding` / `compensateBinding`：底层 `PhaseAsk` 绑定入口。
+*   **可复用参与者类（可选）**：若同一参与者逻辑在多个 Saga 间复用，仍可直接继承 `AskParticipant[E, R, C]` 并通过 `SagaStep(id, participant, resilience, stepGroup)` 组装。
 *   **双轨错误分类**：`business` 规则分类 `Left(E)`（未匹配默认 NonRetryable）；`thrown` 规则叠加在默认矩阵之上（Timeout/AskTimeout/Connect/SQLTransient → Retryable，其余 → NonRetryable）。
-*   未声明 `PhaseAwareParticipant` 的参与者默认展开为三个阶段各一个引擎步骤。
 
-### 2. 定义事务 (SagaDefinition)
+### 2. 定义事务 (`SagaDefinition`)
 
 `steps` 必须是 `(definition, args)` 的纯函数——这正是 journal 无需存参与者的原因：
 
@@ -57,9 +70,27 @@ object MoneyTransferSagaDefinition {
     SagaDefinition[iMadzError, MoneyTransferContext, TransferArgs](
       name = "money-transfer", version = 1,
       argsCodec = ArgsCodec.playJson[TransferArgs],
-      steps = args => Seq(
-        SagaStep("transfer-out", FromAccountParticipant(Id.of(args.fromUserId), money), ResiliencePolicy(maxRetries = 5), stepGroup = 1),
-        SagaStep("transfer-in",  ToAccountParticipant(Id.of(args.toUserId), money),  ResiliencePolicy(maxRetries = 5), stepGroup = 1)),
+      steps = args => {
+        val money = Money(args.amount, Currency.withName(args.currency))
+        Seq(
+          SagaStep.builder[iMadzError, MoneyTransferContext]("transfer-out")
+            .inGroup(1)
+            .withResilience(ResiliencePolicy(maxRetries = 5))
+            .withErrorRules(accountErrorRules)
+            .prepareAsk[ReserveFunds, FundsReservationConfirmation](...)
+            .commitAsk[DeductFunds, FundsDeductionConfirmation](...)
+            .compensateAsk[ReleaseReservedFunds, FundsReleaseConfirmation](...)
+            .build(),
+          SagaStep.builder[iMadzError, MoneyTransferContext]("transfer-in")
+            .inGroup(1)
+            .withResilience(ResiliencePolicy(maxRetries = 5))
+            .withErrorRules(accountErrorRules)
+            .prepareAsk[RecordIncomingCredits, IncomingCreditsRecordingConfirmation](...)
+            .commitAsk[CommitIncomingCredits, IncomingCreditsCommitmentConfirmation](...)
+            .compensateAsk[CancelIncomingCredit, IncomingCreditCancellationConfirmation](...)
+            .build()
+        )
+      },
       preCheck = args => if (args.amount > 0) Right(args) else Left(iMadzError("40001", "amount must be positive")),
       onResult = (args, result) => List(MoneyTransferCompleted(result.snapshot.transactionId, ...)))
 }
