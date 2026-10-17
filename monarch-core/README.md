@@ -59,6 +59,21 @@ Mechanics you get for free:
 
 A resolved failure is **not** a completion: after the interceptor returns a recovery state the run continues with the remaining queue, but only `onStageResolved` fires — the host decides what a resolved failure means downstream.
 
+### `Monarch.builder` / `BankChain.builder` DSL Reference
+
+| Builder DSL Method | Truth-Source YAML (`*.monarch.yaml`) | Purpose |
+|---|---|---|
+| `Monarch.builder[Stage, State]` | `workflowId` / `engine: monarch` | Starts a fluent builder for a stage-queue engine |
+| `BankChain.builder[Item, Raw](pipeline)` | `template: bank-six-stage` | Pre-wires `BankStage.chain`, `BankStage.stageName`, and `BankChain.runStage` |
+| `.namingStages(stage => String)` | `stages[].cursorName` | Defines stable human-readable cursor names used for recovery and auditing |
+| `.withStages(Seq[Stage])` | `stages` | Pre-populates the initial stage queue (or call `engine.initialize` / `injectHead` / `appendTail` at runtime) |
+| `.withExecution((stage, state) => Future[State])` | `stages[].interpreter` | Binds stage execution logic (use `.withExecutionEc` when threading the engine's `ExecutionContext`) |
+| `.onStageStart` / `.onStageComplete` / `.onStageCompleteWithMeta` | `lifecycleHooks.onStart / onComplete` | Stage start and completion hooks (where the host journals `PhaseDone` + state snapshots) |
+| `.onStageFailed` / `.onStageResolved` | `lifecycleHooks.onFailed / onResolved` | Stage failure and interceptor-resolution hooks |
+| `.onFailure((cursor, err, state) => Future[State])` | `failurePolicy.interceptor` | Optional business failure interceptor (e.g. Fab OCAP; or `.onFailureEc`) |
+| `.withGenerationGuard(() => Boolean)` | `concurrencyGuard.runToken` | Binds the `RunRegistry` generation token so superseded runs stop with `StaleRun` |
+| `.build()` | — | Validates required bindings (`namingStages` and `withExecution`) and builds `Monarch[Stage, State]` |
+
 ---
 
 ## 2. Modeling: from a business flow to a Monarch host

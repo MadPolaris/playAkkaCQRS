@@ -93,19 +93,43 @@ sequenceDiagram
 ```scala
 import net.imadz.infra.saga.dsl._
 
+// 方式 A（Actor 交互）：通过 .prepare / .commit / .compensate 链式调用 .ref -> .command -> .mapReply 三个 API
+def transferOutStep(fromUserId: Id, money: Money)(implicit ec: ExecutionContext, scheduler: Scheduler) =
+  SagaStep.builder[iMadzError, MoneyTransferContext]("transfer-out")
+    .inGroup(1)
+    .withResilience(ResiliencePolicy(maxRetries = 5))
+    .withTimeout(5.seconds)
+    .withErrorRules(accountErrorRules)
+    .prepare
+      .ref(ctx => ctx.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsReservationConfirmation]((txId, replyTo) => ReserveFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .commit
+      .ref(ctx => ctx.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsDeductionConfirmation]((txId, replyTo) => DeductFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .compensate
+      .ref(ctx => ctx.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsReleaseConfirmation]((txId, replyTo) => ReleaseReservedFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .build()
+
+// 方式 B（普通 Future 函数交互）：通过 prepareDirect / commitDirect / compensateDirect 绑定
 def step1(args: MyArgs)(implicit ec: ExecutionContext, scheduler: Scheduler): SagaStep[String, String, MyCtx] =
   SagaStep.builder[String, MyCtx]("step-1")
     .inGroup(1)
     .withResilience(ResiliencePolicy(maxRetries = 3))
-    .withTimeout(5.seconds)
-    .withErrorRules(ErrorRules.none)
     .prepareDirect((txId, ctx, _) => ctx.repo.reserve(txId, args))
     .commitDirect((txId, ctx, _) => ctx.repo.deduct(txId, args))
     .compensateDirect((txId, ctx, _) => ctx.repo.release(txId, args))
     .build()
 ```
 
-> **提示**：对于 Akka Typed Actor 交互，直接调用 `.prepareAsk[Cmd, Reply](ref = ..., command = ..., mapReply = ...)` 即可，无需手写 5 个泛型参数的 `PhaseAsk.ask`。若某参与者需在多个 Saga 间复用，也可继承 `AskParticipant[E, R, C]`。
+| 阶段绑定三要素参数 | 类型签名 | 职责说明 |
+|---|---|---|
+| **`ref`** | `C => RecipientRef[Cmd]` | 从运行时 `Context` 中解析目标聚合根 `EntityRef` / `ActorRef` |
+| **`command`** | `(String, ActorRef[Reply]) => Cmd` | 用 `(transactionId, replyTo)` 构造发送给目标 Actor 的命令 |
+| **`mapReply`** | `Reply => Either[E, SagaResult[R]]` | 将 Actor 回复映射为业务错误 `Left(E)` 或成功结果 `Right(SagaResult(R))` |
 
 **2. 定义事务** —— 声明式、类型安全、可重放：
 

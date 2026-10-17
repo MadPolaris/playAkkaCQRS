@@ -65,28 +65,25 @@ object FabSagaDefinition {
             .withErrorRules(LotErrorRules)
             .withTimeout(5.seconds)
             .withResilience(Policy)
-            .prepareAsk[ReserveWaferRemoval, WaferRemovalConfirmation](
-              ref = ctx => ctx.lots.findLotById(sourceLotId),
-              cmd = (txId, replyTo) => ReserveWaferRemoval(Id.of(txId), waferIdSet, waferNameSet, replyTo),
-              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
-            )
-            .commitAsk[CommitWaferRemoval, WaferRemovalConfirmation](
-              ref = ctx => ctx.lots.findLotById(sourceLotId),
-              cmd = (txId, replyTo) => CommitWaferRemoval(Id.of(txId), replyTo),
-              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
-            )
-            .compensateAsk[ReleaseReservedWafer, WaferRemovalConfirmation](
-              ref = ctx => ctx.lots.findLotById(sourceLotId),
-              cmd = (txId, replyTo) => ReleaseReservedWafer(Id.of(txId), replyTo),
-              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
-            )
+            .prepare
+              .ref(ctx => ctx.lots.findLotById(sourceLotId))
+              .command[WaferRemovalConfirmation]((txId, replyTo) => ReserveWaferRemoval(Id.of(txId), waferIdSet, waferNameSet, replyTo))
+              .mapReply(c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString))))
+            .commit
+              .ref(ctx => ctx.lots.findLotById(sourceLotId))
+              .command[WaferRemovalConfirmation]((txId, replyTo) => CommitWaferRemoval(Id.of(txId), replyTo))
+              .mapReply(c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString))))
+            .compensate
+              .ref(ctx => ctx.lots.findLotById(sourceLotId))
+              .command[WaferRemovalConfirmation]((txId, replyTo) => ReleaseReservedWafer(Id.of(txId), replyTo))
+              .mapReply(c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString))))
             .build(),
           SagaStep.builder[iMadzError, AppSagaContext]("target-lot")
             .inGroup(1)
             .withErrorRules(LotErrorRules)
             .withTimeout(5.seconds)
             .withResilience(Policy)
-            .prepareDirect { (txId, ctx, _) =>
+            .prepare.direct { (txId, ctx, _) =>
               implicit val askTimeout: Timeout = 5.seconds
               val sourceRef = ctx.lots.findLotById(sourceLotId)
               val targetRef = ctx.lots.findLotById(targetLotId)
@@ -100,16 +97,14 @@ object FabSagaDefinition {
                     .getOrElse(Right(SagaResult(c.transferId.toString))))
               }
             }
-            .commitAsk[CommitAddWafer, WaferAdditionConfirmation](
-              ref = ctx => ctx.lots.findLotById(targetLotId),
-              cmd = (txId, replyTo) => CommitAddWafer(Id.of(txId), replyTo),
-              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
-            )
-            .compensateAsk[CancelAddWafer, WaferAdditionConfirmation](
-              ref = ctx => ctx.lots.findLotById(targetLotId),
-              cmd = (txId, replyTo) => CancelAddWafer(Id.of(txId), replyTo),
-              map = c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString)))
-            )
+            .commit
+              .ref(ctx => ctx.lots.findLotById(targetLotId))
+              .command[WaferAdditionConfirmation]((txId, replyTo) => CommitAddWafer(Id.of(txId), replyTo))
+              .mapReply(c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString))))
+            .compensate
+              .ref(ctx => ctx.lots.findLotById(targetLotId))
+              .command[WaferAdditionConfirmation]((txId, replyTo) => CancelAddWafer(Id.of(txId), replyTo))
+              .mapReply(c => c.error.map(Left(_)).getOrElse(Right(SagaResult(c.transferId.toString))))
             .build()
         )
       },

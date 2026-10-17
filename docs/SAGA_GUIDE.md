@@ -93,19 +93,43 @@ Four steps to run your own saga (full text also in [`saga-core/README.md`](../sa
 ```scala
 import net.imadz.infra.saga.dsl._
 
+// Option A (Akka Typed Actor ask): chain .ref -> .command -> .mapReply on .prepare / .commit / .compensate
+def transferOutStep(fromUserId: Id, money: Money)(implicit ec: ExecutionContext, scheduler: Scheduler) =
+  SagaStep.builder[iMadzError, MoneyTransferContext]("transfer-out")
+    .inGroup(1)
+    .withResilience(ResiliencePolicy(maxRetries = 5))
+    .withTimeout(5.seconds)
+    .withErrorRules(accountErrorRules)
+    .prepare
+      .ref(ctx => ctx.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsReservationConfirmation]((txId, replyTo) => ReserveFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .commit
+      .ref(ctx => ctx.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsDeductionConfirmation]((txId, replyTo) => DeductFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .compensate
+      .ref(ctx => ctx.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsReleaseConfirmation]((txId, replyTo) => ReleaseReservedFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .build()
+
+// Option B (plain Future functions): bind via prepareDirect / commitDirect / compensateDirect
 def step1(args: MyArgs)(implicit ec: ExecutionContext, scheduler: Scheduler): SagaStep[String, String, MyCtx] =
   SagaStep.builder[String, MyCtx]("step-1")
     .inGroup(1)
     .withResilience(ResiliencePolicy(maxRetries = 3))
-    .withTimeout(5.seconds)
-    .withErrorRules(ErrorRules.none)
     .prepareDirect((txId, ctx, _) => ctx.repo.reserve(txId, args))
     .commitDirect((txId, ctx, _) => ctx.repo.deduct(txId, args))
     .compensateDirect((txId, ctx, _) => ctx.repo.release(txId, args))
     .build()
 ```
 
-> **Tip**: For Akka Typed actors, call `.prepareAsk[Cmd, Reply](ref = ..., command = ..., mapReply = ...)` directly without repeating the 5 type parameters of `PhaseAsk.ask`. When a participant is shared across multiple sagas, you can still subclass `AskParticipant[E, R, C]`.
+| Phase Ask Parameter | Type Signature | Role |
+|---|---|---|
+| **`ref`** | `C => RecipientRef[Cmd]` | Resolves the target aggregate `EntityRef` / `ActorRef` from the runtime `Context` |
+| **`command`** | `(String, ActorRef[Reply]) => Cmd` | Builds the command message from `(transactionId, replyTo)` |
+| **`mapReply`** | `Reply => Either[E, SagaResult[R]]` | Maps the actor reply into a business error `Left(E)` or `Right(SagaResult(R))` |
 
 **2. Define the transaction** — declarative, type-safe, replayable:
 

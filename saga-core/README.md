@@ -35,27 +35,42 @@ val transferOutStep =
     .withErrorRules(ErrorRules(
       business = { case iMadzError("60003" | "60004", _) => ErrorAction.NonRetryable },
       describe = e => s"${e.code}: ${e.message}"))
-    .prepareAsk[ReserveFunds, FundsReservationConfirmation](
-      ref      = _.repository.findCreditBalanceByUserId(fromUserId),
-      command  = (txId, replyTo) => ReserveFunds(Id.of(txId), money, replyTo),
-      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
-    .commitAsk[DeductFunds, FundsDeductionConfirmation](
-      ref      = _.repository.findCreditBalanceByUserId(fromUserId),
-      command  = (txId, replyTo) => DeductFunds(Id.of(txId), money, replyTo),
-      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
-    .compensateAsk[ReleaseReservedFunds, FundsReleaseConfirmation](
-      ref      = _.repository.findCreditBalanceByUserId(fromUserId),
-      command  = (txId, replyTo) => ReleaseReservedFunds(Id.of(txId), money, replyTo),
-      mapReply = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .prepare
+      .ref(_.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsReservationConfirmation]((txId, replyTo) => ReserveFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .commit
+      .ref(_.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsDeductionConfirmation]((txId, replyTo) => DeductFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+    .compensate
+      .ref(_.repository.findCreditBalanceByUserId(fromUserId))
+      .command[FundsReleaseConfirmation]((txId, replyTo) => ReleaseReservedFunds(Id.of(txId), money, replyTo))
+      .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
     .build()
 ```
 
-*   **三种阶段绑定方式**：
-    *   `prepareAsk[Cmd, Reply](ref, command, mapReply)` / `commitAsk` / `compensateAsk`：面向 Akka Typed Actor `ask` 调用，只需指定 `[Cmd, Reply]` 两个类型参数。
-    *   `prepareDirect(fn)` / `commitDirect(fn)` / `compensateDirect(fn)`：面向直接返回 `Future[Either[E, SagaResult[R]]]` 的异步函数。
-    *   `prepareBinding(PhaseAsk)` / `commitBinding` / `compensateBinding`：底层 `PhaseAsk` 绑定入口。
+*   **针对 `ref` / `command` / `mapReply` 三要素定义的 3 个分步链式 API（核心改进）**：
+    1.  **`.ref(ctx => ...)`**：从运行时 `Context` 解析目标 Actor `RecipientRef[Cmd]`，**自动推导命令协议类型 `Cmd`**，无需手写。
+    2.  **`.command[Reply]((txId, replyTo) => ...)`**：根据 `(transactionId, replyTo)` 构造命令，仅需声明回复类型 `Reply`。
+    3.  **`.mapReply(reply => ...)`**：将 `Reply` 映射为 `Either[E, SagaResult[String]]` 并自动回到 `SagaStepBuilder` 继续链式绑定下一阶段。
+    *   *独立构建 `PhaseAsk`*：在 `AskParticipant` 子类中也可直接使用 `PhaseAsk.ref(ctx => ...).command[Reply](...).mapReply[E, R](...)` 三步链式 API。
+*   **其他阶段绑定简写**：
+    *   `.prepare.direct(fn)` / `.prepareDirect(fn)`（及 `commit` / `compensate`）：面向直接返回 `Future[Either[E, SagaResult[String]]]` 的异步函数。
+    *   `.prepareAsk[Cmd, Reply](ref, cmd, map)`：单方法三参数重载。
 *   **可复用参与者类（可选）**：若同一参与者逻辑在多个 Saga 间复用，仍可直接继承 `AskParticipant[E, R, C]` 并通过 `SagaStep(id, participant, resilience, stepGroup)` 组装。
 *   **双轨错误分类**：`business` 规则分类 `Left(E)`（未匹配默认 NonRetryable）；`thrown` 规则叠加在默认矩阵之上（Timeout/AskTimeout/Connect/SQLTransient → Retryable，其余 → NonRetryable）。
+
+| `SagaStep.builder` DSL 方法 | 对应真源树 (`*.saga.yaml`) | 作用说明 |
+|---|---|---|
+| `SagaStep.builder[E, C](stepId)` / `stepBuilder[E, C](stepId)` | `steps[].stepId` | 创建指定步骤 ID 的流式构建器（结果类型默认 `String`，可通过 `.withResultType[R]` 切换） |
+| `.inGroup(group: Int)` | `steps[].executionGroup` | 指定执行组（组内并行、组间串行、逆序补偿） |
+| `.withResilience(policy)` / `.withTimeout(d)` | `steps[].resilience` | 配置重试次数、退避策略、熔断器与单次 Ask 超时 |
+| `.withErrorRules(ErrorRules(...))` | `steps[].errorClassification` | 配置业务错误（`Left(E)`）与异常的双轨分类规则 |
+| `.prepare.ref(...).command[Reply](...).mapReply(...)` | `steps[].tccBindings.prepare` | 三步链式绑定 Try 阶段（自动推导 `Cmd`；另有 `.prepare.direct(fn)` / `.prepareAsk`） |
+| `.commit.ref(...).command[Reply](...).mapReply(...)` | `steps[].tccBindings.commit` | 三步链式绑定 Confirm 阶段（可选；未绑定时自动跳过该阶段） |
+| `.compensate.ref(...).command[Reply](...).mapReply(...)` | `steps[].tccBindings.compensate` | 三步链式绑定 Cancel 阶段（可选；未绑定时自动跳过该阶段） |
+| `.build()` | — | 生成混入 `PhaseAwareParticipant` 的 `SagaStep[E, R, C]` |
 
 ### 2. 定义事务 (`SagaDefinition`)
 
@@ -77,17 +92,17 @@ object MoneyTransferSagaDefinition {
             .inGroup(1)
             .withResilience(ResiliencePolicy(maxRetries = 5))
             .withErrorRules(accountErrorRules)
-            .prepareAsk[ReserveFunds, FundsReservationConfirmation](...)
-            .commitAsk[DeductFunds, FundsDeductionConfirmation](...)
-            .compensateAsk[ReleaseReservedFunds, FundsReleaseConfirmation](...)
+            .prepare.ref(...).command[FundsReservationConfirmation](...).mapReply(...)
+            .commit.ref(...).command[FundsDeductionConfirmation](...).mapReply(...)
+            .compensate.ref(...).command[FundsReleaseConfirmation](...).mapReply(...)
             .build(),
           SagaStep.builder[iMadzError, MoneyTransferContext]("transfer-in")
             .inGroup(1)
             .withResilience(ResiliencePolicy(maxRetries = 5))
             .withErrorRules(accountErrorRules)
-            .prepareAsk[RecordIncomingCredits, IncomingCreditsRecordingConfirmation](...)
-            .commitAsk[CommitIncomingCredits, IncomingCreditsCommitmentConfirmation](...)
-            .compensateAsk[CancelIncomingCredit, IncomingCreditCancellationConfirmation](...)
+            .prepare.ref(...).command[RecordIncomingCreditsConfirmation](...).mapReply(...)
+            .commit.ref(...).command[CommitIncomingCreditsConfirmation](...).mapReply(...)
+            .compensate.ref(...).command[CancelIncomingCreditConfirmation](...).mapReply(...)
             .build()
         )
       },

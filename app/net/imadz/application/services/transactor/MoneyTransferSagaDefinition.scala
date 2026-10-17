@@ -62,42 +62,36 @@ object MoneyTransferSagaDefinition {
             .withErrorRules(AccountErrorRules)
             .withTimeout(5.seconds)
             .withResilience(ResiliencePolicy(maxRetries = 5))
-            .prepareAsk[ReserveFunds, FundsReservationConfirmation](
-              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
-              cmd = (txId, replyTo) => ReserveFunds(Id.of(txId), money, replyTo),
-              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-            )
-            .commitAsk[DeductFunds, FundsDeductionConfirmation](
-              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
-              cmd = (txId, replyTo) => DeductFunds(Id.of(txId), replyTo),
-              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-            )
-            .compensateAsk[ReleaseReservedFunds, FundsReleaseConfirmation](
-              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId),
-              cmd = (txId, replyTo) => ReleaseReservedFunds(Id.of(txId), replyTo),
-              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-            )
+            .prepare
+              .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId))
+              .command[FundsReservationConfirmation]((txId, replyTo) => ReserveFunds(Id.of(txId), money, replyTo))
+              .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+            .commit
+              .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId))
+              .command[FundsDeductionConfirmation]((txId, replyTo) => DeductFunds(Id.of(txId), replyTo))
+              .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+            .compensate
+              .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(fromUserId))
+              .command[FundsReleaseConfirmation]((txId, replyTo) => ReleaseReservedFunds(Id.of(txId), replyTo))
+              .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
             .build(),
           SagaStep.builder[iMadzError, AppSagaContext]("transfer-in")
             .inGroup(1)
             .withErrorRules(AccountErrorRules)
             .withTimeout(5.seconds)
             .withResilience(ResiliencePolicy(maxRetries = 5))
-            .prepareAsk[RecordIncomingCredits, RecordIncomingCreditsConfirmation](
-              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
-              cmd = (txId, replyTo) => RecordIncomingCredits(Id.of(txId), money, replyTo),
-              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-            )
-            .commitAsk[CommitIncomingCredits, CommitIncomingCreditsConfirmation](
-              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
-              cmd = (txId, replyTo) => CommitIncomingCredits(Id.of(txId), replyTo),
-              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-            )
-            .compensateAsk[CancelIncomingCredit, CancelIncomingCreditConfirmation](
-              ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId),
-              cmd = (txId, replyTo) => CancelIncomingCredit(Id.of(txId), replyTo),
-              map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-            )
+            .prepare
+              .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId))
+              .command[RecordIncomingCreditsConfirmation]((txId, replyTo) => RecordIncomingCredits(Id.of(txId), money, replyTo))
+              .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+            .commit
+              .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId))
+              .command[CommitIncomingCreditsConfirmation]((txId, replyTo) => CommitIncomingCredits(Id.of(txId), replyTo))
+              .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+            .compensate
+              .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(toUserId))
+              .command[CancelIncomingCreditConfirmation]((txId, replyTo) => CancelIncomingCredit(Id.of(txId), replyTo))
+              .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
             .build()
         )
       },

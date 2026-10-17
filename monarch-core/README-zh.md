@@ -61,6 +61,21 @@ engine.resumeFromIndex(replayedState, done = 9)  // 崩溃恢复
 
 被处置的失败**不是**完成：拦截器返回恢复状态后，队列带着剩余阶段继续，但只触发 `onStageResolved`——被处置的失败对下游意味着什么，由宿主决定。
 
+### `Monarch.builder` / `BankChain.builder` DSL 速查表
+
+| Builder DSL 方法 | 对应真源树 (`*.monarch.yaml`) | 说明 |
+|---|---|---|
+| `Monarch.builder[Stage, State]` | `workflowId` / `engine: monarch` | 启动通用阶段队列引擎流式构建器 |
+| `BankChain.builder[Item, Raw](pipeline)` | `template: bank-six-stage` | 启动预置 `BankStage.chain`、`BankStage.stageName` 与 `BankChain.runStage` 的构建器 |
+| `.namingStages(stage => String)` | `stages[].cursorName` | 定义稳定可读的阶段游标名（恢复跳过与审计日志的契约） |
+| `.withStages(Seq[Stage])` | `stages` | 预装初始阶段队列（也可在运行期调用 `engine.initialize` / `injectHead` / `appendTail`） |
+| `.withExecution((stage, state) => Future[State])` | `stages[].interpreter` | 绑定阶段执行逻辑（需透传隐式 `ExecutionContext` 时使用 `.withExecutionEc`） |
+| `.onStageStart` / `.onStageComplete` / `.onStageCompleteWithMeta` | `lifecycleHooks.onStart / onComplete` | 阶段启动与完成钩子（宿主在此持久化 `PhaseDone` 与状态快照） |
+| `.onStageFailed` / `.onStageResolved` | `lifecycleHooks.onFailed / onResolved` | 阶段失败与业务拦截恢复后的审计钩子 |
+| `.onFailure((cursor, err, state) => Future[State])` | `failurePolicy.interceptor` | 可选业务失败处置器（如 Fab OCAP；需 `ExecutionContext` 时用 `.onFailureEc`） |
+| `.withGenerationGuard(() => Boolean)` | `concurrencyGuard.runToken` | 绑定 `RunRegistry` 世代守卫，旧链在下一阶段边界静默退出（`StaleRun`） |
+| `.build()` | — | 校验必填项（`namingStages` 与 `withExecution`）并生成 `Monarch[Stage, State]` |
+
 ---
 
 ## 2. 建模：从业务流程到 Monarch 宿主

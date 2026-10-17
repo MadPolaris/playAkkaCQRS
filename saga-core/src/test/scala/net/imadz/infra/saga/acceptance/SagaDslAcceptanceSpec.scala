@@ -420,19 +420,28 @@ class SagaDslAcceptanceSpec extends ScalaTestWithActorTestKit(
       explicit.map(_.retryWhenRecoveredOngoing) should contain only false
     }
 
-    "build steps fluently via SagaStep.builder and auto-detect boundPhases" in {
+    "build steps fluently via SagaStep.builder (.ref -> .command -> .mapReply) and auto-detect boundPhases" in {
       val fullStep = SagaStep.builder[String, Any]("fluent-full")
         .inGroup(1)
         .withResilience(ResiliencePolicy(maxRetries = 4))
-        .prepareDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("prep"))))
-        .commitDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("comm"))))
-        .compensateDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("comp"))))
+        .prepare
+          .ref(_ => neverReply)
+          .command[String]((txId, _) => s"prep-$txId")
+          .mapReply(r => Right(SagaResult(r)))
+        .commit
+          .ref(_ => neverReply)
+          .command[String]((txId, _) => s"comm-$txId")
+          .mapReply(r => Right(SagaResult(r)))
+        .compensate
+          .ref(_ => neverReply)
+          .command[String]((txId, _) => s"comp-$txId")
+          .mapReply(r => Right(SagaResult(r)))
         .build()(ec, scheduler)
 
       val twoPhaseStep = SagaStep.builder[String, Any]("fluent-2pc")
         .inGroup(2)
-        .prepareDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("prep"))))
-        .commitDirect((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("comm"))))
+        .prepare.direct((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("prep"))))
+        .commit.direct((_, _, _) => scala.concurrent.Future.successful(Right(SagaResult("comm"))))
         .build()(ec, scheduler)
 
       val definition = registerDefinition("ac11-builder", steps = Seq(fullStep, twoPhaseStep))

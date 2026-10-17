@@ -10,25 +10,27 @@ import scala.concurrent.duration._
 /** Fluent builder for creating declarative [[SagaStep]] instances with inline ask bindings,
   * eliminating the need to write boilerplate [[AskParticipant]] subclasses.
   *
+  * Supports both:
+  *  1. The 3-API chained phase DSL (`.prepare.ref(...).command[Reply](...).mapReply(...)`), where
+  *     Scala infers `Cmd` automatically from `ref` and binds `(ref, command, mapReply)` step by step;
+  *  2. The single-call `.prepareAsk[Cmd, Reply](ref, cmd, map)` / `.prepareDirect(fn)` methods.
+  *
   * {{{
   * val step = SagaStep.builder[iMadzError, AppSagaContext]("transfer-out")
   *   .inGroup(1)
-  *   .prepareAsk[ReserveFunds, FundsReservationConfirmation](
-  *     ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(userId),
-  *     cmd = (txId, replyTo) => ReserveFunds(Id.of(txId), amount, replyTo),
-  *     map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-  *   )
-  *   .commitAsk[DeductFunds, FundsDeductionConfirmation](
-  *     ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(userId),
-  *     cmd = (txId, replyTo) => DeductFunds(Id.of(txId), replyTo),
-  *     map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-  *   )
-  *   .compensateAsk[ReleaseReservedFunds, FundsReleaseConfirmation](
-  *     ref = ctx => ctx.creditBalances.findCreditBalanceByUserId(userId),
-  *     cmd = (txId, replyTo) => ReleaseReservedFunds(Id.of(txId), replyTo),
-  *     map = r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString)))
-  *   )
   *   .withResilience(ResiliencePolicy(maxRetries = 5))
+  *   .prepare
+  *     .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(userId))
+  *     .command[FundsReservationConfirmation]((txId, replyTo) => ReserveFunds(Id.of(txId), amount, replyTo))
+  *     .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+  *   .commit
+  *     .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(userId))
+  *     .command[FundsDeductionConfirmation]((txId, replyTo) => DeductFunds(Id.of(txId), replyTo))
+  *     .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
+  *   .compensate
+  *     .ref(ctx => ctx.creditBalances.findCreditBalanceByUserId(userId))
+  *     .command[FundsReleaseConfirmation]((txId, replyTo) => ReleaseReservedFunds(Id.of(txId), replyTo))
+  *     .mapReply(r => r.error.map(Left(_)).getOrElse(Right(SagaResult(r.transferId.toString))))
   *   .build()
   * }}}
   */
@@ -54,6 +56,18 @@ final class SagaStepBuilder[E, C] private (
 
   def withErrorRules(rules: ErrorRules[E]): SagaStepBuilder[E, C] =
     copy(errorRules = rules)
+
+  /** Start a 3-API chained binding (`.ref(...)` -> `.command(...)` -> `.mapReply(...)`) for the Prepare (Try) phase. */
+  def prepare: SagaStepBuilder.PhaseRefStepBuilder[E, C] =
+    new SagaStepBuilder.PhaseRefStepBuilder[E, C](ask => prepareBinding(ask))
+
+  /** Start a 3-API chained binding (`.ref(...)` -> `.command(...)` -> `.mapReply(...)`) for the Commit (Confirm) phase. */
+  def commit: SagaStepBuilder.PhaseRefStepBuilder[E, C] =
+    new SagaStepBuilder.PhaseRefStepBuilder[E, C](ask => commitBinding(ask))
+
+  /** Start a 3-API chained binding (`.ref(...)` -> `.command(...)` -> `.mapReply(...)`) for the Compensate (Cancel) phase. */
+  def compensate: SagaStepBuilder.PhaseRefStepBuilder[E, C] =
+    new SagaStepBuilder.PhaseRefStepBuilder[E, C](ask => compensateBinding(ask))
 
   def prepareAsk[Cmd, Reply](
       ref: C => RecipientRef[Cmd],
@@ -137,6 +151,41 @@ final class SagaStepBuilder[E, C] private (
 }
 
 object SagaStepBuilder {
+
+  /** Step 1 of the 3-API chained phase binding: `.ref(...)` (or `.direct(...)`). */
+  final class PhaseRefStepBuilder[E, C] private[dsl] (
+      private val attach: PhaseAsk[E, String, C] => SagaStepBuilder[E, C]
+  ) {
+    /** API 1/3: Resolve the target ActorRef / EntityRef from context `C`. Infers `Cmd` automatically. */
+    def ref[Cmd](resolveRef: C => RecipientRef[Cmd]): PhaseCommandStepBuilder[E, C, Cmd] =
+      new PhaseCommandStepBuilder[E, C, Cmd](resolveRef, attach)
+
+    /** Alternative: bind a direct async function for non-Actor interactions. */
+    def direct(f: (String, C, String) => Future[Either[E, SagaResult[String]]]): SagaStepBuilder[E, C] =
+      attach(PhaseAsk.direct(f))
+  }
+
+  /** Step 2 of the 3-API chained phase binding: `.command(...)`. */
+  final class PhaseCommandStepBuilder[E, C, Cmd] private[dsl] (
+      private val resolveRef: C => RecipientRef[Cmd],
+      private val attach: PhaseAsk[E, String, C] => SagaStepBuilder[E, C]
+  ) {
+    /** API 2/3: Build the command message from `(transactionId, replyTo)`. */
+    def command[Reply](buildCmd: (String, ActorRef[Reply]) => Cmd): PhaseMapReplyStepBuilder[E, C, Cmd, Reply] =
+      new PhaseMapReplyStepBuilder[E, C, Cmd, Reply](resolveRef, buildCmd, attach)
+  }
+
+  /** Step 3 of the 3-API chained phase binding: `.mapReply(...)`. */
+  final class PhaseMapReplyStepBuilder[E, C, Cmd, Reply] private[dsl] (
+      private val resolveRef: C => RecipientRef[Cmd],
+      private val buildCmd: (String, ActorRef[Reply]) => Cmd,
+      private val attach: PhaseAsk[E, String, C] => SagaStepBuilder[E, C]
+  ) {
+    /** API 3/3: Map the Actor `Reply` into `Either[E, SagaResult[String]]` and return to [[SagaStepBuilder]]. */
+    def mapReply(f: Reply => Either[E, SagaResult[String]]): SagaStepBuilder[E, C] =
+      attach(PhaseAsk.ask[Cmd, Reply, E, String, C](resolveRef, buildCmd, f))
+  }
+
   def of[E, C](stepId: String): SagaStepBuilder[E, C] =
     new SagaStepBuilder[E, C](
       stepId = stepId,
