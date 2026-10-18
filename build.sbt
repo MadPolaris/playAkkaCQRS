@@ -54,8 +54,7 @@ lazy val commonSettings = Seq(
   ),
   Compile / javacOptions ++= Seq("--release", "11", "-Xlint:unchecked", "-Xlint:deprecation"),
   resolvers ++= Seq(
-    "Aliyun" at "https://maven.aliyun.com/repository/public/",
-    "Huawei" at "https://repo.huaweicloud.com/repository/maven/"
+    "Aliyun" at "https://maven.aliyun.com/repository/public/"
   ),
   addCompilerPlugin("org.scalameta" % "semanticdb-scalac" % "4.9.7" cross CrossVersion.full),
   scalacOptions += "-Yrangepos",
@@ -85,79 +84,14 @@ lazy val commonSettings = Seq(
   )
 )
 
-lazy val commonCore = (project in file("common-core"))
-  .settings(
-    commonSettings,
-    // Release scope: only monarch-core is published to Maven Central. Keep the
-    // application modules local until they have stable, standalone APIs.
-    publish / skip := true,
-    name := "common-core",
-    libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-serialization-jackson" % akkaVersion,
-      "com.typesafe.akka" %% "akka-remote" % akkaVersion,
-      "com.typesafe.akka" %% "akka-persistence-typed" % akkaVersion,
-      "com.lightbend.akka" %% "akka-projection-jdbc" % AkkaProjectionVersion,
-      "org.scalikejdbc" %% "scalikejdbc" % ScalikeJdbcVersion,
-      "org.scalikejdbc" %% "scalikejdbc-config" % ScalikeJdbcVersion,
-      "com.zaxxer" % "HikariCP" % "3.4.5",
-      "org.reactivemongo" %% "reactivemongo" % "1.1.0-noshaded-RC11",
-      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-      "com.github.scullxbones" %% "akka-persistence-mongo-scala" % MongoPluginVersion
-    )
-  )
-
-lazy val sagaCore = (project in file("saga-core"))
-  .dependsOn(commonCore)
-  .settings(
-    commonSettings,
-    publish / skip := true,
-    name := "saga-core",
-    PB.targets in Compile := Seq(
-      scalapb.gen() -> (sourceManaged in Compile).value / "protobuf"
-    ),
-    libraryDependencies ++= Seq(
-      "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-persistence-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion,
-      "com.typesafe.akka" %% "akka-actor-testkit-typed" % akkaVersion % Test,
-      "com.typesafe.akka" %% "akka-persistence-testkit" % akkaVersion % Test,
-      "org.scalatest" %% "scalatest" % "3.2.15" % Test,
-      "ch.qos.logback" % "logback-classic" % "1.4.5" % Test,
-      "com.google.protobuf" % "protobuf-java" % "3.15.6",
-      "com.thesamet.scalapb" %% "scalapb-runtime" % scalapb.compiler.Version.scalapbVersion % "protobuf",
-      "com.typesafe.play" %% "play-json" % "2.9.3",
-      "javax.inject" % "javax.inject" % "1",
-      "com.google.inject" % "guice" % "5.1.0"
-    )
-  )
-
-lazy val authCore = (project in file("auth-core"))
-  .settings(
-    commonSettings,
-    publish / skip := true,
-    name := "auth-core",
-    // auth 面（Endpoint DSL / ApiError / TokenService / 身份 store）与 saga-core 同为模块无关的基建层：
-    // 依赖 play 栈（json/mvc/Configuration/PBJ）+ jjwt + caffeine + mongo。按模块生成的桩
-    // （CommandRoleMap/ViewKeys，各模块 key 不同）留目标工程，不进本模块。
-    libraryDependencies ++= Seq(
-      "com.typesafe.play" %% "play-json" % "2.9.3",
-      "com.typesafe.play" %% "play" % "2.8.20",
-      "com.github.jwt-scala" %% "jwt-play" % "9.1.2",
-      "com.github.ben-manes.caffeine" % "caffeine" % "3.1.8",
-      "org.mongodb.scala" %% "mongo-scala-driver" % "4.11.0",
-      "javax.inject" % "javax.inject" % "1",
-      "com.google.inject" % "guice" % "5.1.0"
-    )
-  )
-
 lazy val dagEngineCore = (project in file("dag-engine-core"))
-  .dependsOn(commonCore, monarchCore)
   .settings(
     commonSettings,
     publish / skip := true,
     name := "dag-engine-core",
     libraryDependencies ++= Seq(
+      "net.imadz" %% "common-core" % "0.2",
+      "net.imadz" %% "monarch-core" % "0.2",
       "com.typesafe.akka" %% "akka-actor-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-persistence-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion,
@@ -182,23 +116,10 @@ lazy val fabSimulation = (project in file("fab-simulation"))
     )
   )
 
-lazy val monarchCore = (project in file("monarch-core"))
-  .settings(
-    commonSettings,
-    name := "monarch-core",
-    // Deliberately framework-free: scala.concurrent.Future + callbacks only, so the
-    // engine is embeddable in any host (Akka ES wrapper, Play controller, plain test)
-    // and publishable to Maven Central as a standalone artifact.
-    versionScheme := Some("early-semver"),
-    libraryDependencies ++= Seq(
-      "org.scalatest" %% "scalatest" % "3.2.15" % Test
-    )
-  )
-
 lazy val root = (project in file("."))
   .enablePlugins(PlayScala, JavaAppPackaging, DockerPlugin)
-  .dependsOn(commonCore, sagaCore, authCore, dagEngineCore, fabSimulation, monarchCore)
-  .aggregate(commonCore, sagaCore, authCore, dagEngineCore, fabSimulation, monarchCore)
+  .dependsOn(dagEngineCore, fabSimulation)
+  .aggregate(dagEngineCore, fabSimulation)
   .settings(
     commonSettings,
     publish / skip := true,
@@ -223,6 +144,13 @@ lazy val root = (project in file("."))
     libraryDependencies += guice,
     libraryDependencies += jdbc,
     libraryDependencies += clusterSharding,
+    // Engine libs extracted to MadPolaris org, published on Maven Central (0.2)
+    libraryDependencies ++= Seq(
+      "net.imadz" %% "common-core" % "0.2",
+      "net.imadz" %% "monarch-core" % "0.2",
+      "net.imadz" %% "saga-core" % "0.2",
+      "net.imadz" %% "auth-core" % "0.2"
+    ),
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-cluster-typed" % akkaVersion,
       "com.typesafe.akka" %% "akka-cluster-sharding-typed" % akkaVersion,
