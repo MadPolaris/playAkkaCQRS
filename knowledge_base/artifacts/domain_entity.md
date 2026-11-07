@@ -1,29 +1,52 @@
-# Artifact: Domain Entity (实体定义)
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-entity.md; catalog 1.0.0; source-sha256 111d021e71a7df576a818320b49ea7ce78044e84bf39004ac2422ccb11529c44. Edit the central document, not this snapshot. -->
 
-**Target**: `DomainEntityArtifact`
-**File Pattern**: `domain/entities/${Name}Entity.scala`
+# 领域实体与状态初始化
 
-## 1. 核心职责
-定义聚合根的数据结构（State）和事实（Events）。这是纯粹的领域模型，不包含行为逻辑。
+类别：`domain-entity`。本页属于版本化产物说明目录；源码名称、包位置和运行保证按下面的适用变体解释。
 
-## 2. 编码约束
-1.  **Purity**: 纯 Scala 代码。**严禁**引入 Akka、Play、JSON 或 DB 相关的包。
-2.  **File Structure**:
-    -   `object ${Name}Entity`: 伴生对象，包含工厂方法。
-    -   `case class ${Name}State`: 聚合状态，必须包含 `id`。
-    -   `sealed trait ${Name}Event`: 领域事件的父接口。
-    -   `type ${Name}EventHandler`: 领域事件处理器的 Type Alias 定义
-3.  **State**: 必须提供 `empty(id: Id)` 方法来初始化空白状态。
-4.  **Events**: 所有 Event 必须是 `case class` 并继承父 trait。
+## 职责
 
-## 3. 参考模板
-```scala
-object CreditBalanceEntity {
-  case class CreditBalanceState(...)
-  sealed trait CreditBalanceEvent
-  case class BalanceChanged(...) extends CreditBalanceEvent
-  // Event Handler Extension Point
-  type CreditBalanceEventHandler = (CreditBalanceState, CreditBalanceEvent) => CreditBalanceState
-  def empty(id: Id): CreditBalanceState = ...
-}
-```
+定义状态与事件归属并提供唯一空状态初始化。实体不是HTTP服务，也不是Actor生命周期管理器。
+
+## 输入与人工信息
+
+输入为聚合/entity定义、状态字段、事件族、默认值和标识约束。未声明的初始业务值不能用null或猜测填入。
+
+## 生产与所有权
+
+由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+
+目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+
+## 结构与命名
+
+BC <Name>Entity承载State/Event及empty；JS兼容形的domain/entities/<Name>Entity导出原State/Event别名和empty，保留JVM载体身份。
+
+类型使用UpperCamelCase，成员使用lowerCamelCase；数据库、protobuf和稳定业务ID分别遵循各自合同。描述目标命名不授权改写现有wire名称、PID或冻结载体。
+
+## 依赖与装配
+
+事件应用依赖实体合同，application行为决定哪些事件持久化。kernel中实体不依赖ext实现、glue PO或数据库。
+
+## 回锚与更新
+
+有业务知识输入的产物关联相应展开节点与最终源码位置；共享机制只关联其技术合同，不伪造业务来源。BC历史inline注释和JS外置同图映射分开解释；本批不恢复JS新增inline @knowledge。手写映射只是显式实现关系，不自动证明语义或精确span。
+
+## 验证
+
+核初始化、状态/事件成员、已选兼容别名及真实event fold调用，不能只看Entity文件存在。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+## 版本与实例
+
+机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+
+适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/domain/DomainEntityTemplate.scala` — `DomainEntityTemplate`。
+- `js:generators/scala-cqrs-play-service/render-aggregate-layers.mjs` — `renderAggregateLayers`。
+
+来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+
+### 类别依赖
+
+`value-object`、`domain-state`、`domain-protocol`。这些是职责依赖，不代替真实Scala import或执行顺序验证。

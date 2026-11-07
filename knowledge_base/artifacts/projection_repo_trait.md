@@ -1,23 +1,52 @@
-# Artifact: Projection Repository Interface (投影仓库接口)
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-repository-port.md; catalog 1.0.0; source-sha256 75e0dbda7e6c632c2717fadccb629df0d14f7c8b3d3a5dc603d02eb5eddad39f. Edit the central document, not this snapshot. -->
 
-**Target**: `ProjectionRepositoryTraitArtifact`
-**File Pattern**: `application/projection/repository/${Name}Repository.scala`
+# 读侧仓储接口
 
-## 1. 核心职责
-定义读模型 (Read Model) 的持久化操作接口。
+类别：`projection-repository-port`。本页属于版本化产物说明目录；源码名称、包位置和运行保证按下面的适用变体解释。
 
-## 2. 编码约束
-1.  **Tech Stack**: 针对 JDBC/MySQL 设计接口。
-2.  **Async**: 所有 IO 操作必须返回 `Future[T]` (读) 或 `Unit` (写，通常在 Handler 中是同步的，但在 Repository 接口定义中最好保持 Future 或者是同步方法供 Handler 调用，具体取决于 JDBC 上下文。**约定：使用同步方法，因为 ScalikeJDBC 会在 Handler 的 Future 上下文中运行，或者 Handler 本身管理事务**)。
-    -   *修正*: 为了配合 `JdbcHandler`，更新方法通常是同步的 (传入 Session)，查询方法是异步的 (`Future`)。
-3.  **Methods**: 包含 `upsert`, `update`, `findByXxx`。
+## 职责
 
-## 3. 参考模板
-```scala
-trait MonthlySummaryRepository {
-  // Query
-  def find(id: String): Future[Option[Summary]]
-  // Command (used by Handler)
-  def updateIncome(userId: String, amount: BigDecimal): Unit 
-}
-```
+对读取/更新视图定义数据库无关的端口；它是领域/应用契约，不因名字含Repository就属于glue实现。
+
+## 输入与人工信息
+
+身份、读写原语和结果类型来自视图合同；query不等于可任意执行SQL。
+
+## 生产与所有权
+
+由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+
+目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+
+## 结构与命名
+
+application/projection/repository/<View>Repository；multi接口在kernel，签名中不能漏入具体driver/PO类型。
+
+类型使用UpperCamelCase，成员使用lowerCamelCase；数据库、protobuf和稳定业务ID分别遵循各自合同。描述目标命名不授权改写现有wire名称、PID或冻结载体。
+
+## 依赖与装配
+
+root绑定glue或ext实现；移除接口上的@ImplementedBy避免kernel反向依赖。纯静态助手可留伴生对象，但不能藏创建driver工厂。
+
+## 回锚与更新
+
+有业务知识输入的产物关联相应展开节点与最终源码位置；共享机制只关联其技术合同，不伪造业务来源。BC历史inline注释和JS外置同图映射分开解释；本批不恢复JS新增inline @knowledge。手写映射只是显式实现关系，不自动证明语义或精确span。
+
+## 验证
+
+接口闭包与依赖方向，替身可测试性，组合查询/复合键签名；不能只验编译就证明真实数据库一致性。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+## 版本与实例
+
+机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+
+适用：bc-single / bc-multi / js-legacy。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/ProjectionRepositoryTemplate.scala` — `ProjectionRepositoryTemplate`。
+- `dipoc:modules/kernel/src/main/scala/net/imadz/metarch/application/projection/repository/NoteGraphViewRepository.scala` — `NoteGraphViewRepository`。
+
+来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+
+### 类别依赖
+
+`read-model`。这些是职责依赖，不代替真实Scala import或执行顺序验证。

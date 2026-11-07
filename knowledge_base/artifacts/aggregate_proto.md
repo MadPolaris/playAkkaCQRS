@@ -1,91 +1,52 @@
-# Artifact: Protobuf Definition (协议定义)
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/protobuf-schema.md; catalog 1.0.0; source-sha256 13580618a8ff71e286ab8f9ab020e21ae1065cbaa85a4be7c282ec8355648624. Edit the central document, not this snapshot. -->
 
-**Target**: `ProtoDefinitionArtifact`, `SagaTransactionProtoArtifact`, `SagaParticipantProtoArtifact`
-**File Pattern**: `*.proto`
+# Protobuf线格式定义
 
-## 1. 核心职责
-定义跨进程通讯或持久化的数据格式。
+类别：`protobuf-schema`。本页属于版本化产物说明目录；源码名称、包位置和运行保证按下面的适用变体解释。
 
-## 2. 编码约束
-1.  **Syntax**: 必须使用 `syntax = "proto3";`。
-2.  **Options**:
-    -   `option java_multiple_files = true;`
-    -   `option java_package = "net.imadz.infrastructure.proto...";` (注意 Context 包名)。
-3.  **Content**:
-    -   **For Aggregates**: 定义 Events 和 State。
-    -   **For Sagas**: 定义 Transaction State 和 Participant Payload。
-4.  **Naming**: 字段名使用 `snake_case`，消息名使用 `PascalCase`。
+## 职责
 
-## 3. 参考模板
-```protobuf
-syntax = "proto3";
+定义跨进程/持久化wire消息与字段号码，不与领域事件或Scala类名混成同一身份。
 
-package net.imadz.infrastructure.proto;
+## 输入与人工信息
 
-// Define the Money type
-message MoneyPO {
-  double amount = 1;
-  string currency = 2;
-}
+显式字段号、消息变体、可选性、schema版本和兼容策略；删除/重用字段号不是命名整理。
 
-// Define the BalanceChanged event
-message BalanceChanged {
-  MoneyPO update = 1;
-  int64 timestamp = 2;
-}
+## 生产与所有权
 
-// Define the FundsReserved event
-message FundsReserved {
-  string transferId = 1;
-  MoneyPO amount = 2;
-}
+由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
 
-// Define the FundsDeducted event
-message FundsDeducted {
-  string transferId = 1;
-  MoneyPO amount = 2;
-}
+目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
 
-// Define the ReservationReleased event
-message ReservationReleased {
-  string transferId = 1;
-  MoneyPO amount = 2;
-}
+## 结构与命名
 
-// Define the IncomingCreditsRecorded event
-message IncomingCreditsRecorded {
-  string transferId = 1;
-  MoneyPO amount = 2;
-}
+单项目app/protobuf与多模块glue/src/main/protobuf；生成ScalaPB类型属于构建期managed sources，不是truthsrc直接输出的相同库存。
 
-// Define the IncomingCreditsCommited event
-message IncomingCreditsCommited {
-  string transferId = 1;
-}
+类型使用UpperCamelCase，成员使用lowerCamelCase；数据库、protobuf和稳定业务ID分别遵循各自合同。描述目标命名不授权改写现有wire名称、PID或冻结载体。
 
-// Define the IncomingCreditsCanceled event
-message IncomingCreditsCanceled {
-  string transferId = 1;
-}
+## 依赖与装配
 
-// Define the CreditBalanceEvent union
-message CreditBalanceEventPO {
-  oneof event {
-    BalanceChanged balanceChanged = 1;
-    FundsReserved fundsReserved = 2;
-    FundsDeducted fundsDeducted = 3;
-    ReservationReleased reservationReleased = 4;
-    IncomingCreditsRecorded incomingCreditsRecorded = 5;
-    IncomingCreditsCommited incomingCreditsCommited = 6;
-    IncomingCreditsCanceled incomingCreditsCanceled = 7;
-  }
-}
+由converter、serializer和adapter消费；kernel领域事件不直接依赖glue PO。
 
-// Define the CreditBalanceState snapshot
-message CreditBalanceStatePO {
-  string userId = 1; // UUID can be represented as a string
-  map<string, MoneyPO> accountBalance = 2;
-  map<string, MoneyPO> reservedAmount = 3;
-  map<string, MoneyPO> incomingCredits = 4;
-}
-```
+## 回锚与更新
+
+有业务知识输入的产物关联相应展开节点与最终源码位置；共享机制只关联其技术合同，不伪造业务来源。BC历史inline注释和JS外置同图映射分开解释；本批不恢复JS新增inline @knowledge。手写映射只是显式实现关系，不自动证明语义或精确span。
+
+## 验证
+
+PB往返、旧bytes兼容、缺required业务字段拒绝与枚举分支。proto3线格式可空不等于领域语义可空，读侧容忍须专门decoder而非改共享strict converter。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+## 版本与实例
+
+机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+
+适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/infrastructure/proto/ProtoTemplate.scala` — `ProtoTemplate`。
+- `js:generators/scala-cqrs-domain/render-serialization.mjs` — `renderProto`。
+
+来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+
+### 类别依赖
+
+`domain-protocol`、`domain-state`、`value-object`。这些是职责依赖，不代替真实Scala import或执行顺序验证。

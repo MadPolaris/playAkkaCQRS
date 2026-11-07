@@ -1,0 +1,163 @@
+{
+  "schemaVersion": "truthsrc.artifact-documentation-compat/v1",
+  "version": "1.0.0",
+  "source": "@madpolaris/truthsrc/docs/artifacts",
+  "documents": [
+    {
+      "file": "aggregate_behavior.md",
+      "category": "aggregate-behavior",
+      "sha256": "957101297d651fdbad858f67518a3cd469da12327c0a0fb0ad14ac94bff8946f"
+    },
+    {
+      "file": "aggregate_bootstrap.md",
+      "category": "aggregate-bootstrap",
+      "sha256": "72ece0b947b6893df1987b3842b9faed138d4c6f43c981d22f1d20863dc066e6"
+    },
+    {
+      "file": "aggregate_factory.md",
+      "category": "aggregate-factory",
+      "sha256": "7a6ddbcca9f5524ee9ad0e52c2f266a52be476b3a2aaf1400ed6a21380c1e164"
+    },
+    {
+      "file": "aggregate_proto.md",
+      "category": "protobuf-schema",
+      "sha256": "9fd47eb0487bfc299abbac4856b866eac98e89eb963e94cfcee5101310542997"
+    },
+    {
+      "file": "aggregate_protocol.md",
+      "category": "application-protocol",
+      "sha256": "a00905c05b2867b2aa21dfcd24b6a25e2bf93997b5eccb8a1b7a835ba9abf1b1"
+    },
+    {
+      "file": "aggregate_repo_impl.md",
+      "category": "aggregate-repository-implementation",
+      "sha256": "6ad0b13fe73c2b44612387f5974f94c676117574222a6ab951d9a6419c52ff40"
+    },
+    {
+      "file": "aggregate_repo_trait.md",
+      "category": "aggregate-repository-port",
+      "sha256": "f36a6aa998991b93a6ef4d27a5f57e506fd82b8d5a8ed0197656fd3db1ced6a5"
+    },
+    {
+      "file": "application_service.md",
+      "category": "application-service",
+      "sha256": "4d05f3129a573ce86dbd4de052eaacfe48260d8f7b952ab0101c3fbe190eacc6"
+    },
+    {
+      "file": "controller.md",
+      "category": "http-controller",
+      "sha256": "6a29f79e7ecea3375c70ddbb58507196d4e738890463494d5df713d0794558e7"
+    },
+    {
+      "file": "domain_behavior.md",
+      "category": "event-handler",
+      "sha256": "fe2c64ce0da1329f98c4331a163a73aa46829229e80faf718a8cc88ef9000715"
+    },
+    {
+      "file": "domain_entity.md",
+      "category": "domain-entity",
+      "sha256": "29a18cdea8099a30c3934bc73dde17287bce7c48e73183ba580ae2301dd1dd8e"
+    },
+    {
+      "file": "domain_invariant.md",
+      "category": "invariant-rule",
+      "sha256": "573231129a7a88e42df5226d6c5a38189e1a9c580e187e5a89ce2d5907f5ecff"
+    },
+    {
+      "file": "domain_service.md",
+      "category": "domain-service",
+      "sha256": "6a27c77c3a5b2d7b697e4f9c3533da8ae6e90821854331d3538b8e6bc23e4a33"
+    },
+    {
+      "file": "persistence_adapter.md",
+      "category": "event-adapter",
+      "sha256": "261151510f00cf52bd7440ee46d980fed24fb1953fc11d7b562102b679ea89d2"
+    },
+    {
+      "file": "projection_bootstrap.md",
+      "category": "projection-bootstrap",
+      "sha256": "ee89c53a4a883358274105098df6154f07b0e67c3806bb278cc368e815961190"
+    },
+    {
+      "file": "projection_definition.md",
+      "category": "read-model",
+      "sha256": "d642254f39b130bdfa3c791f8fbf37079c1f00b8d574619403738c6208858731"
+    },
+    {
+      "file": "projection_handler.md",
+      "category": "projection-handler",
+      "sha256": "f03e05fd5c7fab28e5e181a3cd14df61edee1861d90890c4d58afb75f916e116"
+    },
+    {
+      "file": "projection_repo_impl.md",
+      "category": "projection-repository-implementation",
+      "sha256": "00b806f0589057837f85774f5fc7053dd1ce1f70df7140a4880cd51b1e717b68"
+    },
+    {
+      "file": "projection_repo_trait.md",
+      "category": "projection-repository-port",
+      "sha256": "47335dd61beaeea74095c225a1c84a43d0eff106902f481076342310adf2c48f"
+    },
+    {
+      "file": "query_service.md",
+      "category": "query-service",
+      "sha256": "2a7290a06ef47cd69a13a71c40089586e87f877ff950cf244844cade6312d2f1"
+    },
+    {
+      "file": "saga_behavior.md",
+      "category": "saga-legacy-behavior",
+      "sha256": "2fd6f0a67086f2b18eba1a4056e728de878e9d8eff45203f325a463e2b11f3cf"
+    },
+    {
+      "file": "saga_bootstrap.md",
+      "category": "saga-bootstrap",
+      "sha256": "3c8f3b9153eb661c341a9e1f12e29d9945f52307afa47fa1e634a069610435f9"
+    },
+    {
+      "file": "saga_participant.md",
+      "category": "saga-participant",
+      "sha256": "438cab2f0b6297ee00f598743d648a618ae610dd33a049f79495910d95bd18fa"
+    },
+    {
+      "file": "saga_participant_proto.md",
+      "category": "saga-wire",
+      "sha256": "e5259a60e81700eb06f0f319f52e3b5efcaf1b4f715f521a57670b38bd5d100d"
+    },
+    {
+      "file": "saga_serializer.md",
+      "category": "saga-serializer",
+      "sha256": "0e8f9ec832767514c82cb462c834a76e5e3e4f8f62725b6b1e52b384891c4974"
+    },
+    {
+      "file": "saga_transaction_proto.md",
+      "category": "saga-wire",
+      "sha256": "e5259a60e81700eb06f0f319f52e3b5efcaf1b4f715f521a57670b38bd5d100d"
+    },
+    {
+      "file": "saga_transaction_repo_impl.md",
+      "category": "saga-transaction-repository-implementation",
+      "sha256": "1f2d427e425db3f50598d7a3150f0ea59c0847e0eb75fc1a81268048feefe802"
+    },
+    {
+      "file": "saga_transaction_repo_trait.md",
+      "category": "saga-transaction-repository-port",
+      "sha256": "f87574dd5dee47af4b4abe733bf137eafef2f496d040fd0d00dff8a37abcc886"
+    },
+    {
+      "file": "saga_transactor.md",
+      "category": "saga-transactor",
+      "sha256": "fc3b3dd83ac0e4a7c58bbecdfef70b3c73c86440d1d8d91f536f20b797618ea1"
+    },
+    {
+      "file": "snapshot_adapter.md",
+      "category": "snapshot-adapter",
+      "sha256": "c80d7a515c13cf4d85420f3558c04ba0d4f65add95fd5ef0ad89462c9e94a1cc"
+    },
+    {
+      "file": "value_object.md",
+      "category": "value-object",
+      "sha256": "3a7873987ee61d3a64af1d480377268b3409dee3253b24a4a21e1356a1f8feb4"
+    }
+  ],
+  "dispatch": {}
+}

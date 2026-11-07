@@ -12,6 +12,7 @@ target
 *.log
 *.txt
 *.json
+!/knowledge_base/artifacts/catalog-index.json
 *.db
 .g8
 /.metals
