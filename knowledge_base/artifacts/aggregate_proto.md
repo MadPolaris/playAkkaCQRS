@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/protobuf-schema.md; catalog 2.1.0; source-sha256 cfea32101a86f61d1b6abea62fd32d2705d91ad542081b4e43a86c4cadbc30d6. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/protobuf-schema.md; catalog 2.2.0; source-sha256 21a7e0afd95d1c8ac7b4b03b67e50ed7803721f97fd7c521e5538b152dfee2e9. Edit the central document, not this snapshot. -->
 
 # Protobuf线格式定义
 
@@ -37,6 +37,14 @@ JS正式serializationModel → render-serialization.mjs#renderProto按包输出<
 ## 验证
 
 PB往返、旧bytes兼容、缺required业务字段拒绝与枚举分支。proto3线格式可空不等于领域语义可空，读侧容忍须专门decoder而非改共享strict converter。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+### 第三批有限 domain-kernel 候选
+
+`js-domain-kernel-candidate-v1`（实际入口 `scala-cqrs-domain-kernel-v1`，manifest `scala-cqrs-domain-kernel:1`）为显式选择的有限实现；不切换旧入口或银行消费。Actual .proto source; explicit message identity/presence. Managed ScalaPB source and byte roundtrip require separate execution.
+
+实际来源为 `generators/scala-cqrs-domain-kernel-v1/templates/protobuf.mjs#protobufTemplate`；结构经 `buildModels`／`serializationModel`、有限 `render` 与逐职责模板，`sourceEntry` 记录来源，最终写入仍由 `src/core/generate.mjs#applyEntries` 承担。共享输出不重复算文件；完整范围见有限合同（公共包 docs/artifacts/scala-cqrs/DOMAIN-KERNEL.md）。
+
+`implemented` 只表示上述代码确实存在。此登记阶段没有刷新观察或 source lock／coverage／矩阵，也没有编译、独立行为或最终审定通过声明；`approval:null`。真实证据必须绑定同一输入、全套最终产物字节及冻结工具指纹。 既有第二批14项 reference-only 资格不变；稳定外置 source 映射不恢复 inline `@knowledge`。
 
 ## 版本与实例
 

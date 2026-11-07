@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-repository-implementation.md; catalog 2.1.0; source-sha256 9bc8d800173f640c8ae52a190ab3a3908eac5fe1d715f7102987c58a49b7018d. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-repository-implementation.md; catalog 2.2.0; source-sha256 9bc8d800173f640c8ae52a190ab3a3908eac5fe1d715f7102987c58a49b7018d. Edit the central document, not this snapshot. -->
 
 # 聚合仓储实现
 

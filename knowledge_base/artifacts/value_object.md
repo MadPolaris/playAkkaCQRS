@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/value-object.md; catalog 2.1.0; source-sha256 09ffd2a0e631f040189d7ec458c624c53345c263b7ad615c586c549f12dc6cb2. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/value-object.md; catalog 2.2.0; source-sha256 0f17addb18f64aea943a53dd90159cf046979b28cb728acbe2b71531110d9a0f. Edit the central document, not this snapshot. -->
 
 # 值对象与签名类型
 
@@ -37,6 +37,14 @@ port所有签名可达的自有值类型必须处于接口可依赖的模块；�
 ## 验证
 
 检查字段/顺序/精确表示，JSON与PB往返、>22字段、关键字/可选字段与默认值反例；生成前后不能丢失已有字段。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+### 第三批有限 domain-kernel 候选
+
+`js-domain-kernel-candidate-v1`（实际入口 `scala-cqrs-domain-kernel-v1`，manifest `scala-cqrs-domain-kernel:1`）为显式选择的有限实现；不切换旧入口或银行消费。One definition per declared nominal/record/exact domain/wire/PO value; kernel-only dependencies.
+
+实际来源为 `generators/scala-cqrs-domain-kernel-v1/templates/values.mjs#valueTemplate`；结构经 `buildModels`／`serializationModel`、有限 `render` 与逐职责模板，`sourceEntry` 记录来源，最终写入仍由 `src/core/generate.mjs#applyEntries` 承担。共享输出不重复算文件；完整范围见有限合同（公共包 docs/artifacts/scala-cqrs/DOMAIN-KERNEL.md）。
+
+`implemented` 只表示上述代码确实存在。此登记阶段没有刷新观察或 source lock／coverage／矩阵，也没有编译、独立行为或最终审定通过声明；`approval:null`。真实证据必须绑定同一输入、全套最终产物字节及冻结工具指纹。 既有第二批14项 reference-only 资格不变；稳定外置 source 映射不恢复 inline `@knowledge`。
 
 ## 版本与实例
 

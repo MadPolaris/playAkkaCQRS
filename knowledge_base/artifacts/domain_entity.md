@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-entity.md; catalog 2.1.0; source-sha256 2038486e7bfd84be84849663a1cf5128859aa63a41c02a84f901ff4d11b83550. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-entity.md; catalog 2.2.0; source-sha256 2038486e7bfd84be84849663a1cf5128859aa63a41c02a84f901ff4d11b83550. Edit the central document, not this snapshot. -->
 
 # 领域实体与状态初始化
 

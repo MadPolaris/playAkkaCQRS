@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/project/aggregate-bootstrap.md; catalog 2.1.0; source-sha256 55ea9fdc7dde1a2d1c74a171c4fa81eb5241c76b4c5d7db5215eabdea67576c0. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/project/aggregate-bootstrap.md; catalog 2.2.0; source-sha256 55ea9fdc7dde1a2d1c74a171c4fa81eb5241c76b4c5d7db5215eabdea67576c0. Edit the central document, not this snapshot. -->
 
 # 聚合持久化Bootstrap
 

@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-bootstrap.md; catalog 2.1.0; source-sha256 49141d62bea030d7eef88d64d427fc642d621ee5ed89a77b6ff0b7d4cbe3aeb5. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-bootstrap.md; catalog 2.2.0; source-sha256 49141d62bea030d7eef88d64d427fc642d621ee5ed89a77b6ff0b7d4cbe3aeb5. Edit the central document, not this snapshot. -->
 
 # 投影启动与注册
 

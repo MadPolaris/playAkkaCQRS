@@ -1,162 +1,162 @@
 {
   "schemaVersion": "truthsrc.artifact-documentation-compat/v1",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "source": "@madpolaris/truthsrc/docs/artifacts",
   "documents": [
     {
       "file": "aggregate_behavior.md",
       "category": "aggregate-behavior",
-      "sha256": "3582e0014b10e1b7928946cfd425af5ece29bf1d1051cdcc2c76c9a7a1103ec8"
+      "sha256": "942d0381a7fa0a67701bb60ae5d16d406a3d2b21f4b78ade14da0ee4259b309b"
     },
     {
       "file": "aggregate_bootstrap.md",
       "category": "aggregate-bootstrap",
-      "sha256": "019464c8efbda256f50628b4a3a49cb2eaf1d8d6e363e56260afc514c9c875fb"
+      "sha256": "8b1ae6657914128395448cb360c483e62852d2bc0d6fffbe79c034091132d090"
     },
     {
       "file": "aggregate_factory.md",
       "category": "aggregate-factory",
-      "sha256": "ee3592720605e1b1faada1845221be8de394c413af3444e80dee91b7a0f04a62"
+      "sha256": "6dacd689ade5f4e67623e5b6f7121a47fe94dffd859f3aba02be1234abdde567"
     },
     {
       "file": "aggregate_proto.md",
       "category": "protobuf-schema",
-      "sha256": "f5fb6731274d637a329022fbbaf61897ddbb89bf675c34bc6525ea6194eafc3d"
+      "sha256": "0867475a77b233a9a2d98009f8fac10b703491cbe751eb97ac2b6240a0ebc5e8"
     },
     {
       "file": "aggregate_protocol.md",
       "category": "application-protocol",
-      "sha256": "1fe51dfaf224d9f848eb62c8630eff971ca0f85b24cda8ad8f45ab09c36de0f6"
+      "sha256": "4df7200bd5e7e9ee86aa4deca2d0a32844071a88089d9bc027910b29d7f3afc8"
     },
     {
       "file": "aggregate_repo_impl.md",
       "category": "aggregate-repository-implementation",
-      "sha256": "9c0eb6ff5c6d25887c416a0e944c851d7e0a7ffd09873a84e3e7ca2ff9b9dcef"
+      "sha256": "7e0292bf0864eda406330ec6658e10a9667a2b71cd5423049ce00be326d9dbd0"
     },
     {
       "file": "aggregate_repo_trait.md",
       "category": "aggregate-repository-port",
-      "sha256": "701acf80c9c8116df06eff19ff1a753e48c264355f2ae285d52ccc76e6c5be13"
+      "sha256": "40d739867d97297ca7726cab6573eda72143116b3a3ebe561b5e453a8e77f008"
     },
     {
       "file": "application_service.md",
       "category": "application-service",
-      "sha256": "410e909bf942485a8c4ca40a20885972639a42f333abab7788d2d8a3a49b02a5"
+      "sha256": "418946433fb22792d8be97f1312d273e1021c8c27075eb103afd29c55b836c33"
     },
     {
       "file": "controller.md",
       "category": "http-controller",
-      "sha256": "fbf17a6a00fae41676531383011e090b01f4f4e19a4b4d3416b04b18e130ba87"
+      "sha256": "38c5d49dfe64b2525744fb3a4b6c6f98acbe8f3ed64deeebccc0bd69c86e7e40"
     },
     {
       "file": "domain_behavior.md",
       "category": "event-handler",
-      "sha256": "2f0b4ee1a9e72aa5f4e1bdd33ec47b709ae14fcef216884702a5ac38df989846"
+      "sha256": "af3d856a0693e2948570133016bb8e5fb65448450f9c0cca2885338cf217163e"
     },
     {
       "file": "domain_entity.md",
       "category": "domain-entity",
-      "sha256": "a158b799716dab47aaf6ff10c6c63b3f8b1e12cd9a3e5f92f754adcfd4a9ca0a"
+      "sha256": "d1478b94bee432f32f3d0b502168490b1ff61a8ba6eff594442ded523d2a35d7"
     },
     {
       "file": "domain_invariant.md",
       "category": "invariant-rule",
-      "sha256": "2eb847b3af70e6694409cdcbd93e024657af42abab39d028f1102251d8718858"
+      "sha256": "7ae95eaa735704b4ffef7acba2c6ac53e388f283d5559fbf891fb86d2e7b79bb"
     },
     {
       "file": "domain_service.md",
       "category": "domain-service",
-      "sha256": "eb6991bb9dffbe6683f6b227737ed20c39cdcdecf18097773473d16fb4507a73"
+      "sha256": "03beae42a9749a6ee4e88badc09321e5a1314fbad1334323801198a150103274"
     },
     {
       "file": "persistence_adapter.md",
       "category": "event-adapter",
-      "sha256": "10b0a4c89dac19007f391ca182f03acb0b503fee0907f8711a15a8c9aa46c9df"
+      "sha256": "1d99b1a6657a5635eb3473e8adc041fb9cfe7e8fdc8070e6536d91cb044bd592"
     },
     {
       "file": "projection_bootstrap.md",
       "category": "projection-bootstrap",
-      "sha256": "eb272ca86ff76a9626150f9ce80eeaa9e6daa8ffdc0a70467f4b026798936260"
+      "sha256": "85d8553ae1f446fde2bf79d260f782af080ce7f3228e72845ff18aac378ccf2a"
     },
     {
       "file": "projection_definition.md",
       "category": "read-model",
-      "sha256": "3a7a07a17ef71780b5cdcd0d2d96902c712a537aaefee545cb178d0c0f491a8c"
+      "sha256": "955c1089914adde02cbb7365e3ceca713620cbca7857683705d0e80a76de51be"
     },
     {
       "file": "projection_handler.md",
       "category": "projection-handler",
-      "sha256": "cb1509112418b52a5d50bded7801af84b060ca638c9077c30cfb0f24ec9bafdc"
+      "sha256": "df8a96862aeb084009fae18b6799188240b5f778d7200cc7ef86d71ab3c121b2"
     },
     {
       "file": "projection_repo_impl.md",
       "category": "projection-repository-implementation",
-      "sha256": "ff80445e73f3accd8151075e99005552c9589dbfe6e2062779c1700be57ef89a"
+      "sha256": "1c6e37873693cb9c03d759c81a6ce5792b4273e764431c398a384a89c612af17"
     },
     {
       "file": "projection_repo_trait.md",
       "category": "projection-repository-port",
-      "sha256": "aa2684e52620aca21e3c76910bbadd475805b4156851eed5303490dcde367e0c"
+      "sha256": "e07b5e655272021586f5c58993383e4df0e2890683a734ec922eac7058e31443"
     },
     {
       "file": "query_service.md",
       "category": "query-service",
-      "sha256": "45db8ce4d3fc83c4e6ad3e0303f65822b6729b4b4195fbc02b70307a8690b84f"
+      "sha256": "ca2024e4cc4106db1b9f20000826f624d175fd4933000d696d9e279a514759f2"
     },
     {
       "file": "saga_behavior.md",
       "category": "saga-legacy-behavior",
-      "sha256": "3378d2f735dcfe66c77b2ce39659796120c71683465148b37ad909dbbecf3e4b"
+      "sha256": "e8186c965a5da0a23a8a4b224e85ce0623ac0b69fc3c97725d88a9a8b9059a1e"
     },
     {
       "file": "saga_bootstrap.md",
       "category": "saga-bootstrap",
-      "sha256": "7326ae3953f845b961a28f4f57c952c6f727413b3b9354dc41dfef58d79d8a6c"
+      "sha256": "25e371f9551dbe86338da0cdd4f3c22054f5ded0a285256e1963c24587482621"
     },
     {
       "file": "saga_participant.md",
       "category": "saga-participant",
-      "sha256": "eadb952bd0bbb5abf16972af46fde6032133280a48b010bcb7e6454d83ff1407"
+      "sha256": "e96bcc815c1938f2881f0312531ced1bea9753ce05ed50e989f04e629a120594"
     },
     {
       "file": "saga_participant_proto.md",
       "category": "saga-wire",
-      "sha256": "0fed6aba7868b17f80e99938b470a262fc6a3e49ea887c582926c992a9bc3dd0"
+      "sha256": "b10e53efa1bcc7ce8f4ee5c84743d27dc82a255c5d7cfc47b29070151bf03093"
     },
     {
       "file": "saga_serializer.md",
       "category": "saga-serializer",
-      "sha256": "bbfead9b48dd4053429c8272382365459a03d3626016a5f5befdb41c27ff0fba"
+      "sha256": "3cd3cffbf34b91b47994a1e2c69fbba3e8d534da25ad58b9402a2fbe7b4234b1"
     },
     {
       "file": "saga_transaction_proto.md",
       "category": "saga-wire",
-      "sha256": "0fed6aba7868b17f80e99938b470a262fc6a3e49ea887c582926c992a9bc3dd0"
+      "sha256": "b10e53efa1bcc7ce8f4ee5c84743d27dc82a255c5d7cfc47b29070151bf03093"
     },
     {
       "file": "saga_transaction_repo_impl.md",
       "category": "saga-transaction-repository-implementation",
-      "sha256": "d119452f8c30d1144f33bb4994d234fe619892703c7e18964a701791a4a109b5"
+      "sha256": "09e579fbbcd70393d12f1cd0470d708cce0207bfb831b0ca0d1fcc65f22f54f4"
     },
     {
       "file": "saga_transaction_repo_trait.md",
       "category": "saga-transaction-repository-port",
-      "sha256": "47940903010ff9614f1cdab503bc5bf0fd8e7a61b8770d2cc7f08a50261dfc2a"
+      "sha256": "7440e6e7cdfcc36c9e88124950c7f796f17d9912cffd8f85047276ff5c178426"
     },
     {
       "file": "saga_transactor.md",
       "category": "saga-transactor",
-      "sha256": "cd1515eb1cbc56cbb1e83823e4fb02be2db7d165b10f3981302c333359dba0ae"
+      "sha256": "b8f63f965cfdccdc81f38e0a6952c791eea7ca07fdcfa1860466372e2501ad7d"
     },
     {
       "file": "snapshot_adapter.md",
       "category": "snapshot-adapter",
-      "sha256": "e8c4bef4c400b07bb4ad414a2f3e5560d98166486458c1ae3742bcfeef32b1f6"
+      "sha256": "f37185be45ffa15737a0e7be12b4c96b1445c98756b35d6bcdc9af7b4da6ce87"
     },
     {
       "file": "value_object.md",
       "category": "value-object",
-      "sha256": "44bf01bee73109fd7113b7cb68568c9fc723d12882d5d0630c732bf26b03b1c9"
+      "sha256": "22be4c0b670b5693030d265351cf22d158071dc19a5094e80f2d63f657b1c450"
     }
   ],
   "dispatch": {}

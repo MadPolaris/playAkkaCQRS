@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/event-adapter.md; catalog 2.1.0; source-sha256 f21fa09d5532b49b784c622ed8ec6b561f1e97186751dc13837cc1398cdc712d. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/event-adapter.md; catalog 2.2.0; source-sha256 f21fa09d5532b49b784c622ed8ec6b561f1e97186751dc13837cc1398cdc712d. Edit the central document, not this snapshot. -->
 
 # 事件持久化适配器
 

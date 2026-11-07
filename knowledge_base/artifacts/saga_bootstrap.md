@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-bootstrap.md; catalog 2.1.0; source-sha256 14c89fc1b3e1ba03b8b32e5c8885914644d707295524a61bc5a4630df8465298. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-bootstrap.md; catalog 2.2.0; source-sha256 14c89fc1b3e1ba03b8b32e5c8885914644d707295524a61bc5a4630df8465298. Edit the central document, not this snapshot. -->
 
 # Saga注册与启动装配
 

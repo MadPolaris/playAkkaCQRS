@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-repository-implementation.md; catalog 2.1.0; source-sha256 d7978d70c3eb1cad3978fe09df213948731fc6780620fb036924c515f66b0e36. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-repository-implementation.md; catalog 2.2.0; source-sha256 d7978d70c3eb1cad3978fe09df213948731fc6780620fb036924c515f66b0e36. Edit the central document, not this snapshot. -->
 
 # 读侧仓储与事务实现
 

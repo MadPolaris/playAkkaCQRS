@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/api/http-controller.md; catalog 2.1.0; source-sha256 35e5ab6532a27393c06d9da37e2bc0c19f5e4119446790b543224d12a2483dff. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/api/http-controller.md; catalog 2.2.0; source-sha256 35e5ab6532a27393c06d9da37e2bc0c19f5e4119446790b543224d12a2483dff. Edit the central document, not this snapshot. -->
 
 # HTTP控制器与服务适配
 

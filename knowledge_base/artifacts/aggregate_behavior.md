@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-behavior.md; catalog 2.1.0; source-sha256 df9903f71dd0534513d5f430d4b4357f7373ef42a332c839fd852c9dd5d43f62. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-behavior.md; catalog 2.2.0; source-sha256 df9903f71dd0534513d5f430d4b4357f7373ef42a332c839fd852c9dd5d43f62. Edit the central document, not this snapshot. -->
 
 # 聚合命令行为
 

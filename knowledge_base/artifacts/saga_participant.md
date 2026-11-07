@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-participant.md; catalog 2.1.0; source-sha256 06a46651c878326189dd4903095ad2efd9ef6657f7ba60da4afc72a606297273. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-participant.md; catalog 2.2.0; source-sha256 06a46651c878326189dd4903095ad2efd9ef6657f7ba60da4afc72a606297273. Edit the central document, not this snapshot. -->
 
 # Saga参与者适配
 
