@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-bootstrap.md; catalog 1.0.0; source-sha256 4b9ecd5c74c967c17eb98d08f33ae853c745137446f7da6caf98978a49f94ce0. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-bootstrap.md; catalog 2.1.0; source-sha256 14c89fc1b3e1ba03b8b32e5c8885914644d707295524a61bc5a4630df8465298. Edit the central document, not this snapshot. -->
 
 # Saga注册与启动装配
 
@@ -14,9 +14,12 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `saga-strict`消费库的StrictSagaCoordinator factory；库不替应用拥有actor身份或生命周期。
+- `js-formal`的`renderDefinitions`在生成Definition内提供`fromTechnical`/`coordinator`装配；`bc-semantic-products`由ProductApplicationTemplate生成对应接线。`bank-p23`再由手写BankRuntime/directory负责spawn、缓存与生命周期，不能全部归为库或生成代码。
+- `bc-strict`由StrictSagaModuleBuilder/Model/Template生成Module内definition/behavior/participant/phase bindings；strict fixture Host/Entry有独立来源，不能引用旧BootstrapTemplate证明strict能力。`js-run-all-strict`亦有独立的旧run-all source入口。
+- `bc-single`/`bc-multi`的BootstrapTemplate是legacy saga_v3注册/sharding装配；该`bootstrap` kind在multi模式明确路由`glue`。`play-legacy`是手写旧应用装配。不要把legacy Saga其他未映射kind的缺口套在bootstrap上。
 
-目录状态：`implemented`；所有权：`mixed`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐profile的模块、生产链及证据级别见CAPABILITY-MATRIX.md（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。本次不迁移P23或升级retry政策。
 
 ## 结构与命名
 
@@ -38,12 +41,13 @@
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+strict库factory、生成Definition/Module与legacy registry按profile分开。P23冻结及retry/backoff/deadline OPEN项不变；测试源码不等actor启动/恢复已验证，最终批准未授予。
 
-适用：saga-strict / bc-strict / js-formal / bank-p23。当前saga-core基线4352a317的strict API与银行P23消费有明确合同，Monarch R2不自动升级Saga政策或retry/backoff/deadline。
+- `saga:src/main/scala/net/imadz/infra/saga/strict/StrictSagaCoordinator.scala` — `StrictSagaCoordinator`（库factory）。
+- `js:generators/scala-cqrs-application/render-host.mjs` — `renderDefinitions`。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/transactor/StrictSagaModuleTemplate.scala` — `generate`（strict）。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/products/ProductApplicationTemplate.scala` — `generate`（semantic）。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/infrastructure/bootstsrap/BootstrapTemplate.scala` — `renderSagaBootstrap`（legacy）。
+- `bank:handwritten/scala/example/bankwealth/integration/BankRuntime.scala` — `ensureCash`、`ensureRefund`。
 
-- `saga:src/main/scala/net/imadz/infra/saga/dsl/SagaDefinition.scala` — `SagaDefinition`。
-- `saga:src/main/scala/net/imadz/infra/saga/strict/StrictSagaCoordinator.scala` — `StrictSagaCoordinator`。
-- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/infrastructure/bootstsrap/BootstrapTemplate.scala` — `BootstrapTemplate`。
-
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+来源revision、摘要及处置见sources.lock.json（公共包 docs/artifacts/sources.lock.json）；不要跨profile认领生产能力。

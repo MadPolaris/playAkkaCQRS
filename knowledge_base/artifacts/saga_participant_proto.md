@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-wire.md; catalog 1.0.0; source-sha256 b978f78d20a22f45ba727e5b2ef6c8d977855606b5c040fc9c19cf55cfb24183. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-wire.md; catalog 2.1.0; source-sha256 486e1b5e29af599bd86decd3de35ced76aec1c5f20ac9b4e30a244a0c873b016. Edit the central document, not this snapshot. -->
 
 # Saga持久化协议与参与者线格式
 
@@ -14,9 +14,11 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `saga-legacy`消费库的`saga_v3.proto`，`saga-strict`消费库的`saga_strict.proto`；这些通用协议不是每个业务生成的wire。
+- `js-formal`/`bank-p23`由`renderHostAdapters`生成应用`<host>_host.proto`及HostSerializer；`bc-semantic-products`由ProductHostSupportTemplate独立生成。应用host-proto是真实生成能力，不能为了修正库归属而删掉。
+- `js-run-all-strict`产生strict wire辅助Scala源码，不是输出一份新的`.proto`或重建库schema。
 
-目录状态：`implemented`；所有权：`library`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐profile的产物、库消费与证据级别见CAPABILITY-MATRIX.md（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。P23冻结字段、PID、codec与旧journal不因分类修订而改变。
 
 ## 结构与命名
 
@@ -38,11 +40,12 @@ legacy saga_v3.proto和strict saga_strict.proto分开；应用host自己的proto
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+legacy/strict库schema、JS/BC应用host proto与run-all Scala wire helper各自解释。测试源码不等wire往返/恢复已验证；P23冻结，最终批准未授予。
 
-适用：saga-legacy / saga-strict。当前saga-core基线4352a317的strict API与银行P23消费有明确合同，Monarch R2不自动升级Saga政策或retry/backoff/deadline。
+- `saga:src/main/protobuf/saga_v3.proto` — legacy库schema。
+- `saga:src/main/protobuf/saga_strict.proto` — strict库schema。
+- `js:generators/scala-cqrs-application/render-host-adapters.mjs` — `renderHostAdapters`（应用host proto）。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/products/ProductHostSupportTemplate.scala` — `generate`（独立BC host支持）。
+- `js:generators/saga-dsl/emit-strict.mjs` — `emitStrictFiles`（Scala辅助源码）。
 
-- `saga:src/main/protobuf/saga_v3.proto` — `syntax`。
-- `saga:src/main/protobuf/saga_strict.proto` — `syntax`。
-
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+来源revision、摘要及处置见sources.lock.json（公共包 docs/artifacts/sources.lock.json）；不授权不兼容journal切换。

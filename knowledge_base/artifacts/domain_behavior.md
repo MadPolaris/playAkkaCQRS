@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/event-handler.md; catalog 1.0.0; source-sha256 12c31ff8d0751647a23e93b9bd471d1b6daf6d1048cedb61721e79fd81742603. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/event-handler.md; catalog 2.1.0; source-sha256 7bc2c310abe24e667e09f751ac78415ff9824b6a2e9b36520f5b209e77425cd0. Edit the central document, not this snapshot. -->
 
 # 事件应用与领域行为
 
@@ -14,13 +14,15 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC由EntityBehaviorBuilder → EntityBehaviorTemplate消费domain.behaviors的mutations/helperMethods；原始模板保留helper ???，未知事件默认case _ => state，不能通称完整fold或未知事件拒绝。选中Metarch pipeline时，BC仓库自己的rules_domain_gen.mjs可依据编译真源、rules/functions与实际签名条件覆写；不是metarch-truthsrc的JS生产者，也不能假定每个BC目标都会经过它。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS正式fold由render-domain.mjs#renderInvariant消费domain-decision/domain-folds等typed产品；renderAggregate负责状态，不是事件折叠的直接写入者。layered目标生成核心与兼容转发，非layered形在domain下输出。legacy aggregate-dsl的entityDir分支及retired scala-cqrs-es另作历史/兼容生产路径记录。
+
+按profile区分源模板、条件最终内容写入者与完整行为证据，见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。本轮源码核对不是生成、重放测试或最终批准。
 
 ## 结构与命名
 
-domain/entities/behaviors/<Name>EventHandler为核心；JS旧domain入口只是兼容转发。BC生成器还可输出拆分函数/事件方法，物理数量不等类别数量。
+BC及JS layered目标以domain/entities/behaviors/<Name>EventHandler为核心，JS layered的旧domain入口是兼容转发；JS非layered目标直接在domain下承载fold。BC生成器还可输出拆分函数/事件方法，物理数量不等类别数量。
 
 类型使用UpperCamelCase，成员使用lowerCamelCase；数据库、protobuf和稳定业务ID分别遵循各自合同。描述目标命名不授权改写现有wire名称、PID或冻结载体。
 
@@ -40,10 +42,11 @@ domain/entities/behaviors/<Name>EventHandler为核心；JS旧domain入口只是�
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / js-formal；legacy/retired路径见上文。BC条件覆写不能传播给所有目标，JS layered与非layered也不是同一文件布局。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/domain/EntityBehaviorTemplate.scala` — `EntityBehaviorTemplate`。
-- `js:generators/scala-cqrs-domain/render-domain.mjs` — `renderAggregate`。
+- `bc:knowledge_base/design_docs/field_template/tools/rules_domain_gen.mjs` — Metarch条件最终内容写入。
+- `js:generators/scala-cqrs-domain/render-domain.mjs` — `renderInvariant`（事件fold，不是`renderAggregate`）。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
 

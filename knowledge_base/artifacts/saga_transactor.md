@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transactor.md; catalog 1.0.0; source-sha256 a28a2e0489fb14e636e64241d011be7fda7e0f17be6d945ae43bbc65a95372dc. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transactor.md; catalog 2.1.0; source-sha256 69e71952789df8fe93667009139171928ccf5b17948028b0bee2562b3093bea3. Edit the central document, not this snapshot. -->
 
 # Saga事务门面与声明
 
@@ -14,9 +14,12 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `saga-strict`提供运行库definition合同；`js-formal`生成具体Definition/TechnicalPorts，`bank-p23`注入手写I/O与actor owner，不能把具体声明与库协调器合并。
+- `bc-strict`经StrictSagaModuleBuilder/Model/Template生成Module内接线，`bc-semantic-products`经ProductApplicationTemplate独立生成；`js-run-all-strict`另有旧strict source入口。
+- `bc-single`生成legacy SagaDefinition；`bc-multi`的`saga-definition`未被`targetModuleOf`映射，writer退回无模块prefix的project root，不是已完成glue接线。
+- `js-legacy`参考入口确实输出Args/Context/SagaDefinition/register Scala，归应用声明而非合同报告；`play-legacy`是手写transactor门面。同名`saga-definition` kind不证明新旧执行合同等价。
 
-目录状态：`implemented`；所有权：`mixed`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐profile的生产链与缺口见CAPABILITY-MATRIX.md（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。本次只校准事实，不改变P23、R2采用或OPEN retry结论。
 
 ## 结构与命名
 
@@ -38,12 +41,14 @@
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+完整profile见生产说明及矩阵；旧声明、新typed接线和运行库合同不能共享一项完成结论。测试源码不等生成/行为证据，P23冻结与OPEN retry项不变，最终批准未授予。
 
-适用：saga-strict / bc-strict / js-formal / bank-p23。当前saga-core基线4352a317的strict API与银行P23消费有明确合同，Monarch R2不自动升级Saga政策或retry/backoff/deadline。
-
-- `saga:src/main/scala/net/imadz/infra/saga/dsl/SagaDefinition.scala` — `SagaDefinition`。
-- `saga:src/main/scala/net/imadz/infra/saga/strict/StrictSagaDefinition.scala` — `StrictSagaDefinition`。
+- `saga:src/main/scala/net/imadz/infra/saga/dsl/SagaDefinition.scala` — `SagaDefinition`（legacy）。
+- `saga:src/main/scala/net/imadz/infra/saga/strict/StrictSagaDefinition.scala` — `StrictSagaDefinition`（库API）。
 - `js:generators/scala-cqrs-application/render-host.mjs` — `renderDefinitions`。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/transactor/StrictSagaModuleTemplate.scala` — `generate`。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/products/ProductApplicationTemplate.scala` — `generate`。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/transactor/SagaDefinitionTemplate.scala` — `generate`（legacy）。
+- `js:generators/saga-dsl/emit.mjs` — `emitLegacySagaSpec`。
 
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+来源revision、摘要及处置见sources.lock.json（公共包 docs/artifacts/sources.lock.json）；BC multi legacy未映射模块缺口保留。

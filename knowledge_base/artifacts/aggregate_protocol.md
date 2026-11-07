@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-protocol.md; catalog 1.0.0; source-sha256 71f6097e0dbbb51c007a52ac9a932efa8b460bf8b94aac9c33abff176b16b234. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-protocol.md; catalog 2.1.0; source-sha256 c305de00e2975c14eb1ab8474d0aaf181868542d952b3663d922d33c13d492fb. Edit the central document, not this snapshot. -->
 
 # Actor命令与回复协议
 
@@ -14,13 +14,15 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC由AggregateProtocolBuilder/Template读取application聚合的commandFamily/replyFamily，生成实际Actor命令与回复类型，多模块放kernel。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS正式layered Play service由templates/aggregate-protocol.mjs的protocolTemplate/legacyTemplate从reference-layout/domain-dependencies同时维护应用Protocol与旧domain/<Name>Aggregate载体。Protocol是type/value别名，Request/Reply的物理case class仍在兼容文件。legacy aggregate-dsl的Actor协议及retired scala-cqrs-es骨架不是该兼容别名链的替代实现。
+
+各profile的消息载体、生成责任和生命周期见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。源码合同存在不证明本轮消息传递、序列化、目标编译或最终批准。
 
 ## 结构与命名
 
-BC Protocol通常定义case classes；JS兼容Protocol导出旧Request/Reply与伴生构造器类型别名，保留二进制载体。多模块它属于kernel接口层而非glue。
+BC Protocol通常定义case classes；JS layered兼容Protocol导出旧Request/Reply的类型别名及伴生构造器值，保留二进制载体。BC多模块Protocol放kernel而非glue；此放置不能推广为JS正式单项目已具有相同模块布局。
 
 类型使用UpperCamelCase，成员使用lowerCamelCase；数据库、protobuf和稳定业务ID分别遵循各自合同。描述目标命名不授权改写现有wire名称、PID或冻结载体。
 
@@ -40,9 +42,10 @@ port/Repository接口可引用Protocol；接口不得注解引用glue实现，�
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / js-formal；legacy/retired另见上文。单/多模块是BC放置变体，JS兼容别名保持已有载体而非另造同名消息族。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/AggregateProtocolTemplate.scala` — `AggregateProtocolTemplate`。
+- `js:generators/scala-cqrs-play-service/templates/aggregate-protocol.mjs` — `protocolTemplate / legacyTemplate`。
 - `js:generators/scala-cqrs-play-service/render-aggregate-layers.mjs` — `renderAggregateLayers`。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。

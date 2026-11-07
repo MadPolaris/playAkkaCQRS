@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/query-service.md; catalog 1.0.0; source-sha256 128a72bc03915a71810f843554d94282c2a53a63ae94e7c8ccedba8b44a3dace. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/query-service.md; catalog 2.1.0; source-sha256 41dbd72fdcb02c9c51c2e8c4b27c406b8682754443373d3c633d4d3b2e79e970. Edit the central document, not this snapshot. -->
 
 # 查询与读模型组合服务
 
@@ -10,13 +10,15 @@
 
 ## 输入与人工信息
 
-业务owner、字段含义、跨PID连接、分页与新鲜度策略需要显式选择。不能把六份说明性read-model自动视为可执行SQL DSL。
+业务owner、字段含义、跨PID连接、分页与新鲜度策略需要显式选择。不能把说明性read-model集合自动视为可执行SQL DSL。
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC由QueryServiceBuilder → QueryServiceTemplate读取SystemMetadata.application.queries，按selfType输出查询类及伴生DTO；多模块当前放root，方法体仍有???。它是部分骨架，不是查询实现，也不因ApplicationServiceTemplate有MANUAL块而自动取得相同覆盖保护。
 
-目录状态：`implemented`；所有权：`mixed`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS legacy service-dsl/emit.mjs#emitQueryService读取显式kind=query、依赖和方法定义并写出<name>.scala，仍留???；它是真实独立CLI输出，不是正式typed-product链的完整查询服务。复制的rules_domain_gen头不能取代实际JS来源。bank-p23的BankReadside是外置手写组合实现，生成JDBC机制不拥有其业务查询政策。
+
+按profile区分生成骨架、维护实现和生命周期，见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。源码检查不证明本轮目标编译、读侧追平、业务验收或最终批准。
 
 ## 结构与命名
 
@@ -40,9 +42,10 @@ application/query或对应readside实现；FeedAggregator属于多来源查询�
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / bank-p23。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / bank-p23及JS legacy service-dsl。BC/JS骨架和银行手写读侧是不同实现责任，不能用当前读库数据或模板存在证明查询语义完整。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/QueryServiceTemplate.scala` — `QueryServiceTemplate`。
+- `js:generators/service-dsl/emit.mjs` — `emitQueryService`。
 - `bank:handwritten/scala/example/bankwealth/readside/BankReadside.scala` — `BankReadside`。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。

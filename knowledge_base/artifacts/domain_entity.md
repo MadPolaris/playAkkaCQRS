@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-entity.md; catalog 1.0.0; source-sha256 111d021e71a7df576a818320b49ea7ce78044e84bf39004ac2422ccb11529c44. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-entity.md; catalog 2.1.0; source-sha256 2038486e7bfd84be84849663a1cf5128859aa63a41c02a84f901ff4d11b83550. Edit the central document, not this snapshot. -->
 
 # 领域实体与状态初始化
 
@@ -10,13 +10,15 @@
 
 ## 输入与人工信息
 
-输入为聚合/entity定义、状态字段、事件族、默认值和标识约束。未声明的初始业务值不能用null或猜测填入。
+输入为聚合/entity定义、状态字段、事件族、默认值和标识约束。目标要求未声明的业务初值不得靠null或猜测补齐；JS准入typed产品与BC neutralValueFor的既有行为须分别核对，不能把该目标写成所有profile已实现的保证。
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC单/多模块从SystemMetadata.domain.entities经DomainEntityBuilder → DomainEntityTemplate生成实体；多模块放入kernel，但empty使用neutralValueFor合成数值哨兵等默认值，Instant/未知类型可为null。这是现存初始化债，不是作者显式初值已完整落实。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS正式域生成由buildStateModels/stateEntries消费reference-layout、domain-folds及exact-value-types；仅layered Play service形额外生成Entity别名与唯一empty初始化。非layered形以State为载体。legacy aggregate-dsl在entityDir启用时也输出实体，retired scala-cqrs-es是历史骨架，不能与当前typed产品互认能力。
+
+能力、生命周期、生成责任及证据按profile分别记录，见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。本页说明源代码中的生产路径，不声称本轮已生成目标、编译或最终批准；生成文件仍经公共更新通道维护。
 
 ## 结构与命名
 
@@ -40,9 +42,11 @@ BC <Name>Entity承载State/Event及empty；JS兼容形的domain/entities/<Name>E
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / js-formal；legacy/retired路径见上文与能力矩阵。单/多模块指BC放置变体，JS layered选择不能视为多模块支持；BANK P23兼容形不推定R2能力。
 
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/builder/domain/DomainEntityBuilder.scala` — `neutralValueFor`。
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/domain/DomainEntityTemplate.scala` — `DomainEntityTemplate`。
+- `js:generators/scala-cqrs-domain/templates/aggregate-state.mjs` — `stateEntries`。
 - `js:generators/scala-cqrs-play-service/render-aggregate-layers.mjs` — `renderAggregateLayers`。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。

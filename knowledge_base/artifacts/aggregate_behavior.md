@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-behavior.md; catalog 1.0.0; source-sha256 bce6c9503d5a4215376e91d0c9a485b2a70189dd713a2f9bdc7e69fad66d0bed. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-behavior.md; catalog 2.1.0; source-sha256 df9903f71dd0534513d5f430d4b4357f7373ef42a332c839fd852c9dd5d43f62. Edit the central document, not this snapshot. -->
 
 # 聚合命令行为
 
@@ -14,13 +14,15 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC从SystemMetadata.application.aggregates经AggregateBehaviorBuilder/Template生成行为结构；原始分支仍有???/未处理helper。原生formal行为与Metarch专用rules_domain_gen.mjs后写内容必须区分；后者属于BC仓库，消费编译真源、rules/functions及已暂存签名，不能假定非Metarch目标也会补全。暂存内容生成与最终apply是不同阶段。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS正式Play service由buildAggregateModels → templates/aggregate-behavior.mjs#behaviorTemplate消费domain-decision/domain-folds等typed产品。legacy aggregate-dsl也生成命令mixin，未支持分支可含MANUAL ???；retired scala-cqrs-es仅代表历史骨架。authority策略和真实计算实现仍由宿主提供。
+
+各profile的骨架、条件最终写入者和证据见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。源码路径已识别不等于本轮目标生成、持久化行为测试、编译或最终批准。
 
 ## 结构与命名
 
-application/aggregates/behaviors/<Name>Behaviors。BC初始skeleton可被rules JS最终覆写，需同时记录两个producer；JS采用受限完整决策profile，不把未实现桩算完成。
+application/aggregates/behaviors/<Name>Behaviors。BC初始skeleton在选定Metarch链中可被BC仓库的Node rules脚本后写，需同时记录生产者和条件；JS正式Play service仅对准入决策产品生成行为，不能把未实现桩或宿主计算接口当完成的业务实现。
 
 类型使用UpperCamelCase，成员使用lowerCamelCase；数据库、protobuf和稳定业务ID分别遵循各自合同。描述目标命名不授权改写现有wire名称、PID或冻结载体。
 
@@ -40,9 +42,11 @@ application/aggregates/behaviors/<Name>Behaviors。BC初始skeleton可被rules J
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / js-formal；legacy/retired另见上文。BC条件rules后写与JS正式typed链分属不同仓库，单/多模块放置也不推定业务完成或R2支持。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/AggregateBehaviorTemplate.scala` — `AggregateBehaviorTemplate`。
+- `bc:knowledge_base/design_docs/field_template/tools/rules_domain_gen.mjs` — Metarch条件后写。
+- `js:generators/scala-cqrs-play-service/templates/aggregate-behavior.mjs` — `behaviorTemplate`。
 - `js:generators/scala-cqrs-play-service/render-aggregate-layers.mjs` — `renderAggregateLayers`。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。

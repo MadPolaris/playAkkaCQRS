@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-participant.md; catalog 1.0.0; source-sha256 772afdac7b4affe67543265be7d4c7a69c0941305b360cbd4cbf4e76ab883aaa. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-participant.md; catalog 2.1.0; source-sha256 06a46651c878326189dd4903095ad2efd9ef6657f7ba60da4afc72a606297273. Edit the central document, not this snapshot. -->
 
 # Saga参与者适配
 
@@ -14,9 +14,11 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `saga-strict`提供StrictParticipant/PhaseBinding运行库类型；`js-formal`的Definition、`bc-strict`的StrictSagaModule及`bc-semantic-products`的应用模板在内部生成具体typed参与者/阶段接线，不要求另有独立participant类文件。
+- `bank-p23`消费生成Definition并注入手写真实I/O；`js-run-all-strict`有独立旧run-all生成入口。库接口、生成接线和真实执行三层不能合并。
+- `bc-single`的SagaParticipantTemplate只生成legacy AskParticipant；`bc-multi`中`saga-participant`未被`targetModuleOf`映射，实际退回无模块prefix的project root，不能称为已落glue。`play-legacy`则为手写旧适配。
 
-目录状态：`implemented`；所有权：`mixed`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐profile的实际生产链及路由缺口见CAPABILITY-MATRIX.md（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。修正归属不删除真实strict接线，也不升级P23或重试政策。
 
 ## 结构与命名
 
@@ -38,12 +40,12 @@
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+strict typed inline接线、legacy AskParticipant及手写I/O分别定位，不能由旧模板认领strict能力。测试源码不等三阶段/恢复验证；P23冻结与OPEN retry项不变，最终批准未授予。
 
-适用：saga-strict / bc-strict / js-formal / bank-p23。当前saga-core基线4352a317的strict API与银行P23消费有明确合同，Monarch R2不自动升级Saga政策或retry/backoff/deadline。
+- `saga:src/main/scala/net/imadz/infra/saga/strict/StrictSagaDefinition.scala` — `StrictParticipant`、`PhaseBinding`。
+- `js:generators/scala-cqrs-application/render-host.mjs` — `renderDefinitions`。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/transactor/StrictSagaModuleTemplate.scala` — `generate`（strict）。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/products/ProductApplicationTemplate.scala` — `generate`（semantic）。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/transactor/SagaParticipantTemplate.scala` — `generate`（legacy AskParticipant）。
 
-- `saga:src/main/scala/net/imadz/infra/saga/SagaParticipant.scala` — `SagaParticipant`。
-- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/transactor/SagaParticipantTemplate.scala` — `SagaParticipantTemplate`。
-- `saga:src/main/scala/net/imadz/infra/saga/strict/StrictSagaDefinition.scala` — `StrictSagaDefinition`。
-
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+来源revision、摘要及处置见sources.lock.json（公共包 docs/artifacts/sources.lock.json）；multi legacy路由仍是partial。

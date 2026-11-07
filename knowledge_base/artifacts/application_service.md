@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-service.md; catalog 1.0.0; source-sha256 420d7e745f980616e057a971c1df716666f2d7b931b2575170033eddeb586ba8. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-service.md; catalog 2.1.0; source-sha256 98cf60438dade0132c6ca3372de33c12d5ef36f0e45d3bb0d3c816eaf9feb007. Edit the central document, not this snapshot. -->
 
 # 应用用例与业务流程服务
 
@@ -14,9 +14,11 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC由ApplicationServiceBuilder/Template读取SystemMetadata.application.services生成带MANUAL方法区的骨架，仍含???；selfType控制实际包名，多模块当前放root。这不是业务用例已由真源完整实现，也不能把此模板的MANUAL保护推给所有service模板。
 
-目录状态：`implemented`；所有权：`mixed`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS legacy service-dsl/emit.mjs#emitApplicationService读取显式kind=application、依赖和方法定义，真正写出<name>.scala，但方法同样为骨架，未接入正式typed-product注册链。其复制的rules_domain_gen头不改变JS写入者归属。正式Play service的Endpoint.run/Bindings属于应用流程调用合同，不应冒充本页的业务服务实现。
+
+bank-p23的BankSipApplication是外置手写实现。各profile的骨架、手写算法和证据见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）；源码存在不等于本轮生成、编译、用例验收或最终批准。
 
 ## 结构与命名
 
@@ -40,9 +42,10 @@ application/services或明确模块下的用例类；银行当前部分服务手
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / bank-p23。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / bank-p23及JS legacy service-dsl。接口/骨架可生成与完整用例实现是不同能力；银行手写定投服务不由通用骨架自动重建。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/ApplicationServiceTemplate.scala` — `ApplicationServiceTemplate`。
+- `js:generators/service-dsl/emit.mjs` — `emitApplicationService`。
 - `bank:handwritten/scala/example/bankwealth/sip/BankSipApplication.scala` — `BankSipApplication`。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。

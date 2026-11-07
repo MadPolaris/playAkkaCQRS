@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-bootstrap.md; catalog 1.0.0; source-sha256 dca00fbf8e8f1f6cdab11290f51918d3d37d76247e3a72a0b06d57b9787efa18. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-bootstrap.md; catalog 2.1.0; source-sha256 49141d62bea030d7eef88d64d427fc642d621ee5ed89a77b6ff0b7d4cbe3aeb5. Edit the central document, not this snapshot. -->
 
 # 投影启动与注册
 
@@ -14,9 +14,11 @@ offset存储、tag/事件来源、并发与资源owner等技术选择必须明�
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `bc-single` / `bc-multi`：BC Bootstrap 模型/模板生成投影注册，multi 放到 glue，宿主控制启动。
+- `js-formal`：`renderJournalReadside` 在 `<Store>Projection` 内生成 `initialize/start/shutdown`；应用显式创建并启动它，不生成独立 Bootstrap trait 或 ShardedDaemonProcess 注册。
+- `js-legacy`：保留 `bootstrap-dsl` 的 `kind=projection`；`js-retired`：退役 `scala-cqrs-es` 的 projectionBootstrapModel 输出。旧集群注册方式不代表原生 journal projection 的运行机制。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐 profile 的生命周期、生产链与证据层级见派生能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。可用源码、生成接线、目标编译、行为验证和最终批准不是同一声明。
 
 ## 结构与命名
 
@@ -38,14 +40,7 @@ infrastructure/bootstrap/<View>Bootstrap或ApplicationBootstrap中的注册；si
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
-
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
-
-- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/infrastructure/bootstsrap/BootstrapTemplate.scala` — `BootstrapTemplate`。
-- `js:generators/scala-cqrs-play-service/render-journal-readside.mjs` — `renderJournalReadside`。
-
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+本页按上述 profile 区分当前原生、保留/退役路径与手写参考；不跨 profile 传播实现或验收结论。完整来源 revision、摘要和生产链由目录、派生矩阵及 `sources.lock.json` 记录，本页不另抄暂定统计。
 
 ### 类别依赖
 

@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-handler.md; catalog 1.0.0; source-sha256 2499d405435888b02ea6d91fef63dcc19429cfdeafb66cd73364606cc29e8938. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-handler.md; catalog 2.1.0; source-sha256 fdf25b04be23c6fcaa5fcd7d30984e8c1f1c191a42c2615afc763afab34356d4. Edit the central document, not this snapshot. -->
 
 # 事件投影处理器
 
@@ -14,9 +14,12 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `bc-single`：BC Scala `ProjectionHandlerTemplate` 生成骨架，BC Node `gen_projection_handlers.mjs` 条件性补写最终 handler；两者都不是 metarch-truthsrc JS。
+- `bc-multi`：该后处理的 handler/converter 路径含多余 `app/`，与 Scala 的 `modules/glue/src/main/scala/<pkg>/...` 不匹配。graph/不支持的 handler 还可能保留人工桩，不能统称完整行为。
+- `js-formal`：`renderJournalReadside` 生成 `<Store>Projection.project(envelope)`，不是每个事件一类 handler。
+- `js-legacy`：`projection-dsl` 先生成骨架，`smviews` 可替换内容；`js-retired`：退役 projection producer 为独立旧链。骨架或 `???` 是未完成源码，不是已实现业务行为。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐 profile 的生命周期、生产链与证据层级见派生能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。可用源码、生成接线、目标编译、行为验证和最终批准不是同一声明。
 
 ## 结构与命名
 
@@ -38,15 +41,7 @@ BC <View>On<Event>Handler由Scala建壳、JS最终写入；multi位于glue。JS�
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
-
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
-
-- `bc:knowledge_base/design_docs/field_template/tools/gen_projection_handlers.mjs` — `handlerPath`。
-- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/ProjectionHandlerTemplate.scala` — `ProjectionHandlerTemplate`。
-- `js:generators/scala-cqrs-play-service/render-journal-readside.mjs` — `renderJournalReadside`。
-
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+本页按上述 profile 区分当前原生、保留/退役路径与手写参考；不跨 profile 传播实现或验收结论。完整来源 revision、摘要和生产链由目录、派生矩阵及 `sources.lock.json` 记录，本页不另抄暂定统计。
 
 ### 类别依赖
 

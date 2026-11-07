@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transaction-repository-port.md; catalog 1.0.0; source-sha256 b1177eaba9a3de61f82ca7a943b1417b0c59d296a2f398490b01e34b2c68d217. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transaction-repository-port.md; catalog 2.1.0; source-sha256 c4018420db5a384cc8672f7c3917b550988069b0278ff4fef236e4e4e7f546bd. Edit the central document, not this snapshot. -->
 
 # Saga事务仓储接口
 
@@ -14,9 +14,10 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `saga-legacy`保留历史repository架构角色的reference-only关联；运行库SagaRunner不是一个必需的通用strict repository trait。
+- `play-legacy`有真实手写FabSagaTransactionRepository应用接口；`bank-p23`有手写BankRuntimeDirectory端口，具体寻址/生命周期由BankRuntime负责。两者不共享同一生成合同。
 
-目录状态：`reference-only`；所有权：`mixed`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐profile责任和来源见CAPABILITY-MATRIX.md（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。不因旧标签是reference-only而抹去现有应用端口，也不虚构统一生成接口；P23与R2采用边界不变。
 
 ## 结构与命名
 
@@ -38,11 +39,10 @@
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+历史角色、Play手写repository和bank手写directory按profile分别解释。测试源码不等查找/恢复已验证；接口存在不授予最终批准，也不迁移P23。
 
-适用：saga-legacy / bank-p23。旧Saga DSL/TCC与当前strict API是并列合同；不能把strict证据和恢复保证套用旧StepExecutor。
-
-- `saga:src/main/scala/net/imadz/infra/saga/dsl/SagaRunner.scala` — `SagaRunner`。
+- `play:app/net/imadz/application/services/transactor/FabSagaTransactionRepository.scala` — `FabSagaTransactionRepository`。
+- `saga:src/main/scala/net/imadz/infra/saga/dsl/SagaRunner.scala` — `SagaRunner`（替代门面）。
 - `bank:handwritten/scala/example/bankwealth/integration/BankRuntimeDirectory.scala` — `BankRuntimeDirectory`。
 
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+来源revision、摘要及处置见sources.lock.json（公共包 docs/artifacts/sources.lock.json）；不虚构strict通用repository producer。

@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-service.md; catalog 1.0.0; source-sha256 3814dbdaedcea19f8f6aab59b3a4672a24cb239c0231cc94ec50bc09234751a7. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-service.md; catalog 2.1.0; source-sha256 ab516ad2a2e671d5c55cef4e1404967004182650f5833c8d09e6537a801cd0b5. Edit the central document, not this snapshot. -->
 
 # 纯领域服务与计算实现
 
@@ -14,9 +14,11 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC由DomainServiceBuilder → DomainServiceTemplate消费SystemMetadata.domain.services生成class/object骨架；方法体仍有???，多模块当前放root，不能把目标纯度或算法完备性当成既有保证。此模板不因ApplicationServiceTemplate有MANUAL块就自动具有相同保护。
 
-目录状态：`implemented`；所有权：`mixed`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS legacy service-dsl/emit.mjs#emitDomainService按显式kind=domain、package/name/dependencies/methods输出<name>.scala，方法同样未实现；它是真实的独立CLI生产者，不是正式typed-product注册链。复制的rules_domain_gen文件头不改变JS实际写入者。run-all条件复制的静态MoneyOps只提供BigInt最小单位算术，不是领域算法或wire codec的通用生成器。
+
+di-poc的ContentFingerprint是kernel内维护的算法，ext的ConceptDeltaResolver是另一个实现。各profile的骨架生成、手写实现与历史静态支持分开记录，见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）；源码存在不等于本轮生成、编译或最终批准。
 
 ## 结构与命名
 
@@ -40,13 +42,19 @@ domain/service或domain/services中的纯object/class；需可替换实现时通
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / di-poc。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / di-poc，以及JS legacy service-dsl与静态支持。BC多模块root骨架、di-poc kernel算法和ext实现不是同一个放置事实；legacy不表示当前正式typed链已具备同样生产能力。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/domain/DomainServiceTemplate.scala` — `DomainServiceTemplate`。
 - `dipoc:modules/kernel/src/main/scala/net/imadz/metarch/domain/service/ContentFingerprint.scala` — `ContentFingerprint`。
+- `js:generators/service-dsl/emit.mjs` — `emitDomainService`。
+- `js:generators/scaffold-static/app/net/imadz/common/MoneyOps.scala` — 静态纯算术支持。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
 
 ### 类别依赖
 
 `value-object`。这些是职责依赖，不代替真实Scala import或执行顺序验证。
+
+### 第二批独立模块候选
+
+`scala-cqrs-modular-candidate-v1`新增独立Parcel参考及纯目标合同，属于reference-only，不是现役生成入口。Pure, checked parcel-capacity calculation with independent boundary expectations. 结构、兼容差异及资格见目标合同（公共包 docs/artifacts/scala-cqrs/TARGET-PROFILES.md）；真实编译/行为结果单独记录，不把参考升级为生成器或最终金样。

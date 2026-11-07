@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transaction-repository-implementation.md; catalog 1.0.0; source-sha256 ae32b0e964d727049da75c008dd3e80fb52c9aba95ffd1c7eb284937806341a1. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transaction-repository-implementation.md; catalog 2.1.0; source-sha256 77d5832e0c002154fa448dbf4d61f18708f03528516a6422710459416352a8c9. Edit the central document, not this snapshot. -->
 
 # Saga事务寻址实现
 
@@ -14,9 +14,10 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `saga-legacy`保留历史repository实现角色的reference-only说明；SagaRunner是替代门面，不能据它构造不存在的统一RepoImpl producer。
+- `bank-p23`的BankRuntime.ensureCash/ensureRefund及directory是手写集成，实现actor引用、身份、缓存和生命周期管理；调用生成Definition/Host不使BankRuntime变成生成文件。
 
-目录状态：`reference-only`；所有权：`mixed`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐profile的责任及来源见CAPABILITY-MATRIX.md（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。内存map不是耐久交易事实，更不能由map存在推断JVM重启恢复已验证；P23冻结及失败证据保持原样。
 
 ## 结构与命名
 
@@ -38,11 +39,10 @@
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
+legacy reference角色与bank-p23手写actor owner分开。测试源码不等缓存重建或跨JVM恢复证据，手写实现存在不授予最终批准。
 
-适用：saga-legacy / bank-p23。旧Saga DSL/TCC与当前strict API是并列合同；不能把strict证据和恢复保证套用旧StepExecutor。
+- `saga:src/main/scala/net/imadz/infra/saga/dsl/SagaRunner.scala` — `SagaRunner`（历史替代门面，不是具名RepoImpl）。
+- `bank:handwritten/scala/example/bankwealth/integration/BankRuntime.scala` — `ensureCash`、`ensureRefund`。
+- `bank:handwritten/scala/example/bankwealth/integration/BankRuntimeDirectory.scala` — `BankRuntimeDirectory`。
 
-- `saga:src/main/scala/net/imadz/infra/saga/dsl/SagaRunner.scala` — `SagaRunner`。
-- `bank:handwritten/scala/example/bankwealth/integration/BankRuntime.scala` — `ensureCash`。
-
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+来源revision、摘要及处置见sources.lock.json（公共包 docs/artifacts/sources.lock.json）；P23冻结及service失败结论不变。

@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/event-adapter.md; catalog 1.0.0; source-sha256 97f273adcd285af9b49e6a5b056b6dad8b76792e18a3fcaab4d6430fd8b31d57. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/event-adapter.md; catalog 2.1.0; source-sha256 f21fa09d5532b49b784c622ed8ec6b561f1e97186751dc13837cc1398cdc712d. Edit the central document, not this snapshot. -->
 
 # 事件持久化适配器
 
@@ -14,9 +14,11 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC由AggregateAdapterBuilder → EventAdapterTemplate读取聚合event/PB/converter元数据，输出infrastructure/persistence/<Name>EventAdapter.scala，多模块放glue。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS正式render-adapters.mjs#renderAdapters基于serializationModel与准入domain-folds、exact值/codec等产品，在<Name>Adapters.scala内生成EventAdapter和SnapshotAdapter；两个类别共享一个物理文件。legacy adapter-dsl另输出Akka事件适配器，retired scala-cqrs-es保留历史实现，两者与正式typed路径分开记录。
+
+各profile的输出、生成责任和生命周期见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。适配器源码存在不是历史upcast策略已实现，也不是本轮journal读写、目标编译或最终批准。
 
 ## 结构与命名
 
@@ -40,7 +42,7 @@ Bootstrap通过.eventAdapter安装；依赖converter/serializer，领域核心�
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / js-formal；legacy/retired另见上文。BC独立文件与JS合并Adapters文件分别计入实际输出，不能由同类名称推定相同载体或升级策略。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/infrastructure/persistence/EventAdapterTemplate.scala` — `EventAdapterTemplate`。
 - `js:generators/scala-cqrs-domain/render-adapters.mjs` — `renderAdapters`。

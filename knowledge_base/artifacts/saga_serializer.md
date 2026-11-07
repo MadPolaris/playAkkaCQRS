@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-serializer.md; catalog 1.0.0; source-sha256 26f5c7ecafecec2fe0e327719b14e95e77097933228c1105a04a3a8f597c538d. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-serializer.md; catalog 2.1.0; source-sha256 88f0069c1cb294b7f582f3e284fefe94828da3d29f754afc95bef24d9737c28b. Edit the central document, not this snapshot. -->
 
 # Saga序列化与转换
 
@@ -14,9 +14,12 @@ wire版本、serializer ID、codec pin和持久事件/状态注册来自对应ru
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+- `saga-strict`消费库的StrictSagaSerializer/StrictSagaProtoConverters：serializer ID `77102231`处理StrictEvent/StrictState的`event-v2`/`state-v2`，不是每个业务生成的serializer。`saga-legacy`的SagaExecutorConverter属于另一旧协议。
+- `js-formal`及`bank-p23`由`renderHostAdapters`真实生成`<Host>HostSerializer.scala`和host proto；该serializer以`742000 + ordinal`、`event-v1`处理应用`host.Event`，仅委托运行库identity转换，不生成StrictSagaSerializer。
+- `bc-semantic-products`有独立ProductHostSupportTemplate链；`js-run-all-strict`生成其显式args/Money codec与host支持源码，不应把所有codec输出都称为运行库持久化serializer。
+- application.conf的host.Event绑定与消费StrictDurable的库绑定分开，不能因需要库就删掉真实HostSerializer生成能力。
 
-目录状态：`implemented`；所有权：`library`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+逐profile的源码、协议与证据级别见CAPABILITY-MATRIX.md（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。P23的PB/PID/codec及冻结运行库不变。
 
 ## 结构与命名
 
@@ -26,7 +29,7 @@ StrictSagaSerializer/ProtoConverters与legacy SagaExecutorConverter分别消费�
 
 ## 依赖与装配
 
-运行库负责其内部格式，生成器只配置消费/宿主格式；不把旧namespace当新runtime的迁移入口。
+运行库负责其内部格式；生成器实际生成应用HostSerializer/host proto，并配置宿主Event与库StrictDurable的独立绑定。不能将应用格式归为StrictSagaSerializer生成，也不把旧namespace当新runtime的迁移入口。
 
 ## 回锚与更新
 
@@ -38,12 +41,12 @@ StrictSagaSerializer/ProtoConverters与legacy SagaExecutorConverter分别消费�
 
 ## 版本与实例
 
-机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
-
-适用：saga-legacy / saga-strict / js-formal。当前saga-core基线4352a317的strict API与银行P23消费有明确合同，Monarch R2不自动升级Saga政策或retry/backoff/deadline。
+运行库持久化serializer、JS/BC生成HostSerializer与run-all业务codec不能共用一个归属结论。测试源码不等真实序列化/恢复已验证；P23冻结，最终批准未授予。
 
 - `saga:src/main/scala/net/imadz/infra/saga/strict/StrictSagaSerializer.scala` — `StrictSagaSerializer`。
 - `saga:src/main/scala/net/imadz/infra/saga/strict/StrictSagaProtoConverters.scala` — `StrictSagaProtoConverters`。
-- `saga:src/main/scala/net/imadz/infra/saga/serialization/SagaExecutorConverter.scala` — `SagaExecutorConverter`。
+- `saga:src/main/scala/net/imadz/infra/saga/serialization/SagaExecutorConverter.scala` — `SagaExecutorConverter`（legacy）。
+- `js:generators/scala-cqrs-application/render-host-adapters.mjs` — `renderHostAdapters`（应用host）。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/products/ProductHostSupportTemplate.scala` — `generate`（独立BC host支持）。
 
-来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
+来源revision、摘要及处置见sources.lock.json（公共包 docs/artifacts/sources.lock.json）；不改serializer ID/manifest消除历史失败。

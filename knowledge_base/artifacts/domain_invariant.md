@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/invariant-rule.md; catalog 1.0.0; source-sha256 dea1742e2fa59b009be2dddace67fdb6c8f829b56c033b41a049edf8cb470967. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/invariant-rule.md; catalog 2.1.0; source-sha256 0bcb98fe0d01d9a67af4fdef6d8b7bc8d8b976c10530b19635260f2544cd9a1d. Edit the central document, not this snapshot. -->
 
 # 领域不变式与命令决策
 
@@ -14,9 +14,11 @@ guard、emission、参数血缘、错误码、前置与后置条件必须显式�
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC原始InvariantRuleBuilder/Template读取domain.invariants，但模板条件文本被禁用且留有???。AggregateRulesBuilder/Template的rules-formal分支、Metarch pipeline中BC-owned rules_domain_gen.mjs的条件覆写是不同生产路径；后者读取编译真源、generated_rules、functions/ports与实际Protocol/Entity签名，不能把这些能力归给骨架模板或metarch-truthsrc。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS正式render-domain.mjs#renderInvariant以domain-decision/domain-folds等准入typed产品生成有序决策。legacy invariant-dsl仍使用旧翻译表和选定元数据；retired scala-cqrs-es-rules是历史overlay。三者不是同一实现，也不因输出叫Rules就具有相同完整性。
+
+具体profile及路径的部分实现、条件写入和证据见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。本页保留纯度/拒绝未知语义的目标，不把源码扫描当执行验证或最终批准。
 
 ## 结构与命名
 
@@ -40,10 +42,11 @@ BC有聚合Rules容器/内嵌Rule以及需port的class变体；JS生成Either[St
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / js-formal；legacy/retired规则路径见上文。BC骨架、原生rules-formal及条件Node后写不能混为同一模板实现，BANK P23兼容或R2能力也不能由此推断。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/domain/InvariantRuleTemplate.scala` — `InvariantRuleTemplate`。
-- `bc:knowledge_base/design_docs/field_template/tools/rules_domain_gen.mjs` — `checkAggregate`。
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/AggregateRulesTemplate.scala` — `AggregateRulesTemplate`，原生formal分支。
+- `bc:knowledge_base/design_docs/field_template/tools/rules_domain_gen.mjs` — Metarch条件rules生产路径（含`checkAggregate`检查）。
 - `js:generators/scala-cqrs-domain/render-domain.mjs` — `renderInvariant`。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。

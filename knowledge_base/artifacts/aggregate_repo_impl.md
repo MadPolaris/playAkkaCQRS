@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-repository-implementation.md; catalog 1.0.0; source-sha256 4cfb79aff6c5994a28b1ae52d3c9934080b768dc92605573ff5b23ac29ba447f. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-repository-implementation.md; catalog 2.1.0; source-sha256 9bc8d800173f640c8ae52a190ab3a3908eac5fe1d715f7102987c58a49b7018d. Edit the central document, not this snapshot. -->
 
 # 聚合仓储实现
 
@@ -14,9 +14,11 @@
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC由AggregateRepositoryImplBuilder/Template读取infrastructure.repositories中的AggregateRepositoryMetadata，生成ClusterSharding/EntityRef实现；多模块该实现位于glue，独立于接口文件。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS正式Play service的templates/aggregate-repository.mjs#repositoryTemplate从reference-layout/domain-dependencies输出一个<Name>Repository[K]具体类。接口职责与本地缓存实现职责都由同一文件承担，没有另发port trait或Impl文件；close仅标记关闭并清理映射，不停止actor或ActorSystem。legacy repository-dsl的sharding实现与retired scala-cqrs-es实现是不同路径。
+
+按profile和物理输出记录能力，见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。一个文件关联两类别仍只计一个文件；源码定位不是集群部署、故障切换测试或最终批准。
 
 ## 结构与命名
 
@@ -40,10 +42,11 @@ BC infrastructure/repositories/aggregate/<Name>RepositoryImpl位于glue；银行
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / js-formal；legacy/retired另见上文。sharding与本地cache是不同部署合同，不是同一实现的目录别名。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/infrastructure/repository/AggregateRepositoryImplTemplate.scala` — `AggregateRepositoryImplTemplate`。
-- `js:generators/scala-cqrs-play-service/render-aggregate-layers.mjs` — `renderAggregateLayers`。
+- `js:generators/scala-cqrs-play-service/templates/aggregate-repository.mjs` — `repositoryTemplate`，与port职责共用输出。
+- `js:generators/repository-dsl/emit.mjs` — legacy sharding分支。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
 

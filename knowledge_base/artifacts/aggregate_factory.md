@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-factory.md; catalog 1.0.0; source-sha256 04901a6e74a8d35e4be7c7bff8f72ba78eebbde5a7b8135e6ea343110e2f3550. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-factory.md; catalog 2.1.0; source-sha256 34a0c239fdf6404ae01c8dd728a787ea5dafbccbeb004d7ce7040f9cbdd155bb. Edit the central document, not this snapshot. -->
 
 # 聚合行为工厂接口
 
@@ -6,27 +6,29 @@
 
 ## 职责
 
-表达构建聚合Behavior所需的依赖，隔离应用合同和框架装配；不是另一个实体工厂或数据仓库。
+表达取得或构建聚合入口所需的依赖。BC类封装sharding查找/ask，JS layered trait表达Behavior创建合同；不是另一个领域实体工厂或数据仓库。
 
 ## 输入与人工信息
 
-稳定身份、初始状态、计算port/authority和所选框架约束由调用者显式提供。
+JS调用者显式提供稳定身份、初始状态、计算port/authority。BC输入是聚合元数据，其初始化命令选择是builder启发式；业务正确性仍须明确核对，不能把所有profile都描述为消费同一显式create合同。
 
 ## 生产与所有权
 
-由列出的生产者/实现提供。BC的Scala结构与JS最终写入者必须一起判断；同文件后续JS覆写时，最终台账行归最后写入者。当前银行兼容profile只按实际已有产物标识，不由旧文档推定能力。
+BC由AggregateFactoryBuilder → AggregateFactoryTemplate读取application.aggregates，产出注入ClusterSharding的查找/ask类，多模块目前放kernel。buildInitializationMethodOption选择首个有参数的非只读命令作为初始化候选，不能据此推断业务上正确的初始化语义。
 
-目录状态：`implemented`；所有权：`generated`。生成文件通过公共生成/更新通道维护；独立手写实现不是生成结果的可编辑副本。
+JS正式layered Play service的templates/aggregate-factory.mjs#factoryTemplate才生成返回Behavior的trait；非layered render-actor.mjs或兼容domain载体内的Factory是object。legacy aggregate-dsl另有factory trait，retired scala-cqrs-es为历史骨架，均不能替代当前BC类或正式JS合同。
+
+工厂形状、输入与所有权按profile分别解释，见能力矩阵（公共包 docs/artifacts/CAPABILITY-MATRIX.md）。这是源生产路径说明，不代表本轮构建、实际创建测试或最终批准。
 
 ## 结构与命名
 
-BC application/aggregates/factories与JS application/aggregates/<Name>AggregateFactory的路径分别记录；trait create返回Behavior。
+BC application/aggregates/factories/<Name>AggregateFactory是注入ClusterSharding的类，封装引用查找、ask及可选初始化方法；不是返回Behavior的trait。JS layered application/aggregates/<Name>AggregateFactory才声明create(persistenceId, initial, hosts[, authority]): Behavior[Command]；domain兼容/非layered形为object工厂。
 
 类型使用UpperCamelCase，成员使用lowerCamelCase；数据库、protobuf和稳定业务ID分别遵循各自合同。描述目标命名不授权改写现有wire名称、PID或冻结载体。
 
 ## 依赖与装配
 
-Bootstrap实现Factory并绑定实际event/command handlers。JS兼容域内Factory只作为旧入口保留，不推荐新模块继续依赖它。
+JS layered Bootstrap实现Factory并装配event/command handlers；BC类由DI取得sharding等依赖后查找/初始化聚合，不能套用前者的实现方式。JS兼容域内Factory只作为旧入口保留，不推荐新模块继续依赖它。
 
 ## 回锚与更新
 
@@ -40,10 +42,12 @@ Bootstrap实现Factory并绑定实际event/command handlers。JS兼容域内Fact
 
 机器目录按各适用变体分别记录可用性/所有权，不能把一个变体的implemented传播到其他profile。
 
-适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
+主要实例：bc-single / bc-multi / js-formal；legacy/retired另见上文。BC class、JS layered trait和非layered/兼容object分别解释；同名Factory不保证同API或部署语义。
 
+- `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/builder/application/AggregateFactoryBuilder.scala` — `buildInitializationMethodOption`。
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/application/AggregateFactoryTemplate.scala` — `AggregateFactoryTemplate`。
-- `js:generators/scala-cqrs-play-service/render-aggregate-layers.mjs` — `renderAggregateLayers`。
+- `js:generators/scala-cqrs-play-service/templates/aggregate-factory.mjs` — `factoryTemplate`。
+- `js:generators/scala-cqrs-domain/render-actor.mjs` — `renderActors`，非layered object工厂。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
 
