@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/project/aggregate-bootstrap.md; catalog 1.0.0; source-sha256 582d0bfc0cdc027379093ddd9328077225c45a80c7747ef7a5c3af00b32aaf2f. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/project/aggregate-bootstrap.md; catalog 1.0.0; source-sha256 5055815fb5e12bf3149d390afc8420384ac26da902b572cba8de661ce354f288. Edit the central document, not this snapshot. -->
 
 # 聚合持久化Bootstrap
 
@@ -43,7 +43,7 @@ Factory到实际Behavior的消费、PID/adapter、崩溃恢复与Actor testkit�
 适用：bc-single / bc-multi / js-formal。单模块和多模块是放置/装配变体，不是两套业务事实。BANK P23兼容层与BC目标模板可能保留具名差异；没有把R2运行库能力写成当前银行生成支持。
 
 - `bc:src/main/scala/net/imadz/codegen/scaffolding/cqrs/template/infrastructure/bootstsrap/BootstrapTemplate.scala` — `BootstrapTemplate`。
-- `js:generators/scala-cqrs-play-service/render-aggregate-layers.mjs` — `EventSourcedBehavior`。
+- `js:generators/scala-cqrs-play-service/templates/aggregate-bootstrap.mjs` — `bootstrapTemplate`。结构输入来自`buildAggregateModels`，不在builder拼装Scala语法。
 
 来源的完整revision、文件摘要及清点处置在根目录的`sources.lock.json`；本页摘录不是生产认证。
 
