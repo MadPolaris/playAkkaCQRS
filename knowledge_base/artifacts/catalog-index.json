@@ -6,37 +6,37 @@
     {
       "file": "aggregate_behavior.md",
       "category": "aggregate-behavior",
-      "sha256": "c7765b340b0f7de2ccb37425bbbf407ed59c7a3ee8f7eb3524fab66f42a12884"
+      "sha256": "659973e0216cd2f7092d4c20472b84ab2dd6aab68daff58aa258a96f63bd6cce"
     },
     {
       "file": "aggregate_bootstrap.md",
       "category": "aggregate-bootstrap",
-      "sha256": "d9696d4fdc0824da39f9715e71b18b51ad7b8e8fc6e5fa31e5ace2a159bb7638"
+      "sha256": "8c9feea17c618b293af1594a1b5cdbcbe201282ce1398c0a0beefb33ea253801"
     },
     {
       "file": "aggregate_factory.md",
       "category": "aggregate-factory",
-      "sha256": "ef257e5dbc223731278f4f8bcbad6a7cde3f73096670e96dce5aa8be95407b6e"
+      "sha256": "445690cb432ac71f242f1a920d94fb8ffdf08265f891af4d8cd0b4807be6195a"
     },
     {
       "file": "aggregate_proto.md",
       "category": "protobuf-schema",
-      "sha256": "719aa12f655138fe7ff1da227cb16e483efc4230c0386e9f898f7dfc51d6805a"
+      "sha256": "45056cd854fcdcf89cc6c351a73b1020a42de41a4f05da63b6713a6fbac19319"
     },
     {
       "file": "aggregate_protocol.md",
       "category": "application-protocol",
-      "sha256": "80566237ef9da34dc3c574ad67980a43f072c2794a3098655f82b88847a0944a"
+      "sha256": "70972f3e4aa8d6ee183ae048ecb7d63e2f41a6c6fba6a4588e07e38f86d0d466"
     },
     {
       "file": "aggregate_repo_impl.md",
       "category": "aggregate-repository-implementation",
-      "sha256": "16ed56dcd36afc500628015595c83a9def54f8308a7d94e3459ab41aa1146374"
+      "sha256": "717101c7d4a414a31ac7968e52991adbacfb26f0871791b8fbe4ed5eafa4d2b7"
     },
     {
       "file": "aggregate_repo_trait.md",
       "category": "aggregate-repository-port",
-      "sha256": "48412c8a3891a42160cc2aea8ca949448bb17e83cf7cc2deb09c05fa319dc92a"
+      "sha256": "801040664d25eefe24130edaa8a835621ff69b513a88620d6eeead4b01a4dc8c"
     },
     {
       "file": "application_service.md",
@@ -51,7 +51,7 @@
     {
       "file": "domain_behavior.md",
       "category": "event-handler",
-      "sha256": "99ad8f76a3bed9ae1b84a83eadc89c568b22e86b374e89082f08073c36c2860e"
+      "sha256": "5230a4baab881ba3bc32cc100e95bed20cf5f181ca465f10bb19bba3b763a03c"
     },
     {
       "file": "domain_entity.md",
@@ -61,7 +61,7 @@
     {
       "file": "domain_invariant.md",
       "category": "invariant-rule",
-      "sha256": "737c35f62cd480bdad38214d1a334791c006f283b673ab3c2d8852f8de741c26"
+      "sha256": "919ed0702afc01a231231d0f13a6cdf7bedee4af1db9a63b8b33ba2b7578c44f"
     },
     {
       "file": "domain_service.md",
@@ -156,7 +156,7 @@
     {
       "file": "value_object.md",
       "category": "value-object",
-      "sha256": "b3c38a7056b1eae3ae478d5d6d51850ede40ebabafa02b5b3ac4ef1bc6ac2256"
+      "sha256": "f9f522297db4fca7b1e2f4f253054cb1512ed46e2eb9742ac275d8bf6ce8bfc3"
     }
   ],
   "dispatch": {}
