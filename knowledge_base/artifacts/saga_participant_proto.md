@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-wire.md; catalog 2.3.0; source-sha256 486e1b5e29af599bd86decd3de35ced76aec1c5f20ac9b4e30a244a0c873b016. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-wire.md; catalog 2.5.0; source-sha256 486e1b5e29af599bd86decd3de35ced76aec1c5f20ac9b4e30a244a0c873b016. Edit the central document, not this snapshot. -->
 
 # Saga持久化协议与参与者线格式
 

@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transaction-repository-port.md; catalog 2.3.0; source-sha256 c4018420db5a384cc8672f7c3917b550988069b0278ff4fef236e4e4e7f546bd. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transaction-repository-port.md; catalog 2.5.0; source-sha256 c4018420db5a384cc8672f7c3917b550988069b0278ff4fef236e4e4e7f546bd. Edit the central document, not this snapshot. -->
 
 # Saga事务仓储接口
 

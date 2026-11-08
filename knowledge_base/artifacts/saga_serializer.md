@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-serializer.md; catalog 2.3.0; source-sha256 88f0069c1cb294b7f582f3e284fefe94828da3d29f754afc95bef24d9737c28b. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-serializer.md; catalog 2.5.0; source-sha256 88f0069c1cb294b7f582f3e284fefe94828da3d29f754afc95bef24d9737c28b. Edit the central document, not this snapshot. -->
 
 # Saga序列化与转换
 

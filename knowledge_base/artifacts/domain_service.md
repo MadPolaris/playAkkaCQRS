@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-service.md; catalog 2.3.0; source-sha256 ab516ad2a2e671d5c55cef4e1404967004182650f5833c8d09e6537a801cd0b5. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/domain-service.md; catalog 2.5.0; source-sha256 ab516ad2a2e671d5c55cef4e1404967004182650f5833c8d09e6537a801cd0b5. Edit the central document, not this snapshot. -->
 
 # 纯领域服务与计算实现
 
