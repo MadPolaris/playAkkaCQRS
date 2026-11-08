@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-repository-implementation.md; catalog 2.2.0; source-sha256 9bc8d800173f640c8ae52a190ab3a3908eac5fe1d715f7102987c58a49b7018d. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-repository-implementation.md; catalog 2.3.0; source-sha256 2d1169b63120d26b7819126657938f40d9c29ea917759ff6bbdbc12f1490d974. Edit the central document, not this snapshot. -->
 
 # 聚合仓储实现
 
@@ -37,6 +37,14 @@ BC infrastructure/repositories/aggregate/<Name>RepositoryImpl位于glue；银行
 ## 验证
 
 查找幂等、类型key/PID冲突、关闭后拒绝；集群和本地profile分别验证。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+### 第四批有限 aggregate-core 候选（当前登记，非验收）
+
+`js-aggregate-core-candidate-v1` 对应实际入口 `scala-cqrs-aggregate-core-v1`、manifest `scala-cqrs-aggregate-core@1`。glue/infrastructure/repositories中的LocalActorRepository由调用者提供key→PersistenceId、behavior与spawn。成功且nonnull后才登记key/PID；同key复用、异key同PID拒绝、失败可重试，get/close串行且拒绝callback重入。close幂等并清缓存/拒绝lookup，但不stop Actor；不承诺deathwatch/eviction、跨JVM或分布式PID唯一。
+
+本页登记的物理输出为 `modules/glue/src/main/scala/**/infrastructure/repositories/*.scala`。实际来源为 `generators/scala-cqrs-aggregate-core-v1/templates/repository.mjs#repositoryImplementationTemplate`；`generators/scala-cqrs-aggregate-core-v1/build-models.mjs#buildModels`。新入口组合复用的family1生产jobs和本族jobs，经 `generators/scala-cqrs-domain-kernel-v1/render.mjs#renderJobs` 与固定 `entry.mjs#aggregateSourceEntry` owner，最后由 `src/core/generate.mjs#applyEntries` 写入；复用指向原物理模板，不存在新族VO/PB复制模板。
+
+`implemented` 仅表示上述源码存在，source仍活跃，未声称最终核验。当前无generation/compiled/behavior/final-approved观察；全量strict比较、冻结后锁与真实双lane由主集成负责。原16条观察及74条变体引用已原样保入历史索引（公共包 docs/artifacts/evidence/capability-domain-kernel-final-history.json），原receipt路径/字节不动、不续签，其旧锁下的资格不算current；初/二/三批原验收仍保留。构建只可取得generation资格。有限范围见本族合同（公共包 docs/artifacts/scala-cqrs/AGGREGATE-CORE.md）；无Bank、外部结果桥、完整四模块/服务或最终批准。
 
 ## 版本与实例
 

@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/protobuf-schema.md; catalog 2.2.0; source-sha256 21a7e0afd95d1c8ac7b4b03b67e50ed7803721f97fd7c521e5538b152dfee2e9. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/protobuf-schema.md; catalog 2.3.0; source-sha256 789cb17c66999caf2c19fbae8dd97055431b455abb659b6eea65e4d92048b4d5. Edit the central document, not this snapshot. -->
 
 # Protobuf线格式定义
 
@@ -45,6 +45,14 @@ PB往返、旧bytes兼容、缺required业务字段拒绝与枚举分支。proto
 实际来源为 `generators/scala-cqrs-domain-kernel-v1/templates/protobuf.mjs#protobufTemplate`；结构经 `buildModels`／`serializationModel`、有限 `render` 与逐职责模板，`sourceEntry` 记录来源，最终写入仍由 `src/core/generate.mjs#applyEntries` 承担。共享输出不重复算文件；完整范围见有限合同（公共包 docs/artifacts/scala-cqrs/DOMAIN-KERNEL.md）。
 
 `implemented` 只表示上述代码确实存在。此登记阶段没有刷新观察或 source lock／coverage／矩阵，也没有编译、独立行为或最终审定通过声明；`approval:null`。真实证据必须绑定同一输入、全套最终产物字节及冻结工具指纹。 既有第二批14项 reference-only 资格不变；稳定外置 source 映射不恢复 inline `@knowledge`。
+
+### 第四批有限 aggregate-core 候选（当前登记，非验收）
+
+`js-aggregate-core-candidate-v1` 对应实际入口 `scala-cqrs-aggregate-core-v1`、manifest `scala-cqrs-aggregate-core@1`。沿原family1物理PB模板生成glue中的真实proto，复用显式PB身份与容器presence；managed ScalaPB源码是后续编译产物，不加入24-entry生产计划凑数。
+
+本页登记的物理输出为 `modules/glue/src/main/protobuf/*_domain.proto`。实际来源为 `generators/scala-cqrs-domain-kernel-v1/templates/protobuf.mjs#protobufTemplate`；`generators/scala-cqrs-domain-kernel-v1/build-models.mjs#buildModels`。新入口组合复用的family1生产jobs和本族jobs，经 `generators/scala-cqrs-domain-kernel-v1/render.mjs#renderJobs` 与固定 `entry.mjs#aggregateSourceEntry` owner，最后由 `src/core/generate.mjs#applyEntries` 写入；复用指向原物理模板，不存在新族VO/PB复制模板。
+
+`implemented` 仅表示上述源码存在，source仍活跃，未声称最终核验。当前无generation/compiled/behavior/final-approved观察；全量strict比较、冻结后锁与真实双lane由主集成负责。原16条观察及74条变体引用已原样保入历史索引（公共包 docs/artifacts/evidence/capability-domain-kernel-final-history.json），原receipt路径/字节不动、不续签，其旧锁下的资格不算current；初/二/三批原验收仍保留。构建只可取得generation资格。有限范围见本族合同（公共包 docs/artifacts/scala-cqrs/AGGREGATE-CORE.md）；无Bank、外部结果桥、完整四模块/服务或最终批准。
 
 ## 版本与实例
 

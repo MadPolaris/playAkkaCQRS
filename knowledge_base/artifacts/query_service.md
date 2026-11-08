@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/query-service.md; catalog 2.2.0; source-sha256 41dbd72fdcb02c9c51c2e8c4b27c406b8682754443373d3c633d4d3b2e79e970. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/query-service.md; catalog 2.3.0; source-sha256 41dbd72fdcb02c9c51c2e8c4b27c406b8682754443373d3c633d4d3b2e79e970. Edit the central document, not this snapshot. -->
 
 # 查询与读模型组合服务
 

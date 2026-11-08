@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/invariant-rule.md; catalog 2.2.0; source-sha256 0bcb98fe0d01d9a67af4fdef6d8b7bc8d8b976c10530b19635260f2544cd9a1d. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/invariant-rule.md; catalog 2.3.0; source-sha256 71e8ed28cd5464252320f49099c89b71b048437c9316ef3ca9677f5db846e2d5. Edit the central document, not this snapshot. -->
 
 # 领域不变式与命令决策
 
@@ -37,6 +37,14 @@ BC有聚合Rules容器/内嵌Rule以及需port的class变体；JS生成Either[St
 ## 验证
 
 顺序、幂等/冲突先后、错误优先、外部输入与生成器独立oracle；不因为当前实现含异常或旧示例调用时钟而放宽纯度目标。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+### 第四批有限 aggregate-core 候选（当前登记，非验收）
+
+`js-aggregate-core-candidate-v1` 对应实际入口 `scala-cqrs-aggregate-core-v1`、manifest `scala-cqrs-aggregate-core@1`。kernel Rules提供decide(state, command, hosts): Either[String, Vector[Event]]及命令方法，按sourceOrdinal短路reject/succeed-empty；只消费准入表达式，不偷偷I/O、不猜错误码。Long checked运算与exact/unit约束保留。
+
+本页登记的物理输出为 `modules/kernel/src/main/scala/**/domain/invariant/*.scala`。实际来源为 `generators/scala-cqrs-aggregate-core-v1/templates/rules.mjs#rulesTemplate`；`generators/scala-cqrs-aggregate-core-v1/build-models.mjs#buildModels`。新入口组合复用的family1生产jobs和本族jobs，经 `generators/scala-cqrs-domain-kernel-v1/render.mjs#renderJobs` 与固定 `entry.mjs#aggregateSourceEntry` owner，最后由 `src/core/generate.mjs#applyEntries` 写入；复用指向原物理模板，不存在新族VO/PB复制模板。
+
+`implemented` 仅表示上述源码存在，source仍活跃，未声称最终核验。当前无generation/compiled/behavior/final-approved观察；全量strict比较、冻结后锁与真实双lane由主集成负责。原16条观察及74条变体引用已原样保入历史索引（公共包 docs/artifacts/evidence/capability-domain-kernel-final-history.json），原receipt路径/字节不动、不续签，其旧锁下的资格不算current；初/二/三批原验收仍保留。构建只可取得generation资格。有限范围见本族合同（公共包 docs/artifacts/scala-cqrs/AGGREGATE-CORE.md）；无Bank、外部结果桥、完整四模块/服务或最终批准。
 
 ## 版本与实例
 

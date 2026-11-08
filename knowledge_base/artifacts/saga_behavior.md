@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-legacy-behavior.md; catalog 2.2.0; source-sha256 001e54ad3db7f30005e5b5ce74384dc4f6bb6ffa880cbdc24be655abcb0a6aa7. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-legacy-behavior.md; catalog 2.3.0; source-sha256 001e54ad3db7f30005e5b5ce74384dc4f6bb6ffa880cbdc24be655abcb0a6aa7. Edit the central document, not this snapshot. -->
 
 # 旧Saga阶段执行行为
 

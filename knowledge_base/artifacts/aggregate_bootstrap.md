@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/project/aggregate-bootstrap.md; catalog 2.2.0; source-sha256 55ea9fdc7dde1a2d1c74a171c4fa81eb5241c76b4c5d7db5215eabdea67576c0. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/project/aggregate-bootstrap.md; catalog 2.3.0; source-sha256 cbbc438d30f2cff99c82ad10e1461350a4798fbd23b629fe1314d43c3b0870aa. Edit the central document, not this snapshot. -->
 
 # 聚合持久化Bootstrap
 
@@ -38,6 +38,14 @@ infrastructure/bootstrap/<Name>Bootstrap，multi在glue；JS Factory.create返�
 ## 验证
 
 Factory到实际Behavior的消费、PID/adapter、崩溃恢复与Actor testkit；checkpoint不等全业务exactly-once。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+### 第四批有限 aggregate-core 候选（当前登记，非验收）
+
+`js-aggregate-core-candidate-v1` 对应实际入口 `scala-cqrs-aggregate-core-v1`、manifest `scala-cqrs-aggregate-core@1`。glue/infrastructure/bootstrap实现Factory并接线EventSourcedBehavior，显式注入PID/initial/hosts/typed adapters；不自行spawn或选journal/serializer，不添加retry/backoff/deadline。
+
+本页登记的物理输出为 `modules/glue/src/main/scala/**/infrastructure/bootstrap/*.scala`。实际来源为 `generators/scala-cqrs-aggregate-core-v1/templates/bootstrap.mjs#bootstrapTemplate`；`generators/scala-cqrs-aggregate-core-v1/build-models.mjs#buildModels`。新入口组合复用的family1生产jobs和本族jobs，经 `generators/scala-cqrs-domain-kernel-v1/render.mjs#renderJobs` 与固定 `entry.mjs#aggregateSourceEntry` owner，最后由 `src/core/generate.mjs#applyEntries` 写入；复用指向原物理模板，不存在新族VO/PB复制模板。
+
+`implemented` 仅表示上述源码存在，source仍活跃，未声称最终核验。当前无generation/compiled/behavior/final-approved观察；全量strict比较、冻结后锁与真实双lane由主集成负责。原16条观察及74条变体引用已原样保入历史索引（公共包 docs/artifacts/evidence/capability-domain-kernel-final-history.json），原receipt路径/字节不动、不续签，其旧锁下的资格不算current；初/二/三批原验收仍保留。构建只可取得generation资格。有限范围见本族合同（公共包 docs/artifacts/scala-cqrs/AGGREGATE-CORE.md）；无Bank、外部结果桥、完整四模块/服务或最终批准。
 
 ## 版本与实例
 

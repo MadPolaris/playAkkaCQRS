@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/event-handler.md; catalog 2.2.0; source-sha256 7bc2c310abe24e667e09f751ac78415ff9824b6a2e9b36520f5b209e77425cd0. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/event-handler.md; catalog 2.3.0; source-sha256 43fb22016c57cacd6fed3897f2e805dafe251eb68228323e9bc81e3971924a08. Edit the central document, not this snapshot. -->
 
 # 事件应用与领域行为
 
@@ -37,6 +37,14 @@ BC及JS layered目标以domain/entities/behaviors/<Name>EventHandler为核心，
 ## 验证
 
 每种事件、集合更新/删除/计数顺序与恢复往返；验证旧入口实际转到唯一核心。 文档覆盖、代码编译与业务运行是不同证据；只有实际执行对应检查才可以报告通过。
+
+### 第四批有限 aggregate-core 候选（当前登记，非验收）
+
+`js-aggregate-core-candidate-v1` 对应实际入口 `scala-cqrs-aggregate-core-v1`、manifest `scala-cqrs-aggregate-core@1`。kernel纯fold支持set、put、remove、put-all、remove-all、money-apply、integer-apply；全部RHS读同一pre-event State，重复target拒绝，无assignment保持状态，不调用host或decide。纯失败无半更新，但不能承诺已persist journal回滚。
+
+本页登记的物理输出为 `modules/kernel/src/main/scala/**/domain/entities/behaviors/*.scala`。实际来源为 `generators/scala-cqrs-aggregate-core-v1/templates/event-handler.mjs#eventHandlerTemplate`；`generators/scala-cqrs-aggregate-core-v1/build-models.mjs#buildModels`。新入口组合复用的family1生产jobs和本族jobs，经 `generators/scala-cqrs-domain-kernel-v1/render.mjs#renderJobs` 与固定 `entry.mjs#aggregateSourceEntry` owner，最后由 `src/core/generate.mjs#applyEntries` 写入；复用指向原物理模板，不存在新族VO/PB复制模板。
+
+`implemented` 仅表示上述源码存在，source仍活跃，未声称最终核验。当前无generation/compiled/behavior/final-approved观察；全量strict比较、冻结后锁与真实双lane由主集成负责。原16条观察及74条变体引用已原样保入历史索引（公共包 docs/artifacts/evidence/capability-domain-kernel-final-history.json），原receipt路径/字节不动、不续签，其旧锁下的资格不算current；初/二/三批原验收仍保留。构建只可取得generation资格。有限范围见本族合同（公共包 docs/artifacts/scala-cqrs/AGGREGATE-CORE.md）；无Bank、外部结果桥、完整四模块/服务或最终批准。
 
 ## 版本与实例
 

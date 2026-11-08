@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/read-model.md; catalog 2.2.0; source-sha256 e4ef753f68bce5a92845033784b4e7fcca3869e451ca3733ab353bac4d74b532. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/read-model.md; catalog 2.3.0; source-sha256 e4ef753f68bce5a92845033784b4e7fcca3869e451ca3733ab353bac4d74b532. Edit the central document, not this snapshot. -->
 
 # 读模型与视图定义
 
