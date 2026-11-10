@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-protocol.md; catalog 2.5.0; source-sha256 daa73d496fcc5f03cf1887524ca375d0da82c7aafce5aacfbe31b74b830886fb. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-protocol.md; catalog 2.6.0; source-sha256 daa73d496fcc5f03cf1887524ca375d0da82c7aafce5aacfbe31b74b830886fb. Edit the central document, not this snapshot. -->
 
 # Actor命令与回复协议
 

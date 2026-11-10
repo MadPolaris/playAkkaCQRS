@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-service.md; catalog 2.5.0; source-sha256 98cf60438dade0132c6ca3372de33c12d5ef36f0e45d3bb0d3c816eaf9feb007. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-service.md; catalog 2.6.0; source-sha256 98cf60438dade0132c6ca3372de33c12d5ef36f0e45d3bb0d3c816eaf9feb007. Edit the central document, not this snapshot. -->
 
 # 应用用例与业务流程服务
 

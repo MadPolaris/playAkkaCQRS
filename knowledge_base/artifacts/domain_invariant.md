@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/invariant-rule.md; catalog 2.5.0; source-sha256 13571f96a426812f2bf40e3db0e9e2a0fd6a63cf8c6ff954ed3e1a22a5ea4d81. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/invariant-rule.md; catalog 2.6.0; source-sha256 13571f96a426812f2bf40e3db0e9e2a0fd6a63cf8c6ff954ed3e1a22a5ea4d81. Edit the central document, not this snapshot. -->
 
 # 领域不变式与命令决策
 

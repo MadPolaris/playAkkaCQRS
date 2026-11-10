@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-repository-port.md; catalog 2.5.0; source-sha256 f941121a4e84e099be61581857efdfcc2baaa8813b826d6efc4592167de894dd. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-repository-port.md; catalog 2.6.0; source-sha256 f941121a4e84e099be61581857efdfcc2baaa8813b826d6efc4592167de894dd. Edit the central document, not this snapshot. -->
 
 # 聚合仓储接口
 

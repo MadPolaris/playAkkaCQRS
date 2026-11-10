@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/event-handler.md; catalog 2.5.0; source-sha256 5d4386abc672a0617fa56f939757396048fd174decd56e418bbe01fe226d5c82. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/event-handler.md; catalog 2.6.0; source-sha256 5d4386abc672a0617fa56f939757396048fd174decd56e418bbe01fe226d5c82. Edit the central document, not this snapshot. -->
 
 # 事件应用与领域行为
 

@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/snapshot-adapter.md; catalog 2.5.0; source-sha256 4f9f629f870dfb7d1fa8e8c74d2fe67acc7bee57af9fa5f837241eb4883705a0. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/snapshot-adapter.md; catalog 2.6.0; source-sha256 4f9f629f870dfb7d1fa8e8c74d2fe67acc7bee57af9fa5f837241eb4883705a0. Edit the central document, not this snapshot. -->
 
 # 快照持久化适配器
 

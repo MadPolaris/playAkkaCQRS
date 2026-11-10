@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/value-object.md; catalog 2.5.0; source-sha256 47f3787fdfca98a8235cc50dfd3fc1b69d2fd6a2b86fe7c3faa484a44761e1a8. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/value-object.md; catalog 2.6.0; source-sha256 c35d472415b30aa02c0c4ba9d2f728705c21e8319f651eb148c72853bd913235. Edit the central document, not this snapshot. -->
 
 # 值对象与签名类型
 
@@ -87,3 +87,11 @@ port所有签名可达的自有值类型必须处于接口可依赖的模块；�
 本次登记移除旧 active evidence 引用，原24观察和旧回执在独立历史索引（公共包 docs/artifacts/evidence/capability-persistence-readside-prior-current06-history.json）保真；新观察要在生产冻结后单独采集并通过原公共验证器。本段及目录 implemented 仅表示实现存在，当前 generated/compiled/behavior/final-approved 不由本配方晋升。范围与限制见本族合同（公共包 docs/artifacts/scala-cqrs/PERSISTENCE-READSIDE.md）。
 
 读侧文件库重放不是生产 Actor journal 耐久性；不扩张为 MySQL、任意读模型、HTTP、银行/Saga/Monarch 或架构批准。
+
+## 第七批 Strict Saga / Monarch R2 生成入口
+
+新增 `js-saga-monarch-r2-candidate-v1`，由 `scala-cqrs-saga-monarch-v1` 提供。此前“未建立原生生成”的描述保留为原基线，不能覆盖本段明确的新非银行入口。
+
+- `protocol`：Nominal bounded inventory values, typed Saga results/ports and optional typed Run Input/State/Output/leaf protocols; no Akka dependency.
+
+输入来自唯一作者树与显式技术/外置实现 bindings；运行库接口及内核仍由冻结制品提供。implemented 表示生成实现存在；资格仅由匹配实际输入的独立验收决定，旧28回执不改签。范围、两阶段恢复、重试耗尽与安装边界见本族合同（公共包 docs/artifacts/SAGA-MONARCH-R2.md）。不表示银行迁移或架构批准。

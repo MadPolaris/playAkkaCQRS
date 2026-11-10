@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-factory.md; catalog 2.5.0; source-sha256 321daecb87e9bf77922f90f5415117defe0eea3e3ed0606ee59110a36cafa233. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-factory.md; catalog 2.6.0; source-sha256 321daecb87e9bf77922f90f5415117defe0eea3e3ed0606ee59110a36cafa233. Edit the central document, not this snapshot. -->
 
 # 聚合行为工厂接口
 

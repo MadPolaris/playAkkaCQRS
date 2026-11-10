@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transaction-repository-implementation.md; catalog 2.5.0; source-sha256 77d5832e0c002154fa448dbf4d61f18708f03528516a6422710459416352a8c9. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transaction-repository-implementation.md; catalog 2.6.0; source-sha256 77d5832e0c002154fa448dbf4d61f18708f03528516a6422710459416352a8c9. Edit the central document, not this snapshot. -->
 
 # Saga事务寻址实现
 

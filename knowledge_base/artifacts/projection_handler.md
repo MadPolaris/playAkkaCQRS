@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-handler.md; catalog 2.5.0; source-sha256 1a27677fce27756208289f28db41409b70aeb7e997c40383bf88079656f6d490. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-handler.md; catalog 2.6.0; source-sha256 1a27677fce27756208289f28db41409b70aeb7e997c40383bf88079656f6d490. Edit the central document, not this snapshot. -->
 
 # 事件投影处理器
 

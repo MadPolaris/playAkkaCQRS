@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-repository-port.md; catalog 2.5.0; source-sha256 5b12ff480a1d655aefa5e04c1ef83073c7b7cff4b5313f32f54cfc4adcc4e2b1. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/projection/projection-repository-port.md; catalog 2.6.0; source-sha256 5b12ff480a1d655aefa5e04c1ef83073c7b7cff4b5313f32f54cfc4adcc4e2b1. Edit the central document, not this snapshot. -->
 
 # 读侧仓储接口
 

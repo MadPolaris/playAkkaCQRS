@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/protobuf-schema.md; catalog 2.5.0; source-sha256 47c5795a7ad4de8420fe23aece7921f74922677bf3eb6668e4cae98337be463a. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/persistence/protobuf-schema.md; catalog 2.6.0; source-sha256 47c5795a7ad4de8420fe23aece7921f74922677bf3eb6668e4cae98337be463a. Edit the central document, not this snapshot. -->
 
 # Protobuf线格式定义
 
