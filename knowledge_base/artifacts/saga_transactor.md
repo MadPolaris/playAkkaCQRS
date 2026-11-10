@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transactor.md; catalog 2.6.0; source-sha256 69e71952789df8fe93667009139171928ccf5b17948028b0bee2562b3093bea3. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/saga/saga-transactor.md; catalog 2.7.0; source-sha256 69e71952789df8fe93667009139171928ccf5b17948028b0bee2562b3093bea3. Edit the central document, not this snapshot. -->
 
 # Saga事务门面与声明
 

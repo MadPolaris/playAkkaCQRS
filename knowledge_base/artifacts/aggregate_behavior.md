@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-behavior.md; catalog 2.6.0; source-sha256 9b2a0907ad650945fff574141c6e701b4833099a7fbf314486913845e0dba5a6. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/aggregate-behavior.md; catalog 2.7.0; source-sha256 5325e4e582740630a1b9a559e22a437e346a745c50eb82c37474588af0d221cc. Edit the central document, not this snapshot. -->
 
 # 聚合命令行为
 
@@ -76,3 +76,11 @@ application/aggregates/behaviors/<Name>Behaviors。BC初始skeleton在选定Meta
 本次登记移除旧 active evidence 引用，原24观察和旧回执在独立历史索引（公共包 docs/artifacts/evidence/capability-persistence-readside-prior-current06-history.json）保真；新观察要在生产冻结后单独采集并通过原公共验证器。本段及目录 implemented 仅表示实现存在，当前 generated/compiled/behavior/final-approved 不由本配方晋升。范围与限制见本族合同（公共包 docs/artifacts/scala-cqrs/PERSISTENCE-READSIDE.md）。
 
 读侧文件库重放不是生产 Actor journal 耐久性；不扩张为 MySQL、任意读模型、HTTP、银行/Saga/Monarch 或架构批准。
+
+## 第八批有限 Play 应用入口
+
+新增 `js-play-application-candidate-v1`，由 `scala-cqrs-play-application-v1` 提供。原先profile的缺口描述保留为对应历史，不覆盖本段的新有限入口。
+
+- `aggregate-root`：One application Aggregate assembles actual command behavior and pure fold. Same physical aggregate output/sample serves aggregate-root and aggregate-behavior; no extra facade or duplicated category/file.
+
+唯一作者和显式技术/外置实现bindings经过公共单writer；源码、真实编译、HTTP行为、安装与最终批准逐层记证。有限范围及不适用项见本族合同（公共包 docs/artifacts/scala-cqrs/PLAY-APPLICATION.md）；旧回执不重签，不表示银行或完整modular target已最终批准。

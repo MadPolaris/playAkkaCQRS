@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/invariant-rule.md; catalog 2.6.0; source-sha256 13571f96a426812f2bf40e3db0e9e2a0fd6a63cf8c6ff954ed3e1a22a5ea4d81. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/domain/invariant-rule.md; catalog 2.7.0; source-sha256 8d96b1cf1b28397008ea1eab1873caca931a9bd075094a176c6322507c85c293. Edit the central document, not this snapshot. -->
 
 # 领域不变式与命令决策
 
@@ -80,3 +80,11 @@ CapacityRule原独立参考字节仅初始化scaffold一次，之后为用户维
 本次登记移除旧 active evidence 引用，原24观察和旧回执在独立历史索引（公共包 docs/artifacts/evidence/capability-persistence-readside-prior-current06-history.json）保真；新观察要在生产冻结后单独采集并通过原公共验证器。本段及目录 implemented 仅表示实现存在，当前 generated/compiled/behavior/final-approved 不由本配方晋升。范围与限制见本族合同（公共包 docs/artifacts/scala-cqrs/PERSISTENCE-READSIDE.md）。
 
 读侧文件库重放不是生产 Actor journal 耐久性；不扩张为 MySQL、任意读模型、HTTP、银行/Saga/Monarch 或架构批准。
+
+## 第八批有限 Play 应用入口
+
+新增 `js-play-application-candidate-v1`，由 `scala-cqrs-play-application-v1` 提供。原先profile的缺口描述保留为对应历史，不覆盖本段的新有限入口。
+
+- `invariant-rule`：Ordered pure decide(state, command, hosts): Either[String, Vector[Event]] and typed per-command Rules; reject and succeed-empty short-circuit later guards/hosts. No I/O, guessed errors or external producer authorization.
+
+唯一作者和显式技术/外置实现bindings经过公共单writer；源码、真实编译、HTTP行为、安装与最终批准逐层记证。有限范围及不适用项见本族合同（公共包 docs/artifacts/scala-cqrs/PLAY-APPLICATION.md）；旧回执不重签，不表示银行或完整modular target已最终批准。

@@ -1,4 +1,4 @@
-<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-service.md; catalog 2.6.0; source-sha256 98cf60438dade0132c6ca3372de33c12d5ef36f0e45d3bb0d3c816eaf9feb007. Edit the central document, not this snapshot. -->
+<!-- Derived from @madpolaris/truthsrc docs/artifacts/scala-cqrs/application/application-service.md; catalog 2.7.0; source-sha256 f054489c11eca38f0582d136dc40cfc73c580523609d203ef78d512d9e85fc0b. Edit the central document, not this snapshot. -->
 
 # 应用用例与业务流程服务
 
@@ -53,3 +53,12 @@ application/services或明确模块下的用例类；银行当前部分服务手
 ### 类别依赖
 
 `application-flow-port`、`aggregate-repository-port`。这些是职责依赖，不代替真实Scala import或执行顺序验证。
+
+## 第八批有限 Play 应用入口
+
+新增 `js-play-application-candidate-v1`，由 `scala-cqrs-play-application-v1` 提供。原先profile的缺口描述保留为对应历史，不覆盖本段的新有限入口。
+
+- `api-ports`：Platform-independent asynchronous command service contracts.
+- `command-service`：Typed actor ask facade, no fabricated sequence, no automatic resend after unknown outcome.
+
+唯一作者和显式技术/外置实现bindings经过公共单writer；源码、真实编译、HTTP行为、安装与最终批准逐层记证。有限范围及不适用项见本族合同（公共包 docs/artifacts/scala-cqrs/PLAY-APPLICATION.md）；旧回执不重签，不表示银行或完整modular target已最终批准。
